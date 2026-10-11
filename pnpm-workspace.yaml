@@ -1,3 +1,8 @@
 allowBuilds:
   '@parcel/watcher': false
   unrs-resolver: false
+
+# Security patches for transitive dev dependencies (pulled in by @nestjs/mau).
+overrides:
+  undici@<6.29.0: ^6.29.0
+  tmp@<0.2.6: ^0.2.7
