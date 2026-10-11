@@ -28,6 +28,13 @@ const CONFIG = {
   nominatimEmail: '',           // opcional: tu correo, recomendado por Nominatim para identificar la app
   // Caja aproximada de Arequipa metropolitana: oeste, norte, este, sur
   viewbox: '-71.75,-16.20,-71.35,-16.60',
+
+  // Zonificación urbana: archivos locales en public/data (no se consulta ningún servicio externo).
+  zonificacion: {
+    geojsonUrl: 'data/zonas_aqp.geojson', // polígonos con los campos `codigo` y `color`
+    reglasUrl: 'data/reglas_zonas.json',  // reglas por código: pisos, coeficiente, área libre, lote mínimo…
+    fuente: 'Plano de Zonificación del PDM Arequipa 2016-2025 (Ordenanza Municipal N.° 975-MPA, 2016)',
+  },
 };
 
 const CATEGORIES = [
