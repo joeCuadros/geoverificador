@@ -14,9 +14,13 @@ describe('AppController', () => {
     appController = app.get<AppController>(AppController);
   });
 
-  describe('root', () => {
-    it('should return "Hello World!"', () => {
-      expect(appController.getHello()).toBe('Hello World!');
+  describe('api', () => {
+    it('should return the API status payload', () => {
+      expect(appController.getApiData()).toEqual({
+        status: 'ok',
+        proyecto: 'GeoVerificador',
+        version: '1.0.0',
+      });
     });
   });
 });

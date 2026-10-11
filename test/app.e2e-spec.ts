@@ -16,11 +16,18 @@ describe('AppController (e2e)', () => {
     await app.init();
   });
 
-  it('/ (GET)', () => {
+  it('/ (GET) serves the home page', () => {
     return request(app.getHttpServer())
       .get('/')
       .expect(200)
-      .expect('Hello World!');
+      .expect('Content-Type', /html/);
+  });
+
+  it('/api (GET) returns the API status', () => {
+    return request(app.getHttpServer())
+      .get('/api')
+      .expect(200)
+      .expect({ status: 'ok', proyecto: 'GeoVerificador', version: '1.0.0' });
   });
 
   afterEach(async () => {
