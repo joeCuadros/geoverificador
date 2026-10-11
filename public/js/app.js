@@ -2,6 +2,7 @@
  * app.js — Interfaz: mapa Leaflet, selección de punto, análisis y resultados.
  * Principio de uso responsable: NINGUNA consulta se lanza al hacer clic, escribir o cambiar el radio.
  * Solo se consulta al pulsar «Buscar» (Nominatim) o «Analizar entorno» (Overpass).
+ * La zonificación sí se muestra al elegir el punto, porque se resuelve con archivos locales (zonificacion.js).
  */
 (() => {
   'use strict';
@@ -25,6 +26,11 @@
     items: [],
     meta: null,
     cache: new Map(),
+    zona: null,          // resultado de Zonificacion.lookup para el punto actual
+    zonaStatus: 'none',  // none | loading | ok | outside | error
+    zonaSeq: 0,          // descarta respuestas de un punto anterior
+    zonLayer: null,      // plano completo (se crea la primera vez que se activa)
+    zonOutline: null,    // contorno de la zona del punto
   };
 
   // ------------------------------------------------------------------ Mapa
@@ -33,6 +39,11 @@
     maxZoom: 19,
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
   }).addTo(map);
+
+  // El plano de zonificación va en un panel propio, debajo de marcadores y círculo, y no captura clics.
+  const zonPane = map.createPane('zonificacion');
+  zonPane.style.zIndex = 350;
+  zonPane.style.pointerEvents = 'none';
 
   // ------------------------------------------------------- Controles iniciales
   CONFIG.radii.forEach((r) => {
@@ -155,6 +166,7 @@
     }
     drawCircle();
     clearResults();
+    updateZona();
     $('point-info').innerHTML = `Punto: <strong>${lat.toFixed(6)}, ${lon.toFixed(6)}</strong>
       · <a href="https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=18/${lat}/${lon}" target="_blank" rel="noopener">verificar en OSM</a>`;
     $('analyze').disabled = state.busy;
@@ -162,6 +174,128 @@
   }
 
   map.on('click', (e) => { if (!state.busy) setPoint(e.latlng.lat, e.latlng.lng); });
+
+  // ------------------------------------------------------------ Zonificación
+  const fmtNum = (n) => Math.round(n).toLocaleString('es-PE');
+  const has = (v) => v !== null && v !== undefined && v !== '';
+  const ZON_BADGE = {
+    si: { cls: 'ok', text: 'Construible' },
+    condicionado: { cls: 'warn', text: 'Requiere consulta' },
+    no: { cls: 'no', text: 'No construible' },
+  };
+
+  $('zon-fuente').textContent = `Fuente: ${CONFIG.zonificacion.fuente}. Referencial: no reemplaza el Certificado de Zonificación y Vías.`;
+
+  function zonMessage(kind, html) {
+    $('zon').innerHTML = `<p class="zon-msg ${kind}">${html}</p>`;
+  }
+
+  // «5 (hasta 6)» cuando la regla tiene un caso base y un máximo distintos.
+  const baseMax = (a, b) => (has(b) && b !== a ? `${a} (hasta ${b})` : `${a}`);
+
+  function potencialHtml(regla) {
+    const raw = $('lote').value.trim();
+    if (raw === '') return '';
+    const lote = Number(raw);
+    if (!(lote > 0)) return '<p class="zon-calc warn">Escribe un área de lote mayor que cero.</p>';
+    if (!regla) return '';
+    if (regla.edificable === 'no') return '<p class="zon-calc">No se calcula: esta zona no es construible.</p>';
+    if (regla.edificable === 'condicionado') {
+      return '<p class="zon-calc">No se calcula: lo que se puede construir aquí depende de la zona vecina o de un plan específico.</p>';
+    }
+    const pot = Zonificacion.potencial(regla, lote);
+    if (!pot) return '<p class="zon-calc">Esta zona no fija un coeficiente: los parámetros dependen del proyecto.</p>';
+
+    const [cBase, cMax] = pot.construible;
+    let html = `<p class="zon-calc"><strong>Hasta ${fmtNum(cBase)} m² techados</strong> en un lote de ${fmtNum(lote)} m²`;
+    html += cMax > cBase ? ` (${fmtNum(cMax)} m² en el caso máximo; ver nota).` : '.';
+    if (pot.ocupable) {
+      const [oMin, oMax] = pot.ocupable;
+      html += ` El primer piso puede ocupar ${oMin === oMax ? `hasta ${fmtNum(oMax)}` : `entre ${fmtNum(oMin)} y ${fmtNum(oMax)}`} m²; el resto debe quedar libre.`;
+    }
+    html += '</p>';
+    if (pot.bajoLoteMinimo) {
+      html += `<p class="zon-calc warn">El lote es menor que el mínimo de la zona (${fmtNum(regla.lote_min_m2)} m²).</p>`;
+    }
+    return html;
+  }
+
+  function renderZona() {
+    if (state.zonaStatus === 'outside') {
+      zonMessage('empty', '<strong>Este punto está fuera del área zonificada.</strong> El plano no le asigna ninguna zona.');
+      return;
+    }
+    if (state.zonaStatus !== 'ok') return;
+
+    const z = state.zona;
+    const r = z.regla;
+    const badge = ZON_BADGE[r && r.edificable] || { cls: 'warn', text: 'Sin reglas en la tabla' };
+    const filas = [];
+    if (r) {
+      if (has(r.pisos_base)) filas.push(['Pisos', baseMax(r.pisos_base, r.pisos_max)]);
+      if (has(r.coef_base)) filas.push(['Coeficiente de edificación', baseMax(r.coef_base, r.coef_max)]);
+      if (has(r.area_libre_pct)) filas.push(['Área libre mínima', `${r.area_libre_pct} %`]);
+      if (has(r.lote_min_m2)) filas.push(['Lote mínimo', `${fmtNum(r.lote_min_m2)} m²`]);
+      if (has(r.frente_min_m)) filas.push(['Frente mínimo', `${r.frente_min_m} m`]);
+    }
+
+    $('zon').innerHTML = `
+      <div class="zon-card">
+        <div class="zon-head">
+          <span class="swatch" style="background:${esc(z.color)}"></span>
+          <span class="zon-code">${esc(z.codigo)}</span>
+          <span class="zon-name">${esc(r ? r.nombre : 'Código sin reglas en la tabla')}</span>
+          <span class="badge ${badge.cls}">${badge.text}</span>
+        </div>
+        ${filas.length ? `<dl class="zon-data">${filas.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>` : ''}
+        ${r && r.nota ? `<p class="zon-nota small">${esc(r.nota)}</p>` : ''}
+        ${potencialHtml(r)}
+        ${z.coincidencias > 1 ? `<p class="zon-nota small">El plano tiene ${z.coincidencias} zonas superpuestas en este punto; se muestra la que queda encima.</p>` : ''}
+      </div>`;
+  }
+
+  async function updateZona() {
+    const seq = ++state.zonaSeq;
+    const { lat, lon } = state.point;
+    state.zona = null;
+    state.zonaStatus = 'loading';
+    if (state.zonOutline) { map.removeLayer(state.zonOutline); state.zonOutline = null; }
+    zonMessage('loading', '<span class="spinner"></span>Buscando la zona en el plano…');
+    try {
+      const z = await Zonificacion.lookup(lat, lon);
+      if (seq !== state.zonaSeq) return; // el usuario ya eligió otro punto
+      state.zona = z;
+      state.zonaStatus = z ? 'ok' : 'outside';
+      if (z) state.zonOutline = Zonificacion.contorno(z.feature).addTo(map);
+      renderZona();
+    } catch (err) {
+      if (seq !== state.zonaSeq) return;
+      state.zonaStatus = 'error';
+      zonMessage('error', `<strong>No se pudo consultar la zonificación.</strong> ${esc(err.message)}`);
+      console.error('[Zonificación] fallo', err);
+    }
+  }
+
+  $('lote').addEventListener('input', renderZona);
+
+  $('zon-layer').addEventListener('change', async (e) => {
+    const box = e.target;
+    if (!box.checked) {
+      if (state.zonLayer) map.removeLayer(state.zonLayer);
+      return;
+    }
+    box.disabled = true;
+    try {
+      if (!state.zonLayer) state.zonLayer = await Zonificacion.capa('zonificacion');
+      if (box.checked) state.zonLayer.addTo(map);
+    } catch (err) {
+      box.checked = false;
+      if (state.zonaStatus !== 'ok') zonMessage('error', `<strong>No se pudo cargar el plano.</strong> ${esc(err.message)}`);
+      console.error('[Zonificación] fallo', err);
+    } finally {
+      box.disabled = false;
+    }
+  });
   $('radius').addEventListener('change', () => {
     drawCircle();
     if (state.point) { clearResults(); setStatus('idle', 'Radio cambiado. Pulsa «Analizar entorno» para actualizar.'); }
@@ -367,6 +501,9 @@
     if (!state.meta) return;
     const out = {
       ...state.meta,
+      zonificacion: state.zona
+        ? { codigo: state.zona.codigo, regla: state.zona.regla, fuente: CONFIG.zonificacion.fuente }
+        : null,
       elements: state.items.map((i) => ({
         osm: i.id, category: i.cat.id, subtype: i.subtype, matchedTag: i.tag, name: i.name,
         lat: i.lat, lon: i.lon, distance_m: Math.round(i.distance * 10) / 10, distance_method: i.method, tags: i.tags,
@@ -383,5 +520,5 @@
   $('analyze').addEventListener('click', analyze);
 
   // Ayuda para verificar desde la consola del navegador (F12)
-  window.osmDebug = { state, Geo, Services, CATEGORIES };
+  window.osmDebug = { state, Geo, Services, Zonificacion, CATEGORIES };
 })();

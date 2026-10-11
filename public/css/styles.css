@@ -122,6 +122,31 @@ summary { cursor: pointer; font-weight: 600; padding: 3px 0; }
 .limits li { margin-bottom: 5px; }
 #filters-doc ul { margin: 2px 0 6px; padding-left: 18px; }
 
+/* Zonificación */
+.zon-msg { margin: 0; padding: 9px 11px; border-radius: 6px; font-size: .88rem; border: 1px solid var(--border); background: #fff; }
+.zon-msg.loading, .zon-msg.empty { background: var(--warn-bg); border-color: #e8d28b; }
+.zon-msg.error { background: var(--danger-bg); border-color: #efb4ad; color: var(--danger); }
+.zon-card { border: 1px solid var(--border); border-radius: 8px; background: #fff; padding: 10px 11px; }
+.zon-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.zon-head .swatch { width: 14px; height: 14px; border-radius: 3px; border: 1px solid rgba(0,0,0,.35); flex: none; }
+.zon-code { font-weight: 700; font-variant-numeric: tabular-nums; }
+.zon-name { flex: 1; min-width: 120px; }
+.badge { font-size: .78rem; font-weight: 600; padding: 2px 8px; border-radius: 999px; border: 1px solid transparent; white-space: nowrap; }
+.badge.ok { background: var(--ok-bg); color: var(--ok); border-color: #a8d5b5; }
+.badge.warn { background: var(--warn-bg); color: #6b4e00; border-color: #e8d28b; }
+.badge.no { background: var(--danger-bg); color: var(--danger); border-color: #efb4ad; }
+.zon-data { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; margin: 10px 0 0; }
+.zon-data dt { font-size: .78rem; color: var(--muted); }
+.zon-data dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+.zon-nota { margin: 8px 0 0; color: var(--muted); }
+.zon-calc { margin: 10px 0 0; padding-top: 8px; border-top: 1px solid var(--border); }
+.zon-calc + .zon-calc { border-top: 0; padding-top: 0; margin-top: 4px; }
+.zon-calc.warn { color: #6b4e00; }
+.zon-lote { margin-top: 10px; }
+input[type="number"] { font: inherit; color: var(--text); padding: 7px 9px; border: 1px solid var(--border); border-radius: 6px; background: #fff; width: 140px; }
+#zon-fuente { margin: 8px 0 0; }
+.block-head .check { margin: 0; }
+
 /* Marcadores en el mapa */
 .poi-icon span {
   display: flex; align-items: center; justify-content: center;

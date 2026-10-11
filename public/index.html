@@ -30,7 +30,21 @@
       </section>
 
       <section class="block">
-        <h2>2. Define el análisis</h2>
+        <div class="block-head">
+          <h2>2. Zonificación del punto</h2>
+          <label class="check small"><input id="zon-layer" type="checkbox"> Ver plano en el mapa</label>
+        </div>
+        <div id="zon" class="zon" role="status" aria-live="polite">
+          <p class="muted small">Elige un punto para ver qué zona le corresponde y cuánto se puede construir.</p>
+        </div>
+        <label class="field zon-lote">Área del lote en m² (opcional, para calcular cuánto se puede construir)
+          <input id="lote" type="number" min="1" step="1" inputmode="decimal" placeholder="Ej.: 300">
+        </label>
+        <p id="zon-fuente" class="small muted"></p>
+      </section>
+
+      <section class="block">
+        <h2>3. Define el análisis del entorno</h2>
         <div class="row">
           <label class="field">Radio
             <select id="radius"></select>
@@ -47,7 +61,7 @@
 
       <section class="block">
         <div class="block-head">
-          <h2>3. Resultados</h2>
+          <h2>4. Resultados del entorno</h2>
           <button id="download" type="button" class="link" hidden>Descargar JSON</button>
         </div>
         <div id="cats"></div>
@@ -76,11 +90,24 @@
             <li>Overpass y Nominatim públicos no tienen disponibilidad garantizada: pueden limitar, saturarse o bloquear solicitudes.</li>
           </ul>
         </details>
+        <details>
+          <summary>Limitaciones de la zonificación</summary>
+          <ul class="small limits">
+            <li>Es el plano de 2016 (Ordenanza 975). No incluye los planes específicos aprobados después ni el plan metropolitano nuevo, que aún está en trámite.</li>
+            <li>Es referencial: el único documento con valor legal es el Certificado de Zonificación y Vías que emite el Instituto Municipal de Planeamiento.</li>
+            <li>Los polígonos se extrajeron del PDF del plano y el código se asignó por el color de relleno. Cerca del borde entre dos zonas el resultado puede no ser exacto.</li>
+            <li>El plano pinta igual todos los niveles de educación (<code>E</code>) y de salud (<code>H</code>), y también la zona agrícola y la de expansión agrícola (<code>ZA</code>).</li>
+            <li>Colegios, salud, usos especiales y zonas de reglamentación especial no tienen coeficiente propio: se rigen por su entorno o por un plan específico, así que no se calcula cuánto se puede construir.</li>
+            <li>En zonas comerciales la altura no es un número fijo de pisos: depende del ancho de la calle (1,5 × ancho de vía más retiros).</li>
+            <li>Los m² construibles son un máximo teórico (área del lote × coeficiente). No consideran retiros, estacionamientos ni la forma del lote.</li>
+          </ul>
+        </details>
       </section>
 
       <footer class="small muted">
         Datos © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">colaboradores de OpenStreetMap</a> (licencia ODbL).
         Consultas vía Overpass API y Nominatim.
+        Zonificación: Municipalidad Provincial de Arequipa (IMPLA).
       </footer>
     </aside>
 
@@ -94,6 +121,7 @@
   <script src="js/config.js"></script>
   <script src="js/geo.js"></script>
   <script src="js/services.js"></script>
+  <script src="js/zonificacion.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
