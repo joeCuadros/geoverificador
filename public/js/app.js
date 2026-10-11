@@ -349,12 +349,12 @@
     if (!(err instanceof Services.ServiceError)) return { title: `Error inesperado: ${err.message}`, hint: '' };
     const hints = {
       network: `Puede ser falta de internet, un bloqueo del navegador/extensión/red, o que ${service} esté caído. Abre la pestaña Network de las herramientas de desarrollo para ver el motivo exacto.`,
-      timeout: 'El servicio público está lento o saturado. Espera un momento o prueba el servidor alternativo con un radio menor.',
+      timeout: 'Los servidores públicos están lentos o saturados (ya se reintentó automáticamente). Espera un momento o prueba con un radio menor.',
       rate_limit: 'Se superó el límite de uso. Espera uno o dos minutos antes de reintentar; no repitas la consulta de inmediato.',
       forbidden: service === 'Nominatim'
         ? 'Nominatim exige identificar la aplicación. Abre la página desde un servidor local (http://localhost:8000) en lugar de file:// y, si puedes, completa nominatimEmail en js/config.js.'
         : 'El servicio bloqueó la solicitud. Prueba el servidor alternativo.',
-      busy: 'El servicio público está ocupado. Prueba el servidor alternativo o reintenta en unos minutos.',
+      busy: 'Todos los servidores públicos están ocupados ahora mismo (ya se reintentó automáticamente). Reintenta en unos minutos o con un radio menor.',
       runtime: 'La consulta fue demasiado pesada para el servidor público. Reduce el radio e inténtalo de nuevo.',
       parse: 'El servicio respondió algo inesperado (a veces una página de error). Reintenta más tarde.',
       http: 'Revisa el código HTTP en la pestaña Network.',
@@ -389,7 +389,11 @@
       setBusy(true);
       setStatus('loading', 'Consultando Overpass API… puede tardar hasta unos 30 s.');
       try {
-        payload = await Services.overpass(endpoint, query);
+        payload = await Services.overpassWithFallback(endpoint, query, (n, total, url) => {
+          if (n === 1) return;
+          const label = (CONFIG.overpassEndpoints.find((e) => e.url === url) || { label: url }).label;
+          setStatus('loading', `El servidor está saturado. Reintentando con ${esc(label)} (intento ${n} de ${total})…`);
+        });
         state.cache.set(key, { at: Date.now(), payload });
       } catch (err) {
         setBusy(false);
@@ -438,7 +442,8 @@
     if (items.length === 0) {
       setStatus('empty', `<strong>La consulta funcionó, pero no hay elementos.</strong> Overpass respondió sin resultados para estas etiquetas en ${radius} m${when}. Puede que no existan o que no estén mapeados en OSM. Prueba un radio mayor.`);
     } else {
-      const origin = fromCache ? 'Resultado guardado localmente (consulta repetida hace menos de 2 min; no se envió una nueva solicitud).' : `Respuesta real de Overpass en ${payload.ms} ms (HTTP ${payload.status}).`;
+      const retried = payload.attempts > 1 ? ` Se obtuvo tras ${payload.attempts} intentos (servidor: ${esc(new URL(payload.endpoint).hostname)}).` : '';
+      const origin = fromCache ? 'Resultado guardado localmente (consulta repetida hace menos de 2 min; no se envió una nueva solicitud).' : `Respuesta real de Overpass en ${payload.ms} ms (HTTP ${payload.status}).${retried}`;
       setStatus('ok', `<strong>${items.length} elementos encontrados</strong> en ${radius} m. ${origin}${when}`);
     }
     $('download').hidden = false;
