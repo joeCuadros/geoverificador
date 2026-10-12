@@ -27,34 +27,45 @@
 
 ## Project setup
 
+This project uses **[pnpm](https://pnpm.io/)** (v11+). Do not use `npm install`: there is no
+`package-lock.json`, so npm would resolve different dependency versions than `pnpm-lock.yaml`.
+
 ```bash
-$ npm install
+$ pnpm install
 ```
+
+`pnpm-workspace.yaml` holds the pnpm settings:
+
+- `allowBuilds`: install scripts of `@parcel/watcher` and `unrs-resolver` are disabled on purpose
+  (both ship prebuilt binaries; the scripts are only source-build fallbacks).
+- `overrides`: security patches for transitive dev dependencies.
 
 ## Compile and run the project
 
 ```bash
 # development
-$ npm run start
+$ pnpm run start
 
 # watch mode
-$ npm run start:dev
+$ pnpm run start:dev
 
 # production mode
-$ npm run start:prod
+$ pnpm run start:prod
 ```
+
+The app is served at http://localhost:3000 (override with the `PORT` environment variable).
 
 ## Run tests
 
 ```bash
 # unit tests
-$ npm run test
+$ pnpm run test
 
 # e2e tests
-$ npm run test:e2e
+$ pnpm run test:e2e
 
 # test coverage
-$ npm run test:cov
+$ pnpm run test:cov
 ```
 
 ## Deployment
@@ -64,7 +75,7 @@ When you're ready to deploy your NestJS application to production, there are som
 If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
 
 ```bash
-$ npm install -g @nestjs/mau
+$ pnpm add -g @nestjs/mau
 $ mau deploy
 ```
 

@@ -16,9 +16,15 @@ const CONFIG = {
 
   overpassEndpoints: [
     { label: 'overpass-api.de (principal)', url: 'https://overpass-api.de/api/interpreter' },
-    { label: 'overpass.kumi.systems (alternativo)', url: 'https://overpass.kumi.systems/api/interpreter' },
+    { label: 'maps.mail.ru (alternativo)', url: 'https://maps.mail.ru/osm/tools/overpass/api/interpreter' },
+    { label: 'overpass.kumi.systems (respaldo)', url: 'https://overpass.kumi.systems/api/interpreter' },
   ],
+  overpassMaxAttempts: 4,       // intentos totales rotando servidores ante saturación (HTTP 5xx, timeout, red)
+  overpassRetryDelayMs: 1500,   // espera creciente entre intentos: 1.5 s, 3 s, 4.5 s…
   overpassTimeoutSec: 25,     // timeout del servidor dentro de la consulta
+  // Memoria que la consulta reserva en Overpass. El valor por defecto (512 MB) hace que un servidor
+  // saturado la rechace con HTTP 504 (Dispatcher_Client). 1.5 km de radio ocupa ~1 MB, así que 64 MB sobra.
+  overpassMaxSizeBytes: 64 * 1024 * 1024,
   clientTimeoutMs: 35000,     // timeout del navegador
   analyzeCooldownMs: 3000,    // mínimo entre consultas reales a Overpass
   cacheTtlMs: 2 * 60 * 1000,  // misma consulta (punto+radio+endpoint) no se repite durante 2 min
