@@ -32,14 +32,35 @@
 
 ## 3. Riesgo normativo: zonificación
 
-**Fuente.** Plano de Zonificación del PDM Arequipa 2016-2025 (Ordenanza Municipal N.° 975-MPA, 2016) y su Reglamento (Cap. IV, Título III), publicados por la Municipalidad Provincial de Arequipa.
+**Fuente y marco legal.**
 
-**Cómo se obtuvo (declarado por el equipo; el procedimiento no se puede reconstruir desde este repositorio):**
+- Plano de Zonificación y Reglamento del Plan de Desarrollo Metropolitano (PDM) de Arequipa 2016-2025, de la Municipalidad Provincial de Arequipa (MPA) e IMPLA.
+- **Ordenanzas.** La Ordenanza Municipal 961-MPA aprobó el PDM 2016-2025. La Ordenanza 975-MPA es la «restitución de zonificación urbana y desarrollo de secciones viales metropolitanas en el PDM Arequipa 2016-2025». El plano que usa la aplicación es el de la zonificación restituida por la 975, dentro del PDM aprobado por la 961. (Fuente de la lista de ordenanzas: presentación del Colegio de Arquitectos del Perú, que las cita junto con el texto de la sentencia; ver «Estado legal» más abajo. No se pudo leer el texto de la 975 en el portal municipal, que bloquea las descargas automáticas.)
+- **Vigencia.** El Título Preliminar del Reglamento (portal de transparencia de la MPA, documento fechado en 2016) establece: «La vigencia del presente Plan se establece en diez (10) años […], debiendo procederse posteriormente a su revisión o actualización.» Un PDM nuevo está en consulta pública: la página de la MPA indica que la etapa inició el 13 de octubre de 2025 y terminó el 11 de diciembre de 2025.
 
-1. Los polígonos se extrajeron del PDF vectorial del plano con QGIS y se guardaron en `public/data/zonas_aqp.geojson` (793 polígonos, EPSG:4326).
-2. El código de cada polígono (RDM-2, CZ, ZA…) se asignó por el **color de relleno**, usando la leyenda del plano.
-3. Se verificó contando etiquetas del plano.
-4. Las reglas de los 29 códigos (pisos, coeficiente, área libre, lote mínimo, frente mínimo, edificable) se transcribieron del Reglamento a `public/data/reglas_zonas.json`.
+**Cómo se obtuvo cada archivo.**
+
+| Archivo | Procedimiento | Verificación |
+|---|---|---|
+| `zonas_aqp.geojson` (793 polígonos, EPSG:4326) | Declarado por el equipo: polígonos extraídos del PDF vectorial del plano con QGIS; el código se asignó por el **color de relleno** usando la leyenda. | Comprobado por script: los 29 colores corresponden **uno a uno** con los 29 códigos, sin conflictos. El equipo también reporta haber contado etiquetas. **No comprobado por mí:** que cada polígono coincida con el plano (ver `VALIDACION.md` §3.1). |
+| `reglas_zonas.json` (29 códigos) | Transcripción del Título III del Reglamento. | **Contrastada** contra el texto del Título III (ver abajo). 29 de 29 coinciden. |
+
+**Contraste de las reglas con el Reglamento (hecho el 2026-10-12).** Se extrajo el texto del Título III, Cap. 1 «Zonificación y compatibilidades» (16 páginas; la copia que se pudo leer está alojada por la Municipalidad Distrital de Yanahuara: `https://muniyanahuara.gob.pe/wp-content/uploads/2021/01/4_1_tituloIII_1_zonificacion-y-compatibilidades.pdf`, PDF creado el 2016-02-08) y se comparó con `reglas_zonas.json`:
+
+| Grupo | Códigos | Resultado |
+|---|---|---|
+| Residencial | RDB, RDM-1, RDM-2, RDA-1, RDA-2, I1R | Lote mínimo, frente, pisos, coeficiente y área libre coinciden en las 6 (incluidos los casos con «(*)» para vías mayores a 18 m o frente a parques y el conjunto residencial de RDA-2). |
+| Comercial | CE, CS, CZ, CIn, CM | Coeficientes (4,0; 4,0; 5,5; 4,0; 7,0) y lotes (450 m² en CE y CIn; «resultado del diseño» o «existente» en los demás) coinciden. Altura = 1,5 × (ancho de vía + retiros). |
+| Industrial | I-1, I-2 | Lote 300 / 1 000 m², frente 10 / 20 m coinciden; altura «según proyecto», por eso no hay coeficiente. |
+| Equipamiento | E, H, OU1, OU2 | El Reglamento los remite a la zonificación comercial o residencial predominante del entorno: coincide. |
+| Especiales y riesgo | ZR, ZRE-CH, ZRE-PP, ZRE-PA, ZRE-PN, ZRE-RU, ZRE-RI1, ZRE-RI2, ZM, ZAQ, RP, ZA | ZR máx. 5 % construido; ZRE-PP 1,85 y 2,30, 40 % libre, lote 300 m²; ZRE-RI1 sin obras nuevas ni cambios de uso; ZRE-RI2 no urbanizable ni edificable; ZRE-CH/PA/PN/RU a plan específico; ZM y ZAQ a normas del Ministerio de Cultura; ZA no edificable. Todo coincide. |
+
+Observaciones del contraste:
+
+- Una **discrepancia interna del Reglamento**: para RDA-1 con frente a vía mayor a 18 m, la ficha de la zona dice coeficiente 4,20 y el cuadro resumen dice 3,50. El repositorio usa 4,20 (la ficha de la zona) y lo advierte en la nota de la regla.
+- El Reglamento escribe «ZRE-RE» en una fila donde el plano usa «ZRE-RU» (errata del documento).
+- En RDA-1 y RDA-2 el área libre mínima crece 5 puntos por cada piso adicional respecto de la altura base (hasta un máximo de 70 %); la tabla del repositorio guarda los valores de los casos base y del caso máximo que lista el Reglamento.
+- Este contraste usa una **copia** alojada en otro sitio municipal. El Título III oficial en el portal de la MPA no se pudo descargar de forma automática (devuelve una página de bloqueo). Conviene que el equipo lo confirme una vez contra el portal oficial.
 
 **Qué se calcula en la aplicación.**
 
@@ -47,17 +68,23 @@
 - Potencial constructivo (si el usuario escribe el área del lote):
   - m² techados = área del lote × coeficiente de edificación (base y máximo).
   - m² del primer piso = área del lote × (1 − área libre mínima).
-- Solo se calcula en zonas con `edificable = "si"` y coeficiente numérico. En zonas condicionadas o no construibles no se calcula nada y se explica por qué. Las zonas industriales `I-1` e `I-2` son «si» pero no tienen coeficiente en la tabla, así que tampoco se calcula.
+- Solo se calcula en zonas con `edificable = "si"` y coeficiente numérico. En zonas condicionadas o no construibles no se calcula nada y se explica por qué. `I-1` e `I-2` son «si» pero su altura es «según proyecto» y no tienen coeficiente, así que tampoco se calcula.
 
-**Por qué así.** La tabla de reglas es normativa y tiene respuesta verificable (se puede comparar con un certificado). Por eso es el eje de la ficha. Se prefirió no calcular cuando la norma no fija un coeficiente, antes que suponer uno.
+**Por qué así.** La tabla de reglas es normativa y verificable contra el documento, por eso es el eje de la ficha. Se prefirió no calcular cuando la norma no fija un coeficiente, antes que suponer uno.
+
+**Estado legal del plan (importante para un inversor).**
+
+- **Sentencia.** La Sentencia de Vista N.° 183-2019 (4 de diciembre de 2019, Primera Sala Penal de Apelaciones de la Corte Superior de Justicia de Arequipa, expediente 04567-2017-97-0401-JR-PE-01) dispuso la suspensión de todo acto administrativo que implique ejecutar el PDM 2016-2025 en cuatro puntos: (1) certificados de zonificación y vías para habilitaciones urbanas y planes específicos en predios que en el PDM 2002-2015 eran zona agrícola (AA) o reserva paisajista (RP); (2) la compatibilidad de la zona agrícola con usos distintos (ZR, OU, residencial); (3) planes específicos y habilitaciones sobre esos mismos predios; (4) la delimitación del centro histórico y su zona de amortiguamiento conforme a la OM 115-2001. La suspensión rige «hasta que la Municipalidad Provincial de Arequipa tome las medidas necesarias para la revisión del PDM 2016-2025». Fuente: presentación del Colegio de Arquitectos del Perú que transcribe el fallo (`https://www.caa.org.pe/wp-content/uploads/2024/12/050525-Presentacion-Patricia-Prietro-FINAL-HOY.pdf`); no se leyó la resolución original.
+- **No verificado:** si la suspensión sigue vigente hoy ni cómo se ejecutó. Una nota periodística de octubre de 2025 habla de litigio todavía en curso.
+- **Consecuencia para la ficha:** la aplicación no sabe qué predios eran agrícolas o de reserva paisajista en el plan anterior, así que no puede avisar del caso. Se muestra la limitación y se remite al IMPLA.
 
 **Límites** (también visibles en la aplicación):
 
-- Es el plano de 2016; no incluye planes específicos posteriores ni el plan metropolitano nuevo.
-- El código se asignó por color: cerca del borde entre zonas puede no ser exacto. Hay colores que el plano comparte entre niveles distintos (`E`, `H`, y `ZA`).
+- El plano tiene vigencia de 10 años desde 2016 y hay un PDM nuevo en trámite; no incluye planes específicos posteriores.
+- El código se asignó por color: cerca del borde entre zonas puede no ser exacto. El plano pinta con el mismo color varios niveles de `E` y `H`, y la zona agrícola con la de expansión agrícola (`ZA`).
 - En zonas comerciales la altura depende del ancho de la vía; no se calcula un número fijo de pisos.
-- Los m² son un máximo teórico: no consideran retiros, estacionamientos ni forma del lote.
-- **No comprobado:** que cada polígono coincida con el plano oficial. El protocolo está en `VALIDACION.md` (§3.1) y sus resultados están **pendientes**.
+- Los m² son un máximo teórico: no consideran retiros, estacionamientos ni forma del lote. El Reglamento excluye del coeficiente los estacionamientos, circulaciones comunes, casa de máquinas y sótanos, así que la superficie total construida puede ser mayor que la que muestra la app.
+- Solo el Certificado de Zonificación y Vías que emite el IMPLA tiene valor legal.
 
 ## 4. Riesgo de desastre: peligros geológicos
 

@@ -33,7 +33,7 @@ const CONFIG = {
   zonificacion: {
     geojsonUrl: 'data/zonas_aqp.geojson', // polígonos con los campos `codigo` y `color`
     reglasUrl: 'data/reglas_zonas.json',  // reglas por código: pisos, coeficiente, área libre, lote mínimo…
-    fuente: 'Plano de Zonificación del PDM Arequipa 2016-2025 (Ordenanza Municipal N.° 975-MPA, 2016)',
+    fuente: 'Plano de Zonificación del PDM Arequipa 2016-2025 (PDM aprobado por la Ordenanza 961-MPA; zonificación restituida por la Ordenanza 975-MPA)',
   },
 
   // Peligros geológicos registrados: archivo local generado con scripts/descargar-peligros.mjs.

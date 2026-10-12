@@ -5,7 +5,7 @@ Distinguimos dos cosas, porque responden preguntas distintas:
 - **Verificación (hecha, automática):** ¿el código calcula lo que dice calcular y los archivos están íntegros?
 - **Validación (pendiente, con personas y documentos externos):** ¿los datos coinciden con la realidad y la herramienta sirve a quien la usa?
 
-> **Estado honesto:** la verificación está hecha y se puede repetir con un comando. La validación externa **todavía no se ha hecho**: este documento define el protocolo y deja las plantillas vacías. Ningún resultado de validación externa aparece aquí porque no existe.
+> **Estado honesto:** la verificación está hecha y se puede repetir con un comando. De la validación externa se hizo una parte (§2.1: la tabla de reglas contra el Reglamento); lo demás **todavía no se ha hecho**: este documento define el protocolo y deja las plantillas vacías. Ningún resultado que no exista aparece aquí.
 
 ## 1. Hipótesis y criterios de éxito
 
@@ -25,11 +25,11 @@ Comando (sin internet ni dependencias):
 node scripts/verificar-datos.mjs
 ```
 
-Corrida del 2026-10-12: **28 de 28 comprobaciones correctas.**
+Corrida del 2026-10-12: **29 de 29 comprobaciones correctas.**
 
 **A. Integridad de los archivos**
 
-- Zonas: formato GeoJSON, todos los polígonos con `codigo` y `color`, todo código del plano existe en la tabla de reglas, coordenadas dentro de Arequipa.
+- Zonas: formato GeoJSON, todos los polígonos con `codigo` y `color`, todo código del plano existe en la tabla de reglas, coordenadas dentro de Arequipa, y cada color corresponde a un solo código (29 colores, 29 códigos, sin conflictos).
 - Reglas: 29 códigos con nombre y `edificable` válido; `coef_max` nunca menor que `coef_base`.
 - Delitos: el número de registros coincide con los metadatos; solo robo y hurto; fechas válidas; ids únicos; sin dirección, cuadra ni hora exacta; la cobertura mensual guardada coincide, mes a mes, con los registros descargados.
 - Peligros: número de registros coincide con los metadatos; ningún código crudo quedó sin traducir; ids únicos; años coherentes.
@@ -47,6 +47,12 @@ Corrida del 2026-10-12: **28 de 28 comprobaciones correctas.**
 **Se comprobó que la prueba puede fallar:** al introducir a propósito un error en el radio de las denuncias (+50 m), la prueba reportó 139 diferencias en 300 puntos y falló.
 
 **Qué NO demuestra la verificación:** que el plano esté bien digitalizado ni que las denuncias reflejen el delito real. Solo que, dados los datos, el cálculo es correcto.
+
+## 2.1 Validación externa ya hecha: reglas frente al Reglamento
+
+Se contrastó `reglas_zonas.json` con el texto del Título III del Reglamento del PDM (zonificación y compatibilidades). Resultado: **29 de 29 códigos coinciden** en lote mínimo, frente, pisos, coeficiente, área libre y condición de edificabilidad. El detalle por grupo, las observaciones (una discrepancia interna del propio Reglamento en RDA-1 y una errata «ZRE-RE») y las fuentes están en `METODOLOGIA.md` §3.
+
+Límites de esta validación: usa una copia del Reglamento alojada en otro sitio municipal, no el portal oficial de la MPA (que bloquea la descarga automática); y valida la **transcripción de las reglas**, no los polígonos del plano. Sigue pendiente que el equipo la confirme contra el portal oficial.
 
 ## 3. Validación externa (pendiente)
 
@@ -97,9 +103,11 @@ Corrida del 2026-10-12: **28 de 28 comprobaciones correctas.**
 | Muestra de usuarios pequeña | Sin significancia estadística | Reportar medianas y casos, decirlo explícitamente |
 | Fuentes públicas que cambian | Cifras distintas al repetir la descarga | Fecha de descarga en cada archivo; scripts reproducibles |
 | Overpass público (entorno) caído o saturado | La sección de entorno no responde | La app muestra el error; no inventa resultados |
+| El PDM 2016-2025 llegó al fin de su vigencia (10 años) y una sentencia suspendió ciertos actos de ejecución | La zona mostrada puede no ser la que hoy aplica el IMPLA | Limitación visible en la app; el Certificado de Zonificación y Vías es el único documento con valor legal (METODOLOGIA §3) |
 
 ## 5. Qué falta para cerrar la validación
 
+- [ ] Confirmar el contraste de reglas (§2.1) contra el Título III en el portal oficial de la MPA.
 - [ ] Fijar los umbrales de H1 y H2 (§1).
 - [ ] Obtener los certificados u otra referencia oficial para la muestra (§3.1).
 - [ ] Reclutar participantes y fijar las tareas con su respuesta correcta (§3.2).

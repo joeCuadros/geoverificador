@@ -57,6 +57,14 @@ console.log('\n== A. Integridad de los archivos ==');
   const usados = new Set(f.map((x) => x.properties.codigo));
   const sinPoligono = Object.keys(reglas).filter((c) => !usados.has(c));
   console.log(`INFO  Códigos de la tabla sin polígono en el archivo: ${sinPoligono.join(', ') || 'ninguno'}`);
+  const colorDe = {};
+  const codigosDe = {};
+  f.forEach((x) => {
+    (colorDe[x.properties.color] ||= new Set()).add(x.properties.codigo);
+    (codigosDe[x.properties.codigo] ||= new Set()).add(x.properties.color);
+  });
+  const conflictos = [...Object.entries(colorDe), ...Object.entries(codigosDe)].filter(([, s]) => s.size > 1);
+  comprobar('Zonas: cada color corresponde a un solo código y cada código a un solo color (la asignación por color es consistente)', conflictos.length === 0, `${Object.keys(colorDe).length} colores, ${Object.keys(codigosDe).length} códigos`);
   const coords = f.flatMap((x) => (x.geometry.type === 'Polygon' ? [x.geometry.coordinates] : x.geometry.coordinates).flat(2));
   comprobar('Zonas: coordenadas dentro de Arequipa (lon -72…-71, lat -17…-16)', coords.every(([x, y]) => x > -72 && x < -71 && y > -17 && y < -16));
 }
