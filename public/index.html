@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Prueba técnica OpenStreetMap · Arequipa</title>
+  <title>GeoVerificador · Riesgos de un predio en Arequipa</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
         integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
   <link rel="stylesheet" href="css/styles.css">
@@ -12,8 +12,8 @@
   <div class="layout">
     <aside class="panel">
       <header>
-        <h1>¿Qué hay cerca de esta ubicación?</h1>
-        <p class="muted">Prueba técnica con datos públicos de OpenStreetMap en Arequipa.</p>
+        <h1>GeoVerificador</h1>
+        <p class="muted">Conoce los riesgos de un predio antes de invertir en Arequipa. Todo sale de datos públicos y cada dato dice de dónde viene y qué no cubre. No es una recomendación de compra.</p>
       </header>
 
       <section class="block">
@@ -30,8 +30,16 @@
       </section>
 
       <section class="block">
+        <h2>Resumen del punto</h2>
+        <ul id="resumen" class="resumen">
+          <li class="muted small">Elige un punto para ver el resumen.</li>
+        </ul>
+        <p class="small muted">Son hechos de cada fuente, no una calificación: no se suman en un puntaje porque no existe una base para decidir cuánto pesa cada riesgo.</p>
+      </section>
+
+      <section class="block">
         <div class="block-head">
-          <h2>2. Zonificación del punto</h2>
+          <h2>2. Riesgo normativo: zonificación</h2>
           <label class="check small"><input id="zon-layer" type="checkbox"> Ver plano en el mapa</label>
         </div>
         <div id="zon" class="zon" role="status" aria-live="polite">
@@ -45,7 +53,18 @@
 
       <section class="block">
         <div class="block-head">
-          <h2>3. Robos y hurtos denunciados cerca</h2>
+          <h2>3. Riesgo de desastre: peligros geológicos</h2>
+          <label class="check small"><input id="pel-layer" type="checkbox"> Ver peligros en el mapa</label>
+        </div>
+        <div id="pel" class="zon" role="status" aria-live="polite">
+          <p class="muted small">Elige un punto para ver qué peligros geológicos hay registrados cerca.</p>
+        </div>
+        <p id="pel-fuente" class="small muted"></p>
+      </section>
+
+      <section class="block">
+        <div class="block-head">
+          <h2>4. Riesgo de seguridad: robos y hurtos</h2>
           <label class="check small"><input id="del-layer" type="checkbox"> Ver mapa de calor</label>
         </div>
         <div id="del-leyenda" class="del-leyenda small" hidden>
@@ -58,7 +77,7 @@
       </section>
 
       <section class="block">
-        <h2>4. Define el análisis del entorno</h2>
+        <h2>5. Entorno: servicios, transporte y áreas verdes</h2>
         <div class="row">
           <label class="field">Radio
             <select id="radius"></select>
@@ -75,7 +94,7 @@
 
       <section class="block">
         <div class="block-head">
-          <h2>5. Resultados del entorno</h2>
+          <h2>6. Resultados del entorno</h2>
           <button id="download" type="button" class="link" hidden>Descargar JSON</button>
         </div>
         <div id="cats"></div>
@@ -117,11 +136,25 @@
           </ul>
         </details>
         <details>
+          <summary>Limitaciones de los peligros geológicos</summary>
+          <ul class="small limits">
+            <li>Es un inventario de eventos documentados (por geólogos en campo, informes técnicos o fotointerpretación), no un mapa de susceptibilidad. Si no hay registros cerca, no significa que el lugar sea seguro: solo que nadie documentó un evento ahí.</li>
+            <li>Los registros están donde se hicieron inspecciones o estudios. Hay más puntos donde se estudió más, no necesariamente donde hay más peligro.</li>
+            <li>Los registros son de 2003 a 2023. No incluyen eventos posteriores ni muestran si un peligro fue corregido.</li>
+            <li>Cada punto es la ubicación de un sector inspeccionado, no el trazado del flujo o del deslizamiento: el alcance real de un evento puede ser mucho mayor que el punto.</li>
+            <li>Algunos registros tienen códigos que el diccionario oficial de la capa no define; se muestran como «sin clasificar» en lugar de adivinar su significado.</li>
+            <li>No se incluyen peligro sísmico, volcánico (Misti), de suelos ni tsunami: no se incorporó ninguna capa pública utilizable de esos peligros. Esta ficha no los cubre.</li>
+            <li>Además de este inventario, el plano de zonificación marca zonas de riesgo muy alto (<code>ZRE-RI1</code>, <code>ZRE-RI2</code>); se avisa en la sección de peligros si el punto cae en una.</li>
+          </ul>
+        </details>
+        <details>
           <summary>Limitaciones de las denuncias</summary>
           <ul class="small limits">
             <li>Son denuncias, no delitos: muchos robos y hurtos no se denuncian, y la costumbre de denunciar cambia de un barrio a otro.</li>
-            <li>Solo se usan las denuncias con ubicación real. En la provincia de Arequipa son una minoría: más de la mitad no tenía coordenada y la fuente las puso en el centro de su sector policial, así que no sirven para medir cercanía y se descartan.</li>
-            <li>La proporción de denuncias con ubicación subió mucho desde diciembre de 2025. Por eso no se comparan años entre sí: el punto se compara con el resto de la ciudad en el mismo periodo.</li>
+            <li>Solo se usan las denuncias con ubicación real. Para robo y hurto en la provincia de Arequipa son 8 245 de 16 780 (49 %): 45 % no traía coordenada (la fuente las puso en el centro de su sector policial, así que no sirven para medir cercanía) y 5 % tenía coordenada en otro distrito del denunciado. Ambos grupos se descartan.</li>
+            <li>La proporción de denuncias con ubicación pasó de ≈25 % (hasta noviembre de 2025) a ≈90 % (desde enero de 2026), aunque el total mensual se mantuvo. Por eso el conteo usa solo el tramo reciente de cobertura homogénea y no se comparan periodos distintos.</li>
+            <li>La coordenada «real» es la que se registró con latitud y longitud intercambiadas y la fuente corrigió; se validó contra el distrito de la denuncia, no contra la cuadra. Su precisión exacta no se puede comprobar.</li>
+            <li>Dentro de ese tramo, el ≈10 % sin ubicación no se puede ubicar y el conteo lo subestima; no se sabe si esas denuncias se concentran en ciertos barrios.</li>
             <li>Varias denuncias comparten exactamente la misma coordenada (por ejemplo, un mercado o una avenida). Una sola dirección puede pesar mucho en el conteo.</li>
             <li>Solo robo y hurto; no incluye otros delitos ni faltas.</li>
             <li>El mapa de calor es relativo: el color indica dónde se concentran más denuncias dentro de la ciudad, no un nivel absoluto de riesgo. Está suavizado (unos 200 m), así que no muestra cuadras exactas.</li>
@@ -135,6 +168,7 @@
         Consultas vía Overpass API y Nominatim.
         Zonificación: Municipalidad Provincial de Arequipa (IMPLA).
         Denuncias: Ministerio del Interior, Mapa del Delito Georreferenciado (SIDPOL-PNP).
+        Peligros geológicos: INGEMMET (GEOCATMIN).
       </footer>
     </aside>
 
@@ -149,6 +183,7 @@
   <script src="js/geo.js"></script>
   <script src="js/services.js"></script>
   <script src="js/zonificacion.js"></script>
+  <script src="js/peligros.js"></script>
   <script src="js/delitos.js"></script>
   <script src="js/app.js"></script>
 </body>

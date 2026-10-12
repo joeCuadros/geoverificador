@@ -151,3 +151,10 @@ input[type="number"] { font: inherit; color: var(--text); padding: 7px 9px; bord
 .del-leyenda[hidden] { display: none; }
 .del-bar { flex: 1; height: 8px; border-radius: 999px;
   background: linear-gradient(90deg, rgba(255,237,160,.5) 0%, #fd8d3c 45%, #e31a1c 75%, #800026 100%); }
+
+/* Resumen del punto: una línea por tipo de riesgo. */
+.resumen { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 6px; }
+.resumen li { display: grid; grid-template-columns: 92px 1fr; gap: 8px; font-size: .88rem; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; background: #fff; }
+.resumen .tipo { font-weight: 700; color: var(--muted); font-size: .78rem; text-transform: uppercase; letter-spacing: .02em; }
+#pel-fuente { margin: 8px 0 0; }
+.pel-tipos { margin: 8px 0 0; padding-left: 18px; font-size: .88rem; }

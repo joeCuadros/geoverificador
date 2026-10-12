@@ -5,7 +5,12 @@
  * descargados con scripts/descargar-delitos.mjs a data/delitos_aqp.geojson.
  * Solo trae denuncias con coordenada real (ESTADO_COORD = 'INVERTIDA'); ver el script.
  *
- * Todo se muestra agregado, nunca como puntos individuales (últimos 12 meses del archivo):
+ * Periodo: la proporción de denuncias que trae coordenada real cambió mucho (≈25 % hasta noviembre de 2025,
+ * ≈90 % desde enero de 2026), aunque el total de denuncias por mes se mantuvo. Mezclar ambos periodos
+ * sesgaría el mapa en el tiempo, así que se usa el tramo más reciente con cobertura homogénea: desde el último
+ * mes del archivo se retrocede mientras la cobertura mensual sea ≥ `coberturaMinima`, hasta `maxMeses`.
+ *
+ * Todo se muestra agregado, nunca como puntos individuales:
  *   - indicador(lat, lon): cuántas denuncias hay a menos de `radio` metros, con desglose robo/hurto.
  *   - capa(pane): mapa de calor de toda la ciudad. Cada denuncia se reparte con un núcleo gaussiano
  *     (σ = `suavizado` metros) sobre una cuadrícula de `celda` metros, así que no se puede leer
@@ -16,7 +21,7 @@
  */
 const Delitos = (() => {
   let ready = null; // promesa de carga (se comparte entre llamadas)
-  let meta = null; // { fuente, desde, hasta, ventanaDesde, registros, enVentana }
+  let meta = null; // { fuente, desde, hasta, ventanaDesde, meses, coberturaVentana, registros, enVentana }
   let pts = []; // denuncias dentro de la ventana: [{ lat, lon, subtipo }]
   let celdas = new Map(); // índice espacial: "i|j" → [puntos]
   let calor = null; // capa del mapa de calor (se crea la primera vez que se pide)
@@ -25,11 +30,26 @@ const Delitos = (() => {
   const claveCelda = (i, j) => `${i}|${j}`;
   const celdaDe = (lat, lon) => [Math.floor(lat / TAM_CELDA), Math.floor(lon / TAM_CELDA)];
 
-  // "2026-07-31" → "2025-08-01": primer día de la ventana de 12 meses que termina en `hasta`.
-  function inicioVentana(hasta) {
-    const [a, m] = hasta.split('-').map(Number);
-    const d = new Date(Date.UTC(a - 1, m, 1)); // mes siguiente, un año antes (Date.UTC usa meses 0-11)
-    return d.toISOString().slice(0, 10);
+  /**
+   * Primer día de la ventana: se parte del último mes con datos y se retrocede mientras el mes tenga
+   * cobertura (denuncias con coordenada / total) de al menos `minima`, hasta `maxMeses` meses.
+   * Devuelve { desde: "2026-01-01", meses: 7, cobertura: 0.89 } o lanza un error si ni el último mes cumple.
+   */
+  function elegirVentana(hasta, cobertura, minima, maxMeses) {
+    const meses = [];
+    let [a, m] = hasta.split('-').map(Number);
+    while (meses.length < maxMeses) {
+      const c = cobertura[`${a}-${String(m).padStart(2, '0')}`];
+      if (!c || c.total === 0 || c.conUbicacion / c.total < minima) break;
+      meses.push({ a, m, ...c });
+      m--;
+      if (m === 0) { m = 12; a--; }
+    }
+    if (meses.length === 0) throw new Error(`Ningún mes reciente tiene al menos ${Math.round(minima * 100)} % de denuncias con ubicación.`);
+    const primero = meses[meses.length - 1];
+    const con = meses.reduce((t, x) => t + x.conUbicacion, 0);
+    const total = meses.reduce((t, x) => t + x.total, 0);
+    return { desde: `${primero.a}-${String(primero.m).padStart(2, '0')}-01`, meses: meses.length, cobertura: con / total };
   }
 
   /** Carga el archivo (una sola vez). Si falla, la siguiente llamada lo reintenta. */
@@ -52,12 +72,13 @@ const Delitos = (() => {
         } catch (_) {
           throw new Error(`${cfg.geojsonUrl} no es un JSON válido.`);
         }
-        if (!fc || !Array.isArray(fc.features) || !fc.metadata || !fc.metadata.hasta) {
-          throw new Error('El archivo de denuncias no tiene el formato esperado (falta `features` o `metadata.hasta`).');
+        if (!fc || !Array.isArray(fc.features) || !fc.metadata || !fc.metadata.hasta || !fc.metadata.cobertura) {
+          throw new Error('El archivo de denuncias no tiene el formato esperado (falta `features`, `metadata.hasta` o `metadata.cobertura`). Vuelve a generarlo con scripts/descargar-delitos.mjs.');
         }
 
         const hasta = fc.metadata.hasta;
-        const desde = inicioVentana(hasta);
+        const ventana = elegirVentana(hasta, fc.metadata.cobertura, cfg.coberturaMinima, cfg.maxMeses);
+        const desde = ventana.desde;
         const lista = [];
         const idx = new Map();
         fc.features.forEach((f) => {
@@ -79,6 +100,8 @@ const Delitos = (() => {
           desde: fc.metadata.desde,
           hasta,
           ventanaDesde: desde,
+          meses: ventana.meses,
+          coberturaVentana: ventana.cobertura,
           registros: fc.features.length,
           enVentana: lista.length,
         };

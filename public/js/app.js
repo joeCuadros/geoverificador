@@ -2,8 +2,8 @@
  * app.js — Interfaz: mapa Leaflet, selección de punto, análisis y resultados.
  * Principio de uso responsable: NINGUNA consulta se lanza al hacer clic, escribir o cambiar el radio.
  * Solo se consulta al pulsar «Buscar» (Nominatim) o «Analizar entorno» (Overpass).
- * La zonificación y las denuncias sí se muestran al elegir el punto, porque se resuelven con archivos locales
- * (zonificacion.js y delitos.js).
+ * La zonificación, los peligros y las denuncias sí se muestran al elegir el punto, porque se resuelven con
+ * archivos locales (zonificacion.js, peligros.js y delitos.js).
  */
 (() => {
   'use strict';
@@ -35,6 +35,10 @@
     delito: null,        // resultado de Delitos.indicador para el punto actual
     delitoSeq: 0,        // descarta respuestas de un punto anterior
     delLayer: null,      // mapa de calor (se crea la primera vez que se activa)
+    peligro: null,       // resultado de Peligros.indicador para el punto actual
+    peligroStatus: 'none', // none | loading | ok | error
+    peligroSeq: 0,       // descarta respuestas de un punto anterior
+    pelLayer: null,      // peligros registrados (se crea la primera vez que se activa)
   };
 
   // ------------------------------------------------------------------ Mapa
@@ -52,6 +56,8 @@
   const calorPane = map.createPane('calor');
   calorPane.style.zIndex = 360;
   calorPane.style.pointerEvents = 'none';
+  // Los peligros van encima del mapa de calor y sí reciben clics (para abrir su popup).
+  map.createPane('peligros').style.zIndex = 450;
 
   // ------------------------------------------------------- Controles iniciales
   CONFIG.radii.forEach((r) => {
@@ -159,6 +165,7 @@
     });
     $('download').hidden = true;
     $('query-details').hidden = true;
+    renderResumen();
   }
 
   function setPoint(lat, lon) {
@@ -175,7 +182,9 @@
     drawCircle();
     clearResults();
     updateZona();
+    updatePeligro();
     updateDelito();
+    renderResumen();
     $('point-info').innerHTML = `Punto: <strong>${lat.toFixed(6)}, ${lon.toFixed(6)}</strong>
       · <a href="https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=18/${lat}/${lon}" target="_blank" rel="noopener">verificar en OSM</a>`;
     $('analyze').disabled = state.busy;
@@ -277,15 +286,130 @@
       state.zonaStatus = z ? 'ok' : 'outside';
       if (z) state.zonOutline = Zonificacion.contorno(z.feature).addTo(map);
       renderZona();
+      renderPeligro(); // el aviso de zona de riesgo depende de la zonificación
+      renderResumen();
     } catch (err) {
       if (seq !== state.zonaSeq) return;
       state.zonaStatus = 'error';
+      renderResumen();
       zonMessage('error', `<strong>No se pudo consultar la zonificación.</strong> ${esc(err.message)}`);
       console.error('[Zonificación] fallo', err);
     }
   }
 
   $('lote').addEventListener('input', renderZona);
+
+  // ------------------------------------------------------------------ Peligros
+  $('pel-fuente').textContent = `Fuente: ${CONFIG.peligros.fuente}. Es un inventario de eventos documentados: que no haya registros no significa que el lugar sea seguro.`;
+
+  function pelMessage(kind, html) {
+    $('pel').innerHTML = `<p class="zon-msg ${kind}">${html}</p>`;
+  }
+
+  // ¿El plano de zonificación marca el punto como zona de riesgo?
+  const enZonaRiesgo = () => state.zonaStatus === 'ok' && state.zona.regla && state.zona.regla.grupo === 'riesgo';
+
+  function renderPeligro() {
+    if (state.peligroStatus !== 'ok') return;
+    const p = state.peligro;
+    const m = p.masCercano;
+    const alerta = enZonaRiesgo()
+      ? `<p class="zon-msg empty"><strong>El plano de zonificación ubica este punto en zona de riesgo (${esc(state.zona.codigo)}: ${esc(state.zona.regla.nombre)}).</strong> ${esc(state.zona.regla.nota || '')}</p>`
+      : '';
+    $('pel').innerHTML = `
+      ${alerta}
+      <div class="zon-card">
+        <div class="zon-head">
+          <span class="zon-code">${fmtNum(p.total)}</span>
+          <span class="zon-name">peligros geológicos registrados a ${p.radio} m</span>
+        </div>
+        ${p.porTipo.length ? `<ul class="pel-tipos">${p.porTipo.map(([t, n]) => `<li>${esc(t)}: ${fmtNum(n)}</li>`).join('')}</ul>` : ''}
+        <p class="zon-nota small">El más cercano está a <strong>${fmtDist(m.distancia)}</strong>: ${esc(m.subtipo || m.tipo)}${m.sector ? ` en «${esc(m.sector)}»` : ''}${m.anio ? `, registrado en ${esc(m.anio)}` : ''}.
+        Inventario ${esc(p.meta.anioDesde)}–${esc(p.meta.anioHasta)}, ${fmtNum(p.meta.registros)} registros en Arequipa metropolitana. Un registro es un evento documentado en un sector, no su alcance real.</p>
+      </div>`;
+  }
+
+  async function updatePeligro() {
+    const seq = ++state.peligroSeq;
+    const { lat, lon } = state.point;
+    state.peligro = null;
+    state.peligroStatus = 'loading';
+    pelMessage('loading', '<span class="spinner"></span>Buscando peligros registrados cerca…');
+    try {
+      const p = await Peligros.indicador(lat, lon);
+      if (seq !== state.peligroSeq) return; // el usuario ya eligió otro punto
+      state.peligro = p;
+      state.peligroStatus = 'ok';
+      renderPeligro();
+    } catch (err) {
+      if (seq !== state.peligroSeq) return;
+      state.peligroStatus = 'error';
+      pelMessage('error', `<strong>No se pudo consultar el inventario de peligros.</strong> ${esc(err.message)}`);
+      console.error('[Peligros] fallo', err);
+    }
+    renderResumen();
+  }
+
+  $('pel-layer').addEventListener('change', async (e) => {
+    const box = e.target;
+    if (!box.checked) {
+      if (state.pelLayer) map.removeLayer(state.pelLayer);
+      return;
+    }
+    box.disabled = true;
+    try {
+      if (!state.pelLayer) state.pelLayer = await Peligros.capa('peligros');
+      if (box.checked) state.pelLayer.addTo(map);
+    } catch (err) {
+      box.checked = false;
+      pelMessage('error', `<strong>No se pudieron cargar los peligros.</strong> ${esc(err.message)}`);
+      console.error('[Peligros] fallo', err);
+    } finally {
+      box.disabled = false;
+    }
+  });
+
+  // ------------------------------------------------------------------ Resumen
+  // Una línea por tipo de riesgo, con el dato tal cual lo entrega cada fuente (sin puntaje ni semáforo).
+  function renderResumen() {
+    if (!state.point) return;
+    const filas = [];
+
+    let norm = 'Consultando…';
+    if (state.zonaStatus === 'outside') norm = 'Fuera del área zonificada del plano.';
+    else if (state.zonaStatus === 'error') norm = 'No se pudo consultar.';
+    else if (state.zonaStatus === 'ok') {
+      const r = state.zona.regla;
+      const badge = ZON_BADGE[r && r.edificable];
+      norm = `${esc(state.zona.codigo)}${r ? ` · ${esc(r.nombre)}` : ''}${badge ? ` — ${badge.text.toLowerCase()}` : ''}`;
+    }
+    filas.push(['Normativo', norm]);
+
+    let des = 'Consultando…';
+    if (state.peligroStatus === 'error') des = 'No se pudo consultar.';
+    else if (state.peligroStatus === 'ok') {
+      const p = state.peligro;
+      des = `${fmtNum(p.total)} peligros geológicos registrados a ${p.radio} m (el más cercano a ${fmtDist(p.masCercano.distancia)}).`;
+      if (enZonaRiesgo()) des += ` El plano lo marca como zona de riesgo (${esc(state.zona.codigo)}).`;
+    }
+    filas.push(['Desastre', des]);
+
+    let seg = 'Consultando…';
+    if (state.delito) {
+      const { total, ROBO, HURTO } = state.delito.conteo;
+      seg = `${fmtNum(total)} denuncias con ubicación a ${state.delito.radio} m (${fmtNum(ROBO)} robos, ${fmtNum(HURTO)} hurtos) en ${state.delito.meta.meses} meses.`;
+    } else if (state.delitoError) seg = 'No se pudo consultar.';
+    filas.push(['Seguridad', seg]);
+
+    let ent = 'Sin analizar: pulsa «Analizar entorno».';
+    if (state.items.length && state.meta) {
+      const por = CATEGORIES.map((c) => `${c.label.toLowerCase()} ${state.items.filter((i) => i.cat.id === c.id).length}`).join(', ');
+      ent = `${state.items.length} elementos de OSM en ${state.meta.radius} m (${por}).`;
+    } else if (state.meta) ent = `Sin elementos de OSM en ${state.meta.radius} m con las etiquetas consultadas.`;
+    filas.push(['Entorno', ent]);
+
+    $('resumen').innerHTML = filas.map(([k, v]) => `<li><span class="tipo">${k}</span><span>${v}</span></li>`).join('');
+  }
 
   // ---------------------------------------------------------------- Denuncias
   const fmtFecha = (iso) => new Date(`${iso}T12:00:00Z`).toLocaleDateString('es-PE', { month: 'short', year: 'numeric', timeZone: 'UTC' });
@@ -309,7 +433,7 @@
           <div><dt>Robos</dt><dd>${fmtNum(ROBO)}</dd></div>
           <div><dt>Hurtos</dt><dd>${fmtNum(HURTO)}</dd></div>
         </dl>
-        <p class="zon-nota small">Últimos 12 meses con datos (${esc(periodo)}). Robo: con violencia o amenaza; hurto: sin violencia. Activa «Ver mapa de calor» para compararlo con el resto de la ciudad.</p>
+        <p class="zon-nota small">Periodo: ${d.meta.meses} meses (${esc(periodo)}), el tramo reciente donde ≥ ${Math.round(CONFIG.delitos.coberturaMinima * 100)} % de las denuncias trae ubicación (${Math.round(d.meta.coberturaVentana * 100)} % en promedio). Solo cuenta las que tienen ubicación. Robo: con violencia o amenaza; hurto: sin violencia. Activa «Ver mapa de calor» para compararlo con el resto de la ciudad.</p>
       </div>`;
   }
 
@@ -317,14 +441,19 @@
     const seq = ++state.delitoSeq;
     const { lat, lon } = state.point;
     state.delito = null;
+    state.delitoError = false;
     delMessage('loading', '<span class="spinner"></span>Contando denuncias alrededor del punto…');
     try {
       const d = await Delitos.indicador(lat, lon);
       if (seq !== state.delitoSeq) return; // el usuario ya eligió otro punto
       state.delito = d;
+      state.delitoError = false;
       renderDelito();
+      renderResumen();
     } catch (err) {
       if (seq !== state.delitoSeq) return;
+      state.delitoError = true;
+      renderResumen();
       delMessage('error', `<strong>No se pudo calcular el indicador de denuncias.</strong> ${esc(err.message)}`);
       console.error('[Denuncias] fallo', err);
     }
@@ -505,6 +634,7 @@
     };
 
     render(items);
+    renderResumen();
     showQuery(query);
 
     const when = state.meta.osmBase ? ` · datos OSM al ${esc(state.meta.osmBase)}` : '';
@@ -577,6 +707,21 @@
       zonificacion: state.zona
         ? { codigo: state.zona.codigo, regla: state.zona.regla, fuente: CONFIG.zonificacion.fuente }
         : null,
+      peligros_geologicos: state.peligro
+        ? {
+          radio_m: state.peligro.radio,
+          total: state.peligro.total,
+          por_tipo: Object.fromEntries(state.peligro.porTipo),
+          mas_cercano: {
+            distancia_m: Math.round(state.peligro.masCercano.distancia),
+            tipo: state.peligro.masCercano.tipo,
+            subtipo: state.peligro.masCercano.subtipo,
+            sector: state.peligro.masCercano.sector,
+            anio: state.peligro.masCercano.anio,
+          },
+          fuente: CONFIG.peligros.fuente,
+        }
+        : null,
       denuncias: state.delito
         ? {
           radio_m: state.delito.radio,
@@ -604,5 +749,5 @@
   $('analyze').addEventListener('click', analyze);
 
   // Ayuda para verificar desde la consola del navegador (F12)
-  window.osmDebug = { state, Geo, Services, Zonificacion, Delitos, CATEGORIES };
+  window.osmDebug = { map, state, Geo, Services, Zonificacion, Peligros, Delitos, CATEGORIES };
 })();

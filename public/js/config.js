@@ -36,10 +36,19 @@ const CONFIG = {
     fuente: 'Plano de Zonificación del PDM Arequipa 2016-2025 (Ordenanza Municipal N.° 975-MPA, 2016)',
   },
 
+  // Peligros geológicos registrados: archivo local generado con scripts/descargar-peligros.mjs.
+  peligros: {
+    geojsonUrl: 'data/peligros_aqp.geojson',
+    radio: 500, // metros alrededor del punto
+    fuente: 'Inventario de peligros geológicos, GEOCATMIN (INGEMMET)',
+  },
+
   // Denuncias de robo y hurto: archivo local generado con scripts/descargar-delitos.mjs.
   delitos: {
     geojsonUrl: 'data/delitos_aqp.geojson',
     radio: 500,      // metros alrededor del punto
+    coberturaMinima: 0.8, // un mes entra en el periodo si ≥ 80 % de sus denuncias trae coordenada real
+    maxMeses: 12,         // tope del periodo
     celda: 100,      // tamaño de celda del mapa de calor, en metros
     suavizado: 200,  // σ del núcleo gaussiano del mapa de calor, en metros
     fuente: 'Mapa del Delito Georreferenciado (MININTER), datos SIDPOL de la PNP',

@@ -14,6 +14,8 @@
  *    fuente las ubicó en el centro de su sector policial, así que no sirven para medir cercanía.
  *    Las 'UBIGEO_NO_COINCIDE' tienen coordenada, pero en un distrito distinto al denunciado.
  *  - Solo robo y hurto: los delitos que mejor reflejan la inseguridad en la calle.
+ *  - metadata.cobertura guarda, mes a mes, cuántas denuncias de robo y hurto traen coordenada real frente al total:
+ *    la proporción cambió mucho en el tiempo y el indicador debe usar un periodo homogéneo.
  *  - Sin dirección, cuadra ni hora exacta: el indicador no los necesita y se evita publicar
  *    datos que permitan ubicar a personas.
  */
@@ -54,6 +56,28 @@ async function consultar(params) {
       await esperar(2000 * intento);
     }
   }
+}
+
+// Cobertura mensual: de todas las denuncias de robo y hurto de la provincia, cuántas traen coordenada real
+// (ESTADO_COORD = 'INVERTIDA'). El navegador la usa para elegir un periodo con cobertura homogénea.
+async function coberturaMensual(anios) {
+  const base = "provincia_hecho = 'AREQUIPA' AND subtipo_hecho IN ('ROBO', 'HURTO')";
+  const cobertura = {};
+  for (const anio of anios) {
+    const data = await consultar({
+      where: `${base} AND fecha_hora_hecho >= timestamp '${anio}-01-01 00:00:00' AND fecha_hora_hecho < timestamp '${anio + 1}-01-01 00:00:00'`,
+      groupByFieldsForStatistics: 'mes_hecho,ESTADO_COORD',
+      outStatistics: JSON.stringify([{ statisticType: 'count', onStatisticField: 'OBJECTID', outStatisticFieldName: 'n' }]),
+    });
+    for (const { attributes: a } of data.features || []) {
+      const mes = `${anio}-${String(a.mes_hecho).padStart(2, '0')}`;
+      cobertura[mes] = cobertura[mes] || { total: 0, conUbicacion: 0 };
+      cobertura[mes].total += a.n;
+      if (a.ESTADO_COORD === 'INVERTIDA') cobertura[mes].conUbicacion += a.n;
+    }
+    await esperar(300);
+  }
+  return Object.fromEntries(Object.entries(cobertura).sort(([x], [y]) => x.localeCompare(y)));
 }
 
 const redondear = (n) => Math.round(n * 10 ** DECIMALES) / 10 ** DECIMALES;
@@ -108,6 +132,8 @@ async function main() {
   }
 
   const fechas = features.map((f) => f.properties.fecha).filter(Boolean).sort();
+  const anios = [...new Set(fechas.map((f) => Number(f.slice(0, 4))))];
+  const cobertura = await coberturaMensual(anios);
   const salida = {
     type: 'FeatureCollection',
     metadata: {
@@ -118,6 +144,7 @@ async function main() {
       registros: features.length,
       desde: fechas[0] || null,
       hasta: fechas[fechas.length - 1] || null,
+      cobertura,
     },
     features,
   };
@@ -135,6 +162,8 @@ async function main() {
   console.log(`Periodo: ${salida.metadata.desde} a ${salida.metadata.hasta}`);
   console.log('Por tipo:', porSubtipo);
   console.log('Por año:', porAnio);
+  console.log('Cobertura mensual (con ubicación / total):');
+  Object.entries(cobertura).forEach(([mes, c]) => console.log(`  ${mes}: ${c.conUbicacion} / ${c.total} (${Math.round((100 * c.conUbicacion) / c.total)} %)`));
 }
 
 main().catch((err) => {
