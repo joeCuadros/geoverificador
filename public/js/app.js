@@ -2,7 +2,8 @@
  * app.js — Interfaz: mapa Leaflet, selección de punto, análisis y resultados.
  * Principio de uso responsable: NINGUNA consulta se lanza al hacer clic, escribir o cambiar el radio.
  * Solo se consulta al pulsar «Buscar» (Nominatim) o «Analizar entorno» (Overpass).
- * La zonificación sí se muestra al elegir el punto, porque se resuelve con archivos locales (zonificacion.js).
+ * La zonificación y las denuncias sí se muestran al elegir el punto, porque se resuelven con archivos locales
+ * (zonificacion.js y delitos.js).
  */
 (() => {
   'use strict';
@@ -31,6 +32,8 @@
     zonaSeq: 0,          // descarta respuestas de un punto anterior
     zonLayer: null,      // plano completo (se crea la primera vez que se activa)
     zonOutline: null,    // contorno de la zona del punto
+    delito: null,        // resultado de Delitos.indicador para el punto actual
+    delitoSeq: 0,        // descarta respuestas de un punto anterior
   };
 
   // ------------------------------------------------------------------ Mapa
@@ -167,6 +170,7 @@
     drawCircle();
     clearResults();
     updateZona();
+    updateDelito();
     $('point-info').innerHTML = `Punto: <strong>${lat.toFixed(6)}, ${lon.toFixed(6)}</strong>
       · <a href="https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=18/${lat}/${lon}" target="_blank" rel="noopener">verificar en OSM</a>`;
     $('analyze').disabled = state.busy;
@@ -277,6 +281,62 @@
   }
 
   $('lote').addEventListener('input', renderZona);
+
+  // ---------------------------------------------------------------- Denuncias
+  const fmtFecha = (iso) => new Date(`${iso}T12:00:00Z`).toLocaleDateString('es-PE', { month: 'short', year: 'numeric', timeZone: 'UTC' });
+  // Nivel según el percentil frente al resto de la ciudad.
+  function nivelDelito(p) {
+    if (p >= 90) return { cls: 'no', text: 'Muy alto' };
+    if (p >= 75) return { cls: 'no', text: 'Alto' };
+    if (p >= 50) return { cls: 'warn', text: 'Medio' };
+    return { cls: 'ok', text: 'Bajo' };
+  }
+
+  $('del-fuente').textContent = `Fuente: ${CONFIG.delitos.fuente}. Solo denuncias con ubicación real; no son todos los delitos.`;
+
+  function delMessage(kind, html) {
+    $('del').innerHTML = `<p class="zon-msg ${kind}">${html}</p>`;
+  }
+
+  function renderDelito() {
+    const d = state.delito;
+    const { total, ROBO, HURTO } = d.conteo;
+    const nivel = nivelDelito(d.percentil);
+    const periodo = `${fmtFecha(d.meta.ventanaDesde)} – ${fmtFecha(d.meta.hasta)}`;
+    $('del').innerHTML = `
+      <div class="zon-card">
+        <div class="zon-head">
+          <span class="zon-code">${fmtNum(total)}</span>
+          <span class="zon-name">denuncias de robo y hurto a ${d.radio} m</span>
+          <span class="badge ${nivel.cls}">${nivel.text}</span>
+        </div>
+        <dl class="zon-data">
+          <div><dt>Robos</dt><dd>${fmtNum(ROBO)}</dd></div>
+          <div><dt>Hurtos</dt><dd>${fmtNum(HURTO)}</dd></div>
+          <div><dt>Frente a la ciudad</dt><dd>más que el ${d.percentil} % de los puntos</dd></div>
+          <div><dt>Punto típico de la ciudad</dt><dd>${fmtNum(d.mediana)} denuncias</dd></div>
+        </dl>
+        <div class="del-bar" aria-hidden="true"><span style="left:${d.percentil}%"></span></div>
+        <p class="zon-nota small">Últimos 12 meses con datos (${esc(periodo)}). Comparado con ${fmtNum(d.puntosReferencia)} puntos cada ${CONFIG.delitos.paso} m sobre las zonas construibles de la ciudad. Robo: con violencia o amenaza; hurto: sin violencia.</p>
+      </div>`;
+  }
+
+  async function updateDelito() {
+    const seq = ++state.delitoSeq;
+    const { lat, lon } = state.point;
+    state.delito = null;
+    delMessage('loading', '<span class="spinner"></span>Contando denuncias alrededor del punto…');
+    try {
+      const d = await Delitos.indicador(lat, lon);
+      if (seq !== state.delitoSeq) return; // el usuario ya eligió otro punto
+      state.delito = d;
+      renderDelito();
+    } catch (err) {
+      if (seq !== state.delitoSeq) return;
+      delMessage('error', `<strong>No se pudo calcular el indicador de denuncias.</strong> ${esc(err.message)}`);
+      console.error('[Denuncias] fallo', err);
+    }
+  }
 
   $('zon-layer').addEventListener('change', async (e) => {
     const box = e.target;
@@ -504,6 +564,19 @@
       zonificacion: state.zona
         ? { codigo: state.zona.codigo, regla: state.zona.regla, fuente: CONFIG.zonificacion.fuente }
         : null,
+      denuncias: state.delito
+        ? {
+          radio_m: state.delito.radio,
+          desde: state.delito.meta.ventanaDesde,
+          hasta: state.delito.meta.hasta,
+          robo: state.delito.conteo.ROBO,
+          hurto: state.delito.conteo.HURTO,
+          total: state.delito.conteo.total,
+          percentil_ciudad: state.delito.percentil,
+          mediana_ciudad: state.delito.mediana,
+          fuente: CONFIG.delitos.fuente,
+        }
+        : null,
       elements: state.items.map((i) => ({
         osm: i.id, category: i.cat.id, subtype: i.subtype, matchedTag: i.tag, name: i.name,
         lat: i.lat, lon: i.lon, distance_m: Math.round(i.distance * 10) / 10, distance_method: i.method, tags: i.tags,
@@ -520,5 +593,5 @@
   $('analyze').addEventListener('click', analyze);
 
   // Ayuda para verificar desde la consola del navegador (F12)
-  window.osmDebug = { state, Geo, Services, Zonificacion, CATEGORIES };
+  window.osmDebug = { state, Geo, Services, Zonificacion, Delitos, CATEGORIES };
 })();

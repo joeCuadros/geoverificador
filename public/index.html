@@ -44,7 +44,15 @@
       </section>
 
       <section class="block">
-        <h2>3. Define el análisis del entorno</h2>
+        <h2>3. Robos y hurtos denunciados cerca</h2>
+        <div id="del" class="zon" role="status" aria-live="polite">
+          <p class="muted small">Elige un punto para ver cuántas denuncias hay a su alrededor.</p>
+        </div>
+        <p id="del-fuente" class="small muted"></p>
+      </section>
+
+      <section class="block">
+        <h2>4. Define el análisis del entorno</h2>
         <div class="row">
           <label class="field">Radio
             <select id="radius"></select>
@@ -61,7 +69,7 @@
 
       <section class="block">
         <div class="block-head">
-          <h2>4. Resultados del entorno</h2>
+          <h2>5. Resultados del entorno</h2>
           <button id="download" type="button" class="link" hidden>Descargar JSON</button>
         </div>
         <div id="cats"></div>
@@ -102,12 +110,25 @@
             <li>Los m² construibles son un máximo teórico (área del lote × coeficiente). No consideran retiros, estacionamientos ni la forma del lote.</li>
           </ul>
         </details>
+        <details>
+          <summary>Limitaciones de las denuncias</summary>
+          <ul class="small limits">
+            <li>Son denuncias, no delitos: muchos robos y hurtos no se denuncian, y la costumbre de denunciar cambia de un barrio a otro.</li>
+            <li>Solo se usan las denuncias con ubicación real. En la provincia de Arequipa son una minoría: más de la mitad no tenía coordenada y la fuente las puso en el centro de su sector policial, así que no sirven para medir cercanía y se descartan.</li>
+            <li>La proporción de denuncias con ubicación subió mucho desde diciembre de 2025. Por eso no se comparan años entre sí: el punto se compara con el resto de la ciudad en el mismo periodo.</li>
+            <li>Varias denuncias comparten exactamente la misma coordenada (por ejemplo, un mercado o una avenida). Una sola dirección puede pesar mucho en el conteo.</li>
+            <li>Solo robo y hurto; no incluye otros delitos ni faltas.</li>
+            <li>El percentil compara con una cuadrícula de puntos cada 500 m sobre las zonas construibles del plano de zonificación; no incluye zona agrícola, reservas ni zonas de riesgo.</li>
+            <li>No se muestran denuncias individuales ni sus direcciones: el archivo no guarda dirección, cuadra ni hora exacta.</li>
+          </ul>
+        </details>
       </section>
 
       <footer class="small muted">
         Datos © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">colaboradores de OpenStreetMap</a> (licencia ODbL).
         Consultas vía Overpass API y Nominatim.
         Zonificación: Municipalidad Provincial de Arequipa (IMPLA).
+        Denuncias: Ministerio del Interior, Mapa del Delito Georreferenciado (SIDPOL-PNP).
       </footer>
     </aside>
 
@@ -122,6 +143,7 @@
   <script src="js/geo.js"></script>
   <script src="js/services.js"></script>
   <script src="js/zonificacion.js"></script>
+  <script src="js/delitos.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

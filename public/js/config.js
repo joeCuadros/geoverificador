@@ -35,6 +35,14 @@ const CONFIG = {
     reglasUrl: 'data/reglas_zonas.json',  // reglas por código: pisos, coeficiente, área libre, lote mínimo…
     fuente: 'Plano de Zonificación del PDM Arequipa 2016-2025 (Ordenanza Municipal N.° 975-MPA, 2016)',
   },
+
+  // Denuncias de robo y hurto: archivo local generado con scripts/descargar-delitos.mjs.
+  delitos: {
+    geojsonUrl: 'data/delitos_aqp.geojson',
+    radio: 500, // metros alrededor del punto
+    paso: 500,  // separación de la cuadrícula con la que se compara el resto de la ciudad
+    fuente: 'Mapa del Delito Georreferenciado (MININTER), datos SIDPOL de la PNP',
+  },
 };
 
 const CATEGORIES = [
