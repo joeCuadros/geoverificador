@@ -44,7 +44,13 @@
       </section>
 
       <section class="block">
-        <h2>3. Robos y hurtos denunciados cerca</h2>
+        <div class="block-head">
+          <h2>3. Robos y hurtos denunciados cerca</h2>
+          <label class="check small"><input id="del-layer" type="checkbox"> Ver mapa de calor</label>
+        </div>
+        <div id="del-leyenda" class="del-leyenda small" hidden>
+          <span>Menos denuncias</span><span class="del-bar" aria-hidden="true"></span><span>Más</span>
+        </div>
         <div id="del" class="zon" role="status" aria-live="polite">
           <p class="muted small">Elige un punto para ver cuántas denuncias hay a su alrededor.</p>
         </div>
@@ -118,7 +124,7 @@
             <li>La proporción de denuncias con ubicación subió mucho desde diciembre de 2025. Por eso no se comparan años entre sí: el punto se compara con el resto de la ciudad en el mismo periodo.</li>
             <li>Varias denuncias comparten exactamente la misma coordenada (por ejemplo, un mercado o una avenida). Una sola dirección puede pesar mucho en el conteo.</li>
             <li>Solo robo y hurto; no incluye otros delitos ni faltas.</li>
-            <li>El percentil compara con una cuadrícula de puntos cada 500 m sobre las zonas construibles del plano de zonificación; no incluye zona agrícola, reservas ni zonas de riesgo.</li>
+            <li>El mapa de calor es relativo: el color indica dónde se concentran más denuncias dentro de la ciudad, no un nivel absoluto de riesgo. Está suavizado (unos 200 m), así que no muestra cuadras exactas.</li>
             <li>No se muestran denuncias individuales ni sus direcciones: el archivo no guarda dirección, cuadra ni hora exacta.</li>
           </ul>
         </details>

@@ -34,6 +34,7 @@
     zonOutline: null,    // contorno de la zona del punto
     delito: null,        // resultado de Delitos.indicador para el punto actual
     delitoSeq: 0,        // descarta respuestas de un punto anterior
+    delLayer: null,      // mapa de calor (se crea la primera vez que se activa)
   };
 
   // ------------------------------------------------------------------ Mapa
@@ -47,6 +48,10 @@
   const zonPane = map.createPane('zonificacion');
   zonPane.style.zIndex = 350;
   zonPane.style.pointerEvents = 'none';
+  // El mapa de calor va encima del plano y debajo de marcadores; tampoco captura clics.
+  const calorPane = map.createPane('calor');
+  calorPane.style.zIndex = 360;
+  calorPane.style.pointerEvents = 'none';
 
   // ------------------------------------------------------- Controles iniciales
   CONFIG.radii.forEach((r) => {
@@ -284,14 +289,6 @@
 
   // ---------------------------------------------------------------- Denuncias
   const fmtFecha = (iso) => new Date(`${iso}T12:00:00Z`).toLocaleDateString('es-PE', { month: 'short', year: 'numeric', timeZone: 'UTC' });
-  // Nivel según el percentil frente al resto de la ciudad.
-  function nivelDelito(p) {
-    if (p >= 90) return { cls: 'no', text: 'Muy alto' };
-    if (p >= 75) return { cls: 'no', text: 'Alto' };
-    if (p >= 50) return { cls: 'warn', text: 'Medio' };
-    return { cls: 'ok', text: 'Bajo' };
-  }
-
   $('del-fuente').textContent = `Fuente: ${CONFIG.delitos.fuente}. Solo denuncias con ubicación real; no son todos los delitos.`;
 
   function delMessage(kind, html) {
@@ -301,23 +298,18 @@
   function renderDelito() {
     const d = state.delito;
     const { total, ROBO, HURTO } = d.conteo;
-    const nivel = nivelDelito(d.percentil);
     const periodo = `${fmtFecha(d.meta.ventanaDesde)} – ${fmtFecha(d.meta.hasta)}`;
     $('del').innerHTML = `
       <div class="zon-card">
         <div class="zon-head">
           <span class="zon-code">${fmtNum(total)}</span>
           <span class="zon-name">denuncias de robo y hurto a ${d.radio} m</span>
-          <span class="badge ${nivel.cls}">${nivel.text}</span>
         </div>
         <dl class="zon-data">
           <div><dt>Robos</dt><dd>${fmtNum(ROBO)}</dd></div>
           <div><dt>Hurtos</dt><dd>${fmtNum(HURTO)}</dd></div>
-          <div><dt>Frente a la ciudad</dt><dd>más que el ${d.percentil} % de los puntos</dd></div>
-          <div><dt>Punto típico de la ciudad</dt><dd>${fmtNum(d.mediana)} denuncias</dd></div>
         </dl>
-        <div class="del-bar" aria-hidden="true"><span style="left:${d.percentil}%"></span></div>
-        <p class="zon-nota small">Últimos 12 meses con datos (${esc(periodo)}). Comparado con ${fmtNum(d.puntosReferencia)} puntos cada ${CONFIG.delitos.paso} m sobre las zonas construibles de la ciudad. Robo: con violencia o amenaza; hurto: sin violencia.</p>
+        <p class="zon-nota small">Últimos 12 meses con datos (${esc(periodo)}). Robo: con violencia o amenaza; hurto: sin violencia. Activa «Ver mapa de calor» para compararlo con el resto de la ciudad.</p>
       </div>`;
   }
 
@@ -359,6 +351,27 @@
   $('radius').addEventListener('change', () => {
     drawCircle();
     if (state.point) { clearResults(); setStatus('idle', 'Radio cambiado. Pulsa «Analizar entorno» para actualizar.'); }
+  });
+
+  $('del-layer').addEventListener('change', async (e) => {
+    const box = e.target;
+    $('del-leyenda').hidden = !box.checked;
+    if (!box.checked) {
+      if (state.delLayer) map.removeLayer(state.delLayer);
+      return;
+    }
+    box.disabled = true;
+    try {
+      if (!state.delLayer) state.delLayer = await Delitos.capa('calor');
+      if (box.checked) state.delLayer.addTo(map);
+    } catch (err) {
+      box.checked = false;
+      $('del-leyenda').hidden = true;
+      delMessage('error', `<strong>No se pudo cargar el mapa de calor.</strong> ${esc(err.message)}`);
+      console.error('[Denuncias] fallo', err);
+    } finally {
+      box.disabled = false;
+    }
   });
 
   // --------------------------------------------------------------- Nominatim
@@ -572,8 +585,6 @@
           robo: state.delito.conteo.ROBO,
           hurto: state.delito.conteo.HURTO,
           total: state.delito.conteo.total,
-          percentil_ciudad: state.delito.percentil,
-          mediana_ciudad: state.delito.mediana,
           fuente: CONFIG.delitos.fuente,
         }
         : null,

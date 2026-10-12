@@ -39,8 +39,9 @@ const CONFIG = {
   // Denuncias de robo y hurto: archivo local generado con scripts/descargar-delitos.mjs.
   delitos: {
     geojsonUrl: 'data/delitos_aqp.geojson',
-    radio: 500, // metros alrededor del punto
-    paso: 500,  // separación de la cuadrícula con la que se compara el resto de la ciudad
+    radio: 500,      // metros alrededor del punto
+    celda: 100,      // tamaño de celda del mapa de calor, en metros
+    suavizado: 200,  // σ del núcleo gaussiano del mapa de calor, en metros
     fuente: 'Mapa del Delito Georreferenciado (MININTER), datos SIDPOL de la PNP',
   },
 };
