@@ -1,0 +1,78 @@
+{
+  "fuente": {
+    "archivo": "ZONIFICACION_PDM_2016_2025_OM975 (1).pdf",
+    "sha256": "3d7b899d0ab472ed426048e1425c9f95c6a3b120be20ff116b1e34049abea27b",
+    "bytes": 16857462,
+    "marcoUtm": {
+      "E": [
+        214215.97843515256,
+        238146.10108672793
+      ],
+      "N": [
+        8165132.504807897,
+        8201590.376796933
+      ]
+    },
+    "metrosPorPunto": 9.704023784093822
+  },
+  "georreferenciacion": {
+    "rectanguloAlineado": true,
+    "cuadriculaEste": {
+      "n": 10,
+      "medianaM": 2.863897557690507
+    },
+    "cuadriculaNorte": {
+      "n": 14,
+      "medianaM": 25.49736236501485
+    }
+  },
+  "poligonos": {
+    "rellenosPdf": 793,
+    "poligonosGeoJson": 793,
+    "codigosConDistintoNumero": [],
+    "coloresDelGeoJsonAusentes": [],
+    "diferenciaAreaPorCodigoPct": {
+      "min": -0.24220411461965963,
+      "mediana": -0.2340986125485056,
+      "max": -0.22445087809599418
+    },
+    "hectareasPdf": 38144.48938396192
+  },
+  "puntosAlAzar": {
+    "total": 30000,
+    "conZona": 13255,
+    "coinciden": 13251,
+    "tasa": 0.9996982270841192,
+    "discrepancias": {
+      "RDM-1 → ZR": 1,
+      "RDA-1 → RDM-1": 1,
+      "ZRE-RU → ZR": 1,
+      "CZ → I1R": 1
+    }
+  },
+  "etiquetas": {
+    "total": 793,
+    "coinciden": 778,
+    "desacuerdosMetrosAlPoligonoPropio": [
+      6,
+      6,
+      10,
+      11,
+      13,
+      13,
+      20,
+      24,
+      26,
+      27,
+      29,
+      55,
+      56,
+      60,
+      97
+    ]
+  },
+  "discrepanciasOsm": {
+    "total": 1148,
+    "elPdfPintaLaMismaZona": 1147
+  }
+}

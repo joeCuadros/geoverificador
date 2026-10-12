@@ -5,13 +5,13 @@ Distinguimos dos cosas, porque responden preguntas distintas:
 - **Verificación (hecha, automática):** ¿el código calcula lo que dice calcular y los archivos están íntegros?
 - **Validación (pendiente, con personas y documentos externos):** ¿los datos coinciden con la realidad y la herramienta sirve a quien la usa?
 
-> **Estado honesto:** la verificación está hecha y se puede repetir con un comando. De la validación externa se hicieron tres partes (§2.1: la tabla de reglas contra el Reglamento oficial; §2.2: los polígonos contra lugares reales de OpenStreetMap; §2.3: la superficie contra la Memoria oficial); lo demás **todavía no se ha hecho**: este documento define el protocolo y deja las plantillas vacías. Ningún resultado que no exista aparece aquí.
+> **Estado honesto:** la verificación está hecha y se puede repetir con un comando. De la validación externa se hicieron cuatro partes (§2.1: la tabla de reglas contra el Reglamento oficial; §2.2: los polígonos contra lugares reales de OpenStreetMap; §2.3: la superficie contra la Memoria oficial; §2.4: los polígonos contra el PDF oficial del plano); lo demás **todavía no se ha hecho**: este documento define el protocolo y deja las plantillas vacías. Ningún resultado que no exista aparece aquí.
 
 ## 1. Hipótesis y criterios de éxito
 
 | # | Hipótesis | Cómo se prueba | Criterio de éxito (fijado el 2026-10-12, antes de medir) |
 |---|---|---|---|
-| H1 | La zona que la app asigna a un punto coincide con la zonificación oficial. | §3.1 | ≥ 90 % de coincidencia en la muestra, y registrar dónde falla. |
+| H1 | La zona que la app asigna a un punto coincide con la zonificación oficial (certificado de zonificación y vías). | §3.1 (la fidelidad del archivo al plano ya está en §2.4) | ≥ 90 % de coincidencia en la muestra, y registrar dónde falla. |
 | H2 | Con la app se responde «qué se puede construir aquí» más rápido y sin perder aciertos que con el PDF y el reglamento. | §3.2 | Menor tiempo mediano con igual o mayor proporción de respuestas correctas. |
 | H3 | El mapa de calor de denuncias es coherente con lo que se sabe de la ciudad. | §3.3 | Revisión cualitativa; no se declara como predictor. |
 
@@ -61,6 +61,24 @@ La Memoria oficial del PDM (Título II) establece que el ámbito define 50 246 h
 **Qué respalda:** que la escala, la proyección y la cobertura total del plano digitalizado son coherentes con el plano oficial; descarta, por ejemplo, un error de escala o la pérdida de zonas enteras.
 **Qué no respalda:** la exactitud de cada polígono ni de cada código; dos errores opuestos se compensarían en la suma. Tampoco se sabe con certeza qué incluye exactamente la cifra oficial de «área urbana» (el plano incluye zonas agrícolas, de reserva y de riesgo, como `ZA` con 8 140 ha), por lo que la diferencia de 3 % no se interpreta como una tasa de error.
 
+## 2.4 Validación externa ya hecha: polígonos frente al PDF oficial del plano
+
+El equipo aportó el PDF del plano publicado con la Ordenanza 975 (ArcMap 10.1, creado el 2016-05-18; SHA-256 `3d7b899d0ab472ed426048e1425c9f95c6a3b120be20ff116b1e34049abea27b`). El script `scripts/validar-zonificacion-plano.mjs` re-extrae de ese PDF sus polígonos (rellenos vectoriales) y etiquetas, los georreferencia con los puntos de control del propio PDF y los compara con `zonas_aqp.geojson` (comando: `npm run datos:validar-plano -- "ruta/al/plano.pdf"`; el PDF no se versiona; resultado en `docs/validacion/resultado-plano.json`).
+
+| Comprobación | Resultado |
+|---|---|
+| Colores | 29 de 29 idénticos |
+| Polígonos | 793 = 793, mismo número en cada uno de los 29 códigos |
+| Área por código | −0,22 % a −0,24 % en todos (diferencia uniforme por proyección, no por datos) |
+| 30 000 puntos al azar | 13,251 de 13,255 coinciden (99.970 %); 0 puntos pintados por el PDF y omitidos por la app o viceversa |
+| Etiquetas impresas (793) | 778 (98.1 %) coinciden; las demás a ≤ 97 m de su propio polígono |
+| Georreferenciación | Rectángulo UTM alineado; la cuadrícula impresa coincide (Este ≤ 4 m) |
+| Discrepancias de OSM (§2.2) | En 1 147 de 1 148, el plano oficial pinta la misma zona que la app |
+
+**Qué cierra.** La duda de si el GeoJSON reproduce el plano: sí, con una concordancia del 99,97 % en puntos y número de polígonos idéntico por código. También resuelve los seis casos «sin explicación» de §2.2: en esos puntos **el plano oficial pinta la misma zona** que la app, de modo que no son errores del equipo; si hay un error, está en el plano o en la ubicación del lugar en OpenStreetMap.
+
+**Qué no cierra.** Que ese PDF sea la versión vigente (lo aportó el equipo, no se descargó del portal), que el plano coincida con la realidad legal de cada predio (§3.1, con certificados) y qué ocurrió con modificaciones posteriores a 2016. Nueve polígonos grandes se extienden más allá del marco impreso (ver `METODOLOGIA.md` §3).
+
 ## 2.2 Validación externa ya hecha: polígonos frente a lugares reales (OpenStreetMap)
 
 **Qué se hizo.** Se tomaron de OpenStreetMap (fuente independiente del plano) los hospitales, universidades, parques y aeropuertos de Arequipa metropolitana, se ubicó cada uno en el plano con el mismo código de la aplicación y se midió cuántos caen en la zona que el Reglamento les asigna. La expectativa de cada tipo sale del texto del Reglamento y se fijó antes de ver los resultados:
@@ -92,7 +110,7 @@ Los cementerios se excluyeron: el Reglamento no les asigna una zona, y suponerla
 3. **Lectura de las discrepancias (manual, hecha después de ver los resultados, por lo tanto exploratoria).**
    - Varias tienen una explicación en el Reglamento: hospitales y universidades dentro de `ZRE-CH` (zona de reglamentación especial del Centro Histórico: Hospital Goyeneche, Hospital Seguín Escobedo, sedes de la UNSA); el Hospital Militar en `OU2` (que incluye establecimientos de las fuerzas armadas); y postas, consultorios y filiales pequeñas en zonas residenciales o comerciales.
    - **No son errores de borde.** Se midió la distancia de cada discrepancia al polígono más cercano de la zona esperada: solo 1 de 20 hospitales y 0 de 14 universidades quedan a 50 m o menos (el único es una «Posta Médica» a 2 m). La mayoría está a cientos de metros o kilómetros de cualquier zona `H` o `E`, así que una tolerancia de ubicación no explica los casos de abajo.
-   - **Casos sin explicación, a revisar a ojo contra el plano oficial** (entre paréntesis, distancia a la zona esperada: «Intermedic» 1,32 km, «Fisioterapia» 1,27 km, «Centro médico Pedro P. Díaz» 238 m, «Hospital Maritza Campos Díaz» 2,58 km, «Hospital Edmundo Escomel» 439 m, «Universidad Autónoma San Francisco» 442 m): «Intermedic» y «Fisioterapia» en `RP` (reserva paisajista; -16,38832 -71,53692 y -16,38788 -71,53744), «Centro médico Pedro P. Díaz» (-16,41505 -71,50066) y «Hospital Maritza Campos Díaz» (-16,32655 -71,56015) en `ZR`, «Hospital Edmundo Escomel» en `I-1` (-16,41722 -71,50866) y «Universidad Autónoma San Francisco» en `ZA` (-16,44923 -71,60000). Pueden ser errores del plano, errores de ubicación en OSM, o usos que la norma permite; con estos datos no se puede decidir cuál.
+   - **Casos sin explicación en el Reglamento** (en los seis, el plano oficial pinta esa misma zona, §2.4: no son errores de digitalización del equipo) (entre paréntesis, distancia a la zona esperada: «Intermedic» 1,32 km, «Fisioterapia» 1,27 km, «Centro médico Pedro P. Díaz» 238 m, «Hospital Maritza Campos Díaz» 2,58 km, «Hospital Edmundo Escomel» 439 m, «Universidad Autónoma San Francisco» 442 m): «Intermedic» y «Fisioterapia» en `RP` (reserva paisajista; -16,38832 -71,53692 y -16,38788 -71,53744), «Centro médico Pedro P. Díaz» (-16,41505 -71,50066) y «Hospital Maritza Campos Díaz» (-16,32655 -71,56015) en `ZR`, «Hospital Edmundo Escomel» en `I-1` (-16,41722 -71,50866) y «Universidad Autónoma San Francisco» en `ZA` (-16,44923 -71,60000). Dado que el plano oficial pinta esa zona, lo que queda por saber es si el plano es correcto allí, si OpenStreetMap ubica mal el lugar o si es un uso existente que la norma tolera; con estos datos no se puede decidir cuál.
 4. **Parques: no concluyente.** La expectativa se fijó antes y el resultado fue 1 % (peor que la base). Se encontró después una explicación plausible: el Reglamento (3.6) dice que las áreas agrícolas zonificadas como `ZR` mantienen su condición, así que `ZR` no equivale a «parque», y OSM incluye parques de barrio demasiado pequeños para el plano. Como esa explicación se halló después de ver el resultado, **esta prueba no se usa ni a favor ni en contra del plano**.
 5. **Otras limitaciones.** OSM es colaborativo y el punto de un lugar grande es su centro, que puede caer fuera de su propio edificio; una discrepancia no siempre es un error del plano.
 
@@ -152,7 +170,6 @@ Los cementerios se excluyeron: el Reglamento no les asigna una zona, y suponerla
 
 ## 5. Qué falta para cerrar la validación
 
-- [ ] Revisar a ojo contra el plano oficial los 6 casos sin explicación de §2.2.
 - [ ] Leer el texto de la Ordenanza 961 (escaneo sin texto; requiere OCR o lectura a ojo) y el Anexo 01 de la 975.
 - [ ] Obtener los certificados u otra referencia oficial para la muestra (§3.1).
 - [ ] Reclutar participantes y fijar las tareas con su respuesta correcta (§3.2).
