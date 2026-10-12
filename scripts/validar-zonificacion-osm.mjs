@@ -61,6 +61,31 @@ const Zon = vm.runInContext('Zonificacion', ctx);
 const CONFIG = vm.runInContext('CONFIG', ctx);
 const [oeste, norte, este, sur] = CONFIG.viewbox.split(',').map(Number);
 
+// Distancia en metros de un punto al polígono más cercano de las zonas indicadas (0 si está dentro).
+// Se usa para saber si una discrepancia es un punto junto al borde de la zona esperada.
+const zonasGeo = JSON.parse(readFileSync(join(PUBLIC, CONFIG.zonificacion.geojsonUrl), 'utf8')).features;
+function distanciaAZonas(lat, lon, codigos) {
+  const mLat = 111320;
+  const mLon = 111320 * Math.cos((lat * Math.PI) / 180);
+  let mejor = Infinity;
+  for (const f of zonasGeo) {
+    if (!codigos.includes(f.properties.codigo)) continue;
+    const polis = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates;
+    for (const anillos of polis) {
+      const r = anillos[0];
+      for (let i = 0; i < r.length - 1; i++) {
+        const ax = (r[i][0] - lon) * mLon, ay = (r[i][1] - lat) * mLat;
+        const bx = (r[i + 1][0] - lon) * mLon, by = (r[i + 1][1] - lat) * mLat;
+        const dx = bx - ax, dy = by - ay;
+        const l2 = dx * dx + dy * dy;
+        const t = l2 === 0 ? 0 : Math.max(0, Math.min(1, -(ax * dx + ay * dy) / l2));
+        mejor = Math.min(mejor, Math.hypot(ax + t * dx, ay + t * dy));
+      }
+    }
+  }
+  return mejor;
+}
+
 const ref = JSON.parse(readFileSync(REF, 'utf8'));
 console.log(`Referencia OpenStreetMap descargada el ${ref.descargado} (datos OSM al ${ref.baseOsm || 'sin dato'})\n`);
 
@@ -89,7 +114,7 @@ for (const [tipo, exp] of Object.entries(EXPECTATIVAS)) {
     dentro++;
     donde[z.codigo] = (donde[z.codigo] || 0) + 1;
     if (exp.zonas.includes(z.codigo)) acierta++;
-    else fallos.push({ osm: e.id, nombre: e.nombre, lat: e.lat, lon: e.lon, zona: z.codigo });
+    else fallos.push({ osm: e.id, nombre: e.nombre, lat: e.lat, lon: e.lon, zona: z.codigo, metrosALaZonaEsperada: Math.round(distanciaAZonas(e.lat, e.lon, exp.zonas)) });
   }
   const tasa = dentro ? acierta / dentro : null;
   const pBase = probBase(exp.zonas);
@@ -97,6 +122,10 @@ for (const [tipo, exp] of Object.entries(EXPECTATIVAS)) {
   console.log(`${tipo} (esperado ${exp.zonas.join('/')}; ${exp.regla})`);
   console.log(`  ${lista.length} lugares en OSM, ${dentro} dentro del plano; ${acierta} en la zona esperada = ${tasa === null ? 'sin datos' : (100 * tasa).toFixed(0) + ' %'}`);
   console.log(`  base: ${(100 * pBase).toFixed(1)} % de los puntos del plano caen en ${exp.zonas.join('/')}${tasa !== null && pBase ? ` → el acierto es ${(tasa / pBase).toFixed(1)} veces la base` : ''}`);
+  if (fallos.length) {
+    const cerca = fallos.filter((f) => f.metrosALaZonaEsperada <= 50).length;
+    console.log(`  discrepancias a ≤ 50 m de un polígono de la zona esperada: ${cerca} de ${fallos.length}`);
+  }
   if (exp.noConcluyente) console.log(`  NO CONCLUYENTE: ${exp.noConcluyente}`);
   console.log(`  dónde caen: ${Object.entries(donde).sort((a, b) => b[1] - a[1]).map(([c, n]) => `${c} ${n}`).join(', ')}\n`);
 }
