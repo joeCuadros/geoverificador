@@ -5,7 +5,7 @@ Distinguimos dos cosas, porque responden preguntas distintas:
 - **Verificación (hecha, automática):** ¿el código calcula lo que dice calcular y los archivos están íntegros?
 - **Validación (pendiente, con personas y documentos externos):** ¿los datos coinciden con la realidad y la herramienta sirve a quien la usa?
 
-> **Estado honesto:** la verificación está hecha y se puede repetir con un comando. De la validación externa se hicieron dos partes (§2.1: la tabla de reglas contra el Reglamento; §2.2: los polígonos contra lugares reales de OpenStreetMap); lo demás **todavía no se ha hecho**: este documento define el protocolo y deja las plantillas vacías. Ningún resultado que no exista aparece aquí.
+> **Estado honesto:** la verificación está hecha y se puede repetir con un comando. De la validación externa se hicieron tres partes (§2.1: la tabla de reglas contra el Reglamento oficial; §2.2: los polígonos contra lugares reales de OpenStreetMap; §2.3: la superficie contra la Memoria oficial); lo demás **todavía no se ha hecho**: este documento define el protocolo y deja las plantillas vacías. Ningún resultado que no exista aparece aquí.
 
 ## 1. Hipótesis y criterios de éxito
 
@@ -25,7 +25,7 @@ Comando (sin internet ni dependencias):
 node scripts/verificar-datos.mjs
 ```
 
-Corrida del 2026-10-12: **29 de 29 comprobaciones correctas.**
+Corrida del 2026-10-12: **30 de 30 comprobaciones correctas.**
 
 **A. Integridad de los archivos**
 
@@ -52,7 +52,14 @@ Corrida del 2026-10-12: **29 de 29 comprobaciones correctas.**
 
 Se contrastó `reglas_zonas.json` con el texto del Título III del Reglamento del PDM (zonificación y compatibilidades). Resultado: **29 de 29 códigos coinciden** en lote mínimo, frente, pisos, coeficiente, área libre y condición de edificabilidad. El detalle por grupo, las observaciones (una discrepancia interna del propio Reglamento en RDA-1 y una errata «ZRE-RE») y las fuentes están en `METODOLOGIA.md` §3.
 
-Límites de esta validación: usa una copia del Reglamento alojada en otro sitio municipal, no el portal oficial de la MPA (que bloquea la descarga automática); y valida la **transcripción de las reglas**, no los polígonos del plano. Sigue pendiente que el equipo la confirme contra el portal oficial.
+Fuente: el Capítulo IV oficial de la Memoria del PDM (archivo aportado por el equipo) y la copia del Título III alojada por municipalidades distritales; los 201 valores numéricos de la copia aparecen en el documento oficial, sin faltantes (detalle en `METODOLOGIA.md` §3). Límites: se compararon valores numéricos, no cada palabra, y se validó la **transcripción de las reglas**, no los polígonos del plano.
+
+## 2.3 Validación externa ya hecha: superficie frente a la Memoria oficial
+
+La Memoria oficial del PDM (Título II) establece que el ámbito define 50 246 ha, de las cuales el **área urbana representa 37 107 ha** y el área de expansión urbana de reserva 3 818 ha. La suma de las áreas de los 793 polígonos digitalizados es **38 233 ha** (calculada con proyección local; muestreando 12 127 puntos dentro del plano no se encontró ninguno cubierto por dos polígonos, así que no hay doble conteo), es decir **+3,0 %** frente a la cifra oficial. La comprobación automática acepta ±10 % como cota de cordura; el 3,0 % es lo observado, no un criterio fijado para pasar.
+
+**Qué respalda:** que la escala, la proyección y la cobertura total del plano digitalizado son coherentes con el plano oficial; descarta, por ejemplo, un error de escala o la pérdida de zonas enteras.
+**Qué no respalda:** la exactitud de cada polígono ni de cada código; dos errores opuestos se compensarían en la suma. Tampoco se sabe con certeza qué incluye exactamente la cifra oficial de «área urbana» (el plano incluye zonas agrícolas, de reserva y de riesgo, como `ZA` con 8 140 ha), por lo que la diferencia de 3 % no se interpreta como una tasa de error.
 
 ## 2.2 Validación externa ya hecha: polígonos frente a lugares reales (OpenStreetMap)
 
@@ -145,8 +152,8 @@ Los cementerios se excluyeron: el Reglamento no les asigna una zona, y suponerla
 
 ## 5. Qué falta para cerrar la validación
 
-- [ ] Confirmar el contraste de reglas (§2.1) contra el Título III en el portal oficial de la MPA.
 - [ ] Revisar a ojo contra el plano oficial los 6 casos sin explicación de §2.2.
+- [ ] Leer el texto de la Ordenanza 961 (escaneo sin texto; requiere OCR o lectura a ojo) y el Anexo 01 de la 975.
 - [ ] Obtener los certificados u otra referencia oficial para la muestra (§3.1).
 - [ ] Reclutar participantes y fijar las tareas con su respuesta correcta (§3.2).
 - [ ] Revisión del mapa de calor con conocedores (§3.3).

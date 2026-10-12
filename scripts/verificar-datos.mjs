@@ -65,6 +65,24 @@ console.log('\n== A. Integridad de los archivos ==');
   });
   const conflictos = [...Object.entries(colorDe), ...Object.entries(codigosDe)].filter(([, s]) => s.size > 1);
   comprobar('Zonas: cada color corresponde a un solo código y cada código a un solo color (la asignación por color es consistente)', conflictos.length === 0, `${Object.keys(colorDe).length} colores, ${Object.keys(codigosDe).length} códigos`);
+  // Superficie: la Memoria oficial (Reglamento, Título II) da 37 107 ha de área urbana. Se compara la suma de áreas de los
+  // polígonos (proyección local; los polígonos no se superponen) como control de escala y cobertura. NO valida cada polígono.
+  const R = 6371008.8;
+  const rad = (d) => (d * Math.PI) / 180;
+  const areaAnillo = (r) => {
+    const lat0 = r.reduce((t, p) => t + p[1], 0) / r.length;
+    const kx = Math.cos(rad(lat0)) * R * (Math.PI / 180);
+    const ky = R * (Math.PI / 180);
+    let a = 0;
+    for (let i = 0, j = r.length - 1; i < r.length; j = i++) a += r[j][0] * kx * (r[i][1] * ky) - r[i][0] * kx * (r[j][1] * ky);
+    return Math.abs(a) / 2;
+  };
+  const ha = f.reduce((t, x) => {
+    const polis = x.geometry.type === 'Polygon' ? [x.geometry.coordinates] : x.geometry.coordinates;
+    return t + polis.reduce((u, p) => u + areaAnillo(p[0]) - p.slice(1).reduce((v, h) => v + areaAnillo(h), 0), 0) / 1e4;
+  }, 0);
+  const oficial = 37107;
+  comprobar('Zonas: la superficie total está a ±10 % del área urbana oficial (37 107 ha, Memoria del PDM, Título II)', Math.abs(ha / oficial - 1) <= 0.1, `${Math.round(ha)} ha (${((ha / oficial - 1) * 100).toFixed(1)} % frente al oficial)`);
   const coords = f.flatMap((x) => (x.geometry.type === 'Polygon' ? [x.geometry.coordinates] : x.geometry.coordinates).flat(2));
   comprobar('Zonas: coordenadas dentro de Arequipa (lon -72…-71, lat -17…-16)', coords.every(([x, y]) => x > -72 && x < -71 && y > -17 && y < -16));
 }
