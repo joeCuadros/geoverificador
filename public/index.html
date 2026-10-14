@@ -61,7 +61,7 @@
             <span id="point-distrito" class="point-distrito">Punto seleccionado</span>
             <span id="point-info" class="point-info">Ningún punto seleccionado.</span>
           </div>
-          <button id="download" type="button" class="ghost" title="Descarga todos los datos del punto y tu registro de riesgos">Descargar ficha</button>
+          <button id="download" type="button" class="ghost pdf-btn" title="Resumen de la ficha y tu registro de riesgos, para guardar como PDF">Descargar PDF</button>
         </div>
 
         <nav class="tabs" role="tablist" aria-label="Secciones de la ficha">
@@ -235,6 +235,7 @@
             <summary>Etiquetas de OSM que se consultan</summary>
             <div id="filters-doc" class="small"></div>
           </details>
+          <p class="small muted">¿Necesitas los datos crudos para verificarlos? <button id="download-json" type="button" class="link">Descargar los datos del punto en JSON</button></p>
           <div class="credits">
             <h3 class="sub-head">Fuentes de datos</h3>
             <ul>
@@ -276,6 +277,9 @@
     </main>
   </div>
 
+  <!-- Informe para imprimir o guardar como PDF (se llena al pulsar «Descargar PDF») -->
+  <div id="reporte" class="reporte" aria-hidden="true"></div>
+
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
           integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="js/config.js"></script>
@@ -285,6 +289,7 @@
   <script src="js/peligros.js"></script>
   <script src="js/distritos.js"></script>
   <script src="js/riesgos.js"></script>
+  <script src="js/reporte.js"></script>
   <script src="js/delitos.js"></script>
   <script src="js/app.js"></script>
 </body>

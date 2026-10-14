@@ -550,3 +550,61 @@ textarea { width: 100%; font-family: Consolas, "Courier New", monospace; font-si
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
 }
+
+/* ==========================================================================
+   Informe en PDF (se imprime con el diálogo del navegador: «Guardar como PDF»)
+   .vista-reporte muestra el mismo informe en pantalla, útil para revisarlo.
+   ========================================================================== */
+.pdf-btn::before { content: "⬇"; margin-right: 6px; font-size: .8rem; }
+.reporte { display: none; }
+
+.reporte { color: #111827; font: 10.5pt/1.45 "Segoe UI", system-ui, Arial, sans-serif; }
+.rp-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; border-bottom: 3px solid #0f766e; padding-bottom: 8px; }
+.rp-marca { font-size: 9pt; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: #0f766e; }
+.rp-head h1 { font-size: 19pt; margin: 2px 0 2px; letter-spacing: -.01em; }
+.rp-sub { margin: 0; color: #374151; font-size: 10pt; }
+.rp-fecha { font-size: 8.5pt; color: #6b7280; text-align: right; white-space: nowrap; }
+.rp-aviso { margin: 10px 0 12px; padding: 7px 10px; background: #f3f4f6; border-radius: 6px; font-size: 8.8pt; color: #374151; }
+.rp-sec { margin: 0 0 12px; break-inside: avoid; }
+.rp-sec h2 { font-size: 12pt; margin: 0 0 6px; padding-left: 8px; border-left: 4px solid var(--rp-c, #0f766e); }
+.rp-resumen h2 { border-left-color: #0f766e; }
+.rp-tabla { width: 100%; border-collapse: collapse; font-size: 9.6pt; }
+.rp-tabla th, .rp-tabla td { text-align: left; vertical-align: top; padding: 4px 8px; border-bottom: 1px solid #e5e7eb; }
+.rp-tabla th { width: 32%; color: #4b5563; font-weight: 600; background: #f9fafb; }
+.rp-nota { margin: 5px 0 0; font-size: 8.6pt; color: #4b5563; }
+.rp-muted { color: #6b7280; }
+.rp-fuente { margin: 5px 0 0; font-size: 8pt; color: #6b7280; font-style: italic; }
+.rp-destacado { margin: 6px 0 0; padding: 6px 9px; background: #eef0ff; border-radius: 5px; font-size: 9.6pt; }
+.rp-alerta { margin: 0 0 6px; padding: 6px 9px; background: #fdecea; color: #991b1b; border-radius: 5px; font-weight: 600; font-size: 9.6pt; }
+.rp-reg { width: 100%; border-collapse: collapse; font-size: 8.8pt; margin-top: 6px; }
+.rp-reg th { text-align: left; background: #0f766e; color: #fff; padding: 4px 6px; font-weight: 600; }
+.rp-reg td { padding: 4px 6px; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
+.rp-reg tbody tr:not(.rp-acc) td { border-top: 1px solid #d1d5db; }
+.rp-reg tr { break-inside: avoid; }
+.rp-id { font-weight: 800; color: #0f766e; }
+.rp-c { text-align: center; white-space: nowrap; }
+.rp-ev { color: #4b5563; font-size: 8.4pt; margin-top: 2px; }
+.rp-acc td { font-size: 8.2pt; color: #374151; border-bottom: 1px solid #e5e7eb; padding-top: 0; }
+.rp-niv { padding: 1px 7px; border-radius: 999px; font-weight: 700; font-size: 8pt; }
+.rp-niv.rp-bajo, .rp-celda.rp-bajo { background: #dcf3e3; color: #14532d; }
+.rp-niv.rp-medio, .rp-celda.rp-medio { background: #fdf0c4; color: #713f12; }
+.rp-niv.rp-alto, .rp-celda.rp-alto { background: #fbd5d1; color: #7f1d1d; }
+.rp-matriz { display: grid; grid-template-columns: 52px repeat(3, 90px); grid-auto-rows: 26px; gap: 3px; margin: 6px 0 4px; font-size: 8.4pt; }
+.rp-mtit { grid-column: 1 / -1; font-size: 8pt; color: #6b7280; font-weight: 600; height: auto; }
+.rp-my { display: flex; align-items: center; justify-content: flex-end; padding-right: 4px; color: #6b7280; }
+.rp-mx { text-align: center; color: #6b7280; }
+.rp-celda { display: flex; align-items: center; justify-content: center; border-radius: 4px; font-weight: 800; }
+.rp-limites ul { margin: 0; padding-left: 16px; font-size: 8.8pt; color: #374151; }
+.rp-limites h2 { border-left-color: #6b7280; }
+.rp-pie { margin-top: 10px; padding-top: 6px; border-top: 1px solid #e5e7eb; font-size: 7.8pt; color: #6b7280; }
+
+body.vista-reporte .app { display: none; }
+body.vista-reporte .reporte { display: block; max-width: 800px; margin: 20px auto; background: #fff; padding: 28px 32px; box-shadow: var(--shadow-lg); }
+
+@page { size: A4; margin: 14mm 14mm 16mm; }
+@media print {
+  html, body { height: auto; background: #fff; }
+  .app { display: none !important; }
+  .reporte { display: block !important; }
+  .reporte * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}

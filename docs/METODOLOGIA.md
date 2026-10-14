@@ -220,6 +220,7 @@ Descarga: `node scripts/descargar-delitos.mjs` → `public/data/delitos_aqp.geoj
 | Riesgos identificados | Reglas del catálogo sobre los datos anteriores | `riesgos.js` (`CATALOGO`, `identificar`) |
 | Nivel de cada riesgo | Probabilidad × impacto elegidos por el usuario (matriz 3 × 3) | `riesgos.js` (`nivel`) |
 | Resumen del punto | Une las líneas anteriores sin puntaje | `app.js` (`renderResumen`) |
+| Ficha en PDF | Los mismos datos de la pantalla, sin cálculos nuevos, en un informe para imprimir | `reporte.js`, `app.js` (`datosReporte`), reglas `@media print` de `styles.css` |
 
 ## 8. Cómo reproducir
 
@@ -254,7 +255,7 @@ Las fuentes públicas cambian: al volver a descargar, las cifras de este documen
 | Evaluar (nivel) | Regla fija | Nivel = probabilidad × impacto (1-3 × 1-3): 1-2 bajo, 3-4 medio, 6-9 alto | Matriz cualitativa de probabilidad e impacto; los cortes son una **convención de este proyecto**, no una norma |
 | Tratar | La herramienta propone, el usuario decide | Acciones que son trámites o normas oficiales, cada una con su fuente; decisión: evitar, reducir, transferir o aceptar | Las acciones tienen respaldo documental. Las cuatro decisiones son una **convención de este proyecto** para registrar qué se hará |
 | Dar seguimiento | El usuario | Marca las acciones hechas; la evaluación se guarda en el navegador (por punto) | Uso personal; no se envía a ningún servidor |
-| Comunicar | La herramienta | Descarga del registro en CSV (y dentro del JSON de descarga) con evidencias, fuentes, evaluación, decisión y acciones | Deja constancia de qué se sabía y qué se decidió |
+| Comunicar | La herramienta | **Ficha en PDF** (botón «Descargar PDF»: informe con el resumen, el detalle de cada riesgo, el registro con la matriz y las limitaciones, que se guarda con el diálogo de impresión del navegador); además, el registro en CSV y los datos crudos en JSON | Deja constancia de qué se sabía y qué se decidió, en un formato que cualquiera puede leer |
 
 **Catálogo.** Definido en `public/js/riesgos.js` (`CATALOGO`). Cada regla está probada con casos sintéticos en `scripts/verificar-datos.mjs`.
 

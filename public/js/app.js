@@ -1010,7 +1010,6 @@
       const origin = fromCache ? 'Resultado guardado localmente (consulta repetida hace menos de 2 min; no se envió una nueva solicitud).' : `Respuesta real de Overpass en ${payload.ms} ms (HTTP ${payload.status}).`;
       setStatus('ok', `<strong>${items.length} elementos encontrados</strong> en ${radius} m. ${origin}${when}`);
     }
-    $('download').hidden = false;
     if (state.circle) map.fitBounds(state.circle.getBounds(), { padding: [20, 20] });
   }
 
@@ -1065,8 +1064,56 @@
     $('query-details').hidden = false;
   }
 
-  // --------------------------------------------------------- Descarga de datos
+  // --------------------------------------------------------- Ficha en PDF
+  // Reúne lo que ya se calculó y lo pasa a reporte.js (no calcula nada nuevo).
+  function datosReporte() {
+    const zonaOk = state.zonaStatus === 'ok';
+    const r = zonaOk ? state.zona.regla : null;
+    const lote = Number($('lote').value);
+    const d = state.distritoStatus === 'ok' ? state.distrito : null;
+    const resumen = [];
+    resumen.push(['Normativo', zonaOk ? `${state.zona.codigo} · ${r ? r.nombre : ''}${ZON_BADGE[r && r.edificable] ? ` — ${ZON_BADGE[r.edificable].text.toLowerCase()}` : ''}` : state.zonaStatus === 'outside' ? 'Fuera del área zonificada' : 'No disponible']);
+    resumen.push(['Desastre', `${state.peligro ? `${fmtNum(state.peligro.total)} peligros geológicos registrados a ${state.peligro.radio} m` : 'Peligros no disponibles'}${d ? `; zona sísmica ${d.zona} (Z = ${String(d.z).replace('.', ',')})` : ''}${enZonaRiesgo() ? '; zona de riesgo muy alto en el plano' : ''}`]);
+    resumen.push(['Seguridad', state.delito ? `${fmtNum(state.delito.conteo.total)} denuncias de robo y hurto a ${state.delito.radio} m en ${state.delito.meta.meses} meses` : 'No disponible']);
+    resumen.push(['Entorno', state.meta ? `${state.items.length} elementos de OpenStreetMap en ${state.meta.radius} m` : 'No analizado']);
+    resumen.push(['Registro de riesgos', `${(state.riesgos || []).length} riesgos identificados`]);
+    return {
+      fecha: new Date().toLocaleString('es-PE', { dateStyle: 'long', timeStyle: 'short' }),
+      punto: state.point,
+      distritoTitulo: d ? `Distrito de ${capitalizar(d.distrito)}` : 'Arequipa',
+      distritoNombre: d ? capitalizar(d.distrito) : '',
+      resumen,
+      zonaStatus: state.zonaStatus,
+      zona: zonaOk ? state.zona : null,
+      badgeZona: zonaOk && ZON_BADGE[r && r.edificable] ? ZON_BADGE[r.edificable].text : null,
+      lote: lote > 0 ? lote : null,
+      potencial: zonaOk && lote > 0 ? Zonificacion.potencial(r, lote) : null,
+      zonaRiesgo: enZonaRiesgo(),
+      peligro: state.peligroStatus === 'ok' ? state.peligro : null,
+      distrito: d,
+      delito: state.delito,
+      periodo: state.delito ? `${fmtFecha(state.delito.meta.ventanaDesde)} – ${fmtFecha(state.delito.meta.hasta)}` : '',
+      entorno: state.meta ? {
+        radio: state.meta.radius,
+        fecha: state.meta.osmBase ? state.meta.osmBase.slice(0, 10) : null,
+        categorias: CATEGORIES.map((c) => {
+          const lista = state.items.filter((i) => i.cat.id === c.id);
+          return { label: c.label, total: lista.length, cercanos: lista.slice(0, 3).map((i) => ({ nombre: i.name || `${i.subtype} sin nombre`, distancia: i.distance })) };
+        }),
+      } : null,
+      registro: { riesgos: state.riesgos || [], evaluacion: state.evaluacion, nivel: Riesgos.nivel, escala: Riesgos.ESCALA, decisiones: Riesgos.DECISIONES },
+      fuentes: { zonificacion: CONFIG.zonificacion.fuente, peligros: CONFIG.peligros.fuente, distritos: CONFIG.distritos.fuente, delitos: CONFIG.delitos.fuente },
+    };
+  }
+
   $('download').addEventListener('click', () => {
+    if (!state.point) return;
+    renderResumen(); // asegura que el registro esté al día
+    Reporte.imprimir($('reporte'), datosReporte());
+  });
+
+  // --------------------------------------------------------- Datos crudos (JSON, para verificación)
+  $('download-json').addEventListener('click', () => {
     if (!state.point) return;
     const out = {
       generado: new Date().toISOString(),
