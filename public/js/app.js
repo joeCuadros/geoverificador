@@ -52,6 +52,7 @@
     maxZoom: 19,
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
   }).addTo(map);
+  L.control.scale({ metric: true, imperial: false, position: 'bottomleft' }).addTo(map);
 
   // El plano de zonificación va en un panel propio, debajo de marcadores y círculo, y no captura clics.
   const zonPane = map.createPane('zonificacion');
@@ -76,15 +77,15 @@
   const catUI = {};
   CATEGORIES.forEach((cat) => {
     const sec = document.createElement('section');
-    sec.className = 'cat';
+    sec.className = 'osm-cat';
     sec.innerHTML = `
-      <label class="cat-head">
+      <label class="osm-cat-head">
         <input type="checkbox" checked aria-label="Mostrar ${esc(cat.label)}">
         <span class="swatch" style="background:${cat.color}"></span>
         <span class="name">${esc(cat.label)}</span>
         <span class="count">–</span>
       </label>
-      <div class="cat-meta">Sin analizar</div>
+      <div class="osm-cat-meta">Sin analizar</div>
       <ul class="items"></ul>`;
     $('cats').appendChild(sec);
     const layer = L.layerGroup().addTo(map);
@@ -92,7 +93,7 @@
       sec, layer,
       check: sec.querySelector('input'),
       count: sec.querySelector('.count'),
-      meta: sec.querySelector('.cat-meta'),
+      meta: sec.querySelector('.osm-cat-meta'),
       list: sec.querySelector('.items'),
     };
     ui.check.addEventListener('change', () => {
@@ -107,6 +108,70 @@
     <h4>${esc(cat.label)}</h4>
     <ul>${cat.filters.map((f) => `<li><code>${esc(f.key)}</code> = ${Object.keys(f.values).map((v) => `<code>${esc(v)}</code>`).join(', ')}</li>`).join('')}</ul>`).join('')
     + '<p>Cada elemento se clasifica en la primera categoría cuyo tag coincide. Se buscan nodos, vías y relaciones (<code>nwr</code>).</p>';
+
+  // ------------------------------------------------------------- Pestañas
+  const TABS = ['resumen', 'normativo', 'desastre', 'seguridad', 'entorno', 'riesgos', 'fuentes'];
+  function selectTab(name, focus = false) {
+    TABS.forEach((t) => {
+      const btn = $(`tabbtn-${t}`);
+      const on = t === name;
+      btn.setAttribute('aria-selected', String(on));
+      btn.tabIndex = on ? 0 : -1;
+      $(`tab-${t}`).hidden = !on;
+      if (on && t === 'entorno' && !state.mostrarEntorno) { state.mostrarEntorno = true; drawCircle(); }
+      if (on && focus) btn.focus();
+      // La pestaña activa siempre queda visible en la barra (que se desplaza en horizontal).
+      if (on) { const bar = btn.parentElement; bar.scrollLeft = btn.offsetLeft - (bar.clientWidth - btn.offsetWidth) / 2; }
+    });
+    // Si el panel estaba desplazado, vuelve al inicio del contenido (las pestañas quedan fijas arriba).
+    const panel = document.querySelector('.panel');
+    const tope = document.querySelector('.point-card').offsetHeight;
+    if (panel.scrollTop > tope) panel.scrollTop = tope;
+  }
+  document.querySelector('.tabs').addEventListener('click', (e) => {
+    const btn = e.target.closest('[role="tab"]');
+    if (btn) selectTab(btn.dataset.tab);
+  });
+  // Flechas izquierda/derecha, Inicio y Fin, como en un tablist estándar.
+  document.querySelector('.tabs').addEventListener('keydown', (e) => {
+    const i = TABS.indexOf(document.activeElement?.dataset?.tab);
+    if (i < 0) return;
+    let n = null;
+    if (e.key === 'ArrowRight') n = (i + 1) % TABS.length;
+    if (e.key === 'ArrowLeft') n = (i - 1 + TABS.length) % TABS.length;
+    if (e.key === 'Home') n = 0;
+    if (e.key === 'End') n = TABS.length - 1;
+    if (n !== null) { e.preventDefault(); selectTab(TABS[n], true); }
+  });
+
+  // Tarjeta de capas plegable (plegada de inicio en pantallas angostas).
+  function setLayersOpen(open) {
+    $('layers-toggle').setAttribute('aria-expanded', String(open));
+    $('layers-body').hidden = !open;
+  }
+  $('layers-toggle').addEventListener('click', () => setLayersOpen($('layers-body').hidden));
+  if (window.matchMedia('(max-width: 820px)').matches) setLayersOpen(false);
+
+  $('probar').addEventListener('click', () => {
+    setPoint(CONFIG.center[0], CONFIG.center[1]);
+    map.setView(CONFIG.center, 16);
+  });
+
+  // Botones «Ver en el mapa» de cada pestaña: activan la misma casilla de la tarjeta de capas y se sincronizan con ella.
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-capa]');
+    if (b) $(b.dataset.capa).click();
+  });
+  ['zon-layer', 'pel-layer', 'del-layer'].forEach((id) => {
+    $(id).addEventListener('change', () => {
+      document.querySelectorAll(`[data-capa="${id}"]`).forEach((b) => b.setAttribute('aria-pressed', String($(id).checked)));
+    });
+  });
+
+  // Menú de resultados del buscador: se cierra con Escape o al hacer clic fuera.
+  const showSearchPop = (show) => { $('search-pop').hidden = !show; };
+  document.addEventListener('click', (e) => { if (!e.target.closest('.search-wrap')) showSearchPop(false); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') showSearchPop(false); });
 
   // ------------------------------------------------------------- Utilidades UI
   function setStatus(kind, html) {
@@ -150,12 +215,21 @@
   }
 
   // ------------------------------------------------------------ Punto y radio
+  // Dos círculos: el radio de análisis de peligros y denuncias (siempre) y el radio del entorno de OSM
+  // (solo cuando se usa la pestaña Entorno, para no confundir qué se está midiendo).
   function drawCircle() {
     if (state.circle) { map.removeLayer(state.circle); state.circle = null; }
+    if (state.ring) { map.removeLayer(state.ring); state.ring = null; }
     if (!state.point) return;
-    state.circle = L.circle([state.point.lat, state.point.lon], {
-      radius: Number($('radius').value), color: '#44505f', weight: 1.5, dashArray: '5 5', fillOpacity: 0.04,
+    const c = [state.point.lat, state.point.lon];
+    state.ring = L.circle(c, {
+      radius: CONFIG.peligros.radio, color: '#0f766e', weight: 2, fillColor: '#0f766e', fillOpacity: 0.06, interactive: false,
     }).addTo(map);
+    if (state.mostrarEntorno) {
+      state.circle = L.circle(c, {
+        radius: Number($('radius').value), color: '#16a34a', weight: 1.5, dashArray: '6 6', fill: false, interactive: false,
+      }).addTo(map);
+    }
   }
 
   function clearResults() {
@@ -168,7 +242,6 @@
       ui.count.textContent = '–';
       ui.meta.textContent = 'Sin analizar';
     });
-    $('download').hidden = true;
     $('query-details').hidden = true;
     renderResumen();
   }
@@ -188,12 +261,15 @@
     clearResults();
     updateZona();
     state.evaluacion = Riesgos.leerEvaluacion(lat, lon);
+    $('welcome').hidden = true;
+    $('ficha').hidden = false;
+    $('map-hint').classList.add('oculto');
+    $('point-distrito').textContent = 'Buscando distrito…';
     updatePeligro();
     updateDistrito();
     updateDelito();
     renderResumen();
-    $('point-info').innerHTML = `Punto: <strong>${lat.toFixed(6)}, ${lon.toFixed(6)}</strong>
-      · <a href="https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=18/${lat}/${lon}" target="_blank" rel="noopener">verificar en OSM</a>`;
+    $('point-info').innerHTML = `${lat.toFixed(6)}, ${lon.toFixed(6)} · <a href="https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=18/${lat}/${lon}" target="_blank" rel="noopener">ver en OSM</a>`;
     $('analyze').disabled = state.busy;
     setStatus('idle', 'Punto listo. Pulsa «Analizar entorno» para consultar Overpass.');
   }
@@ -209,7 +285,7 @@
     no: { cls: 'no', text: 'No construible' },
   };
 
-  $('zon-fuente').textContent = `Fuente: ${CONFIG.zonificacion.fuente}. Referencial: no reemplaza el Certificado de Zonificación y Vías.`;
+  $('zon-fuente').textContent = `Fuente: ${CONFIG.zonificacion.fuente}. Referencial: no reemplaza los certificados municipales.`;
 
   function zonMessage(kind, html) {
     $('zon').innerHTML = `<p class="zon-msg ${kind}">${html}</p>`;
@@ -304,7 +380,7 @@
     }
   }
 
-  $('lote').addEventListener('input', () => { renderZona(); renderRiesgos(); });
+  $('lote').addEventListener('input', () => { renderZona(); renderResumen(); });
 
   // ------------------------------------------------------------------ Peligros
   $('pel-fuente').textContent = `Fuente: ${CONFIG.peligros.fuente}. Es un inventario de eventos documentados: que no haya registros no significa que el lugar sea seguro.`;
@@ -321,18 +397,19 @@
     const p = state.peligro;
     const m = p.masCercano;
     const alerta = enZonaRiesgo()
-      ? `<p class="zon-msg empty"><strong>El plano de zonificación ubica este punto en zona de riesgo (${esc(state.zona.codigo)}: ${esc(state.zona.regla.nombre)}).</strong> ${esc(state.zona.regla.nota || '')}</p>`
+      ? `<p class="zon-msg error"><strong>El plano de zonificación ubica este punto en zona de riesgo muy alto (${esc(state.zona.codigo)}: ${esc(state.zona.regla.nombre)}).</strong> ${esc(state.zona.regla.nota || '')}</p>`
       : '';
     $('pel').innerHTML = `
       ${alerta}
       <div class="zon-card">
-        <div class="zon-head">
-          <span class="zon-code">${fmtNum(p.total)}</span>
-          <span class="zon-name">peligros geológicos registrados a ${p.radio} m</span>
-        </div>
-        ${p.porTipo.length ? `<ul class="pel-tipos">${p.porTipo.map(([t, n]) => `<li>${esc(t)}: ${fmtNum(n)}</li>`).join('')}</ul>` : ''}
-        <p class="zon-nota small">El más cercano está a <strong>${fmtDist(m.distancia)}</strong>: ${esc(m.subtipo || m.tipo)}${m.sector ? ` en «${esc(m.sector)}»` : ''}${m.anio ? `, registrado en ${esc(m.anio)}` : ''}.
-        Inventario ${esc(p.meta.anioDesde)}–${esc(p.meta.anioHasta)}, ${fmtNum(p.meta.registros)} registros en Arequipa metropolitana. Un registro es un evento documentado en un sector, no su alcance real.</p>
+        <div class="stat-row"><span class="big-number">${fmtNum(p.total)}</span><span class="stat-label">peligro${p.total === 1 ? '' : 's'} geológico${p.total === 1 ? '' : 's'} registrado${p.total === 1 ? '' : 's'} a ${p.radio} m</span></div>
+        ${p.porTipo.length ? `<ul class="pel-tipos">${p.porTipo.map(([t, n]) => `<li>${esc(t)} · ${fmtNum(n)}</li>`).join('')}</ul>` : ''}
+        <dl class="zon-data">
+          <div><dt>Más cercano</dt><dd>${fmtDist(m.distancia)}</dd></div>
+          <div><dt>Tipo</dt><dd>${esc(m.subtipo || m.tipo)}</dd></div>
+          ${m.anio ? `<div><dt>Registrado</dt><dd>${esc(m.anio)}</dd></div>` : ''}
+        </dl>
+        <p class="zon-nota">${m.sector ? `Sector del más cercano: «${esc(m.sector)}». ` : ''}Inventario ${esc(p.meta.anioDesde)}–${esc(p.meta.anioHasta)}, ${fmtNum(p.meta.registros)} registros en Arequipa metropolitana. Un registro es un evento documentado en un sector, no su alcance real.</p>
       </div>`;
   }
 
@@ -379,6 +456,8 @@
   // ------------------------------------------------------------ Peligro sísmico
   $('sismo-fuente').textContent = `Fuente: ${CONFIG.distritos.fuente}.`;
 
+  const capitalizar = (t) => t.toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase()).replace(/\b(Y|De|Del|La)\b/g, (m) => m.toLowerCase());
+
   function renderSismo() {
     const el = $('sismo');
     if (state.distritoStatus === 'loading') { el.innerHTML = '<p class="zon-msg loading"><span class="spinner"></span>Buscando el distrito y su zona sísmica…</p>'; return; }
@@ -388,11 +467,14 @@
     const d = state.distrito;
     el.innerHTML = `
       <div class="zon-card">
-        <div class="zon-head">
-          <span class="zon-code">Zona ${esc(d.zona)}</span>
-          <span class="zon-name">sísmica · Z = ${esc(String(d.z).replace('.', ','))} · distrito ${esc(d.distrito)}</span>
+        <div class="sismo-z">
+          <div class="sismo-ring"><div><b>${esc(d.zona)}</b><small>Zona</small></div></div>
+          <div>
+            <div class="stat-row"><span class="big-number">Z = ${esc(String(d.z).replace('.', ','))}</span></div>
+            <div class="muted small">Distrito de ${esc(capitalizar(d.distrito))} · Norma E.030 2026</div>
+          </div>
         </div>
-        <p class="zon-nota small">Z es la aceleración máxima horizontal en suelo rígido con 10 % de probabilidad de ser excedida en 50 años, como fracción de la gravedad (E.030, Art. 11). Es un valor regional: el suelo del predio puede amplificar el movimiento y eso lo determina el Estudio de Mecánica de Suelos que la E.030 exige a todo proyecto de edificación (Art. 16.1).</p>
+        <p class="zon-nota">Z es la aceleración máxima horizontal en suelo rígido con 10 % de probabilidad de ser excedida en 50 años, como fracción de la gravedad (E.030, Art. 11). Es un valor regional: el suelo del predio puede amplificar el movimiento y eso lo determina el Estudio de Mecánica de Suelos que la E.030 exige a todo proyecto de edificación (Art. 16.1).</p>
       </div>`;
   }
 
@@ -407,10 +489,12 @@
       if (seq !== state.distritoSeq) return; // el usuario ya eligió otro punto
       state.distrito = d;
       state.distritoStatus = d ? 'ok' : 'outside';
+      $('point-distrito').textContent = d ? `Distrito de ${capitalizar(d.distrito)}` : 'Fuera de los distritos de Arequipa metropolitana';
     } catch (err) {
       if (seq !== state.distritoSeq) return;
       state.distritoStatus = 'error';
       state.distritoError = err.message;
+      $('point-distrito').textContent = 'Punto seleccionado';
       console.error('[Distritos] fallo', err);
     }
     renderSismo();
@@ -418,48 +502,110 @@
   }
 
   // ------------------------------------------------------------------ Resumen
-  // Una línea por tipo de riesgo, con el dato tal cual lo entrega cada fuente (sin puntaje ni semáforo).
+  // Una tarjeta por tipo de riesgo con el dato tal cual lo entrega cada fuente (sin puntaje ni semáforo global).
+  // Al hacer clic se abre la pestaña con el detalle.
+  function tarjeta({ tab, kicker, valor, detalle, badge, wide, cargando }) {
+    return `
+      <button type="button" class="sum-card ${tab}${wide ? ' wide' : ''}${cargando ? ' loading' : ''}" data-tab="${tab}">
+        <span class="sum-kicker">${kicker}</span>
+        <span class="sum-value">${valor}</span>
+        ${detalle ? `<span class="sum-detail">${detalle}</span>` : ''}
+        ${badge ? `<span class="badge ${badge.cls}">${esc(badge.text)}</span>` : ''}
+        <span class="sum-go">Ver detalle →</span>
+      </button>`;
+  }
+  const cargandoHtml = '<span class="spinner"></span>Consultando…';
+  const fmtCorto = (n) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1).replace('.', ',')} k` : String(n));
+
+  function setBadge(id, texto, cls = '') {
+    const el = $(`badge-${id}`);
+    el.textContent = texto ?? '';
+    el.className = `tab-badge${cls ? ` ${cls}` : ''}`;
+  }
+
   function renderResumen() {
     if (!state.point) return;
-    const filas = [];
+    renderRiesgos();
+    const cards = [];
 
-    let norm = 'Consultando…';
-    if (state.zonaStatus === 'outside') norm = 'Fuera del área zonificada del plano.';
-    else if (state.zonaStatus === 'error') norm = 'No se pudo consultar.';
-    else if (state.zonaStatus === 'ok') {
+    // Normativo
+    if (state.zonaStatus === 'ok') {
       const r = state.zona.regla;
       const badge = ZON_BADGE[r && r.edificable];
-      norm = `${esc(state.zona.codigo)}${r ? ` · ${esc(r.nombre)}` : ''}${badge ? ` — ${badge.text.toLowerCase()}` : ''}`;
+      cards.push(tarjeta({ tab: 'normativo', kicker: 'Normativo', valor: esc(state.zona.codigo), detalle: esc(r ? r.nombre : 'Código sin reglas en la tabla'), badge }));
+      setBadge('normativo', state.zona.codigo);
+    } else if (state.zonaStatus === 'outside') {
+      cards.push(tarjeta({ tab: 'normativo', kicker: 'Normativo', valor: 'Sin zona', detalle: 'El punto está fuera del área zonificada del plano.', badge: { cls: 'warn', text: 'Fuera del plano' } }));
+      setBadge('normativo', '—');
+    } else if (state.zonaStatus === 'error') {
+      cards.push(tarjeta({ tab: 'normativo', kicker: 'Normativo', valor: 'No disponible', detalle: 'No se pudo consultar la zonificación.' }));
+      setBadge('normativo', '');
+    } else {
+      cards.push(tarjeta({ tab: 'normativo', kicker: 'Normativo', valor: cargandoHtml, cargando: true }));
+      setBadge('normativo', '');
     }
-    filas.push(['Normativo', norm]);
 
-    let des = 'Consultando…';
-    if (state.peligroStatus === 'error') des = 'No se pudo consultar.';
-    else if (state.peligroStatus === 'ok') {
+    // Desastre
+    if (state.peligroStatus === 'ok') {
       const p = state.peligro;
-      des = `${fmtNum(p.total)} peligros geológicos registrados a ${p.radio} m (el más cercano a ${fmtDist(p.masCercano.distancia)}).`;
-      if (enZonaRiesgo()) des += ` El plano lo marca como zona de riesgo (${esc(state.zona.codigo)}).`;
+      const det = [`El más cercano a ${fmtDist(p.masCercano.distancia)}.`];
+      if (state.distritoStatus === 'ok') det.push(`Zona sísmica ${esc(state.distrito.zona)} (Z = ${esc(String(state.distrito.z).replace('.', ','))}).`);
+      cards.push(tarjeta({
+        tab: 'desastre', kicker: 'Desastre',
+        valor: `${fmtNum(p.total)} peligro${p.total === 1 ? '' : 's'} a ${p.radio} m`,
+        detalle: det.join(' '),
+        badge: enZonaRiesgo() ? { cls: 'no', text: `Zona de riesgo en el plano (${state.zona.codigo})` } : null,
+      }));
+      setBadge('desastre', enZonaRiesgo() ? '!' : String(p.total), enZonaRiesgo() ? 'alerta' : '');
+    } else if (state.peligroStatus === 'error') {
+      cards.push(tarjeta({ tab: 'desastre', kicker: 'Desastre', valor: 'No disponible', detalle: 'No se pudo consultar el inventario de peligros.' }));
+    } else {
+      cards.push(tarjeta({ tab: 'desastre', kicker: 'Desastre', valor: cargandoHtml, cargando: true }));
     }
-    if (state.distritoStatus === 'ok') des += ` Zona sísmica ${esc(state.distrito.zona)} (Z = ${esc(String(state.distrito.z).replace('.', ','))}, ${esc(state.distrito.distrito)}).`;
-    filas.push(['Desastre', des]);
 
-    let seg = 'Consultando…';
+    // Seguridad
     if (state.delito) {
       const { total, ROBO, HURTO } = state.delito.conteo;
-      seg = `${fmtNum(total)} denuncias con ubicación a ${state.delito.radio} m (${fmtNum(ROBO)} robos, ${fmtNum(HURTO)} hurtos) en ${state.delito.meta.meses} meses.`;
-    } else if (state.delitoError) seg = 'No se pudo consultar.';
-    filas.push(['Seguridad', seg]);
+      cards.push(tarjeta({ tab: 'seguridad', kicker: 'Seguridad', valor: `${fmtNum(total)} denuncias`, detalle: `${fmtNum(ROBO)} robos · ${fmtNum(HURTO)} hurtos · ${state.delito.radio} m · ${state.delito.meta.meses} meses` }));
+      setBadge('seguridad', fmtCorto(total));
+    } else if (state.delitoError) {
+      cards.push(tarjeta({ tab: 'seguridad', kicker: 'Seguridad', valor: 'No disponible', detalle: 'No se pudo calcular el indicador de denuncias.' }));
+    } else {
+      cards.push(tarjeta({ tab: 'seguridad', kicker: 'Seguridad', valor: cargandoHtml, cargando: true }));
+    }
 
-    let ent = 'Sin analizar: pulsa «Analizar entorno».';
+    // Entorno
     if (state.items.length && state.meta) {
-      const por = CATEGORIES.map((c) => `${c.label.toLowerCase()} ${state.items.filter((i) => i.cat.id === c.id).length}`).join(', ');
-      ent = `${state.items.length} elementos de OSM en ${state.meta.radius} m (${por}).`;
-    } else if (state.meta) ent = `Sin elementos de OSM en ${state.meta.radius} m con las etiquetas consultadas.`;
-    filas.push(['Entorno', ent]);
+      const por = CATEGORIES.map((c) => `${c.label.toLowerCase()} ${state.items.filter((i) => i.cat.id === c.id).length}`).join(' · ');
+      cards.push(tarjeta({ tab: 'entorno', kicker: 'Entorno', valor: `${state.items.length} elementos`, detalle: `${por} (${state.meta.radius} m)` }));
+      setBadge('entorno', String(state.items.length));
+    } else if (state.meta) {
+      cards.push(tarjeta({ tab: 'entorno', kicker: 'Entorno', valor: '0 elementos', detalle: `Sin elementos de OSM en ${state.meta.radius} m con las etiquetas consultadas.` }));
+      setBadge('entorno', '0');
+    } else {
+      cards.push(tarjeta({ tab: 'entorno', kicker: 'Entorno', valor: 'Sin analizar', detalle: 'Consulta OpenStreetMap desde la pestaña Entorno.' }));
+      setBadge('entorno', '');
+    }
 
-    $('resumen').innerHTML = filas.map(([k, v]) => `<li><span class="tipo">${k}</span><span>${v}</span></li>`).join('');
-    renderRiesgos();
+    // Registro de riesgos
+    const rs = state.riesgos || [];
+    const ev = state.evaluacion;
+    const evaluados = rs.filter((r) => Riesgos.nivel(ev[r.id]?.p, ev[r.id]?.i));
+    const altos = evaluados.filter((r) => Riesgos.nivel(ev[r.id].p, ev[r.id].i).texto === 'Alto').length;
+    cards.push(tarjeta({
+      tab: 'riesgos', kicker: 'Gestión de riesgos', wide: true,
+      valor: `${rs.length} riesgos identificados`,
+      detalle: evaluados.length ? `${evaluados.length} evaluados por ti · ${altos} de nivel alto.` : 'Evalúa la probabilidad y el impacto de cada uno y elige qué harás.',
+    }));
+    setBadge('riesgos', rs.length ? String(rs.length) : '', 'accent');
+
+    $('resumen').innerHTML = cards.join('');
   }
+
+  $('resumen').addEventListener('click', (e) => {
+    const card = e.target.closest('.sum-card');
+    if (card) selectTab(card.dataset.tab);
+  });
 
   // ------------------------------------------------------------ Gestión de riesgos
   function contextoRiesgos() {
@@ -488,6 +634,39 @@
     return `<option value="">—</option>${lista.map((o) => `<option value="${o.v}"${o.v === valor ? ' selected' : ''}>${esc(o.texto)}</option>`).join('')}`;
   }
 
+  // Grupo de botones excluyentes (radio) para probabilidad o impacto.
+  function segmentado(id, k, valor) {
+    return `<div class="seg" role="radiogroup">${Riesgos.ESCALA.map((o) => `
+      <label><input type="radio" name="${id}-${k}" data-k="${k}" value="${o.v}"${o.v === valor ? ' checked' : ''}><span>${esc(o.texto)}</span></label>`).join('')}</div>`;
+  }
+
+  // Matriz 3 × 3 con los riesgos que el usuario ya evaluó (probabilidad en filas, impacto en columnas).
+  function matrizHtml(riesgos, ev) {
+    const nombres = ['Baja', 'Media', 'Alta'];
+    let celdas = '';
+    for (let p = 3; p >= 1; p--) {
+      celdas += `<div class="lab-y" style="grid-row:${4 - p}">${nombres[p - 1]}</div>`;
+      for (let i = 1; i <= 3; i++) {
+        const n = Riesgos.nivel(p, i);
+        const ids = riesgos.filter((r) => ev[r.id]?.p === p && ev[r.id]?.i === i);
+        celdas += `<div class="celda ${n.texto.toLowerCase()}" style="grid-row:${4 - p};grid-column:${i + 2}" title="Probabilidad ${nombres[p - 1].toLowerCase()} · impacto ${nombres[i - 1].toLowerCase()}: nivel ${n.texto.toLowerCase()}">
+          <span class="pt">${n.puntaje}</span>${ids.map((r) => `<button type="button" class="chip-id" data-ir="${r.id}" title="${esc(r.titulo)}">${r.id}</button>`).join('')}</div>`;
+      }
+    }
+    const labsX = nombres.map((t, k) => `<div class="lab-x" style="grid-column:${k + 3}">${t}</div>`).join('');
+    const hay = riesgos.some((r) => Riesgos.nivel(ev[r.id]?.p, ev[r.id]?.i));
+    return `
+      <div class="matriz-wrap">
+        <div class="matriz-title"><strong>Matriz de riesgos</strong><span>nivel = probabilidad × impacto</span></div>
+        <div class="matriz">
+          <div class="eje-y">Probabilidad</div>${celdas}${labsX}<div class="eje-x">Impacto</div>
+        </div>
+        ${hay ? '' : '<p class="matriz-vacia">Aún no evaluaste ningún riesgo: elige probabilidad e impacto en las tarjetas de abajo y aparecerán aquí.</p>'}
+      </div>`;
+  }
+
+  state.filtroRiesgo = 'Todos';
+
   function renderRiesgos() {
     if (!state.point) return;
     const riesgos = Riesgos.identificar(contextoRiesgos());
@@ -497,32 +676,62 @@
     const altos = evaluados.filter((r) => Riesgos.nivel(ev[r.id].p, ev[r.id].i).texto === 'Alto').length;
     const falta = pendientes();
     const decisiones = Riesgos.DECISIONES.map((t, k) => ({ v: k, texto: t }));
+    const categorias = ['Todos', ...new Set(riesgos.map((r) => r.categoria))];
+    if (!categorias.includes(state.filtroRiesgo)) state.filtroRiesgo = 'Todos';
+    const visibles = riesgos.filter((r) => state.filtroRiesgo === 'Todos' || r.categoria === state.filtroRiesgo);
+
     $('riesgos').innerHTML = `
-      <p class="riesgos-resumen"><strong>${riesgos.length} riesgos identificados</strong> · ${evaluados.length} evaluados${evaluados.length ? ` · ${altos} de nivel alto` : ''}${falta.length ? ` · <span class="muted">cargando ${esc(falta.join(', '))}…</span>` : ''}</p>
-      ${riesgos.map((r) => {
+      <div class="r-kpis">
+        <div class="r-kpi"><b>${riesgos.length}</b><span>identificados</span></div>
+        <div class="r-kpi"><b>${evaluados.length}</b><span>evaluados por ti</span></div>
+        <div class="r-kpi alto"><b>${altos}</b><span>de nivel alto</span></div>
+      </div>
+      ${falta.length ? `<p class="r-loading"><span class="spinner"></span>Cargando ${esc(falta.join(', '))}: el registro se completa al terminar.</p>` : ''}
+      ${matrizHtml(riesgos, ev)}
+      <div class="filtros" role="group" aria-label="Filtrar por tipo de riesgo">
+        ${categorias.map((c) => `<button type="button" data-filtro="${esc(c)}" aria-pressed="${c === state.filtroRiesgo}">${esc(c)}<span class="n">${c === 'Todos' ? riesgos.length : riesgos.filter((r) => r.categoria === c).length}</span></button>`).join('')}
+      </div>
+      ${visibles.length ? visibles.map((r) => {
         const e = ev[r.id] || {};
         const n = Riesgos.nivel(e.p, e.i);
+        const hechas = (e.hechas || []).filter((k) => k < r.acciones.length).length;
+        const pct = Math.round((100 * hechas) / r.acciones.length);
         return `
-        <article class="riesgo" data-id="${r.id}">
-          <header>
-            <span class="cat">${esc(r.categoria)}</span>
-            <strong>${esc(r.titulo)}</strong>
-            <span class="badge ${n ? n.cls : 'warn'}">${n ? `Nivel ${n.texto.toLowerCase()} (${n.puntaje})` : 'Sin evaluar'}</span>
-          </header>
-          <p class="small">${esc(r.evidencia)}</p>
-          <p class="small muted">Fuente del dato: ${esc(r.fuente)}</p>
+        <article class="riesgo ${r.categoria.toLowerCase()}" id="riesgo-${r.id}" data-id="${r.id}">
+          <div class="r-head">
+            <div class="r-titles">
+              <div class="r-tag">${esc(r.categoria)}<span class="r-id">${r.id}</span></div>
+              <h3>${esc(r.titulo)}</h3>
+            </div>
+            <span class="badge ${n ? n.cls : 'neutral'}">${n ? `Nivel ${n.texto.toLowerCase()} · ${n.puntaje}` : 'Sin evaluar'}</span>
+          </div>
+          <p class="r-evidencia">${esc(r.evidencia)}</p>
+          <p class="r-fuente">Fuente del dato: ${esc(r.fuente)}</p>
           <div class="r-eval">
-            <label>Probabilidad<select data-k="p">${opciones(Riesgos.ESCALA, e.p)}</select></label>
-            <label>Impacto<select data-k="i">${opciones(Riesgos.ESCALA, e.i)}</select></label>
-            <label>Decisión<select data-k="decision">${opciones(decisiones, e.decision)}</select></label>
+            <div><span class="r-lbl">Probabilidad</span>${segmentado(r.id, 'p', e.p)}</div>
+            <div><span class="r-lbl">Impacto</span>${segmentado(r.id, 'i', e.i)}</div>
+            <label class="r-dec"><span class="r-lbl">Decisión</span><select data-k="decision">${opciones(decisiones, e.decision)}</select></label>
+          </div>
+          <div class="r-acciones-head">
+            <span class="r-lbl">Acciones de tratamiento</span>
+            <span class="progreso"><span class="pbar"><i style="width:${pct}%"></i></span>${hechas}/${r.acciones.length}</span>
           </div>
           <ul class="r-acciones">
-            ${r.acciones.map((ac, k) => `<li><label><input type="checkbox" data-k="hecha" data-a="${k}"${(e.hechas || []).includes(k) ? ' checked' : ''}> ${esc(ac.texto)}</label><span class="fuente small muted">Fuente: ${esc(ac.fuente)}</span></li>`).join('')}
+            ${r.acciones.map((ac, k) => {
+              const hecha = (e.hechas || []).includes(k);
+              return `<li class="${hecha ? 'hecha' : ''}"><label><input type="checkbox" data-k="hecha" data-a="${k}"${hecha ? ' checked' : ''}> <span>${esc(ac.texto)}</span></label><span class="fuente">Fuente: ${esc(ac.fuente)}</span></li>`;
+            }).join('')}
           </ul>
+          ${e.p || e.i || e.decision != null || (e.hechas || []).length ? '<div class="r-foot"><button type="button" data-limpiar="1">Limpiar mi evaluación</button></div>' : ''}
         </article>`;
-      }).join('')}`;
+      }).join('') : '<p class="r-vacio">Sin riesgos en esta categoría.</p>'}`;
     $('riesgos-csv').hidden = riesgos.length === 0;
   }
+
+  const guardarYRedibujar = () => {
+    Riesgos.guardarEvaluacion(state.point.lat, state.point.lon, state.evaluacion);
+    renderResumen(); // redibuja también el registro y las insignias
+  };
 
   $('riesgos').addEventListener('change', (e) => {
     const card = e.target.closest('.riesgo');
@@ -538,8 +747,25 @@
     } else {
       ev[k] = e.target.value === '' ? null : Number(e.target.value);
     }
-    Riesgos.guardarEvaluacion(state.point.lat, state.point.lon, state.evaluacion);
-    renderRiesgos();
+    guardarYRedibujar();
+  });
+
+  $('riesgos').addEventListener('click', (e) => {
+    const filtro = e.target.closest('[data-filtro]');
+    if (filtro) { state.filtroRiesgo = filtro.dataset.filtro; renderRiesgos(); return; }
+    const chip = e.target.closest('[data-ir]');
+    if (chip) {
+      state.filtroRiesgo = 'Todos';
+      renderRiesgos();
+      const card = $(`riesgo-${chip.dataset.ir}`);
+      if (card) { card.scrollIntoView({ block: 'start' }); card.classList.add('destacado'); setTimeout(() => card.classList.remove('destacado'), 1500); }
+      return;
+    }
+    if (e.target.closest('[data-limpiar]') && state.point) {
+      const id = e.target.closest('.riesgo').dataset.id;
+      delete state.evaluacion[id];
+      guardarYRedibujar();
+    }
   });
 
   $('riesgos-csv').addEventListener('click', () => {
@@ -564,18 +790,15 @@
     const d = state.delito;
     const { total, ROBO, HURTO } = d.conteo;
     const periodo = `${fmtFecha(d.meta.ventanaDesde)} – ${fmtFecha(d.meta.hasta)}`;
+    const pRobo = total ? (100 * ROBO) / total : 0;
     $('del').innerHTML = `
       <div class="zon-card">
-        <div class="zon-head">
-          <span class="zon-code">${fmtNum(total)}</span>
-          <span class="zon-name">denuncias de robo y hurto a ${d.radio} m</span>
-        </div>
-        <dl class="zon-data">
-          <div><dt>Robos</dt><dd>${fmtNum(ROBO)}</dd></div>
-          <div><dt>Hurtos</dt><dd>${fmtNum(HURTO)}</dd></div>
-        </dl>
-        <p class="zon-nota small">Periodo: ${d.meta.meses} meses (${esc(periodo)}), el tramo reciente donde ≥ ${Math.round(CONFIG.delitos.coberturaMinima * 100)} % de las denuncias trae ubicación (${Math.round(d.meta.coberturaVentana * 100)} % en promedio). Solo cuenta las que tienen ubicación. Robo: con violencia o amenaza; hurto: sin violencia. Activa «Ver mapa de calor» para compararlo con el resto de la ciudad.</p>
-      </div>`;
+        <div class="stat-row"><span class="big-number">${fmtNum(total)}</span><span class="stat-label">denuncias de robo y hurto a ${d.radio} m</span></div>
+        ${total ? `<div class="bar-split" aria-hidden="true"><span style="width:${pRobo}%;background:#b91c1c"></span><span style="width:${100 - pRobo}%;background:#fca5a5"></span></div>
+        <div class="bar-legend"><span><i style="background:#b91c1c"></i>${fmtNum(ROBO)} robos</span><span><i style="background:#fca5a5"></i>${fmtNum(HURTO)} hurtos</span></div>` : ''}
+        <p class="zon-nota">Periodo: ${d.meta.meses} meses (${esc(periodo)}), el tramo reciente donde ≥ ${Math.round(CONFIG.delitos.coberturaMinima * 100)} % de las denuncias trae ubicación (${Math.round(d.meta.coberturaVentana * 100)} % en promedio). Solo cuenta las que tienen ubicación. Robo: con violencia o amenaza; hurto: sin violencia.</p>
+      </div>
+      <p class="zon-msg">Para compararlo con el resto de la ciudad, usa <strong>Ver mapa de calor</strong>: muestra dónde se concentran las denuncias (escala relativa).</p>`;
   }
 
   async function updateDelito() {
@@ -653,6 +876,7 @@
     const box = $('search-status');
     const list = $('search-results');
     list.innerHTML = '';
+    showSearchPop(true);
     if (q.length < 3) { box.textContent = 'Escribe al menos 3 caracteres.'; return; }
 
     searching = true;
@@ -672,6 +896,7 @@
           b.addEventListener('click', () => {
             list.innerHTML = '';
             box.textContent = '';
+            showSearchPop(false);
             setPoint(r.lat, r.lon);
             map.setView([r.lat, r.lon], 16);
           });
@@ -842,9 +1067,11 @@
 
   // --------------------------------------------------------- Descarga de datos
   $('download').addEventListener('click', () => {
-    if (!state.meta) return;
+    if (!state.point) return;
     const out = {
-      ...state.meta,
+      generado: new Date().toISOString(),
+      punto: { lat: state.point.lat, lon: state.point.lon },
+      entorno_consulta: state.meta || null,
       zonificacion: state.zona
         ? { codigo: state.zona.codigo, regla: state.zona.regla, fuente: CONFIG.zonificacion.fuente }
         : null,
@@ -895,7 +1122,7 @@
     const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `osm-arequipa-${state.meta.lat.toFixed(5)}_${state.meta.lon.toFixed(5)}_${state.meta.radius}m.json`;
+    a.download = `ficha-predio_${state.point.lat.toFixed(5)}_${state.point.lon.toFixed(5)}.json`;
     a.click();
     URL.revokeObjectURL(a.href);
   });

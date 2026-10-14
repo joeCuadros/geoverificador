@@ -66,6 +66,8 @@ const Riesgos = (() => {
   };
 
   const fmt = (n) => Math.round(n).toLocaleString('es-PE');
+  // «JOSE LUIS BUSTAMANTE Y RIVERO» → «Jose Luis Bustamante y Rivero» (los datos vienen en mayúsculas).
+  const titulo = (t) => String(t).toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase()).replace(/(Y|De|Del|La)/g, (m) => m.toLowerCase());
 
   /**
    * Catálogo. `aplica(ctx)` devuelve null si el riesgo no se identifica para el punto, o { evidencia } con el dato
@@ -125,7 +127,7 @@ const Riesgos = (() => {
     {
       id: 'D3', categoria: 'Desastre', titulo: 'Peligro sísmico de la zona', fuente: `${F.e030}; ${F.inei}`,
       aplica: (c) => (c.distrito && c.distrito.zona
-        ? { evidencia: `Distrito ${c.distrito.distrito}: zona sísmica ${c.distrito.zona}, Z = ${String(c.distrito.z).replace('.', ',')} (aceleración máxima horizontal en suelo rígido con 10 % de probabilidad de ser excedida en 50 años, como fracción de la gravedad). No considera el suelo del predio.` }
+        ? { evidencia: `Distrito de ${titulo(c.distrito.distrito)}: zona sísmica ${c.distrito.zona}, Z = ${String(c.distrito.z).replace('.', ',')} (aceleración máxima horizontal en suelo rígido con 10 % de probabilidad de ser excedida en 50 años, como fracción de la gravedad). No considera el suelo del predio.` }
         : null),
       acciones: [A.ems, A.e030],
     },

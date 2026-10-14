@@ -4,198 +4,275 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>GeoVerificador · Riesgos de un predio en Arequipa</title>
+  <meta name="description" content="Ficha de riesgos de un predio en Arequipa con datos públicos: zonificación, peligros, zona sísmica, denuncias y entorno, con su fuente y sus límites.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230f766e'/%3E%3Cpath d='M16 6c-4.4 0-8 3.4-8 7.7C8 19.5 16 26 16 26s8-6.5 8-12.3C24 9.4 20.4 6 16 6zm0 10.6a3 3 0 1 1 0-6 3 3 0 0 1 0 6z' fill='%23fff'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
         integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
-  <div class="layout">
-    <aside class="panel">
-      <header>
-        <h1>GeoVerificador</h1>
-        <p class="muted">Conoce los riesgos de un predio antes de invertir en Arequipa. Todo sale de datos públicos y cada dato dice de dónde viene y qué no cubre. No es una recomendación de compra.</p>
-      </header>
+  <div class="app">
+    <!-- ============================================================ Barra superior -->
+    <header class="topbar">
+      <div class="brand">
+        <svg class="brand-logo" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8"/><path d="M16 6c-4.4 0-8 3.4-8 7.7C8 19.5 16 26 16 26s8-6.5 8-12.3C24 9.4 20.4 6 16 6zm0 10.6a3 3 0 1 1 0-6 3 3 0 0 1 0 6z"/></svg>
+        <div class="brand-text">
+          <strong>GeoVerificador</strong>
+          <span>Riesgos de un predio · Arequipa</span>
+        </div>
+      </div>
 
-      <section class="block">
-        <h2>1. Elige un punto</h2>
-        <p class="muted small">Haz clic en el mapa, arrastra el marcador o busca una dirección.</p>
-        <form id="search-form" class="row" autocomplete="off">
-          <input id="q" type="search" placeholder="Ej.: Av. Ejército 700, Yanahuara" aria-label="Dirección a buscar" minlength="3">
+      <div class="search-wrap">
+        <form id="search-form" class="search" autocomplete="off" role="search">
+          <svg class="search-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M8.5 3a5.5 5.5 0 0 1 4.38 8.83l3.65 3.64-1.06 1.06-3.64-3.65A5.5 5.5 0 1 1 8.5 3zm0 1.5a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/></svg>
+          <input id="q" type="search" placeholder="Busca una dirección: Av. Ejército 700, Yanahuara" aria-label="Dirección a buscar" minlength="3">
           <button id="search-btn" type="submit">Buscar</button>
         </form>
-        <label class="check small"><input id="bounded" type="checkbox" checked> Limitar la búsqueda a Arequipa</label>
-        <div id="search-status" class="small" role="status"></div>
-        <ul id="search-results" class="search-results"></ul>
-        <p id="point-info" class="point-info">Ningún punto seleccionado.</p>
+        <label class="check search-bounded"><input id="bounded" type="checkbox" checked> Solo Arequipa</label>
+        <div class="search-pop" id="search-pop" hidden>
+          <div id="search-status" class="small" role="status"></div>
+          <ul id="search-results" class="search-results"></ul>
+        </div>
+      </div>
+    </header>
+
+    <!-- ============================================================ Panel de la ficha -->
+    <aside class="panel" aria-label="Ficha del predio">
+
+      <!-- Bienvenida: se muestra hasta que se elige un punto -->
+      <section id="welcome" class="welcome">
+        <p class="eyebrow">Ficha de riesgos con datos públicos</p>
+        <h1>Conoce los riesgos de un predio antes de invertir</h1>
+        <p class="lead">Elige un punto de Arequipa metropolitana y obtén, por separado y con su fuente, lo que dice la norma, los peligros documentados, la zona sísmica, las denuncias y el entorno.</p>
+        <ol class="steps">
+          <li><span class="step-n">1</span><div><strong>Elige un punto</strong><span>Haz clic en el mapa, arrastra el marcador o busca una dirección arriba.</span></div></li>
+          <li><span class="step-n">2</span><div><strong>Revisa cada riesgo</strong><span>Cada dato dice de dónde viene y qué no cubre.</span></div></li>
+          <li><span class="step-n">3</span><div><strong>Evalúa y descarga</strong><span>Arma tu registro de riesgos con las acciones oficiales para cada uno.</span></div></li>
+        </ol>
+        <button id="probar" type="button" class="primary">Probar con el centro de Arequipa</button>
+        <p class="disclaimer">No es una recomendación de compra ni reemplaza los certificados municipales.</p>
       </section>
 
-      <section class="block">
-        <h2>Resumen del punto</h2>
-        <ul id="resumen" class="resumen">
-          <li class="muted small">Elige un punto para ver el resumen.</li>
-        </ul>
-        <p class="small muted">Son hechos de cada fuente, no una calificación: no se suman en un puntaje porque no existe una base para decidir cuánto pesa cada riesgo.</p>
-      </section>
+      <!-- Ficha: aparece al elegir un punto -->
+      <div id="ficha" class="ficha" hidden>
+        <div class="point-card">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2a6 6 0 0 0-6 6c0 4.4 6 10 6 10s6-5.6 6-10a6 6 0 0 0-6-6zm0 8.2a2.2 2.2 0 1 1 0-4.4 2.2 2.2 0 0 1 0 4.4z"/></svg>
+          <div class="point-text">
+            <span id="point-distrito" class="point-distrito">Punto seleccionado</span>
+            <span id="point-info" class="point-info">Ningún punto seleccionado.</span>
+          </div>
+          <button id="download" type="button" class="ghost" title="Descarga todos los datos del punto y tu registro de riesgos">Descargar ficha</button>
+        </div>
 
-      <section class="block">
-        <div class="block-head">
-          <h2>2. Riesgo normativo: zonificación</h2>
-          <label class="check small"><input id="zon-layer" type="checkbox"> Ver plano en el mapa</label>
-        </div>
-        <div id="zon" class="zon" role="status" aria-live="polite">
-          <p class="muted small">Elige un punto para ver qué zona le corresponde y cuánto se puede construir.</p>
-        </div>
-        <label class="field zon-lote">Área del lote en m² (opcional, para calcular cuánto se puede construir)
-          <input id="lote" type="number" min="1" step="1" inputmode="decimal" placeholder="Ej.: 300">
-        </label>
-        <p id="zon-fuente" class="small muted"></p>
-      </section>
+        <nav class="tabs" role="tablist" aria-label="Secciones de la ficha">
+          <button role="tab" id="tabbtn-resumen" data-tab="resumen" aria-controls="tab-resumen" aria-selected="true">Resumen</button>
+          <button role="tab" id="tabbtn-normativo" data-tab="normativo" aria-controls="tab-normativo" aria-selected="false" tabindex="-1">Normativo <span class="tab-badge" id="badge-normativo"></span></button>
+          <button role="tab" id="tabbtn-desastre" data-tab="desastre" aria-controls="tab-desastre" aria-selected="false" tabindex="-1">Desastre <span class="tab-badge" id="badge-desastre"></span></button>
+          <button role="tab" id="tabbtn-seguridad" data-tab="seguridad" aria-controls="tab-seguridad" aria-selected="false" tabindex="-1">Seguridad <span class="tab-badge" id="badge-seguridad"></span></button>
+          <button role="tab" id="tabbtn-entorno" data-tab="entorno" aria-controls="tab-entorno" aria-selected="false" tabindex="-1">Entorno <span class="tab-badge" id="badge-entorno"></span></button>
+          <button role="tab" id="tabbtn-riesgos" data-tab="riesgos" aria-controls="tab-riesgos" aria-selected="false" tabindex="-1">Riesgos <span class="tab-badge accent" id="badge-riesgos"></span></button>
+          <button role="tab" id="tabbtn-fuentes" data-tab="fuentes" aria-controls="tab-fuentes" aria-selected="false" tabindex="-1">Fuentes</button>
+        </nav>
 
-      <section class="block">
-        <div class="block-head">
-          <h2>3. Riesgo de desastre: peligros geológicos</h2>
-          <label class="check small"><input id="pel-layer" type="checkbox"> Ver peligros en el mapa</label>
-        </div>
-        <div id="pel" class="zon" role="status" aria-live="polite">
-          <p class="muted small">Elige un punto para ver qué peligros geológicos hay registrados cerca.</p>
-        </div>
-        <p id="pel-fuente" class="small muted"></p>
-        <div id="sismo" class="zon sismo" role="status" aria-live="polite"></div>
-        <p id="sismo-fuente" class="small muted"></p>
-      </section>
+        <!-- Resumen -->
+        <section class="tabpanel" id="tab-resumen" role="tabpanel" aria-labelledby="tabbtn-resumen">
+          <div id="resumen" class="summary-grid"></div>
+          <p class="note">Son hechos de cada fuente, no una calificación: no se suman en un puntaje porque no existe una base para decidir cuánto pesa cada riesgo.</p>
+        </section>
 
-      <section class="block">
-        <div class="block-head">
-          <h2>4. Riesgo de seguridad: robos y hurtos</h2>
-          <label class="check small"><input id="del-layer" type="checkbox"> Ver mapa de calor</label>
-        </div>
-        <div id="del-leyenda" class="del-leyenda small" hidden>
-          <span>Menos denuncias</span><span class="del-bar" aria-hidden="true"></span><span>Más</span>
-        </div>
-        <div id="del" class="zon" role="status" aria-live="polite">
-          <p class="muted small">Elige un punto para ver cuántas denuncias hay a su alrededor.</p>
-        </div>
-        <p id="del-fuente" class="small muted"></p>
-      </section>
-
-      <section class="block">
-        <h2>5. Entorno: servicios, transporte y áreas verdes</h2>
-        <div class="row">
-          <label class="field">Radio
-            <select id="radius"></select>
+        <!-- Normativo -->
+        <section class="tabpanel" id="tab-normativo" role="tabpanel" aria-labelledby="tabbtn-normativo" hidden>
+          <header class="panel-head">
+            <span class="dot normativo"></span>
+            <div><h2>Riesgo normativo</h2><p>Zonificación del PDM y cuánto se puede construir</p></div>
+            <button type="button" class="ghost capa-btn" data-capa="zon-layer" aria-pressed="false">Ver plano</button>
+          </header>
+          <label class="lote-field">
+            <span class="lote-label">Área del lote <small>(opcional, para calcular los m² construibles)</small></span>
+            <span class="input-unit"><input id="lote" type="number" min="1" step="1" inputmode="decimal" placeholder="Ej.: 300"><em>m²</em></span>
           </label>
-          <label class="field grow">Servidor Overpass
-            <select id="endpoint"></select>
-          </label>
-        </div>
-        <button id="analyze" class="primary" type="button" disabled>Analizar entorno</button>
-        <div id="status" class="status idle" role="status" aria-live="polite">
-          Selecciona un punto para empezar.
-        </div>
-      </section>
+          <div id="zon" class="zon" role="status" aria-live="polite">
+            <p class="muted small">Elige un punto para ver qué zona le corresponde y cuánto se puede construir.</p>
+          </div>
+          <p id="zon-fuente" class="source"></p>
+        </section>
 
-      <section class="block">
-        <div class="block-head">
-          <h2>6. Resultados del entorno</h2>
-          <button id="download" type="button" class="link" hidden>Descargar JSON</button>
-        </div>
-        <div id="cats"></div>
-      </section>
+        <!-- Desastre -->
+        <section class="tabpanel" id="tab-desastre" role="tabpanel" aria-labelledby="tabbtn-desastre" hidden>
+          <header class="panel-head">
+            <span class="dot desastre"></span>
+            <div><h2>Riesgo de desastre</h2><p>Peligros geológicos documentados y zona sísmica</p></div>
+            <button type="button" class="ghost capa-btn" data-capa="pel-layer" aria-pressed="false">Ver peligros</button>
+          </header>
+          <h3 class="sub-head">Peligros geológicos registrados</h3>
+          <div id="pel" class="zon" role="status" aria-live="polite">
+            <p class="muted small">Elige un punto para ver qué peligros geológicos hay registrados cerca.</p>
+          </div>
+          <p id="pel-fuente" class="source"></p>
+          <h3 class="sub-head">Peligro sísmico</h3>
+          <div id="sismo" class="zon sismo" role="status" aria-live="polite"></div>
+          <p id="sismo-fuente" class="source"></p>
+        </section>
 
-      <section class="block">
-        <div class="block-head">
-          <h2>7. Gestión de riesgos del predio</h2>
-          <button id="riesgos-csv" type="button" class="link" hidden>Descargar registro (CSV)</button>
-        </div>
-        <p class="small muted">La herramienta <strong>identifica</strong> cada riesgo a partir de un dato y su fuente, y propone <strong>acciones</strong> que son trámites o normas oficiales. La <strong>probabilidad</strong> y el <strong>impacto</strong> los evalúas tú: no hay datos que permitan asignarlos por ti, así que no vienen precargados. Tu evaluación se guarda solo en este navegador.</p>
-        <div id="riesgos" class="riesgos" aria-live="polite">
-          <p class="muted small">Elige un punto para armar el registro de riesgos.</p>
-        </div>
-        <details class="small">
-          <summary>Cómo se calcula el nivel</summary>
-          <p>Nivel = probabilidad × impacto, cada uno de 1 (baja) a 3 (alta): 1–2 bajo, 3–4 medio, 6–9 alto. Es una convención de este proyecto (una matriz cualitativa de probabilidad e impacto), no una norma; se aplica solo a los valores que eliges. Las decisiones (evitar, reducir, transferir, aceptar) también son una convención para registrar qué harás con cada riesgo.</p>
-        </details>
-      </section>
+        <!-- Seguridad -->
+        <section class="tabpanel" id="tab-seguridad" role="tabpanel" aria-labelledby="tabbtn-seguridad" hidden>
+          <header class="panel-head">
+            <span class="dot seguridad"></span>
+            <div><h2>Riesgo de seguridad</h2><p>Robos y hurtos denunciados alrededor del punto</p></div>
+            <button type="button" class="ghost capa-btn" data-capa="del-layer" aria-pressed="false">Ver mapa de calor</button>
+          </header>
+          <div id="del" class="zon" role="status" aria-live="polite">
+            <p class="muted small">Elige un punto para ver cuántas denuncias hay a su alrededor.</p>
+          </div>
+          <p id="del-fuente" class="source"></p>
+        </section>
 
-      <section class="block">
-        <details id="query-details" hidden>
-          <summary>Consulta enviada a Overpass</summary>
-          <textarea id="query-text" readonly rows="10" aria-label="Consulta Overpass QL"></textarea>
-          <p class="small"><a id="turbo-link" href="#" target="_blank" rel="noopener">Ejecutar esta misma consulta en Overpass Turbo</a></p>
-        </details>
-        <details>
-          <summary>Etiquetas de OSM que se consultan</summary>
-          <div id="filters-doc" class="small"></div>
-        </details>
-        <details>
-          <summary>Limitaciones de los datos</summary>
-          <ul class="small limits">
-            <li>OSM es un mapa colaborativo: un elemento ausente puede existir en la realidad y simplemente no estar mapeado.</li>
-            <li>Solo aparece lo que tiene exactamente las etiquetas listadas arriba. Quedan fuera, por ejemplo, plazas (<code>place=square</code>), alamedas, bermas arboladas, postas o centros de salud mapeados con otras etiquetas, y colegios cuyo tag sea distinto de <code>amenity=school</code>.</li>
-            <li>Las paradas de transporte informal (combis, micros) rara vez están completas; no hay horarios ni frecuencias.</li>
-            <li>Muchos elementos no tienen nombre; se cuentan igual y se marcan como «sin nombre».</li>
-            <li>Una misma instalación puede estar mapeada dos veces (punto y área) y contarse dos veces.</li>
-            <li>Parques y canchas son áreas: la distancia es al borde más cercano (0 m si el punto está dentro). Las relaciones (multipolígonos) usan el centro de su caja envolvente, así que son aproximadas.</li>
-            <li>Distancia en línea recta, no recorrido a pie. Un parque puede estar cerca pero tener acceso lejano.</li>
-            <li>Overpass y Nominatim públicos no tienen disponibilidad garantizada: pueden limitar, saturarse o bloquear solicitudes.</li>
-          </ul>
-        </details>
-        <details>
-          <summary>Limitaciones de la zonificación</summary>
-          <ul class="small limits">
-            <li>Es el plano del PDM 2016-2025. El Reglamento fija su vigencia en 10 años, luego de los cuales debe revisarse, y la Municipalidad tiene un PDM nuevo en consulta pública (octubre a diciembre de 2025). No incluye los planes específicos aprobados después ni el plan nuevo.</li>
-            <li>Una sentencia judicial (Sentencia de Vista N.° 183-2019) suspendió actos administrativos de ejecución del PDM en cuatro puntos: certificados de zonificación para predios que antes eran zona agrícola o reserva paisajista, la compatibilidad de la zona agrícola con otros usos, los planes específicos sobre esos predios y la delimitación del centro histórico. No se pudo comprobar si la suspensión sigue vigente. Si el predio fue zona agrícola o de reserva paisajista, consulta al IMPLA antes de confiar en este resultado.</li>
-            <li>Es referencial: el único documento con valor legal es el Certificado de Zonificación y Vías que emite el Instituto Municipal de Planeamiento.</li>
-            <li>Los polígonos se extrajeron del PDF del plano y el código se asignó por el color de relleno. Cerca del borde entre dos zonas el resultado puede no ser exacto.</li>
-            <li>El plano pinta igual todos los niveles de educación (<code>E</code>) y de salud (<code>H</code>), y también la zona agrícola y la de expansión agrícola (<code>ZA</code>).</li>
-            <li>Colegios, salud, usos especiales y zonas de reglamentación especial no tienen coeficiente propio: se rigen por su entorno o por un plan específico, así que no se calcula cuánto se puede construir.</li>
-            <li>En zonas comerciales la altura no es un número fijo de pisos: depende del ancho de la calle (1,5 × ancho de vía más retiros).</li>
-            <li>Nueve polígonos grandes (zonas de riesgo muy alto, reserva paisajista, agrícola y arqueológica) cruzan el borde del marco impreso del plano y el archivo conserva su forma completa. Muy cerca de ese borde, la herramienta puede devolver una zona (<code>ZRE-RI2</code> o <code>RP</code>) en un punto que el plano impreso no muestra.</li>
-            <li>Los m² construibles son un máximo teórico (área del lote × coeficiente). No consideran retiros, estacionamientos ni la forma del lote.</li>
-          </ul>
-        </details>
-        <details>
-          <summary>Limitaciones de los peligros geológicos</summary>
-          <ul class="small limits">
-            <li>Es un inventario de eventos documentados (por geólogos en campo, informes técnicos o fotointerpretación), no un mapa de susceptibilidad. Si no hay registros cerca, no significa que el lugar sea seguro: solo que nadie documentó un evento ahí.</li>
-            <li>Los registros están donde se hicieron inspecciones o estudios. Hay más puntos donde se estudió más, no necesariamente donde hay más peligro.</li>
-            <li>Los registros son de 2003 a 2023. No incluyen eventos posteriores ni muestran si un peligro fue corregido.</li>
-            <li>Cada punto es la ubicación de un sector inspeccionado, no el trazado del flujo o del deslizamiento: el alcance real de un evento puede ser mucho mayor que el punto.</li>
-            <li>Algunos registros tienen códigos que el diccionario oficial de la capa no define; se muestran como «sin clasificar» en lugar de adivinar su significado.</li>
-            <li>El peligro sísmico se muestra con la zona sísmica del distrito según la Norma E.030 2026. Es un valor regional: no considera el suelo del predio, que puede amplificar el movimiento; eso lo determina el Estudio de Mecánica de Suelos.</li>
-            <li>El distrito se obtiene de los límites del INEI publicados en GEOCATMIN. Cerca de un límite distrital, el distrito (y por tanto la zona sísmica) puede no ser exacto.</li>
-            <li>No se incluyen el peligro volcánico (Misti), la licuación de suelos ni el tsunami: no se incorporó ninguna capa pública utilizable. El registro de riesgos los marca como «no evaluado» y remite al mapa de peligros del Misti del INGEMMET.</li>
-            <li>Además de este inventario, el plano de zonificación marca zonas de riesgo muy alto (<code>ZRE-RI1</code>, <code>ZRE-RI2</code>); se avisa en la sección de peligros si el punto cae en una.</li>
-          </ul>
-        </details>
-        <details>
-          <summary>Limitaciones de las denuncias</summary>
-          <ul class="small limits">
-            <li>Son denuncias, no delitos: muchos robos y hurtos no se denuncian, y la costumbre de denunciar cambia de un barrio a otro.</li>
-            <li>Solo se usan las denuncias con ubicación real. Para robo y hurto en la provincia de Arequipa son 8 245 de 16 780 (49 %): 45 % no traía coordenada (la fuente las puso en el centro de su sector policial, así que no sirven para medir cercanía) y 5 % tenía coordenada en otro distrito del denunciado. Ambos grupos se descartan.</li>
-            <li>La proporción de denuncias con ubicación pasó de ≈25 % (hasta noviembre de 2025) a ≈90 % (desde enero de 2026), aunque el total mensual se mantuvo. Por eso el conteo usa solo el tramo reciente de cobertura homogénea y no se comparan periodos distintos.</li>
-            <li>La coordenada «real» es la que se registró con latitud y longitud intercambiadas y la fuente corrigió; se validó contra el distrito de la denuncia, no contra la cuadra. Su precisión exacta no se puede comprobar.</li>
-            <li>Dentro de ese tramo, el ≈10 % sin ubicación no se puede ubicar y el conteo lo subestima; no se sabe si esas denuncias se concentran en ciertos barrios.</li>
-            <li>Varias denuncias comparten exactamente la misma coordenada (por ejemplo, un mercado o una avenida). Una sola dirección puede pesar mucho en el conteo.</li>
-            <li>Solo robo y hurto; no incluye otros delitos ni faltas.</li>
-            <li>El mapa de calor es relativo: el color indica dónde se concentran más denuncias dentro de la ciudad, no un nivel absoluto de riesgo. Está suavizado (unos 200 m), así que no muestra cuadras exactas.</li>
-            <li>No se muestran denuncias individuales ni sus direcciones: el archivo no guarda dirección, cuadra ni hora exacta.</li>
-          </ul>
-        </details>
-      </section>
+        <!-- Entorno -->
+        <section class="tabpanel" id="tab-entorno" role="tabpanel" aria-labelledby="tabbtn-entorno" hidden>
+          <header class="panel-head">
+            <span class="dot entorno"></span>
+            <div><h2>Entorno</h2><p>Servicios, transporte y áreas verdes en OpenStreetMap</p></div>
+          </header>
+          <div class="entorno-controls">
+            <label class="field">
+              <span>Radio</span>
+              <select id="radius"></select>
+            </label>
+            <label class="field grow">
+              <span>Servidor Overpass</span>
+              <select id="endpoint"></select>
+            </label>
+          </div>
+          <button id="analyze" class="primary" type="button" disabled>Analizar entorno</button>
+          <div id="status" class="status idle" role="status" aria-live="polite">Selecciona un punto para empezar.</div>
+          <div id="cats" class="osm-cats"></div>
+          <details id="query-details" class="disclosure" hidden>
+            <summary>Consulta enviada a Overpass</summary>
+            <textarea id="query-text" readonly rows="10" aria-label="Consulta Overpass QL"></textarea>
+            <p class="small"><a id="turbo-link" href="#" target="_blank" rel="noopener">Ejecutar esta misma consulta en Overpass Turbo</a></p>
+          </details>
+        </section>
 
-      <footer class="small muted">
-        Datos © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">colaboradores de OpenStreetMap</a> (licencia ODbL).
-        Consultas vía Overpass API y Nominatim.
-        Zonificación: Municipalidad Provincial de Arequipa (IMPLA).
-        Denuncias: Ministerio del Interior, Mapa del Delito Georreferenciado (SIDPOL-PNP).
-        Peligros geológicos y límites distritales: INGEMMET (GEOCATMIN; límites del INEI).
-        Zona sísmica: Norma E.030 (MVCS).
-      </footer>
+        <!-- Gestión de riesgos -->
+        <section class="tabpanel" id="tab-riesgos" role="tabpanel" aria-labelledby="tabbtn-riesgos" hidden>
+          <header class="panel-head">
+            <span class="dot riesgos"></span>
+            <div><h2>Gestión de riesgos del predio</h2><p>Identificar · analizar · tratar · dar seguimiento</p></div>
+            <button id="riesgos-csv" type="button" class="ghost" hidden>Descargar CSV</button>
+          </header>
+          <p class="explain">La herramienta <strong>identifica</strong> cada riesgo a partir de un dato y su fuente, y propone <strong>acciones</strong> que son trámites o normas oficiales. La <strong>probabilidad</strong> y el <strong>impacto</strong> los evalúas tú: no hay datos que permitan asignarlos por ti, así que no vienen precargados. Tu evaluación se guarda solo en este navegador.</p>
+          <div id="riesgos" class="riesgos" aria-live="polite">
+            <p class="muted small">Elige un punto para armar el registro de riesgos.</p>
+          </div>
+          <details class="disclosure">
+            <summary>Cómo se calcula el nivel</summary>
+            <p>Nivel = probabilidad × impacto, cada uno de 1 (baja) a 3 (alta): 1–2 bajo, 3–4 medio, 6–9 alto. Es una convención de este proyecto (una matriz cualitativa de probabilidad e impacto), no una norma; se aplica solo a los valores que eliges. Las decisiones (evitar, reducir, transferir, aceptar) también son una convención para registrar qué harás con cada riesgo.</p>
+          </details>
+        </section>
+
+        <!-- Fuentes y limitaciones -->
+        <section class="tabpanel" id="tab-fuentes" role="tabpanel" aria-labelledby="tabbtn-fuentes" hidden>
+          <header class="panel-head">
+            <span class="dot fuentes"></span>
+            <div><h2>Fuentes y limitaciones</h2><p>Qué cubre cada dato y qué no</p></div>
+          </header>
+          <details class="disclosure">
+            <summary>Limitaciones de la zonificación</summary>
+            <ul class="limits">
+              <li>Es el plano del PDM 2016-2025. El Reglamento fija su vigencia en 10 años, luego de los cuales debe revisarse, y la Municipalidad tiene un PDM nuevo en consulta pública (octubre a diciembre de 2025). No incluye los planes específicos aprobados después ni el plan nuevo.</li>
+              <li>Una sentencia judicial (Sentencia de Vista N.° 183-2019) suspendió actos administrativos de ejecución del PDM en cuatro puntos: certificados de zonificación para predios que antes eran zona agrícola o reserva paisajista, la compatibilidad de la zona agrícola con otros usos, los planes específicos sobre esos predios y la delimitación del centro histórico. No se pudo comprobar si la suspensión sigue vigente. Si el predio fue zona agrícola o de reserva paisajista, consulta al IMPLA antes de confiar en este resultado.</li>
+              <li>Es referencial: no reemplaza los certificados municipales (el Certificado de Parámetros Urbanísticos y Edificatorios de la municipalidad distrital o el Certificado de Zonificación y Vías de la municipalidad provincial).</li>
+              <li>Los polígonos se extrajeron del PDF del plano y el código se asignó por el color de relleno. Cerca del borde entre dos zonas el resultado puede no ser exacto.</li>
+              <li>El plano pinta igual todos los niveles de educación (<code>E</code>) y de salud (<code>H</code>), y también la zona agrícola y la de expansión agrícola (<code>ZA</code>).</li>
+              <li>Colegios, salud, usos especiales y zonas de reglamentación especial no tienen coeficiente propio: se rigen por su entorno o por un plan específico, así que no se calcula cuánto se puede construir.</li>
+              <li>En zonas comerciales la altura no es un número fijo de pisos: depende del ancho de la calle (1,5 × ancho de vía más retiros).</li>
+              <li>Nueve polígonos grandes (zonas de riesgo muy alto, reserva paisajista, agrícola y arqueológica) cruzan el borde del marco impreso del plano y el archivo conserva su forma completa. Muy cerca de ese borde, la herramienta puede devolver una zona (<code>ZRE-RI2</code> o <code>RP</code>) en un punto que el plano impreso no muestra.</li>
+              <li>Los m² construibles son un máximo teórico (área del lote × coeficiente). No consideran retiros, estacionamientos ni la forma del lote.</li>
+            </ul>
+          </details>
+          <details class="disclosure">
+            <summary>Limitaciones de los peligros y la zona sísmica</summary>
+            <ul class="limits">
+              <li>Es un inventario de eventos documentados (por geólogos en campo, informes técnicos o fotointerpretación), no un mapa de susceptibilidad. Si no hay registros cerca, no significa que el lugar sea seguro: solo que nadie documentó un evento ahí.</li>
+              <li>Los registros están donde se hicieron inspecciones o estudios. Hay más puntos donde se estudió más, no necesariamente donde hay más peligro.</li>
+              <li>Los registros son de 2003 a 2023. No incluyen eventos posteriores ni muestran si un peligro fue corregido.</li>
+              <li>Cada punto es la ubicación de un sector inspeccionado, no el trazado del flujo o del deslizamiento: el alcance real de un evento puede ser mucho mayor que el punto.</li>
+              <li>Algunos registros tienen códigos que el diccionario oficial de la capa no define; se muestran como «sin clasificar» en lugar de adivinar su significado.</li>
+              <li>El peligro sísmico se muestra con la zona sísmica del distrito según la Norma E.030 2026. Es un valor regional: no considera el suelo del predio, que puede amplificar el movimiento; eso lo determina el Estudio de Mecánica de Suelos.</li>
+              <li>El distrito se obtiene de los límites del INEI publicados en GEOCATMIN. Cerca de un límite distrital, el distrito (y por tanto la zona sísmica) puede no ser exacto.</li>
+              <li>No se incluyen el peligro volcánico (Misti), la licuación de suelos ni el tsunami: no se incorporó ninguna capa pública utilizable. El registro de riesgos los marca como «no evaluado» y remite al mapa de peligros del Misti del INGEMMET.</li>
+              <li>Además de este inventario, el plano de zonificación marca zonas de riesgo muy alto (<code>ZRE-RI1</code>, <code>ZRE-RI2</code>); se avisa en la sección de peligros si el punto cae en una.</li>
+            </ul>
+          </details>
+          <details class="disclosure">
+            <summary>Limitaciones de las denuncias</summary>
+            <ul class="limits">
+              <li>Son denuncias, no delitos: muchos robos y hurtos no se denuncian, y la costumbre de denunciar cambia de un barrio a otro.</li>
+              <li>Solo se usan las denuncias con ubicación real. Para robo y hurto en la provincia de Arequipa son 8 245 de 16 780 (49 %): 45 % no traía coordenada (la fuente las puso en el centro de su sector policial, así que no sirven para medir cercanía) y 5 % tenía coordenada en otro distrito del denunciado. Ambos grupos se descartan.</li>
+              <li>La proporción de denuncias con ubicación pasó de ≈25 % (hasta noviembre de 2025) a ≈90 % (desde enero de 2026), aunque el total mensual se mantuvo. Por eso el conteo usa solo el tramo reciente de cobertura homogénea y no se comparan periodos distintos.</li>
+              <li>La coordenada «real» es la que se registró con latitud y longitud intercambiadas y la fuente corrigió; se validó contra el distrito de la denuncia, no contra la cuadra. Su precisión exacta no se puede comprobar.</li>
+              <li>Dentro de ese tramo, el ≈10 % sin ubicación no se puede ubicar y el conteo lo subestima; no se sabe si esas denuncias se concentran en ciertos barrios.</li>
+              <li>Varias denuncias comparten exactamente la misma coordenada (por ejemplo, un mercado o una avenida). Una sola dirección puede pesar mucho en el conteo.</li>
+              <li>Solo robo y hurto; no incluye otros delitos ni faltas.</li>
+              <li>El mapa de calor es relativo: el color indica dónde se concentran más denuncias dentro de la ciudad, no un nivel absoluto de riesgo. Está suavizado (unos 200 m), así que no muestra cuadras exactas.</li>
+              <li>No se muestran denuncias individuales ni sus direcciones: el archivo no guarda dirección, cuadra ni hora exacta.</li>
+            </ul>
+          </details>
+          <details class="disclosure">
+            <summary>Limitaciones del entorno (OpenStreetMap)</summary>
+            <ul class="limits">
+              <li>OSM es un mapa colaborativo: un elemento ausente puede existir en la realidad y simplemente no estar mapeado.</li>
+              <li>Solo aparece lo que tiene exactamente las etiquetas listadas abajo. Quedan fuera, por ejemplo, plazas (<code>place=square</code>), alamedas, bermas arboladas, postas o centros de salud mapeados con otras etiquetas, y colegios cuyo tag sea distinto de <code>amenity=school</code>.</li>
+              <li>Las paradas de transporte informal (combis, micros) rara vez están completas; no hay horarios ni frecuencias.</li>
+              <li>Muchos elementos no tienen nombre; se cuentan igual y se marcan como «sin nombre».</li>
+              <li>Una misma instalación puede estar mapeada dos veces (punto y área) y contarse dos veces.</li>
+              <li>Parques y canchas son áreas: la distancia es al borde más cercano (0 m si el punto está dentro). Las relaciones (multipolígonos) usan el centro de su caja envolvente, así que son aproximadas.</li>
+              <li>Distancia en línea recta, no recorrido a pie. Un parque puede estar cerca pero tener acceso lejano.</li>
+              <li>Overpass y Nominatim públicos no tienen disponibilidad garantizada: pueden limitar, saturarse o bloquear solicitudes.</li>
+            </ul>
+          </details>
+          <details class="disclosure">
+            <summary>Etiquetas de OSM que se consultan</summary>
+            <div id="filters-doc" class="small"></div>
+          </details>
+          <div class="credits">
+            <h3 class="sub-head">Fuentes de datos</h3>
+            <ul>
+              <li><strong>Zonificación:</strong> Municipalidad Provincial de Arequipa (IMPLA), PDM 2016-2025.</li>
+              <li><strong>Peligros geológicos y límites distritales:</strong> INGEMMET (GEOCATMIN; límites del INEI).</li>
+              <li><strong>Zona sísmica:</strong> Norma E.030 Diseño Sismorresistente 2026 (MVCS).</li>
+              <li><strong>Denuncias:</strong> Ministerio del Interior, Mapa del Delito Georreferenciado (SIDPOL-PNP).</li>
+              <li><strong>Entorno y mapa base:</strong> © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">colaboradores de OpenStreetMap</a> (ODbL), vía Overpass API y Nominatim.</li>
+            </ul>
+          </div>
+        </section>
+      </div>
     </aside>
 
+    <!-- ============================================================ Mapa -->
     <main class="map-wrap">
       <div id="map" aria-label="Mapa de Arequipa"></div>
+
+      <div class="layers-card" id="layers-card">
+        <button type="button" class="layers-toggle" id="layers-toggle" aria-expanded="true" aria-controls="layers-body">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2 1.5 6.5 10 11l8.5-4.5L10 2zm-6.6 8.2L1.5 11.2 10 15.7l8.5-4.5-1.9-1-6.6 3.5-6.6-3.5zm0 4.2-1.9 1L10 19.9l8.5-4.5-1.9-1-6.6 3.5-6.6-3.5z"/></svg>
+          Capas
+        </button>
+        <div class="layers-body" id="layers-body">
+          <label class="layer-row"><input id="zon-layer" type="checkbox"><span class="layer-swatch zon"></span><span>Plano de zonificación</span></label>
+          <label class="layer-row"><input id="pel-layer" type="checkbox"><span class="layer-swatch pel"></span><span>Peligros geológicos</span></label>
+          <label class="layer-row"><input id="del-layer" type="checkbox"><span class="layer-swatch del"></span><span>Mapa de calor de denuncias</span></label>
+          <div class="ring-legend">
+            <span><i class="ring r500"></i>Radio de peligros y denuncias (500 m)</span>
+            <span><i class="ring rent"></i>Radio del entorno (pestaña Entorno)</span>
+          </div>
+          <div id="del-leyenda" class="del-leyenda" hidden>
+            <span>Menos</span><span class="del-bar" aria-hidden="true"></span><span>Más</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="map-hint" id="map-hint">Elige un punto en el mapa</div>
     </main>
   </div>
 
