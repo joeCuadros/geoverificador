@@ -1,0 +1,21 @@
+{
+  "norma": "Norma Técnica E.030 Diseño Sismorresistente 2026 (Ministerio de Vivienda, Construcción y Saneamiento)",
+  "url": "https://cdn.www.gob.pe/uploads/document/file/9902957/8081915-nt-e-030-diseno-sismorresistente-2026.pdf",
+  "firmas": "Firmas digitales del MVCS del 28/04/2026 en la carátula del documento",
+  "articulos": "Art. 10 (zonificación), Art. 11 y Tabla N.° 1 (factores Z), Anexo II (zonificación sísmica por distrito)",
+  "definicion_z": "Este factor representa la aceleración máxima horizontal en suelo rígido con una probabilidad de 10% de ser excedida en 50 años. El factor Z se expresa como una fracción de la aceleración de la gravedad.",
+  "z": { "4": 0.45, "3": 0.35, "2": 0.25, "1": 0.10 },
+  "anexo_ii": {
+    "AREQUIPA": {
+      "AREQUIPA": {
+        "ALTO SELVA ALEGRE": 3, "AREQUIPA": 3, "CAYMA": 3, "CERRO COLORADO": 3, "CHARACATO": 3, "CHIGUATA": 3,
+        "JACOBO HUNTER": 3, "JOSE LUIS BUSTAMANTE Y RIVERO": 3, "MARIANO MELGAR": 3, "MIRAFLORES": 3, "MOLLEBAYA": 3,
+        "PAUCARPATA": 3, "POCSI": 3, "QUEQUEÑA": 3, "SABANDIA": 3, "SACHACA": 3, "SAN JUAN DE TARUCANI": 3, "SOCABAYA": 3,
+        "TIABAYA": 3, "YANAHUARA": 3, "YURA": 3,
+        "LA JOYA": 4, "POLOBAYA": 4, "SAN JUAN DE SIGUAS": 4, "SANTA ISABEL DE SIGUAS": 4, "SANTA RITA DE SIGUAS": 4,
+        "UCHUMAYO": 4, "VITOR": 4, "YARABAMBA": 4
+      }
+    }
+  },
+  "nota": "Transcrito del Anexo II (provincia de Arequipa: 21 distritos en zona 3 y 8 distritos en zona 4). Los nombres se escriben sin tildes, salvo la Ñ, para cruzarlos con los límites distritales del INEI."
+}

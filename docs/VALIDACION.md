@@ -25,7 +25,7 @@ Comando (sin internet ni dependencias):
 node scripts/verificar-datos.mjs
 ```
 
-Corrida del 2026-10-12: **30 de 30 comprobaciones correctas.**
+Corrida del 2026-10-13: **43 de 43 comprobaciones correctas.**
 
 **A. Integridad de los archivos**
 
@@ -34,6 +34,8 @@ Corrida del 2026-10-12: **30 de 30 comprobaciones correctas.**
 - Delitos: el número de registros coincide con los metadatos; solo robo y hurto; fechas válidas; ids únicos; sin dirección, cuadra ni hora exacta; la cobertura mensual guardada coincide, mes a mes, con los registros descargados.
 - Peligros: número de registros coincide con los metadatos; ningún código crudo quedó sin traducir; ids únicos; años coherentes.
 
+- Distritos y zona sísmica: 25 distritos con ubigeo, nombre y fuente del límite; ubigeos únicos; la transcripción del Anexo II de la E.030 tiene 21 distritos de la provincia en zona 3 y 8 en zona 4; los factores Z coinciden con la Tabla N.° 1; todos los distritos tienen zona.
+
 **B. Cálculos del navegador frente a un método independiente.** Se ejecuta el mismo código que corre en el navegador (`zonificacion.js`, `peligros.js`, `delitos.js`) y se compara con un cálculo escrito aparte, con puntos al azar de semilla fija:
 
 | Cálculo | Método independiente | Muestra | Diferencias |
@@ -41,10 +43,12 @@ Corrida del 2026-10-12: **30 de 30 comprobaciones correctas.**
 | Zona de un punto | Número de vueltas (winding number) en lugar de ray casting | 2 000 puntos (402 dentro del plano) | 0 |
 | Potencial constructivo | Aritmética directa con una regla real | 3 comprobaciones | 0 |
 | Peligros a 500 m y más cercano | Fuerza bruta con ley esférica de los cosenos | 200 puntos | 0 |
+| Distrito del punto | Número de vueltas (winding number) | 1 500 puntos, más la Plaza de Armas (distrito Arequipa, zona 3, Z = 0,35) | 0 |
+| Registro de riesgos | 14 casos sintéticos (cada regla con su dato y sin él) | 14 casos; además: fuentes en cada riesgo y acción, sin valores precargados y matriz 3 × 3 completa | 0 |
 | Denuncias a 500 m (total, robo, hurto) | Fuerza bruta con ley esférica de los cosenos | 300 puntos (169 con ≥ 1 denuncia) | 0 |
 | Periodo de denuncias | Regla de cobertura reescrita | 1 | 0 |
 
-**Se comprobó que la prueba puede fallar:** al introducir a propósito un error en el radio de las denuncias (+50 m), la prueba reportó 139 diferencias en 300 puntos y falló.
+**Se comprobó que la prueba puede fallar** (también en las reglas de riesgo: cambiar «menor que» por «menor o igual que» en la regla del lote mínimo hace fallar un caso). al introducir a propósito un error en el radio de las denuncias (+50 m), la prueba reportó 139 diferencias en 300 puntos y falló.
 
 **Qué NO demuestra la verificación:** que el plano esté bien digitalizado ni que las denuncias reflejen el delito real. Solo que, dados los datos, el cálculo es correcto.
 
@@ -140,7 +144,7 @@ Los cementerios se excluyeron: el Reglamento no les asigna una zona, y suponerla
 **Procedimiento:**
 
 1. Reclutar de 5 a 8 personas con contacto con el tema (estudiantes de arquitectura o ingeniería civil, agentes inmobiliarios).
-2. Definir de 2 a 3 tareas con respuesta correcta conocida, por ejemplo: «¿Se pueden construir 5 pisos en un lote de 300 m² en este punto?» y «¿Hay algún peligro geológico registrado a menos de 500 m?». Fijar la respuesta correcta con el reglamento **antes** de la prueba.
+2. Definir de 2 a 4 tareas con respuesta correcta conocida (una de ellas puede ser armar el registro de riesgos de un predio y decir qué trámite corresponde a cada riesgo), por ejemplo: «¿Se pueden construir 5 pisos en un lote de 300 m² en este punto?» y «¿Hay algún peligro geológico registrado a menos de 500 m?». Fijar la respuesta correcta con el reglamento **antes** de la prueba.
 3. Cada participante hace las tareas de las dos formas (PDF y app), alternando cuál va primero para repartir el efecto del aprendizaje.
 4. Medir tiempo y si la respuesta es correcta (`docs/plantillas/prueba-usuarios.csv`). Al final, un cuestionario corto de usabilidad (por ejemplo, SUS) y una pregunta abierta: «¿qué le faltó?».
 5. Reportar medianas y casos, no solo promedios; con 5 a 8 personas no hay significancia estadística, y debe decirse así.

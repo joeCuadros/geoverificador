@@ -2,8 +2,9 @@
  * app.js — Interfaz: mapa Leaflet, selección de punto, análisis y resultados.
  * Principio de uso responsable: NINGUNA consulta se lanza al hacer clic, escribir o cambiar el radio.
  * Solo se consulta al pulsar «Buscar» (Nominatim) o «Analizar entorno» (Overpass).
- * La zonificación, los peligros y las denuncias sí se muestran al elegir el punto, porque se resuelven con
- * archivos locales (zonificacion.js, peligros.js y delitos.js).
+ * La zonificación, los peligros, la zona sísmica y las denuncias sí se muestran al elegir el punto, porque se
+ * resuelven con archivos locales (zonificacion.js, peligros.js, distritos.js y delitos.js). El registro de riesgos
+ * (riesgos.js) se arma con esos mismos datos.
  */
 (() => {
   'use strict';
@@ -39,6 +40,10 @@
     peligroStatus: 'none', // none | loading | ok | error
     peligroSeq: 0,       // descarta respuestas de un punto anterior
     pelLayer: null,      // peligros registrados (se crea la primera vez que se activa)
+    distrito: null,      // resultado de Distritos.lookup (distrito y zona sísmica)
+    distritoStatus: 'none', // none | loading | ok | outside | error
+    distritoSeq: 0,      // descarta respuestas de un punto anterior
+    evaluacion: {},      // evaluación del usuario por riesgo: { id: { p, i, decision, hechas } }
   };
 
   // ------------------------------------------------------------------ Mapa
@@ -182,7 +187,9 @@
     drawCircle();
     clearResults();
     updateZona();
+    state.evaluacion = Riesgos.leerEvaluacion(lat, lon);
     updatePeligro();
+    updateDistrito();
     updateDelito();
     renderResumen();
     $('point-info').innerHTML = `Punto: <strong>${lat.toFixed(6)}, ${lon.toFixed(6)}</strong>
@@ -297,7 +304,7 @@
     }
   }
 
-  $('lote').addEventListener('input', renderZona);
+  $('lote').addEventListener('input', () => { renderZona(); renderRiesgos(); });
 
   // ------------------------------------------------------------------ Peligros
   $('pel-fuente').textContent = `Fuente: ${CONFIG.peligros.fuente}. Es un inventario de eventos documentados: que no haya registros no significa que el lugar sea seguro.`;
@@ -369,6 +376,47 @@
     }
   });
 
+  // ------------------------------------------------------------ Peligro sísmico
+  $('sismo-fuente').textContent = `Fuente: ${CONFIG.distritos.fuente}.`;
+
+  function renderSismo() {
+    const el = $('sismo');
+    if (state.distritoStatus === 'loading') { el.innerHTML = '<p class="zon-msg loading"><span class="spinner"></span>Buscando el distrito y su zona sísmica…</p>'; return; }
+    if (state.distritoStatus === 'error') { el.innerHTML = `<p class="zon-msg error"><strong>No se pudo consultar la zona sísmica.</strong> ${esc(state.distritoError || '')}</p>`; return; }
+    if (state.distritoStatus === 'outside') { el.innerHTML = '<p class="zon-msg empty">El punto está fuera de los distritos descargados: no se asigna zona sísmica.</p>'; return; }
+    if (state.distritoStatus !== 'ok') { el.innerHTML = ''; return; }
+    const d = state.distrito;
+    el.innerHTML = `
+      <div class="zon-card">
+        <div class="zon-head">
+          <span class="zon-code">Zona ${esc(d.zona)}</span>
+          <span class="zon-name">sísmica · Z = ${esc(String(d.z).replace('.', ','))} · distrito ${esc(d.distrito)}</span>
+        </div>
+        <p class="zon-nota small">Z es la aceleración máxima horizontal en suelo rígido con 10 % de probabilidad de ser excedida en 50 años, como fracción de la gravedad (E.030, Art. 11). Es un valor regional: el suelo del predio puede amplificar el movimiento y eso lo determina el Estudio de Mecánica de Suelos que la E.030 exige a todo proyecto de edificación (Art. 16.1).</p>
+      </div>`;
+  }
+
+  async function updateDistrito() {
+    const seq = ++state.distritoSeq;
+    const { lat, lon } = state.point;
+    state.distrito = null;
+    state.distritoStatus = 'loading';
+    renderSismo();
+    try {
+      const d = await Distritos.lookup(lat, lon);
+      if (seq !== state.distritoSeq) return; // el usuario ya eligió otro punto
+      state.distrito = d;
+      state.distritoStatus = d ? 'ok' : 'outside';
+    } catch (err) {
+      if (seq !== state.distritoSeq) return;
+      state.distritoStatus = 'error';
+      state.distritoError = err.message;
+      console.error('[Distritos] fallo', err);
+    }
+    renderSismo();
+    renderResumen();
+  }
+
   // ------------------------------------------------------------------ Resumen
   // Una línea por tipo de riesgo, con el dato tal cual lo entrega cada fuente (sin puntaje ni semáforo).
   function renderResumen() {
@@ -392,6 +440,7 @@
       des = `${fmtNum(p.total)} peligros geológicos registrados a ${p.radio} m (el más cercano a ${fmtDist(p.masCercano.distancia)}).`;
       if (enZonaRiesgo()) des += ` El plano lo marca como zona de riesgo (${esc(state.zona.codigo)}).`;
     }
+    if (state.distritoStatus === 'ok') des += ` Zona sísmica ${esc(state.distrito.zona)} (Z = ${esc(String(state.distrito.z).replace('.', ','))}, ${esc(state.distrito.distrito)}).`;
     filas.push(['Desastre', des]);
 
     let seg = 'Consultando…';
@@ -409,7 +458,99 @@
     filas.push(['Entorno', ent]);
 
     $('resumen').innerHTML = filas.map(([k, v]) => `<li><span class="tipo">${k}</span><span>${v}</span></li>`).join('');
+    renderRiesgos();
   }
+
+  // ------------------------------------------------------------ Gestión de riesgos
+  function contextoRiesgos() {
+    const lote = Number($('lote').value);
+    return {
+      zonaStatus: state.zonaStatus,
+      zona: state.zonaStatus === 'ok' ? state.zona : null,
+      lote: lote > 0 ? lote : null,
+      peligro: state.peligroStatus === 'ok' ? state.peligro : null,
+      distrito: state.distritoStatus === 'ok' ? state.distrito : null,
+      delito: state.delito,
+    };
+  }
+
+  // Datos que aún se están cargando (el registro se completa cuando terminan).
+  function pendientes() {
+    const p = [];
+    if (state.zonaStatus === 'loading') p.push('zonificación');
+    if (state.peligroStatus === 'loading') p.push('peligros');
+    if (state.distritoStatus === 'loading') p.push('zona sísmica');
+    if (!state.delito && !state.delitoError) p.push('denuncias');
+    return p;
+  }
+
+  function opciones(lista, valor) {
+    return `<option value="">—</option>${lista.map((o) => `<option value="${o.v}"${o.v === valor ? ' selected' : ''}>${esc(o.texto)}</option>`).join('')}`;
+  }
+
+  function renderRiesgos() {
+    if (!state.point) return;
+    const riesgos = Riesgos.identificar(contextoRiesgos());
+    state.riesgos = riesgos;
+    const ev = state.evaluacion;
+    const evaluados = riesgos.filter((r) => Riesgos.nivel(ev[r.id]?.p, ev[r.id]?.i));
+    const altos = evaluados.filter((r) => Riesgos.nivel(ev[r.id].p, ev[r.id].i).texto === 'Alto').length;
+    const falta = pendientes();
+    const decisiones = Riesgos.DECISIONES.map((t, k) => ({ v: k, texto: t }));
+    $('riesgos').innerHTML = `
+      <p class="riesgos-resumen"><strong>${riesgos.length} riesgos identificados</strong> · ${evaluados.length} evaluados${evaluados.length ? ` · ${altos} de nivel alto` : ''}${falta.length ? ` · <span class="muted">cargando ${esc(falta.join(', '))}…</span>` : ''}</p>
+      ${riesgos.map((r) => {
+        const e = ev[r.id] || {};
+        const n = Riesgos.nivel(e.p, e.i);
+        return `
+        <article class="riesgo" data-id="${r.id}">
+          <header>
+            <span class="cat">${esc(r.categoria)}</span>
+            <strong>${esc(r.titulo)}</strong>
+            <span class="badge ${n ? n.cls : 'warn'}">${n ? `Nivel ${n.texto.toLowerCase()} (${n.puntaje})` : 'Sin evaluar'}</span>
+          </header>
+          <p class="small">${esc(r.evidencia)}</p>
+          <p class="small muted">Fuente del dato: ${esc(r.fuente)}</p>
+          <div class="r-eval">
+            <label>Probabilidad<select data-k="p">${opciones(Riesgos.ESCALA, e.p)}</select></label>
+            <label>Impacto<select data-k="i">${opciones(Riesgos.ESCALA, e.i)}</select></label>
+            <label>Decisión<select data-k="decision">${opciones(decisiones, e.decision)}</select></label>
+          </div>
+          <ul class="r-acciones">
+            ${r.acciones.map((ac, k) => `<li><label><input type="checkbox" data-k="hecha" data-a="${k}"${(e.hechas || []).includes(k) ? ' checked' : ''}> ${esc(ac.texto)}</label><span class="fuente small muted">Fuente: ${esc(ac.fuente)}</span></li>`).join('')}
+          </ul>
+        </article>`;
+      }).join('')}`;
+    $('riesgos-csv').hidden = riesgos.length === 0;
+  }
+
+  $('riesgos').addEventListener('change', (e) => {
+    const card = e.target.closest('.riesgo');
+    if (!card || !state.point) return;
+    const id = card.dataset.id;
+    const k = e.target.dataset.k;
+    const ev = state.evaluacion[id] || (state.evaluacion[id] = {});
+    if (k === 'hecha') {
+      const a = Number(e.target.dataset.a);
+      const set = new Set(ev.hechas || []);
+      if (e.target.checked) set.add(a); else set.delete(a);
+      ev.hechas = [...set];
+    } else {
+      ev[k] = e.target.value === '' ? null : Number(e.target.value);
+    }
+    Riesgos.guardarEvaluacion(state.point.lat, state.point.lon, state.evaluacion);
+    renderRiesgos();
+  });
+
+  $('riesgos-csv').addEventListener('click', () => {
+    if (!state.point || !state.riesgos) return;
+    const blob = new Blob([Riesgos.registroCsv(state.riesgos, state.evaluacion, state.point)], { type: 'text/csv;charset=utf-8' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `registro-riesgos_${state.point.lat.toFixed(5)}_${state.point.lon.toFixed(5)}.csv`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  });
 
   // ---------------------------------------------------------------- Denuncias
   const fmtFecha = (iso) => new Date(`${iso}T12:00:00Z`).toLocaleDateString('es-PE', { month: 'short', year: 'numeric', timeZone: 'UTC' });
@@ -707,6 +848,19 @@
       zonificacion: state.zona
         ? { codigo: state.zona.codigo, regla: state.zona.regla, fuente: CONFIG.zonificacion.fuente }
         : null,
+      zona_sismica: state.distritoStatus === 'ok'
+        ? { distrito: state.distrito.distrito, ubigeo: state.distrito.ubigeo, zona: state.distrito.zona, z: state.distrito.z, fuente: CONFIG.distritos.fuente }
+        : null,
+      registro_riesgos: (state.riesgos || []).map((r) => {
+        const e = state.evaluacion[r.id] || {};
+        const n = Riesgos.nivel(e.p, e.i);
+        return {
+          id: r.id, categoria: r.categoria, riesgo: r.titulo, evidencia: r.evidencia, fuente: r.fuente,
+          probabilidad: e.p ?? null, impacto: e.i ?? null, nivel: n ? n.texto : null,
+          decision: e.decision != null ? Riesgos.DECISIONES[e.decision] : null,
+          acciones: r.acciones.map((ac, k) => ({ accion: ac.texto, fuente: ac.fuente, hecha: (e.hechas || []).includes(k) })),
+        };
+      }),
       peligros_geologicos: state.peligro
         ? {
           radio_m: state.peligro.radio,
@@ -749,5 +903,5 @@
   $('analyze').addEventListener('click', analyze);
 
   // Ayuda para verificar desde la consola del navegador (F12)
-  window.osmDebug = { map, state, Geo, Services, Zonificacion, Peligros, Delitos, CATEGORIES };
+  window.osmDebug = { map, state, Geo, Services, Zonificacion, Peligros, Distritos, Riesgos, Delitos, CATEGORIES };
 })();

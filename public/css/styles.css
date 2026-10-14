@@ -158,3 +158,21 @@ input[type="number"] { font: inherit; color: var(--text); padding: 7px 9px; bord
 .resumen .tipo { font-weight: 700; color: var(--muted); font-size: .78rem; text-transform: uppercase; letter-spacing: .02em; }
 #pel-fuente { margin: 8px 0 0; }
 .pel-tipos { margin: 8px 0 0; padding-left: 18px; font-size: .88rem; }
+
+/* Peligro sísmico y gestión de riesgos */
+.sismo:empty { display: none; }
+.sismo { margin-top: 10px; }
+#sismo-fuente { margin: 6px 0 0; }
+.riesgos { display: grid; gap: 10px; margin-top: 8px; }
+.riesgos-resumen { margin: 0; font-size: .88rem; }
+.riesgo { border: 1px solid var(--border); border-radius: 8px; background: #fff; padding: 10px 11px; }
+.riesgo header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.riesgo header strong { flex: 1; min-width: 160px; font-size: .92rem; }
+.riesgo .cat { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); }
+.riesgo p { margin: 6px 0 0; }
+.r-eval { display: flex; flex-wrap: wrap; gap: 8px 12px; margin-top: 8px; font-size: .82rem; }
+.r-eval label { display: flex; flex-direction: column; gap: 2px; }
+.r-eval select { font: inherit; padding: 3px 4px; max-width: 240px; }
+.r-acciones { margin: 8px 0 0; padding: 0; list-style: none; display: grid; gap: 6px; font-size: .84rem; }
+.r-acciones label { display: flex; gap: 6px; align-items: flex-start; }
+.r-acciones .fuente { display: block; margin-left: 22px; }

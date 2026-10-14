@@ -5,9 +5,11 @@ Ficha de riesgos de un predio en Arequipa metropolitana, con datos públicos. El
 | Riesgo | Qué muestra | Fuente |
 |---|---|---|
 | Normativo | Zona, reglas de edificación y m² construibles según el tamaño del lote | Plano y Reglamento del PDM Arequipa 2016-2025 |
-| De desastre | Peligros geológicos registrados cerca y aviso de zona de riesgo | INGEMMET (GEOCATMIN) y plano de zonificación |
+| De desastre | Peligros geológicos registrados cerca, aviso de zona de riesgo y zona sísmica del distrito | INGEMMET (GEOCATMIN), plano de zonificación, Norma E.030 y límites del INEI |
 | De seguridad | Robos y hurtos denunciados cerca, y mapa de calor | MININTER / SIDPOL-PNP |
 | De entorno | Servicios, transporte y áreas verdes cercanos | OpenStreetMap |
+
+Con esos datos arma un **registro de riesgos**: identifica cada riesgo con su evidencia y fuente, propone trámites o normas oficiales para tratarlo, y deja que el usuario evalúe probabilidad e impacto y descargue el registro.
 
 **No recomienda dónde comprar ni construir y no da un puntaje global**: no hay base para decidir cuánto pesa cada riesgo. Cada dato indica qué no cubre. No reemplaza el Certificado de Zonificación y Vías.
 
@@ -30,6 +32,7 @@ El frontend es JavaScript sin dependencias (Leaflet desde CDN). Zonificación, p
 ```bash
 node scripts/descargar-peligros.mjs   # public/data/peligros_aqp.geojson
 node scripts/descargar-delitos.mjs    # public/data/delitos_aqp.geojson
+node scripts/descargar-distritos.mjs  # public/data/distritos_aqp.geojson (zona sísmica E.030)
 npm run datos:verificar               # integridad de los datos y cálculos frente a un método independiente
 ```
 

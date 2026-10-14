@@ -1,7 +1,7 @@
 # GeoVerificador — Metodología y trazabilidad
 
 > Cada dato que muestra la aplicación tiene aquí su origen, su transformación, la decisión que lo justifica y su límite.
-> Lo que **no** se pudo comprobar está marcado como tal. Cifras consultadas el 2026-10-12.
+> Lo que **no** se pudo comprobar está marcado como tal. Cifras consultadas el 2026-10-12 y, para el peligro sísmico y la gestión de riesgos, el 2026-10-13.
 
 ## 1. Qué es y qué no es
 
@@ -13,14 +13,14 @@
 
 - No recomienda dónde comprar ni construir. La decisión es del usuario.
 - No da un puntaje ni un semáforo global. No existe una base que justifique cuánto pesa cada riesgo frente a los demás, ni datos para comprobar que una ponderación acierte. Un puntaje con pesos inventados sería información inventada.
-- No reemplaza el Certificado de Zonificación y Vías (el único documento con valor legal) ni un estudio de suelos o de riesgo.
+- No reemplaza los certificados municipales (el Certificado de Parámetros Urbanísticos y Edificatorios, que emite la municipalidad distrital, y el Certificado de Zonificación y Vías, que emite la municipalidad provincial), ni un estudio de suelos o una evaluación de riesgo.
 
-**Marco:** gestión de riesgos aplicada a un predio. Los factores se agrupan por tipo de riesgo y se comunican uno a uno.
+**Marco:** gestión de riesgos aplicada a un predio. Los factores se agrupan por tipo de riesgo y se comunican uno a uno; el registro de riesgos (§10) los lleva por el proceso identificar → analizar → tratar → dar seguimiento.
 
 | Tipo de riesgo | Pregunta | Fuente | Sección |
 |---|---|---|---|
 | Normativo | ¿Puedo construir lo que quiero? | Plano y Reglamento del PDM Arequipa 2016-2025 | §3 |
-| De desastre | ¿Hay peligros geológicos documentados cerca? | INGEMMET (GEOCATMIN) + zonas de riesgo del plano | §4 |
+| De desastre | ¿Hay peligros geológicos documentados cerca? ¿Qué zona sísmica le corresponde? | INGEMMET (GEOCATMIN) + zonas de riesgo del plano + Norma E.030 y límites del INEI | §4 |
 | De seguridad | ¿Cuántos robos y hurtos se denunciaron cerca? | MININTER / SIDPOL-PNP | §5 |
 | De entorno | ¿Hay servicios, transporte y áreas verdes cerca? | OpenStreetMap | §6 |
 
@@ -137,7 +137,15 @@ Descarga: `node scripts/descargar-peligros.mjs` → `public/data/peligros_aqp.ge
 - Hay más registros donde se hicieron más inspecciones, no necesariamente donde hay más peligro (sesgo de muestreo). De los registros con fuente, 334 de 394 son «Información de campo».
 - Años de registro: 2003 a 2023.
 - Cada punto es un sector, no el alcance real del evento.
-- **No cubre** peligro sísmico, volcánico (Misti), de suelos ni tsunami: no se incorporó ninguna capa pública utilizable de esos peligros. Esto es un hueco declarado de la ficha, no una conclusión de que no existan.
+- **No cubre** el peligro volcánico (Misti), la licuación de suelos ni el tsunami: no se incorporó ninguna capa pública utilizable. Esto es un hueco declarado de la ficha, no una conclusión de que no existan. El peligro sísmico se cubre a escala de distrito (ver abajo).
+
+**Peligro sísmico (añadido el 2026-10-13).**
+
+- **Fuente de la zona sísmica.** Norma Técnica **E.030 Diseño Sismorresistente 2026** del Ministerio de Vivienda, Construcción y Saneamiento, descargada de gob.pe (`https://cdn.www.gob.pe/uploads/document/file/9902957/8081915-nt-e-030-diseno-sismorresistente-2026.pdf`; firmas digitales del 28/04/2026). Se usan el Art. 10 (el territorio se divide en cuatro zonas; el Anexo II lista los distritos de cada una), el Art. 11 y la Tabla N.° 1 (Z = 0,45 / 0,35 / 0,25 / 0,10 para las zonas 4 / 3 / 2 / 1). Definición textual del Art. 11.1: Z «representa la aceleración máxima horizontal en suelo rígido con una probabilidad de 10% de ser excedida en 50 años», expresada como fracción de la gravedad.
+- **Transcripción del Anexo II para la provincia de Arequipa** (`public/data/zonas_sismicas_e030.json`): 21 distritos en **zona 3** (Alto Selva Alegre, Arequipa, Cayma, Cerro Colorado, Characato, Chiguata, Jacobo Hunter, José Luis Bustamante y Rivero, Mariano Melgar, Miraflores, Mollebaya, Paucarpata, Pocsi, Quequeña, Sabandía, Sachaca, San Juan de Tarucani, Socabaya, Tiabaya, Yanahuara y Yura) y 8 en **zona 4** (La Joya, Polobaya, San Juan de Siguas, Santa Isabel de Siguas, Santa Rita de Siguas, Uchumayo, Vítor y Yarabamba). La tabla del PDF se extrajo en modo tabla y se contó: 21 + 8 = 29 distritos, todos los de la provincia.
+- **Fuente de los distritos.** Capa «Distritos» del servicio `SERV_CARTOGRAFIA_DEMARCACION_WGS84` de GEOCATMIN (INGEMMET); el campo de fuente de cada distrito dice «OFICIO N° 006099-2024-INEI/DNCE» (fecha de ingreso 26/12/2024). Descarga: `node scripts/descargar-distritos.mjs` → `public/data/distritos_aqp.geojson` (25 distritos que tocan la caja de Arequipa metropolitana). El script falla si algún distrito no tiene zona en la transcripción.
+- **Qué se calcula.** Distrito del punto (punto-en-polígono) → zona y Z según la tabla. Se muestra en la sección de desastre, en el resumen y como riesgo D3 del registro.
+- **Límites.** La zona es regional: no considera el suelo del predio, que puede amplificar el movimiento; la E.030 exige a todo proyecto de edificación un Estudio de Mecánica de Suelos o un Informe Técnico de Suelos (Art. 16.1). Cerca de un límite distrital el distrito puede no ser exacto. Si la E.030 se actualiza, hay que revisar la transcripción.
 
 ## 5. Riesgo de seguridad: robos y hurtos denunciados
 
@@ -208,6 +216,9 @@ Descarga: `node scripts/descargar-delitos.mjs` → `public/data/delitos_aqp.geoj
 | Periodo y cobertura | Regla de cobertura sobre `metadata.cobertura` | `Delitos.load`, `metadata.cobertura` |
 | Mapa de calor | Densidad gaussiana (σ 200 m, celdas 100 m) | `Delitos.capa` |
 | Elementos del entorno | Overpass en vivo | `services.js`, `geo.js` |
+| Distrito, zona sísmica y Z | Punto-en-polígono sobre los límites del INEI; zona y Z de la E.030 | `distritos.js`, `distritos_aqp.geojson`, `zonas_sismicas_e030.json` |
+| Riesgos identificados | Reglas del catálogo sobre los datos anteriores | `riesgos.js` (`CATALOGO`, `identificar`) |
+| Nivel de cada riesgo | Probabilidad × impacto elegidos por el usuario (matriz 3 × 3) | `riesgos.js` (`nivel`) |
 | Resumen del punto | Une las líneas anteriores sin puntaje | `app.js` (`renderResumen`) |
 
 ## 8. Cómo reproducir
@@ -216,6 +227,7 @@ Descarga: `node scripts/descargar-delitos.mjs` → `public/data/delitos_aqp.geoj
 npm install
 node scripts/descargar-peligros.mjs   # public/data/peligros_aqp.geojson
 node scripts/descargar-delitos.mjs    # public/data/delitos_aqp.geojson
+node scripts/descargar-distritos.mjs  # public/data/distritos_aqp.geojson
 node scripts/verificar-datos.mjs      # comprobaciones automáticas
 npm run start:dev                     # http://localhost:3000
 ```
@@ -224,7 +236,54 @@ Las fuentes públicas cambian: al volver a descargar, las cifras de este documen
 
 ## 9. Lo que la ficha no cubre (huecos declarados)
 
-- Peligro sísmico, volcánico (Misti), de suelos y tsunami.
+- Peligro volcánico (Misti), licuación y amplificación por el suelo del predio, y tsunami. El peligro sísmico solo está a escala de distrito (zona E.030).
 - Precio del suelo, rentabilidad o demanda: no se relaciona ningún factor con el valor de un predio. Eso exigiría datos de precios y es un trabajo aparte.
 - Calidad de la construcción, servicios básicos (agua, desagüe, luz) y situación legal del predio (títulos, cargas).
 - Planes urbanos posteriores a 2016.
+
+## 10. Gestión de riesgos del predio (registro de riesgos)
+
+**Objetivo.** Llevar los datos de la ficha por un proceso de gestión de riesgos: **identificar, analizar, evaluar, tratar, dar seguimiento y comunicar**. Así resume ISO el proceso de la norma ISO 31000 en su sitio oficial. No se citan cláusulas de la norma: su texto completo no se leyó (la plataforma de consulta de ISO exige aceptar términos de uso).
+
+**Reparto del trabajo y por qué.**
+
+| Paso | Quién | Cómo | Por qué así |
+|---|---|---|---|
+| Identificar | La herramienta | Cada riesgo del catálogo tiene una regla que se activa con un dato concreto, y muestra ese dato como evidencia con su fuente | Es lo único que los datos permiten afirmar sin suponer |
+| Analizar (probabilidad e impacto) | El usuario | Elige baja/media/alta para cada uno; **no hay valores precargados** | No existe un dato que permita asignar la probabilidad o el impacto por él (por ejemplo, la cantidad de denuncias no dice qué tan probable es que le roben a un inversor concreto). Precargarlos sería inventarlos |
+| Evaluar (nivel) | Regla fija | Nivel = probabilidad × impacto (1-3 × 1-3): 1-2 bajo, 3-4 medio, 6-9 alto | Matriz cualitativa de probabilidad e impacto; los cortes son una **convención de este proyecto**, no una norma |
+| Tratar | La herramienta propone, el usuario decide | Acciones que son trámites o normas oficiales, cada una con su fuente; decisión: evitar, reducir, transferir o aceptar | Las acciones tienen respaldo documental. Las cuatro decisiones son una **convención de este proyecto** para registrar qué se hará |
+| Dar seguimiento | El usuario | Marca las acciones hechas; la evaluación se guarda en el navegador (por punto) | Uso personal; no se envía a ningún servidor |
+| Comunicar | La herramienta | Descarga del registro en CSV (y dentro del JSON de descarga) con evidencias, fuentes, evaluación, decisión y acciones | Deja constancia de qué se sabía y qué se decidió |
+
+**Catálogo.** Definido en `public/js/riesgos.js` (`CATALOGO`). Cada regla está probada con casos sintéticos en `scripts/verificar-datos.mjs`.
+
+| Id | Riesgo | Se identifica cuando… | Fuente del dato | Tratamiento propuesto (fuente) |
+|---|---|---|---|---|
+| N1 | La zona no permite construir | la regla de la zona tiene `edificable = no` | Reglamento PDM, Título III | Certificado de parámetros o de zonificación y vías (Ley 29090) |
+| N2 | Los parámetros no están fijados en el plano | `edificable = condicionado` (plan específico o zona del entorno) | Reglamento PDM, Título III | Certificados (Ley 29090) |
+| N3 | El lote es menor que el mínimo | el usuario escribe un área de lote menor que `lote_min_m2` | Reglamento PDM, Título III | Certificados (Ley 29090) |
+| N4 | La altura depende del ancho de la vía | zona comercial (altura = 1,5 × (vía + retiros)) | Reglamento PDM, Título III | Certificados (Ley 29090) |
+| N5 | El plan cumplió su vigencia y hay uno nuevo en trámite | el punto está dentro o fuera del plano (siempre que se consultó) | Título Preliminar del Reglamento (vigencia 10 años); página de la MPA (consulta del PDM nuevo, 13/10 al 11/12/2025) | Consultar al IMPLA; certificados |
+| N6 | Posible suspensión judicial | el punto tiene zona en el plano: la herramienta no puede saber si el predio era agrícola o de reserva paisajista en el PDM 2002-2015 | Sentencia de Vista 183-2019 (transcrita por el Colegio de Arquitectos) | Consultar al IMPLA |
+| N7 | El plano no asigna zona | el punto está fuera del área zonificada | Plano de zonificación | Consultar al IMPLA; certificados |
+| D1 | Zona de riesgo muy alto según el plano | la zona es `ZRE-RI1` o `ZRE-RI2` (grupo «riesgo») | Reglamento PDM, Título III | Evaluación de riesgo según el manual del CENEPRED; certificados |
+| D2 | Peligros geológicos documentados cerca | hay al menos un registro a 500 m | Inventario de INGEMMET | Revisar el SIGRID del CENEPRED; evaluación de riesgo (CENEPRED) |
+| D3 | Peligro sísmico de la zona | el punto cae en un distrito | E.030 2026 (Anexo II, Tabla N.° 1); límites del INEI | EMS o ITS (E.030, Art. 16.1); diseño según la E.030 (Art. 4) |
+| D4 | Peligro volcánico (Misti) no evaluado | el punto cae en un distrito | Mapa de peligros del Misti (INGEMMET), citado por informes | Ubicar el predio en ese mapa |
+| S1 | Robos y hurtos denunciados | hay al menos una denuncia a 500 m en el periodo | SIDPOL (MININTER) | Sin trámite oficial: comparar con la ciudad en el mapa de calor y decidir medidas (recomendación práctica, declarada como tal) |
+
+**Fuentes de los tratamientos y su nivel de verificación.**
+
+- **Certificados (Ley 29090).** El Certificado de Parámetros Urbanísticos y Edificatorios lo emite la municipalidad distrital y es requisito de la licencia de edificación de un predio urbano. El Certificado de Zonificación y Vías lo emite la municipalidad provincial y se usa en la habilitación urbana. Ambos están en el art. 14 del TUO de la Ley 29090; una resolución de INDECOPI cita el TUO aprobado por D.S. 006-2017-VIVIENDA y una guía cita otro decreto (D.S. 029-2019-VIVIENDA), así que la versión vigente debe confirmarse. **Verificación:** solo con fuentes secundarias (guías de trámites, resoluciones de INDECOPI y una resolución de gerencia municipal que cita el art. 14); el texto oficial de la ley no se leyó. La aplicación lo dice y pide confirmar en el TUPA de la municipalidad.
+- **E.030, Arts. 4 y 16.1.** Leídos en el texto oficial de 2026: la norma «es de cumplimiento obligatorio a nivel nacional» en el diseño de edificaciones nuevas, y «todo proyecto de edificación debe contar con Estudio de Mecánica de Suelos (EMS) o Informe Técnico de Suelos (ITS), según sea el caso, conforme a lo indicado en la Norma Técnica E.050».
+- **CENEPRED.** Manual para la Evaluación de Riesgos originados por Fenómenos Naturales, 2.ª versión, aprobado por la Resolución N.° 112-2014-CENEPRED. Una nota del CENEPRED de 2025 indica que sigue usándolo en sus asistencias técnicas. **Verificación:** con el registro de la resolución y notas institucionales; no se leyó el manual completo.
+- **SIGRID.** Portal del CENEPRED (`sigrid.cenepred.gob.pe`) que publica estudios y mapas de peligro; sus documentos aparecieron en las búsquedas de este trabajo, pero no se revisó qué cubre para cada sector de Arequipa.
+- **Mapa de peligros del Misti.** Publicado por el INGEMMET. Según informes del INGEMMET y del CENEPRED, la Municipalidad Provincial lo adoptó como documento de gestión mediante la Ordenanza 658-MPA. **Verificación:** fuentes secundarias; el texto de la ordenanza no se leyó.
+
+**Qué no hace el registro, a propósito.**
+
+- No asigna probabilidad, impacto ni nivel por el usuario, y no suma los riesgos en un puntaje global.
+- No incluye el entorno (servicios, transporte, áreas verdes): no hay una base para decir desde cuántos elementos la falta de servicios es un «riesgo».
+- No reemplaza la evaluación de riesgo del CENEPRED, el estudio de suelos ni los certificados municipales: los propone como tratamiento.
+- La evaluación se guarda solo en el navegador del usuario. Si borra los datos del sitio, se pierde; por eso se puede descargar.

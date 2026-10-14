@@ -60,6 +60,8 @@
           <p class="muted small">Elige un punto para ver qué peligros geológicos hay registrados cerca.</p>
         </div>
         <p id="pel-fuente" class="small muted"></p>
+        <div id="sismo" class="zon sismo" role="status" aria-live="polite"></div>
+        <p id="sismo-fuente" class="small muted"></p>
       </section>
 
       <section class="block">
@@ -98,6 +100,21 @@
           <button id="download" type="button" class="link" hidden>Descargar JSON</button>
         </div>
         <div id="cats"></div>
+      </section>
+
+      <section class="block">
+        <div class="block-head">
+          <h2>7. Gestión de riesgos del predio</h2>
+          <button id="riesgos-csv" type="button" class="link" hidden>Descargar registro (CSV)</button>
+        </div>
+        <p class="small muted">La herramienta <strong>identifica</strong> cada riesgo a partir de un dato y su fuente, y propone <strong>acciones</strong> que son trámites o normas oficiales. La <strong>probabilidad</strong> y el <strong>impacto</strong> los evalúas tú: no hay datos que permitan asignarlos por ti, así que no vienen precargados. Tu evaluación se guarda solo en este navegador.</p>
+        <div id="riesgos" class="riesgos" aria-live="polite">
+          <p class="muted small">Elige un punto para armar el registro de riesgos.</p>
+        </div>
+        <details class="small">
+          <summary>Cómo se calcula el nivel</summary>
+          <p>Nivel = probabilidad × impacto, cada uno de 1 (baja) a 3 (alta): 1–2 bajo, 3–4 medio, 6–9 alto. Es una convención de este proyecto (una matriz cualitativa de probabilidad e impacto), no una norma; se aplica solo a los valores que eliges. Las decisiones (evitar, reducir, transferir, aceptar) también son una convención para registrar qué harás con cada riesgo.</p>
+        </details>
       </section>
 
       <section class="block">
@@ -145,7 +162,9 @@
             <li>Los registros son de 2003 a 2023. No incluyen eventos posteriores ni muestran si un peligro fue corregido.</li>
             <li>Cada punto es la ubicación de un sector inspeccionado, no el trazado del flujo o del deslizamiento: el alcance real de un evento puede ser mucho mayor que el punto.</li>
             <li>Algunos registros tienen códigos que el diccionario oficial de la capa no define; se muestran como «sin clasificar» en lugar de adivinar su significado.</li>
-            <li>No se incluyen peligro sísmico, volcánico (Misti), de suelos ni tsunami: no se incorporó ninguna capa pública utilizable de esos peligros. Esta ficha no los cubre.</li>
+            <li>El peligro sísmico se muestra con la zona sísmica del distrito según la Norma E.030 2026. Es un valor regional: no considera el suelo del predio, que puede amplificar el movimiento; eso lo determina el Estudio de Mecánica de Suelos.</li>
+            <li>El distrito se obtiene de los límites del INEI publicados en GEOCATMIN. Cerca de un límite distrital, el distrito (y por tanto la zona sísmica) puede no ser exacto.</li>
+            <li>No se incluyen el peligro volcánico (Misti), la licuación de suelos ni el tsunami: no se incorporó ninguna capa pública utilizable. El registro de riesgos los marca como «no evaluado» y remite al mapa de peligros del Misti del INGEMMET.</li>
             <li>Además de este inventario, el plano de zonificación marca zonas de riesgo muy alto (<code>ZRE-RI1</code>, <code>ZRE-RI2</code>); se avisa en la sección de peligros si el punto cae en una.</li>
           </ul>
         </details>
@@ -170,7 +189,8 @@
         Consultas vía Overpass API y Nominatim.
         Zonificación: Municipalidad Provincial de Arequipa (IMPLA).
         Denuncias: Ministerio del Interior, Mapa del Delito Georreferenciado (SIDPOL-PNP).
-        Peligros geológicos: INGEMMET (GEOCATMIN).
+        Peligros geológicos y límites distritales: INGEMMET (GEOCATMIN; límites del INEI).
+        Zona sísmica: Norma E.030 (MVCS).
       </footer>
     </aside>
 
@@ -186,6 +206,8 @@
   <script src="js/services.js"></script>
   <script src="js/zonificacion.js"></script>
   <script src="js/peligros.js"></script>
+  <script src="js/distritos.js"></script>
+  <script src="js/riesgos.js"></script>
   <script src="js/delitos.js"></script>
   <script src="js/app.js"></script>
 </body>

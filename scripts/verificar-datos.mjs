@@ -43,6 +43,8 @@ const zonas = json('data/zonas_aqp.geojson');
 const reglas = json('data/reglas_zonas.json');
 const delitos = json('data/delitos_aqp.geojson');
 const peligros = json('data/peligros_aqp.geojson');
+const distritos = json('data/distritos_aqp.geojson');
+const e030 = json('data/zonas_sismicas_e030.json');
 
 // ------------------------------------------------------------------ A. Integridad
 console.log('\n== A. Integridad de los archivos ==');
@@ -136,6 +138,21 @@ console.log('\n== A. Integridad de los archivos ==');
   console.log(`INFO  Códigos que el diccionario oficial no define: ${(m.codigosSinDefinir || []).join(', ') || 'ninguno'}`);
 }
 
+// Distritos y zona sísmica (E.030)
+{
+  const f = distritos.features;
+  comprobar('Distritos: metadata.registros coincide con el número de features', distritos.metadata.registros === f.length, `${f.length} distritos`);
+  comprobar('Distritos: todos tienen ubigeo, nombre y fuente del límite', f.every((x) => /^\d{6}$/.test(x.properties.ubigeo) && x.properties.distrito && x.properties.fuente_limite));
+  comprobar('Distritos: ubigeos únicos', new Set(f.map((x) => x.properties.ubigeo)).size === f.length);
+  const prov = e030.anexo_ii.AREQUIPA.AREQUIPA;
+  const z3 = Object.values(prov).filter((z) => z === 3).length;
+  const z4 = Object.values(prov).filter((z) => z === 4).length;
+  comprobar('E.030: la provincia de Arequipa tiene 21 distritos en zona 3 y 8 en zona 4 (como dice el Anexo II)', z3 === 21 && z4 === 8, `${z3} y ${z4}`);
+  comprobar('E.030: factores Z de la Tabla N.° 1 (4: 0,45; 3: 0,35; 2: 0,25; 1: 0,10)', e030.z['4'] === 0.45 && e030.z['3'] === 0.35 && e030.z['2'] === 0.25 && e030.z['1'] === 0.1);
+  const sinZona = f.filter((x) => !e030.anexo_ii?.[x.properties.departamento]?.[x.properties.provincia]?.[x.properties.distrito]);
+  comprobar('Distritos: todos tienen zona sísmica en la transcripción del Anexo II', sinZona.length === 0, sinZona.map((x) => x.properties.distrito).join(', '));
+}
+
 // ------------------------------------------------- B. Corrección de los cálculos
 console.log('\n== B. Cálculos del navegador frente a un método independiente ==');
 
@@ -151,13 +168,15 @@ const ctx = vm.createContext({
     }
   },
 });
-for (const f of ['js/config.js', 'js/geo.js', 'js/zonificacion.js', 'js/peligros.js', 'js/delitos.js']) {
+for (const f of ['js/config.js', 'js/geo.js', 'js/zonificacion.js', 'js/peligros.js', 'js/delitos.js', 'js/distritos.js', 'js/riesgos.js']) {
   vm.runInContext(leer(f), ctx, { filename: f });
 }
 const app = (expr) => vm.runInContext(expr, ctx);
 const Zon = app('Zonificacion');
 const Pel = app('Peligros');
 const Del = app('Delitos');
+const Dis = app('Distritos');
+const Rsg = app('Riesgos');
 const CONFIG = app('CONFIG');
 const [oeste, norte, este, sur] = CONFIG.viewbox.split(',').map(Number);
 
@@ -267,8 +286,59 @@ const dentro = (x, y, anillos) => vueltas(x, y, anillos[0]) && !anillos.slice(1)
   comprobar(`Delitos: 300 puntos (total, robo, hurto a 500 m) coinciden con el método independiente`, malos === 0, `${malos} diferencias; ${conDenuncias} puntos con al menos 1 denuncia; ${ventana.length} de ${delitos.features.length} registros en el periodo`);
 }
 
-console.log(`
-${pruebas - fallos} de ${pruebas} comprobaciones correctas.`);
+// B5. Distritos: el distrito del navegador frente al número de vueltas, y un punto conocido.
+{
+  let malos = 0;
+  let dentroN = 0;
+  for (let k = 0; k < 1500; k++) {
+    const lat = sur + azar() * (norte - sur);
+    const lon = oeste + azar() * (este - oeste);
+    let esperado = null;
+    for (const f of distritos.features) {
+      const polis = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates;
+      if (polis.some((p) => dentro(lon, lat, p))) { esperado = f.properties.ubigeo; break; }
+    }
+    const r = await Dis.lookup(lat, lon);
+    if (r) dentroN++;
+    if ((r?.ubigeo ?? null) !== esperado) malos++;
+  }
+  comprobar('Distritos: 1 500 puntos al azar coinciden con el método independiente', malos === 0, `${malos} diferencias; ${dentroN} dentro de algún distrito`);
+  const plaza = await Dis.lookup(-16.3988, -71.5369);
+  comprobar('Distritos: la Plaza de Armas cae en el distrito AREQUIPA, zona sísmica 3, Z = 0,35', plaza?.distrito === 'AREQUIPA' && plaza.zona === 3 && plaza.z === 0.35);
+}
+
+// B6. Gestión de riesgos: catálogo con fuentes, reglas que se activan solo con su dato, sin valores precargados y matriz.
+{
+  const cat = Rsg.CATALOGO;
+  comprobar('Riesgos: cada riesgo del catálogo tiene id único, categoría, título y fuente del dato', new Set(cat.map((r) => r.id)).size === cat.length && cat.every((r) => r.categoria && r.titulo && r.fuente));
+  comprobar('Riesgos: cada acción de tratamiento tiene texto y fuente', cat.every((r) => r.acciones.length > 0 && r.acciones.every((a) => a.texto && a.fuente)));
+  const ids = (ctx) => Rsg.identificar(ctx).map((r) => r.id).join(',');
+  const regla = (codigo) => ({ codigo, regla: reglas[codigo] });
+  const casos = [
+    ['sin datos: no se identifica ningún riesgo', { zonaStatus: 'loading' }, ''],
+    ['fuera del plano: N5 y N7', { zonaStatus: 'outside' }, 'N5,N7'],
+    ['zona RDM-2 sin otros datos: N5 y N6', { zonaStatus: 'ok', zona: regla('RDM-2') }, 'N5,N6'],
+    ['zona ZA (no edificable): N1', { zonaStatus: 'ok', zona: regla('ZA') }, 'N1,N5,N6'],
+    ['zona ZRE-CH (condicionada): N2', { zonaStatus: 'ok', zona: regla('ZRE-CH') }, 'N2,N5,N6'],
+    ['zona CZ (comercial): N4', { zonaStatus: 'ok', zona: regla('CZ') }, 'N4,N5,N6'],
+    ['zona ZRE-RI1: N1 y D1', { zonaStatus: 'ok', zona: regla('ZRE-RI1') }, 'N1,N5,N6,D1'],
+    ['lote de 100 m² en RDB (mínimo 300): N3', { zonaStatus: 'ok', zona: regla('RDB'), lote: 100 }, 'N3,N5,N6'],
+    ['lote de 300 m² en RDB: sin N3', { zonaStatus: 'ok', zona: regla('RDB'), lote: 300 }, 'N5,N6'],
+    ['peligros a 500 m: D2', { zonaStatus: 'loading', peligro: { total: 2, radio: 500, porTipo: [['Caida', 2]], masCercano: { distancia: 120 } } }, 'D2'],
+    ['peligros = 0: sin D2', { zonaStatus: 'loading', peligro: { total: 0, radio: 500, porTipo: [], masCercano: { distancia: 900 } } }, ''],
+    ['distrito conocido: D3 y D4', { zonaStatus: 'loading', distrito: { distrito: 'UCHUMAYO', zona: 4, z: 0.45 } }, 'D3,D4'],
+    ['denuncias > 0: S1', { zonaStatus: 'loading', delito: { radio: 500, conteo: { total: 3, ROBO: 1, HURTO: 2 }, meta: { meses: 7 } } }, 'S1'],
+    ['denuncias = 0: sin S1', { zonaStatus: 'loading', delito: { radio: 500, conteo: { total: 0, ROBO: 0, HURTO: 0 }, meta: { meses: 7 } } }, ''],
+  ];
+  const fallan = casos.filter(([, ctx, esperado]) => ids(ctx) !== esperado).map(([n, ctx, e]) => `${n}: obtuvo «${ids(ctx)}», esperaba «${e}»`);
+  comprobar(`Riesgos: ${casos.length} casos de prueba activan exactamente los riesgos esperados`, fallan.length === 0, fallan.join(' | '));
+  const todos = Rsg.identificar({ zonaStatus: 'ok', zona: regla('ZRE-RI1'), lote: 1, peligro: { total: 1, radio: 500, porTipo: [['Caida', 1]], masCercano: { distancia: 10 } }, distrito: { distrito: 'X', zona: 3, z: 0.35 }, delito: { radio: 500, conteo: { total: 1, ROBO: 1, HURTO: 0 }, meta: { meses: 7 } } });
+  comprobar('Riesgos: la herramienta no precarga probabilidad, impacto ni decisión', todos.every((r) => !('p' in r) && !('i' in r) && !('decision' in r) && !('nivel' in r)));
+  const m = [[1, 1, 'Bajo'], [1, 2, 'Bajo'], [2, 1, 'Bajo'], [1, 3, 'Medio'], [3, 1, 'Medio'], [2, 2, 'Medio'], [2, 3, 'Alto'], [3, 2, 'Alto'], [3, 3, 'Alto']];
+  comprobar('Riesgos: matriz 3 × 3 (1-2 bajo, 3-4 medio, 6-9 alto) y sin nivel si falta un valor', m.every(([p, i, n]) => Rsg.nivel(p, i)?.texto === n) && Rsg.nivel(null, 2) === null && Rsg.nivel(2, null) === null);
+}
+
+console.log(`\n${pruebas - fallos} de ${pruebas} comprobaciones correctas.`);
 if (fallos) {
   console.error(`${fallos} FALLARON.`);
   process.exit(1);

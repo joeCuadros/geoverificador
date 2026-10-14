@@ -36,6 +36,13 @@ const CONFIG = {
     fuente: 'Plano de Zonificación del PDM Arequipa 2016-2025 (PDM aprobado por la Ordenanza 961-MPA; zonificación restituida por la Ordenanza 975-MPA)',
   },
 
+  // Distritos (límites del INEI vía GEOCATMIN) y zona sísmica de la Norma E.030: archivos locales.
+  distritos: {
+    geojsonUrl: 'data/distritos_aqp.geojson', // generado con scripts/descargar-distritos.mjs
+    e030Url: 'data/zonas_sismicas_e030.json', // Anexo II y Tabla N.° 1 de la E.030 2026, transcritos
+    fuente: 'Norma E.030 Diseño Sismorresistente 2026 (MVCS), Anexo II; límites distritales del INEI vía GEOCATMIN',
+  },
+
   // Peligros geológicos registrados: archivo local generado con scripts/descargar-peligros.mjs.
   peligros: {
     geojsonUrl: 'data/peligros_aqp.geojson',
