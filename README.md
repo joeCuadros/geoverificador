@@ -20,12 +20,30 @@ Con esos datos arma un **registro de riesgos**: identifica cada riesgo con su ev
 
 ## Ejecutar
 
+El proyecto usa **[pnpm](https://pnpm.io/) 11 o superior**. No uses `npm install`: no hay `package-lock.json`, y npm resolvería versiones distintas a las de `pnpm-lock.yaml`.
+
 ```bash
-npm install
-npm run start:dev      # http://localhost:3000 (Nest sirve el frontend estático de public/)
+pnpm install
+pnpm run start:dev     # http://localhost:3000 (Nest sirve el frontend estático de public/)
 ```
 
-El frontend es JavaScript sin dependencias (Leaflet desde CDN). Zonificación, peligros y denuncias se resuelven con archivos locales de `public/data`; solo el entorno (OpenStreetMap) y la búsqueda de direcciones consultan servicios externos, y únicamente al pulsar los botones.
+El puerto se cambia con la variable de entorno `PORT`.
+
+`pnpm-workspace.yaml` guarda dos ajustes de pnpm:
+
+- `allowBuilds`: los scripts de instalación de `@parcel/watcher` y `unrs-resolver` están desactivados a propósito (ambos traen binarios precompilados; esos scripts solo compilan desde el código fuente).
+- `overrides`: parches de seguridad para dependencias transitivas de desarrollo.
+
+El frontend es JavaScript sin dependencias (Leaflet desde CDN). Zonificación, peligros y denuncias se resuelven con archivos locales de `public/data`; solo el entorno (OpenStreetMap) y la búsqueda de direcciones consultan servicios externos, y únicamente al pulsar los botones. Si un servidor público de Overpass está saturado, la aplicación reintenta automáticamente con los demás servidores de `CONFIG.overpassEndpoints` (hasta 4 intentos).
+
+## Pruebas
+
+```bash
+pnpm run test        # unitarias
+pnpm run test:e2e    # extremo a extremo (GET / y GET /api)
+pnpm run lint
+pnpm run build
+```
 
 ## Datos y verificación
 
@@ -33,7 +51,7 @@ El frontend es JavaScript sin dependencias (Leaflet desde CDN). Zonificación, p
 node scripts/descargar-peligros.mjs   # public/data/peligros_aqp.geojson
 node scripts/descargar-delitos.mjs    # public/data/delitos_aqp.geojson
 node scripts/descargar-distritos.mjs  # public/data/distritos_aqp.geojson (zona sísmica E.030)
-npm run datos:verificar               # integridad de los datos y cálculos frente a un método independiente
+pnpm run datos:verificar              # integridad de los datos y cálculos frente a un método independiente
 ```
 
 `zonas_aqp.geojson` y `reglas_zonas.json` se elaboraron a partir del plano y del reglamento oficiales; el procedimiento está en la metodología.

@@ -63,7 +63,7 @@ const Services = (() => {
         lines.push(`  nwr${sel}${around};`);
       });
     });
-    return `[out:json][timeout:${CONFIG.overpassTimeoutSec}];\n(\n${lines.join('\n')}\n);\nout body geom;`;
+    return `[out:json][timeout:${CONFIG.overpassTimeoutSec}][maxsize:${CONFIG.overpassMaxSizeBytes}];\n(\n${lines.join('\n')}\n);\nout body geom;`;
   }
 
   async function overpass(endpoint, query) {
@@ -90,6 +90,45 @@ const Services = (() => {
       throw new ServiceError('runtime', `Overpass reportó: ${data.remark}`, res.status);
     }
     return { data, ms: Math.round(performance.now() - t0), status: res.status };
+  }
+
+  // Fallos pasajeros de un servidor público: vale la pena reintentar u otro servidor.
+  const TRANSIENT = new Set(['busy', 'timeout', 'network', 'parse']);
+  const isTransient = (err) =>
+    err instanceof ServiceError && (TRANSIENT.has(err.kind) || (err.kind === 'http' && err.status >= 500));
+
+  /**
+   * Prueba el servidor elegido y, si falla por saturación, rota por los demás de CONFIG
+   * con una espera creciente. Un 429 descarta solo ese servidor (cada uno tiene su propio cupo);
+   * otros errores no pasajeros (403, consulta demasiado pesada) se lanzan al instante.
+   * onAttempt(n, total, endpoint) permite mostrar el progreso en pantalla.
+   */
+  async function overpassWithFallback(preferred, query, onAttempt) {
+    const others = CONFIG.overpassEndpoints.map((e) => e.url).filter((u) => u !== preferred);
+    const order = [preferred, ...others];
+    const limited = new Set();
+    const total = CONFIG.overpassMaxAttempts;
+    let lastErr;
+    for (let i = 0, turn = 0; i < total; i++) {
+      const pool = order.filter((u) => !limited.has(u));
+      if (pool.length === 0) break;
+      const endpoint = pool[turn++ % pool.length];
+      if (i > 0) await sleep(CONFIG.overpassRetryDelayMs * i);
+      if (onAttempt) onAttempt(i + 1, total, endpoint);
+      try {
+        return { ...(await overpass(endpoint, query)), endpoint, attempts: i + 1 };
+      } catch (err) {
+        lastErr = err;
+        console.warn(`[Overpass] intento ${i + 1}/${total} falló en ${endpoint}:`, err.message);
+        if (err instanceof ServiceError && err.kind === 'rate_limit') {
+          limited.add(endpoint);
+          turn--; // el servidor siguiente ocupa ahora la posición del descartado
+        } else if (!isTransient(err)) {
+          throw err;
+        }
+      }
+    }
+    throw lastErr;
   }
 
   // --------------------------------------------------------------- Nominatim
@@ -139,5 +178,5 @@ const Services = (() => {
     return { results, cached: false, ms: Math.round(performance.now() - t0) };
   }
 
-  return { ServiceError, buildOverpassQuery, overpass, geocode };
+  return { ServiceError, buildOverpassQuery, overpass, overpassWithFallback, geocode };
 })();
