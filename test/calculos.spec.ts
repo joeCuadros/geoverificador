@@ -205,8 +205,14 @@ describe('nivelesEducativos (reglas por etiquetas de OSM)', () => {
     expect(Calculos.nivelesEducativos({ amenity: 'school', school: 'secondary' })).toEqual(['secundaria']);
   });
 
-  it('si el nivel etiquetado no se reconoce (p. ej. isced:level=4), aplica la regla por defecto', () => {
-    expect(Calculos.nivelesEducativos({ amenity: 'school', 'isced:level': '4' })).toEqual(['primaria', 'secundaria']);
+  it('un colegio etiquetado solo con niveles superiores (isced:level ≥ 4) no es educación básica', () => {
+    expect(Calculos.nivelesEducativos({ amenity: 'school', 'isced:level': '6' })).toEqual([]);
+    expect(Calculos.nivelesEducativos({ amenity: 'school', 'isced:level': '4;5' })).toEqual([]);
+    expect(Calculos.nivelesEducativos({ amenity: 'school', 'isced:level': '3;6' })).toEqual(['secundaria']);
+  });
+
+  it('si el valor de nivel no es interpretable, aplica la regla por defecto', () => {
+    expect(Calculos.nivelesEducativos({ amenity: 'school', 'isced:level': 'superior artística' })).toEqual(['primaria', 'secundaria']);
   });
 
   it('otros elementos no son educación escolar', () => {
@@ -223,8 +229,10 @@ describe('clasificación de etiquetas y consulta Overpass', () => {
     expect(Calculos.categoriasDe({ healthcare: 'centre' })).toContain('salud');
   });
 
-  it('healthcare=pharmacy no cuenta como establecimiento de salud', () => {
+  it('healthcare=pharmacy, dentist o laboratory no cuentan como establecimiento de salud', () => {
     expect(Calculos.categoriasDe({ amenity: 'pharmacy', healthcare: 'pharmacy' })).not.toContain('salud');
+    expect(Calculos.categoriasDe({ healthcare: 'dentist' })).not.toContain('salud');
+    expect(Calculos.categoriasDe({ healthcare: 'laboratory' })).not.toContain('salud');
   });
 
   it('reconoce educación, transporte y áreas verdes', () => {

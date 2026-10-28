@@ -146,7 +146,15 @@ const Calculos = (() => {
   const FILTROS = {
     salud: [
       { clave: 'amenity', valores: ['hospital', 'clinic', 'doctors'] },
-      { clave: 'healthcare', excluir: ['pharmacy', 'optometrist', 'alternative', 'blood_donation'] },
+      // healthcare=* salvo lo que no es un centro de atención general: farmacia, óptica, medicina alternativa, banco de
+      // sangre, laboratorio y consultas de una sola especialidad paramédica u odontológica.
+      {
+        clave: 'healthcare',
+        excluir: [
+          'pharmacy', 'optometrist', 'alternative', 'blood_donation', 'laboratory', 'sample_collection', 'dentist',
+          'physiotherapist', 'occupational_therapist', 'psychotherapist', 'speech_therapist', 'audiologist', 'podiatrist',
+        ],
+      },
     ],
     educacion: [{ clave: 'amenity', valores: ['school', 'kindergarten'] }],
     transporte: [
@@ -193,26 +201,30 @@ const Calculos = (() => {
    *   1. amenity=kindergarten → inicial.
    *   2. amenity=school con `isced:level` (0 = inicial, 1 = primaria, 2 y 3 = secundaria) o con
    *      `school=kindergarten|primary|secondary` → los niveles que declare.
-   *   3. amenity=school SIN etiquetas de nivel (o con un valor que no se reconoce, p. ej. isced:level=4) → candidato a
-   *      primaria y a secundaria. No se le asigna inicial: no hay base para suponerlo, y los jardines se mapean
-   *      aparte como kindergarten. Si un colegio mixto no declara su nivel, esta regla puede sobrestimar la oferta.
+   *   3. amenity=school SIN etiquetas de nivel (o con un valor no interpretable) → candidato a primaria y a
+   *      secundaria. No se le asigna inicial: no hay base para suponerlo, y los jardines se mapean aparte como
+   *      kindergarten. Si un colegio mixto no declara su nivel, esta regla puede sobrestimar la oferta.
+   *   4. amenity=school etiquetado solo con niveles ISCED ≥ 4 (superior no universitaria o universitaria, mal
+   *      etiquetada como colegio) → no es educación básica: no cuenta para ninguno de los tres niveles.
    */
   function nivelesEducativos(tags) {
     const t = tags || {};
     if (t.amenity === 'kindergarten') return ['inicial'];
     if (t.amenity !== 'school') return [];
     const niveles = new Set();
+    let superior = false;
     String(t['isced:level'] ?? '').split(/[;,\s]+/).forEach((v) => {
       if (v === '0') niveles.add('inicial');
       else if (v === '1') niveles.add('primaria');
       else if (v === '2' || v === '3') niveles.add('secundaria');
+      else if (/^[4-8]$/.test(v)) superior = true;
     });
     String(t.school ?? '').split(/[;,\s]+/).forEach((v) => {
       if (v === 'kindergarten') niveles.add('inicial');
       else if (v === 'primary') niveles.add('primaria');
       else if (v === 'secondary') niveles.add('secundaria');
     });
-    if (niveles.size === 0) return ['primaria', 'secundaria'];
+    if (niveles.size === 0) return superior ? [] : ['primaria', 'secundaria'];
     return ['inicial', 'primaria', 'secundaria'].filter((n) => niveles.has(n));
   }
 

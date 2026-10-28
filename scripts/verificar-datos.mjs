@@ -45,6 +45,7 @@ const delitos = json('data/delitos_aqp.geojson');
 const peligros = json('data/peligros_aqp.geojson');
 const distritos = json('data/distritos_aqp.geojson');
 const e030 = json('data/zonas_sismicas_e030.json');
+const equipamiento = Object.fromEntries(['salud', 'educacion', 'transporte', 'areas_verdes'].map((n) => [n, json(`data/equipamiento/${n}.geojson`)]));
 
 // ------------------------------------------------------------------ A. Integridad
 console.log('\n== A. Integridad de los archivos ==');
@@ -153,6 +154,27 @@ console.log('\n== A. Integridad de los archivos ==');
   comprobar('Distritos: todos tienen zona sísmica en la transcripción del Anexo II', sinZona.length === 0, sinZona.map((x) => x.properties.distrito).join(', '));
 }
 
+// Equipamiento de OpenStreetMap (salud, educación, transporte y áreas verdes)
+{
+  const caja = [-71.75, -16.6, -71.35, -16.2];
+  const enCaja = ([x, y]) => x >= caja[0] && x <= caja[2] && y >= caja[1] && y <= caja[3];
+  for (const [nombre, fc] of Object.entries(equipamiento)) {
+    const f = fc.features;
+    const m = fc.metadata || {};
+    comprobar(`Equipamiento/${nombre}: metadata con fuente ODbL, fecha de extracción y consulta`, m.fuente === 'OpenStreetMap (ODbL)' && /^\d{4}-\d{2}-\d{2}$/.test(m.fecha_extraccion) && typeof m.consulta === 'string' && m.consulta.includes('[out:json]'), m.fecha_extraccion);
+    comprobar(`Equipamiento/${nombre}: metadata.registros coincide con el número de features`, m.registros === f.length && f.length > 0, `${f.length}`);
+    comprobar(`Equipamiento/${nombre}: id de OSM único, con nombre y etiquetas`, new Set(f.map((x) => x.properties.osm)).size === f.length && f.every((x) => /^(node|way|relation)\/\d+$/.test(x.properties.osm) && 'nombre' in x.properties && x.properties.tags));
+    if (nombre === 'areas_verdes') {
+      const anillos = f.flatMap((x) => (x.geometry.type === 'Polygon' ? [x.geometry.coordinates] : x.geometry.coordinates).flat());
+      comprobar('Equipamiento/areas_verdes: solo Polygon/MultiPolygon, con anillos cerrados dentro de la caja de Arequipa', f.every((x) => /^(Multi)?Polygon$/.test(x.geometry.type)) && anillos.every((a) => a.length >= 4 && a[0][0] === a.at(-1)[0] && a[0][1] === a.at(-1)[1] && a.every(enCaja)), `${anillos.length} anillos`);
+    } else {
+      comprobar(`Equipamiento/${nombre}: solo puntos dentro de la caja de Arequipa`, f.every((x) => x.geometry.type === 'Point' && enCaja(x.geometry.coordinates)));
+    }
+  }
+  const sinSalud = equipamiento.salud.features.filter((x) => !(['hospital', 'clinic', 'doctors'].includes(x.properties.tags.amenity) || x.properties.tags.healthcare));
+  comprobar('Equipamiento/salud: todo elemento tiene amenity=hospital|clinic|doctors o healthcare', sinSalud.length === 0);
+}
+
 // ------------------------------------------------- B. Corrección de los cálculos
 console.log('\n== B. Cálculos del navegador frente a un método independiente ==');
 
@@ -168,11 +190,12 @@ const ctx = vm.createContext({
     }
   },
 });
-for (const f of ['js/config.js', 'js/geo.js', 'js/zonificacion.js', 'js/peligros.js', 'js/delitos.js', 'js/distritos.js', 'js/riesgos.js']) {
+for (const f of ['js/config.js', 'js/calculos.js', 'js/geo.js', 'js/zonificacion.js', 'js/peligros.js', 'js/delitos.js', 'js/distritos.js', 'js/riesgos.js']) {
   vm.runInContext(leer(f), ctx, { filename: f });
 }
 const app = (expr) => vm.runInContext(expr, ctx);
 const Zon = app('Zonificacion');
+const Calc = app('Calculos');
 const Pel = app('Peligros');
 const Del = app('Delitos');
 const Dis = app('Distritos');
@@ -219,6 +242,68 @@ const dentro = (x, y, anillos) => vueltas(x, y, anillos[0]) && !anillos.slice(1)
     if (obtenido !== esperado) { distintos++; if (detalles.length < 3) detalles.push(`${lat.toFixed(5)},${lon.toFixed(5)}: código ${obtenido} vs ${esperado}`); }
   }
   comprobar('Zonificación: 2000 puntos al azar coinciden con el método independiente', distintos === 0, `${conZona} cayeron dentro del plano; ${detalles.join(' | ')}`);
+}
+
+// B1b. Equipamiento: haversine, área, punto en polígono, distancia al borde y más cercano frente a métodos independientes.
+{
+  // Haversine frente a la ley esférica de los cosenos.
+  let malosH = 0;
+  for (let k = 0; k < 500; k++) {
+    const la1 = sur + azar() * (norte - sur); const lo1 = oeste + azar() * (este - oeste);
+    const la2 = sur + azar() * (norte - sur); const lo2 = oeste + azar() * (este - oeste);
+    if (Math.abs(Calc.haversine(la1, lo1, la2, lo2) - distCosenos(la1, lo1, la2, lo2)) > 0.5) malosH++;
+  }
+  comprobar('Equipamiento: haversine coincide con la ley de los cosenos en 500 pares (≤ 0,5 m)', malosH === 0, `${malosH} diferencias`);
+
+  const verdes = equipamiento.areas_verdes.features;
+  const poligonosDe = (g) => (g.type === 'Polygon' ? [g.coordinates] : g.coordinates);
+  // Área geodésica frente a la proyección local con la fórmula del topógrafo (shoelace), anillo por anillo.
+  const areaLocal = (r) => {
+    const lat0 = r.reduce((t, p) => t + p[1], 0) / r.length;
+    const kx = Math.cos(rad(lat0)) * R * (Math.PI / 180);
+    const ky = R * (Math.PI / 180);
+    let a = 0;
+    for (let i = 0, j = r.length - 1; i < r.length; j = i++) a += r[j][0] * kx * (r[i][1] * ky) - r[i][0] * kx * (r[j][1] * ky);
+    return Math.abs(a) / 2;
+  };
+  let peorArea = 0; let comparados = 0;
+  verdes.forEach((f) => {
+    const esp = poligonosDe(f.geometry).reduce((t, p) => t + areaLocal(p[0]) - p.slice(1).reduce((u, h) => u + areaLocal(h), 0), 0);
+    if (esp < 100) return; // por debajo de 100 m² la diferencia relativa no dice nada
+    comparados++;
+    peorArea = Math.max(peorArea, Math.abs(Calc.areaGeometriaM2(f.geometry) / esp - 1));
+  });
+  comprobar(`Equipamiento: área geodésica coincide con la proyección local (peor diferencia ${(peorArea * 100).toFixed(2)} %, tope 2 %)`, peorArea < 0.02, `${comparados} polígonos`);
+
+  // Punto en polígono frente al número de vueltas; distancia al borde: 0 dentro y nunca mayor que la distancia al vértice más cercano.
+  let malosP = 0; let malosD = 0;
+  for (let k = 0; k < 400; k++) {
+    const f = verdes[Math.floor(azar() * verdes.length)];
+    const polis = poligonosDe(f.geometry);
+    const [x, y] = polis[0][0][Math.floor(azar() * (polis[0][0].length - 1))];
+    const lat = y + (azar() - 0.5) * 0.004; const lon = x + (azar() - 0.5) * 0.004;
+    const esDentro = polis.some((p) => dentro(lon, lat, p));
+    if (polis.some((p) => Calc.puntoEnPoligono(lat, lon, p)) !== esDentro) malosP++;
+    const d = Calc.distanciaAGeometriaM(lat, lon, f.geometry);
+    if (esDentro) { if (d !== 0) malosD++; continue; }
+    const aVertice = Math.min(...polis.flatMap((p) => p.flat().map(([vx, vy]) => distCosenos(lat, lon, vy, vx))));
+    if (d > aVertice + 0.5 || d <= 0) malosD++;
+  }
+  comprobar('Equipamiento: punto en polígono y distancia al borde (400 puntos) coinciden con el método independiente', malosP === 0 && malosD === 0, `${malosP} y ${malosD} diferencias`);
+
+  // Más cercano de salud y transporte frente a fuerza bruta con la ley de los cosenos.
+  let malosC = 0;
+  const umbral = 1000;
+  for (let k = 0; k < 200; k++) {
+    const lat = sur + azar() * (norte - sur); const lon = oeste + azar() * (este - oeste);
+    for (const n of ['salud', 'transporte']) {
+      const cand = equipamiento[n].features.map((f) => ({ nombre: f.properties.nombre, lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0] }));
+      const r = Calc.evaluarMasCercano({ lat, lon }, cand, { umbralM: umbral, fuente: 'x', fecha: 'x', metodo: 'x' });
+      const minimo = Math.min(...cand.map((c) => distCosenos(lat, lon, c.lat, c.lon)));
+      if (Math.abs(r.distanciaM - minimo) > 0.5 || (r.estado === 'CUMPLE') !== (minimo <= umbral)) malosC++;
+    }
+  }
+  comprobar('Equipamiento: más cercano de salud y transporte (200 puntos × 2) coincide con fuerza bruta', malosC === 0, `${malosC} diferencias`);
 }
 
 // B2. Potencial constructivo: aritmética comprobada a mano con una regla real del archivo.

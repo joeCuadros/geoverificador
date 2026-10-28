@@ -13,6 +13,7 @@
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
+    "datos:extraer": "node scripts/extraer-equipamiento.mjs",
     "datos:verificar": "node scripts/verificar-datos.mjs",
     "datos:validar-osm": "node scripts/validar-zonificacion-osm.mjs",
     "datos:validar-plano": "node scripts/validar-zonificacion-plano.mjs",
