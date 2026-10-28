@@ -4,169 +4,241 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>GeoVerificador · Zonificación y servicios de un predio en Arequipa</title>
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#f3eee3" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#101520" media="(prefers-color-scheme: dark)">
   <meta name="description" content="Ficha de un predio en Arequipa con datos públicos: zonificación vigente y aviso del PDM nuevo, y si hay cerca salud, colegios, transporte y un área verde, con su fuente y sus límites.">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230f766e'/%3E%3Cpath d='M16 6c-4.4 0-8 3.4-8 7.7C8 19.5 16 26 16 26s8-6.5 8-12.3C24 9.4 20.4 6 16 6zm0 10.6a3 3 0 1 1 0-6 3 3 0 0 1 0 6z' fill='%23fff'/%3E%3C/svg%3E">
+  <link rel="preload" href="fonts/public-sans-latin-wght.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/source-serif-4-latin-wght.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231c3a6b'/%3E%3Cpath d='M16 6c-4.4 0-8 3.4-8 7.7C8 19.5 16 26 16 26s8-6.5 8-12.3C24 9.4 20.4 6 16 6zm0 10.6a3 3 0 1 1 0-6 3 3 0 0 1 0 6z' fill='%23fff'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
         integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
-  <div class="app">
+  
+  <!-- Iconos: un solo trazo (1,75 px, extremos redondeados). Se usan con <use href="#i-...">. -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+    <defs>
+      <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.4"/></symbol>
+      <symbol id="i-buscar" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l5 5"/></symbol>
+      <symbol id="i-ubicacion" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5V6M12 18v3.5M2.5 12H6M18 12h3.5"/></symbol>
+      <symbol id="i-cumple" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.7 2.7L16 9.8"/></symbol>
+      <symbol id="i-nocumple" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/></symbol>
+      <symbol id="i-sindato" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" stroke-dasharray="2.6 2.6"/><path d="M9.7 9.6a2.4 2.4 0 1 1 3.4 2.2c-.7.4-1.1.8-1.1 1.6"/><path d="M12 16.6v.1"/></symbol>
+      <symbol id="i-parcial" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></symbol>
+      <symbol id="i-aviso" viewBox="0 0 24 24"><path d="M12 3.5l9.5 16.5h-19z"/><path d="M12 10v4.2M12 17.2v.1"/></symbol>
+      <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.9v.1"/></symbol>
+      <symbol id="i-flecha" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></symbol>
+      <symbol id="i-salud" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3.5"/><path d="M12 8v8M8 12h8"/></symbol>
+      <symbol id="i-colegio" viewBox="0 0 24 24"><path d="M2.5 9.5L12 5l9.5 4.5L12 14z"/><path d="M6.5 11.8v4c0 1.3 2.5 2.9 5.5 2.9s5.5-1.6 5.5-2.9v-4M21.5 9.5v5"/></symbol>
+      <symbol id="i-paradero" viewBox="0 0 24 24"><rect x="4" y="3.5" width="16" height="13.5" rx="2.5"/><path d="M4 10.5h16M7.5 17v3M16.5 17v3M8 14h.1M16 14h.1"/></symbol>
+      <symbol id="i-verde" viewBox="0 0 24 24"><path d="M12 21v-6"/><path d="M12 15c-3.6 0-6-2.3-6-5.2 0-1.6.9-3 2.2-3.7C8.4 4.1 10 2.5 12 2.5s3.6 1.6 3.8 3.6c1.3.7 2.2 2.1 2.2 3.7 0 2.9-2.4 5.2-6 5.2z"/></symbol>
+      <symbol id="i-descargar" viewBox="0 0 24 24"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"/></symbol>
+      <symbol id="i-nueva" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.6-5.9M20 4v5h-5"/></symbol>
+      <symbol id="i-cerrar" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+      <symbol id="i-capas" viewBox="0 0 24 24"><path d="M12 3L2.8 8 12 13l9.2-5z"/><path d="M2.8 12.2L12 17.2l9.2-5M2.8 16.2L12 21.2l9.2-5"/></symbol>
+    </defs>
+  </svg>
+
+  <div class="app" id="app" data-paso="ubicar">
     <!-- ============================================================ Barra superior -->
     <header class="topbar">
       <div class="brand">
-        <svg class="brand-logo" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8"/><path d="M16 6c-4.4 0-8 3.4-8 7.7C8 19.5 16 26 16 26s8-6.5 8-12.3C24 9.4 20.4 6 16 6zm0 10.6a3 3 0 1 1 0-6 3 3 0 0 1 0 6z"/></svg>
+        <svg class="brand-logo" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7"/><path d="M5 22.500h22M5 17.500h22" class="brand-juntas"/><path d="M16 5.500c-3.900 0-7 3-7 6.800 0 5 7 11 7 11s7-6 7-11c0-3.800-3.100-6.800-7-6.800zm0 9.400a2.600 2.600 0 1 1 0-5.200 2.600 2.600 0 0 1 0 5.200z" class="brand-pin"/></svg>
         <div class="brand-text">
-          <strong>GeoVerificador</strong>
-          <span>Zonificación y servicios · Arequipa</span>
+          <h1>GeoVerificador</h1>
+          <span>Predios de Arequipa</span>
         </div>
       </div>
 
-      <div class="search-wrap">
-        <form id="search-form" class="search" autocomplete="off" role="search">
-          <svg class="search-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M8.5 3a5.5 5.5 0 0 1 4.38 8.83l3.65 3.64-1.06 1.06-3.64-3.65A5.5 5.5 0 1 1 8.5 3zm0 1.5a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/></svg>
-          <input id="q" type="search" placeholder="Busca una dirección: Av. Ejército 700, Yanahuara" aria-label="Dirección a buscar" minlength="3">
-          <button id="search-btn" type="submit">Buscar</button>
-        </form>
-        <label class="check search-bounded"><input id="bounded" type="checkbox" checked> Solo Arequipa</label>
-        <div class="search-pop" id="search-pop" hidden>
-          <div id="search-status" class="small" role="status"></div>
-          <ul id="search-results" class="search-results"></ul>
-        </div>
-      </div>
+      <nav class="stepper" aria-label="Pasos de la consulta">
+        <ol>
+          <li data-paso="ubicar" aria-current="step"><span class="st-n" aria-hidden="true">1</span><span class="st-label"><span class="sr-only">Paso 1: </span>Ubica tu predio</span></li>
+          <li data-paso="confirmar"><span class="st-n" aria-hidden="true">2</span><span class="st-label"><span class="sr-only">Paso 2: </span>Confirma el punto</span></li>
+          <li data-paso="reporte"><span class="st-n" aria-hidden="true">3</span><span class="st-label"><span class="sr-only">Paso 3: </span>Lee tu reporte</span></li>
+        </ol>
+      </nav>
+
+      <button id="ayuda-btn" type="button" class="enlace-ayuda" aria-haspopup="dialog">¿Cómo funciona?</button>
     </header>
 
-    <!-- ============================================================ Panel de la ficha -->
-    <aside class="panel" aria-label="Ficha del predio">
+    <!-- ============================================================ Panel -->
+    <aside class="panel" id="contenido" aria-label="Consulta de un predio">
 
-      <!-- Bienvenida: se muestra hasta que se elige un punto -->
-      <section id="welcome" class="welcome">
-        <p class="eyebrow">Ficha con datos públicos</p>
-        <h1>Conoce la zonificación y los servicios cercanos de un predio</h1>
-        <p class="lead">Elige un punto de Arequipa metropolitana y revisa, con su fuente: la zonificación vigente y el aviso del PDM nuevo, y si hay cerca un establecimiento de salud, colegios por nivel, un paradero y un área verde.</p>
-        <ol class="steps">
-          <li><span class="step-n">1</span><div><strong>Elige un punto</strong><span>Haz clic en el mapa, arrastra el marcador o busca una dirección arriba.</span></div></li>
-          <li><span class="step-n">2</span><div><strong>Revisa cada variable</strong><span>Cada una dice si cumple, la distancia en línea recta, de dónde viene el dato y qué no cubre.</span></div></li>
-          <li><span class="step-n">3</span><div><strong>Descarga la ficha</strong><span>Guárdala como PDF para consultarla o compartir el archivo.</span></div></li>
-        </ol>
-        <button id="probar" type="button" class="primary">Probar con el centro de Arequipa</button>
-        <p class="disclaimer">No es una recomendación de compra ni reemplaza los certificados municipales. Las distancias son en línea recta, no recorrido a pie.</p>
-      </section>
+      <!-- Paso 1: Ubica tu predio -->
+      <section id="paso-ubicar" class="paso" aria-labelledby="ubicar-h">
+        <h2 id="ubicar-h" tabindex="-1">Ubica tu predio</h2>
+        <p class="promesa">Mira qué zonificación tiene un predio de Arequipa y qué servicios hay cerca.</p>
 
-      <!-- Ficha: aparece al elegir un punto -->
-      <div id="ficha" class="ficha" hidden>
-        <div class="point-card">
-          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2a6 6 0 0 0-6 6c0 4.4 6 10 6 10s6-5.6 6-10a6 6 0 0 0-6-6zm0 8.2a2.2 2.2 0 1 1 0-4.4 2.2 2.2 0 0 1 0 4.4z"/></svg>
-          <div class="point-text">
-            <span id="point-distrito" class="point-distrito">Punto seleccionado</span>
-            <span id="point-info" class="point-info">Ningún punto seleccionado.</span>
+        <form id="search-form" class="busqueda" autocomplete="off" role="search">
+          <label for="q" class="busqueda-etiqueta">Escribe una dirección o toca el mapa</label>
+          <div class="busqueda-fila">
+            <input id="q" type="search" placeholder="Ej.: Av. Ejército 700" minlength="3" enterkeyhint="search">
+            <button id="search-btn" type="submit" class="primary">
+              <svg class="ico" aria-hidden="true"><use href="#i-buscar"/></svg>Buscar
+            </button>
           </div>
-          <button id="download" type="button" class="ghost pdf-btn" title="Resumen de la ficha para guardar como PDF">Descargar PDF</button>
+          <label class="check search-bounded"><input id="bounded" type="checkbox" checked><span>Buscar solo en Arequipa</span></label>
+        </form>
+
+        <div class="busqueda-resultados" id="search-pop" hidden>
+          <p id="search-status" class="small" role="status"></p>
+          <ul id="search-results" class="search-results"></ul>
         </div>
 
-        <nav class="tabs" role="tablist" aria-label="Secciones de la ficha">
-          <button role="tab" id="tabbtn-resumen" data-tab="resumen" aria-controls="tab-resumen" aria-selected="true">Resumen</button>
-          <button role="tab" id="tabbtn-normativo" data-tab="normativo" aria-controls="tab-normativo" aria-selected="false" tabindex="-1">Zonificación <span class="tab-badge" id="badge-normativo"></span></button>
-          <button role="tab" id="tabbtn-entorno" data-tab="entorno" aria-controls="tab-entorno" aria-selected="false" tabindex="-1">Servicios <span class="tab-badge" id="badge-entorno"></span></button>
-          <button role="tab" id="tabbtn-desastre" data-tab="desastre" data-modulo="desastre sismica" aria-controls="tab-desastre" aria-selected="false" tabindex="-1">Desastre <span class="tab-badge" id="badge-desastre"></span></button>
-          <button role="tab" id="tabbtn-seguridad" data-tab="seguridad" data-modulo="seguridad" aria-controls="tab-seguridad" aria-selected="false" tabindex="-1">Seguridad <span class="tab-badge" id="badge-seguridad"></span></button>
-          <button role="tab" id="tabbtn-riesgos" data-tab="riesgos" data-modulo="riesgos" aria-controls="tab-riesgos" aria-selected="false" tabindex="-1">Riesgos <span class="tab-badge accent" id="badge-riesgos"></span></button>
-          <button role="tab" id="tabbtn-fuentes" data-tab="fuentes" aria-controls="tab-fuentes" aria-selected="false" tabindex="-1">Fuentes</button>
-        </nav>
+        <div class="o-separador" aria-hidden="true"><span>o</span></div>
+        <button id="usar-ubicacion" type="button" class="secondary">
+          <svg class="ico" aria-hidden="true"><use href="#i-ubicacion"/></svg>Usar mi ubicación
+        </button>
+        <p id="ubicacion-estado" class="estado-linea small" role="status"></p>
 
-        <!-- Resumen -->
-        <section class="tabpanel" id="tab-resumen" role="tabpanel" aria-labelledby="tabbtn-resumen">
-          <div id="resumen" class="summary-grid"></div>
-          <p class="note">Cada variable se evalúa por separado contra su propio umbral: no se suman en un puntaje porque no existe una base para decidir cuánto pesa cada una. Las distancias son en línea recta.</p>
-        </section>
+        <p class="limite">Consulta referencial: no reemplaza el certificado municipal de zonificación.</p>
+        <p class="ejemplo"><button id="probar" type="button" class="link">Ver un ejemplo en la Plaza de Armas</button></p>
+      </section>
 
-        <!-- Normativo -->
-        <section class="tabpanel" id="tab-normativo" role="tabpanel" aria-labelledby="tabbtn-normativo" hidden>
-          <header class="panel-head">
-            <span class="dot normativo"></span>
-            <div><h2>Zonificación</h2><p>Zonificación vigente (PDM 2016-2025) y estado del PDM nuevo</p></div>
-            <button type="button" class="ghost capa-btn" data-capa="zon-layer" aria-pressed="false">Ver plano</button>
-          </header>
-          <label class="lote-field">
-            <span class="lote-label">Área del lote <small>(opcional, para calcular los m² construibles)</small></span>
-            <span class="input-unit"><input id="lote" type="number" min="1" step="1" inputmode="decimal" placeholder="Ej.: 300"><em>m²</em></span>
-          </label>
-          <div id="zon" class="zon" role="status" aria-live="polite">
-            <p class="muted small">Elige un punto para ver qué zona le corresponde y cuánto se puede construir.</p>
+      <!-- Paso 2: Confirma el punto -->
+      <section id="paso-confirmar" class="paso" aria-labelledby="confirmar-h" hidden>
+        <h2 id="confirmar-h" tabindex="-1">¿Es este el predio?</h2>
+        <div class="lugar">
+          <svg class="ico ico-lg" aria-hidden="true"><use href="#i-pin"/></svg>
+          <div>
+            <p class="lugar-nombre" id="confirmar-lugar">Punto elegido en el mapa</p>
+            <p class="lugar-detalle" id="confirmar-detalle"></p>
           </div>
-          <p id="zon-fuente" class="source"></p>
-          <div id="pdm-aviso"></div>
-        </section>
+        </div>
+        <p id="confirmar-aviso" class="estado-linea small" role="status"></p>
+        <p class="ayuda-paso">Mira que el marcador esté sobre tu predio. Si no, toca otro lugar del mapa o usa «Mover el punto».</p>
 
-        <!-- Servicios: salud, educación, transporte y área verde (V2 a V5) -->
-        <section class="tabpanel" id="tab-entorno" role="tabpanel" aria-labelledby="tabbtn-entorno" hidden>
-          <header class="panel-head">
-            <span class="dot entorno"></span>
-            <div><h2>Servicios cercanos</h2><p>Salud, educación, transporte y área verde, en línea recta desde el punto</p></div>
-          </header>
-          <div id="entorno" class="entorno" role="status" aria-live="polite">
-            <p class="muted small">Elige un punto para ver qué servicios hay cerca.</p>
-          </div>
-          <p id="entorno-fuente" class="source"></p>
-        </section>
+        <div class="acciones-paso">
+          <button id="btn-verificar" type="button" class="primary">Sí, verificar</button>
+          <button id="btn-mover" type="button" class="secondary" aria-expanded="false" aria-controls="mover-panel">Mover el punto</button>
+        </div>
 
-        <!-- Desastre -->
-        <section class="tabpanel" id="tab-desastre" role="tabpanel" aria-labelledby="tabbtn-desastre" data-modulo="desastre sismica" hidden>
-          <header class="panel-head">
-            <span class="dot desastre"></span>
-            <div><h2>Riesgo de desastre</h2><p>Peligros geológicos documentados y zona sísmica</p></div>
-            <button type="button" class="ghost capa-btn" data-capa="pel-layer" aria-pressed="false">Ver peligros</button>
-          </header>
-          <div data-modulo="desastre">
-            <h3 class="sub-head">Peligros geológicos registrados</h3>
-            <div id="pel" class="zon" role="status" aria-live="polite">
-              <p class="muted small">Elige un punto para ver qué peligros geológicos hay registrados cerca.</p>
+        <div id="mover-panel" class="mover" hidden>
+          <p class="small mover-texto">Cada toque en una flecha mueve el punto en línea recta. También puedes enfocar el marcador y usar las flechas del teclado.</p>
+          <div class="mover-cuerpo">
+            <div class="pad" role="group" aria-label="Mover el punto">
+              <button type="button" class="pad-btn n" data-dir="N"><svg class="ico" aria-hidden="true"><use href="#i-flecha"/></svg></button>
+              <button type="button" class="pad-btn o" data-dir="O"><svg class="ico" aria-hidden="true"><use href="#i-flecha"/></svg></button>
+              <span class="pad-centro" id="pad-centro" aria-hidden="true">10 m</span>
+              <button type="button" class="pad-btn e" data-dir="E"><svg class="ico" aria-hidden="true"><use href="#i-flecha"/></svg></button>
+              <button type="button" class="pad-btn s" data-dir="S"><svg class="ico" aria-hidden="true"><use href="#i-flecha"/></svg></button>
             </div>
-            <p id="pel-fuente" class="source"></p>
+            <div class="paso-mov" role="group" aria-label="Distancia de cada movimiento">
+              <button type="button" data-metros="10" aria-pressed="true">10 m</button>
+              <button type="button" data-metros="50" aria-pressed="false">50 m</button>
+            </div>
           </div>
-          <div data-modulo="sismica">
-            <h3 class="sub-head">Peligro sísmico</h3>
-            <div id="sismo" class="zon sismo" role="status" aria-live="polite"></div>
-            <p id="sismo-fuente" class="source"></p>
-          </div>
-        </section>
+          <p id="mover-estado" class="sr-only" role="status"></p>
+        </div>
 
-        <!-- Seguridad -->
-        <section class="tabpanel" id="tab-seguridad" role="tabpanel" aria-labelledby="tabbtn-seguridad" data-modulo="seguridad" hidden>
-          <header class="panel-head">
-            <span class="dot seguridad"></span>
-            <div><h2>Riesgo de seguridad</h2><p>Robos y hurtos denunciados alrededor del punto</p></div>
-            <button type="button" class="ghost capa-btn" data-capa="del-layer" aria-pressed="false">Ver mapa de calor</button>
-          </header>
-          <div id="del" class="zon" role="status" aria-live="polite">
-            <p class="muted small">Elige un punto para ver cuántas denuncias hay a su alrededor.</p>
-          </div>
-          <p id="del-fuente" class="source"></p>
-        </section>
+      </section>
 
-        <!-- Gestión de riesgos -->
-        <section class="tabpanel" id="tab-riesgos" role="tabpanel" aria-labelledby="tabbtn-riesgos" data-modulo="riesgos" hidden>
-          <header class="panel-head">
-            <span class="dot riesgos"></span>
-            <div><h2>Gestión de riesgos del predio</h2><p>Identificar · analizar · tratar · dar seguimiento</p></div>
-            <button id="riesgos-csv" type="button" class="ghost" hidden>Descargar CSV</button>
-          </header>
-          <p class="explain">La herramienta <strong>identifica</strong> cada riesgo a partir de un dato y su fuente, y propone <strong>acciones</strong> que son trámites o normas oficiales. La <strong>probabilidad</strong> y el <strong>impacto</strong> los evalúas tú: no hay datos que permitan asignarlos por ti, así que no vienen precargados. Tu evaluación se guarda solo en este navegador.</p>
-          <div id="riesgos" class="riesgos" aria-live="polite">
-            <p class="muted small">Elige un punto para armar el registro de riesgos.</p>
-          </div>
-          <details class="disclosure">
-            <summary>Cómo se calcula el nivel</summary>
-            <p>Nivel = probabilidad × impacto, cada uno de 1 (baja) a 3 (alta): 1–2 bajo, 3–4 medio, 6–9 alto. Es una convención de este proyecto (una matriz cualitativa de probabilidad e impacto), no una norma; se aplica solo a los valores que eliges. Las decisiones (evitar, reducir, transferir, aceptar) también son una convención para registrar qué harás con cada riesgo.</p>
-          </details>
-        </section>
+      <!-- Paso 3: Lee tu reporte -->
+      <div id="resultado" class="resultado" hidden>
+        <div id="res-info" class="res-info">
+          <section class="direccion card" aria-labelledby="dir-h">
+            <div class="direccion-texto">
+              <h2 id="dir-h" tabindex="-1">Punto elegido en el mapa</h2>
+              <p id="point-distrito" class="direccion-distrito"></p>
+              <p id="point-info" class="direccion-coord"></p>
+            </div>
+            <button id="btn-cambiar" type="button" class="secondary compacto">Cambiar</button>
+          </section>
 
-        <!-- Fuentes y limitaciones -->
-        <section class="tabpanel" id="tab-fuentes" role="tabpanel" aria-labelledby="tabbtn-fuentes" hidden>
-          <header class="panel-head">
-            <span class="dot fuentes"></span>
-            <div><h2>Fuentes y limitaciones</h2><p>Qué cubre cada dato y qué no</p></div>
-          </header>
+          <div class="aviso-referencial" role="note">
+            <svg class="ico ico-lg" aria-hidden="true"><use href="#i-aviso"/></svg>
+            <p><strong>Consulta referencial.</strong> No reemplaza el certificado municipal de zonificación. Las distancias son en línea recta, no recorrido a pie.</p>
+          </div>
+
+          <div id="consejo" class="consejo" role="note" hidden>
+            <svg class="ico ico-lg" aria-hidden="true"><use href="#i-info"/></svg>
+            <p>Cada tarjeta dice si el servicio <strong>cumple</strong> o <strong>no cumple</strong> la distancia de referencia, a cuántos metros está y de dónde sale el dato. <strong>Sin dato</strong> quiere decir que no figura en nuestros datos, no que no exista.</p>
+            <button id="consejo-ok" type="button" class="secondary compacto">Entendido</button>
+          </div>
+
+          <!-- Zonificación (V1a) y aviso del PDM nuevo (V1b) -->
+          <section class="card zona" aria-labelledby="zona-h" aria-busy="true" id="zona-card">
+            <div class="card-cab">
+              <h3 id="zona-h">Zonificación</h3>
+              <button type="button" class="ghost capa-btn" data-capa="zon-layer" aria-pressed="false">Ver plano en el mapa</button>
+            </div>
+            <div id="zon" class="zon">
+              <p class="zon-msg loading"><span class="spinner"></span>Buscando la zona en el plano…</p>
+            </div>
+            <label class="lote-field">
+              <span class="lote-label">Área del lote <small>(opcional, para calcular los m² construibles)</small></span>
+              <span class="input-unit"><input id="lote" type="number" min="1" step="1" inputmode="decimal" placeholder="Ej.: 300"><em>m²</em></span>
+            </label>
+            <div id="zon-calc"></div>
+            <p id="zon-fuente" class="fuente-linea"></p>
+            <div id="pdm-aviso"></div>
+          </section>
+
+          <!-- Servicios cerca (V2 a V5) -->
+          <section class="servicios" aria-labelledby="serv-h" id="servicios">
+            <h3 id="serv-h">Servicios cerca del punto</h3>
+            <div id="entorno" class="entorno" aria-busy="true">
+              <p class="zon-msg loading"><span class="spinner"></span>Buscando los servicios más cercanos…</p>
+            </div>
+            <p id="entorno-fuente" class="fuente-linea"></p>
+          </section>
+
+          <!-- Módulos fuera de alcance: solo se muestran con CONFIG.modulos o ?modulos=todos -->
+          <section class="card modulo" id="tab-desastre" aria-labelledby="mod-desastre-h" data-modulo="desastre sismica">
+            <div class="card-cab">
+              <h3 id="mod-desastre-h">Riesgo de desastre</h3>
+              <button type="button" class="ghost capa-btn" data-capa="pel-layer" aria-pressed="false" data-modulo="desastre">Ver peligros</button>
+            </div>
+            <p class="small muted">Peligros geológicos documentados y zona sísmica.</p>
+            <div data-modulo="desastre">
+              <h4 class="sub-head">Peligros geológicos registrados</h4>
+              <div id="pel" class="zon" role="status" aria-live="polite">
+                <p class="muted small">Elige un punto para ver qué peligros geológicos hay registrados cerca.</p>
+              </div>
+              <p id="pel-fuente" class="fuente-linea"></p>
+            </div>
+            <div data-modulo="sismica">
+              <h4 class="sub-head">Peligro sísmico</h4>
+              <div id="sismo" class="zon sismo" role="status" aria-live="polite"></div>
+              <p id="sismo-fuente" class="fuente-linea"></p>
+            </div>
+          </section>
+
+          <section class="card modulo" id="tab-seguridad" aria-labelledby="mod-seguridad-h" data-modulo="seguridad">
+            <div class="card-cab">
+              <h3 id="mod-seguridad-h">Riesgo de seguridad</h3>
+              <button type="button" class="ghost capa-btn" data-capa="del-layer" aria-pressed="false">Ver mapa de calor</button>
+            </div>
+            <p class="small muted">Robos y hurtos denunciados alrededor del punto.</p>
+            <div id="del" class="zon" role="status" aria-live="polite">
+              <p class="muted small">Elige un punto para ver cuántas denuncias hay a su alrededor.</p>
+            </div>
+            <p id="del-fuente" class="fuente-linea"></p>
+          </section>
+
+          <section class="card modulo" id="tab-riesgos" aria-labelledby="mod-riesgos-h" data-modulo="riesgos">
+            <div class="card-cab">
+              <h3 id="mod-riesgos-h">Gestión de riesgos del predio</h3>
+              <button id="riesgos-csv" type="button" class="ghost" hidden>Descargar CSV</button>
+            </div>
+            <p class="small muted">Identificar · analizar · tratar · dar seguimiento</p>
+            <p class="explain">La herramienta <strong>identifica</strong> cada riesgo a partir de un dato y su fuente, y propone <strong>acciones</strong> que son trámites o normas oficiales. La <strong>probabilidad</strong> y el <strong>impacto</strong> los evalúas tú: no hay datos que permitan asignarlos por ti, así que no vienen precargados. Tu evaluación se guarda solo en este navegador.</p>
+            <div id="riesgos" class="riesgos" aria-live="polite">
+              <p class="muted small">Elige un punto para armar el registro de riesgos.</p>
+            </div>
+            <details class="disclosure">
+              <summary>Cómo se calcula el nivel</summary>
+              <p>Nivel = probabilidad × impacto, cada uno de 1 (baja) a 3 (alta): 1–2 bajo, 3–4 medio, 6–9 alto. Es una convención de este proyecto (una matriz cualitativa de probabilidad e impacto), no una norma; se aplica solo a los valores que eliges. Las decisiones (evitar, reducir, transferir, aceptar) también son una convención para registrar qué harás con cada riesgo.</p>
+            </details>
+          </section>
+        </div>
+
+        <!-- Fuentes y límites: después del mapa en pantallas angostas -->
+        <section class="res-fuentes" id="res-fuentes" aria-labelledby="fuentes-h">
+          <h3 id="fuentes-h">Fuentes y límites de esta consulta</h3>
+          <div class="fuentes-cuerpo">
           <details class="disclosure">
             <summary>Limitaciones de la zonificación</summary>
             <ul class="limits">
@@ -241,17 +313,28 @@
               <li><strong>Umbrales de educación:</strong> MEF/MINEDU, Instructivo FTE, Cuadro N.° 1 (RVM 104-2019 y 208-2019-MINEDU). <strong>Área verde:</strong> OMS Europa (2016).</li>
             </ul>
           </div>
+          </div>
         </section>
+
+        <!-- Acciones: siempre al alcance -->
+        <div class="res-acciones" id="res-acciones">
+          <button id="download" type="button" class="primary">
+            <svg class="ico" aria-hidden="true"><use href="#i-descargar"/></svg>Descargar PDF
+          </button>
+          <button id="btn-nueva" type="button" class="secondary">
+            <svg class="ico" aria-hidden="true"><use href="#i-nueva"/></svg>Nueva consulta
+          </button>
+        </div>
       </div>
     </aside>
 
     <!-- ============================================================ Mapa -->
-    <main class="map-wrap">
-      <div id="map" aria-label="Mapa de Arequipa"></div>
+    <main class="map-wrap" id="mapa-zona">
+      <div id="map" role="application" aria-label="Mapa de Arequipa. Toca un lugar para elegir el punto."></div>
 
       <div class="layers-card" id="layers-card">
         <button type="button" class="layers-toggle" id="layers-toggle" aria-expanded="true" aria-controls="layers-body">
-          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2 1.5 6.5 10 11l8.5-4.5L10 2zm-6.6 8.2L1.5 11.2 10 15.7l8.5-4.5-1.9-1-6.6 3.5-6.6-3.5zm0 4.2-1.9 1L10 19.9l8.5-4.5-1.9-1-6.6 3.5-6.6-3.5z"/></svg>
+          <svg class="ico" aria-hidden="true"><use href="#i-capas"/></svg>
           Capas
         </button>
         <div class="layers-body" id="layers-body">
@@ -267,9 +350,28 @@
         </div>
       </div>
 
-      <div class="map-hint" id="map-hint">Elige un punto en el mapa</div>
+      <div class="map-hint" id="map-hint">Toca el mapa para elegir un punto</div>
     </main>
   </div>
+
+  <!-- Ayuda: se abre solo si la persona la pide -->
+  <dialog id="ayuda" class="ayuda" aria-labelledby="ayuda-h">
+    <div class="ayuda-cab">
+      <h2 id="ayuda-h">¿Cómo funciona?</h2>
+      <button id="ayuda-cerrar" type="button" class="icon-btn" aria-label="Cerrar la ayuda"><svg class="ico" aria-hidden="true"><use href="#i-cerrar"/></svg></button>
+    </div>
+    <ol class="ayuda-pasos">
+      <li><strong>Ubica tu predio.</strong> Escribe una dirección, usa tu ubicación o toca el mapa.</li>
+      <li><strong>Confirma el punto.</strong> Revisa que el marcador esté sobre tu predio. Puedes tocar otro lugar o moverlo con las flechas.</li>
+      <li><strong>Lee tu reporte.</strong> Verás la zonificación del plano y si hay cerca un establecimiento de salud, un colegio por nivel, un paradero y un área verde. Cada dato dice su fuente, su fecha y cómo se midió.</li>
+    </ol>
+    <p>Las distancias son en línea recta, no recorrido a pie. <strong>Sin dato</strong> significa que el servicio no figura en nuestros datos (OpenStreetMap), no que no exista.</p>
+    <p>Es una consulta referencial: no reemplaza el certificado municipal de zonificación ni es una recomendación de compra.</p>
+    <button id="ayuda-ok" type="button" class="primary">Entendido</button>
+  </dialog>
+
+  <!-- Anuncios para lectores de pantalla -->
+  <p id="anuncios" class="sr-only" role="status" aria-live="polite"></p>
 
   <!-- Informe para imprimir o guardar como PDF (se llena al pulsar «Descargar PDF») -->
   <div id="reporte" class="reporte" aria-hidden="true"></div>
@@ -278,6 +380,7 @@
           integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="js/config.js"></script>
   <script src="js/calculos.js"></script>
+  <script src="js/onboarding.js"></script>
   <script src="js/geo.js"></script>
   <script src="js/services.js"></script>
   <script src="js/zonificacion.js"></script>

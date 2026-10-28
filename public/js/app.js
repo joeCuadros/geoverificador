@@ -6,6 +6,9 @@
  * servicio externo, al pulsar «Buscar»; Overpass en vivo se usa únicamente si falta un archivo de equipamiento.
  * Los módulos fuera de alcance (peligros, zona sísmica, denuncias y registro de riesgos) siguen en el código pero se
  * ocultan con CONFIG.modulos; `?modulos=todos` en la URL los vuelve a mostrar.
+ *
+ * La pantalla sigue 3 pasos (ver onboarding.js): 1 ubicar el predio, 2 confirmar el punto y 3 leer el reporte.
+ * El primer paso es la propia pantalla de inicio: no hay tour ni ventana obligatoria.
  */
 (() => {
   'use strict';
@@ -20,6 +23,10 @@
   const MODULOS = Calculos.modulosEfectivos(CONFIG.modulos, window.location.search);
 
   const state = {
+    flujo: { ...Onboarding.ESTADO_INICIAL }, // paso actual (Onboarding.transicion)
+    etiqueta: '',        // nombre del lugar si vino de una búsqueda (si no, «Punto elegido en el mapa»)
+    moverMetros: 10,     // salto de los botones para mover el punto
+    distritoTexto: '',   // «Distrito de …» del punto actual
     point: null,
     pointMarker: null,
     circle: null,
@@ -52,6 +59,8 @@
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
   }).addTo(map);
   L.control.scale({ metric: true, imperial: false, position: 'bottomleft' }).addTo(map);
+  // El contenedor cambia de tamaño al pasar de un paso a otro (la hoja inferior crece o se achica): Leaflet debe enterarse.
+  if (window.ResizeObserver) new ResizeObserver(() => map.invalidateSize({ pan: false })).observe($('map'));
 
   // El plano de zonificación va en un panel propio, debajo de marcadores y círculo, y no captura clics.
   const zonPane = map.createPane('zonificacion');
@@ -92,54 +101,19 @@
     </ul>
     <p>Los archivos con estos elementos se generaron una vez con <code>pnpm datos:extraer</code> y están en <code>public/data/equipamiento</code>.</p>`;
 
-  // ------------------------------------------------------------- Pestañas
-  const TABS = [...document.querySelectorAll('.tabs [role="tab"]')].filter((b) => !b.hidden).map((b) => b.dataset.tab);
-  function selectTab(name, focus = false) {
-    TABS.forEach((t) => {
-      const btn = $(`tabbtn-${t}`);
-      const on = t === name;
-      btn.setAttribute('aria-selected', String(on));
-      btn.tabIndex = on ? 0 : -1;
-      $(`tab-${t}`).hidden = !on;
-      if (on && focus) btn.focus();
-      // La pestaña activa siempre queda visible en la barra (que se desplaza en horizontal).
-      if (on) { const bar = btn.parentElement; bar.scrollLeft = btn.offsetLeft - (bar.clientWidth - btn.offsetWidth) / 2; }
-    });
-    // Si el panel estaba desplazado, vuelve al inicio del contenido (las pestañas quedan fijas arriba).
-    const panel = document.querySelector('.panel');
-    const tope = document.querySelector('.point-card').offsetHeight;
-    if (panel.scrollTop > tope) panel.scrollTop = tope;
-  }
-  document.querySelector('.tabs').addEventListener('click', (e) => {
-    const btn = e.target.closest('[role="tab"]');
-    if (btn) selectTab(btn.dataset.tab);
-  });
-  // Flechas izquierda/derecha, Inicio y Fin, como en un tablist estándar.
-  document.querySelector('.tabs').addEventListener('keydown', (e) => {
-    const i = TABS.indexOf(document.activeElement?.dataset?.tab);
-    if (i < 0) return;
-    let n = null;
-    if (e.key === 'ArrowRight') n = (i + 1) % TABS.length;
-    if (e.key === 'ArrowLeft') n = (i - 1 + TABS.length) % TABS.length;
-    if (e.key === 'Home') n = 0;
-    if (e.key === 'End') n = TABS.length - 1;
-    if (n !== null) { e.preventDefault(); selectTab(TABS[n], true); }
-  });
-
   // Tarjeta de capas plegable (plegada de inicio en pantallas angostas).
   function setLayersOpen(open) {
     $('layers-toggle').setAttribute('aria-expanded', String(open));
     $('layers-body').hidden = !open;
   }
   $('layers-toggle').addEventListener('click', () => setLayersOpen($('layers-body').hidden));
-  if (window.matchMedia('(max-width: 820px)').matches) setLayersOpen(false);
+  if (window.matchMedia('(max-width: 899px)').matches) setLayersOpen(false);
 
   $('probar').addEventListener('click', () => {
-    setPoint(CONFIG.center[0], CONFIG.center[1]);
-    map.setView(CONFIG.center, 16);
+    colocarPunto(CONFIG.center[0], CONFIG.center[1], { etiqueta: 'Plaza de Armas de Arequipa', vista: 17 });
   });
 
-  // Botones «Ver en el mapa» de cada pestaña: activan la misma casilla de la tarjeta de capas y se sincronizan con ella.
+  // Botones «Ver en el mapa» de cada tarjeta: activan la misma casilla de la tarjeta de capas y se sincronizan con ella.
   document.addEventListener('click', (e) => {
     const b = e.target.closest('[data-capa]');
     if (b) $(b.dataset.capa).click();
@@ -150,24 +124,72 @@
     });
   });
 
-  // Menú de resultados del buscador: se cierra con Escape o al hacer clic fuera.
+  // Resultados del buscador: aparecen debajo del formulario, dentro de la hoja.
   const showSearchPop = (show) => { $('search-pop').hidden = !show; };
-  document.addEventListener('click', (e) => { if (!e.target.closest('.search-wrap')) showSearchPop(false); });
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') showSearchPop(false); });
 
   // ------------------------------------------------------------- Utilidades UI
+  const icono = (id, extra = '') => `<svg class="ico${extra ? ` ${extra}` : ''}" aria-hidden="true"><use href="#i-${id}"/></svg>`;
   const VARIABLES = {
-    salud: { titulo: 'Salud', icono: '🏥', color: '#c2410c' },
-    educacion: { titulo: 'Educación', icono: '🎓', color: '#7c3aed' },
-    transporte: { titulo: 'Transporte', icono: '🚌', color: '#1d4ed8' },
-    areaVerde: { titulo: 'Área verde', icono: '🌳', color: '#15803d' },
+    salud: { titulo: 'Salud', icono: 'salud' },
+    educacion: { titulo: 'Colegio', icono: 'colegio' },
+    transporte: { titulo: 'Paradero', icono: 'paradero' },
+    areaVerde: { titulo: 'Área verde', icono: 'verde' },
   };
+  const colorMapa = (nombre) => getComputedStyle(document.documentElement).getPropertyValue(nombre).trim() || '#1c3a6b';
+  const sinMovimiento = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const almacen = () => { try { return window.localStorage; } catch (err) { return null; } };
+  const anunciar = (texto) => { $('anuncios').textContent = ''; setTimeout(() => { $('anuncios').textContent = texto; }, 60); };
+  // Nominatim devuelve la dirección completa (hasta el país); para el reporte basta lo primero.
+  const etiquetaCorta = (nombre) => String(nombre).split(',').map((p) => p.trim()).filter(Boolean).slice(0, 3).join(', ');
 
   function poiIcon(v) {
     return L.divIcon({
-      className: 'poi-icon',
-      html: `<span style="background:${v.color}">${v.icono}</span>`,
-      iconSize: [26, 26], iconAnchor: [13, 13], popupAnchor: [0, -13],
+      className: `poi-icon${v.icono === 'verde' ? ' verde' : ''}`,
+      html: `<span>${icono(v.icono)}</span>`,
+      iconSize: [32, 32], iconAnchor: [16, 16], popupAnchor: [0, -16],
+    });
+  }
+
+  // El marcador del punto: una chincheta de tinta con un centro claro.
+  const puntoIcon = L.divIcon({
+    className: 'punto-icon',
+    html: '<svg viewBox="0 0 38 48" aria-hidden="true"><path class="pp-cuerpo" d="M19 46S3 29.5 3 18a16 16 0 0 1 32 0c0 11.5-16 28-16 28z"/><circle class="pp-centro" cx="19" cy="18" r="6"/></svg>',
+    iconSize: [38, 48], iconAnchor: [19, 46],
+  });
+
+  // ------------------------------------------------------------ Pasos
+  const PASO_TITULO = { ubicar: 'ubicar-h', confirmar: 'confirmar-h', reporte: 'dir-h' };
+
+  function aplicarFlujo(nuevo, { foco = true } = {}) {
+    const cambio = nuevo.paso !== state.flujo.paso;
+    state.flujo = nuevo;
+    $('app').dataset.paso = nuevo.paso;
+    $('paso-ubicar').hidden = nuevo.paso !== 'ubicar';
+    $('paso-confirmar').hidden = nuevo.paso !== 'confirmar';
+    $('resultado').hidden = nuevo.paso !== 'reporte';
+    $('mover-panel').hidden = !nuevo.moviendo;
+    $('btn-mover').setAttribute('aria-expanded', String(nuevo.moviendo));
+    const actual = Onboarding.numeroDePaso(nuevo.paso);
+    document.querySelectorAll('.stepper li').forEach((li) => {
+      const n = Onboarding.numeroDePaso(li.dataset.paso);
+      if (n === actual) li.setAttribute('aria-current', 'step'); else li.removeAttribute('aria-current');
+      li.classList.toggle('hecho', n < actual);
+    });
+    // Solo se arrastra el marcador mientras se confirma el punto.
+    if (state.pointMarker) {
+      if (nuevo.paso === 'confirmar') state.pointMarker.dragging.enable(); else state.pointMarker.dragging.disable();
+    }
+    if (!cambio) return;
+    if (nuevo.paso === 'reporte') $('consejo').hidden = Onboarding.consejoVisto(almacen());
+    $('contenido').scrollTop = 0;
+    window.scrollTo(0, 0);
+    if (foco) $(PASO_TITULO[nuevo.paso]).focus({ preventScroll: true });
+    // El mapa cambia de tamaño con el paso: se recoloca sobre el punto.
+    requestAnimationFrame(() => {
+      map.invalidateSize({ pan: false });
+      if (state.point && nuevo.paso !== 'reporte' && !map.getBounds().pad(-0.2).contains([state.point.lat, state.point.lon])) {
+        map.panTo([state.point.lat, state.point.lon], { animate: !sinMovimiento() });
+      }
     });
   }
 
@@ -176,49 +198,216 @@
   function drawCircle() {
     if (state.ring) { map.removeLayer(state.ring); state.ring = null; }
     if (!state.point || !(MODULOS.desastre || MODULOS.seguridad)) return;
+    const c = colorMapa('--tinta');
     state.ring = L.circle([state.point.lat, state.point.lon], {
-      radius: CONFIG.peligros.radio, color: '#0f766e', weight: 2, fillColor: '#0f766e', fillOpacity: 0.06, interactive: false,
+      radius: CONFIG.peligros.radio, color: c, weight: 2, fillColor: c, fillOpacity: 0.06, interactive: false,
     }).addTo(map);
   }
 
-  function setPoint(lat, lon) {
-    state.point = { lat, lon };
-    if (!state.pointMarker) {
-      state.pointMarker = L.marker([lat, lon], { draggable: true, title: 'Punto de análisis' }).addTo(map);
-      state.pointMarker.on('dragend', () => {
-        const p = state.pointMarker.getLatLng();
-        setPoint(p.lat, p.lng);
+  const MOVER_DIR = { ArrowUp: 'N', ArrowDown: 'S', ArrowRight: 'E', ArrowLeft: 'O' };
+  const DIR_TEXTO = { N: 'al norte', S: 'al sur', E: 'al este', O: 'al oeste' };
+
+  function crearMarcador(lat, lon) {
+    const m = L.marker([lat, lon], { icon: puntoIcon, draggable: true, keyboard: true, title: 'Punto elegido', zIndexOffset: 1000 }).addTo(map);
+    m.on('dragend', () => {
+      const p = m.getLatLng();
+      colocarPunto(p.lat, p.lng);
+    });
+    const el = m.getElement();
+    if (el) {
+      el.setAttribute('aria-label', 'Punto elegido. Con las flechas del teclado lo mueves.');
+      // Alternativa al arrastre: las flechas del teclado mueven el punto (y no desplazan el mapa).
+      el.addEventListener('keydown', (e) => {
+        const dir = MOVER_DIR[e.key];
+        if (!dir || state.flujo.paso !== 'confirmar') return;
+        e.preventDefault();
+        e.stopPropagation();
+        moverPunto(dir);
       });
-    } else {
-      state.pointMarker.setLatLng([lat, lon]);
     }
+    return m;
+  }
+
+  function refrescarTextoPunto() {
+    if (!state.point) return;
+    const { lat, lon } = state.point;
+    const coord = `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+    const lugar = state.etiqueta || 'Punto elegido en el mapa';
+    $('confirmar-lugar').textContent = lugar;
+    $('confirmar-detalle').textContent = `${state.distritoTexto ? `${state.distritoTexto} · ` : ''}${coord}`;
+    $('dir-h').textContent = lugar;
+    $('point-distrito').textContent = state.distritoTexto;
+    $('point-info').innerHTML = `${coord} · <a href="https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=18/${lat}/${lon}" target="_blank" rel="noopener">ver en OpenStreetMap</a>`;
+  }
+
+  // Elige o mueve el punto (paso 1 o 2). En el reporte el mapa no cambia el punto: eso se hace con «Cambiar».
+  function colocarPunto(lat, lon, { etiqueta = null, vista = null, aviso = '', conservarMover = false } = {}) {
+    if (state.flujo.paso === 'reporte') return;
+    state.point = { lat, lon };
+    if (etiqueta !== null) {
+      state.etiqueta = etiqueta;
+      state.etiquetaOrigen = { lat, lon };
+    } else if (!state.etiquetaOrigen || Calculos.haversine(lat, lon, state.etiquetaOrigen.lat, state.etiquetaOrigen.lon) > 100) {
+      // Si el punto se aleja de la dirección buscada, ya no se le puede llamar así.
+      state.etiqueta = '';
+      state.etiquetaOrigen = null;
+    }
+    if (etiqueta !== null || state.flujo.paso !== 'confirmar') $('confirmar-aviso').textContent = aviso;
+    if (!state.pointMarker) state.pointMarker = crearMarcador(lat, lon); else state.pointMarker.setLatLng([lat, lon]);
+    drawCircle();
+    $('map-hint').classList.add('oculto');
+    state.distritoTexto = '';
+    refrescarTextoPunto();
+    updateDistrito(); // archivo local: se muestra ya en el paso 2
+    let nuevoFlujo = Onboarding.transicion(state.flujo, 'elegir-punto');
+    // Con los botones de flecha el panel de movimiento sigue abierto para poder dar varios pasos seguidos.
+    if (conservarMover && state.flujo.moviendo) nuevoFlujo = { ...nuevoFlujo, moviendo: true };
+    if (vista) map.setView([lat, lon], vista, { animate: !sinMovimiento() });
+    aplicarFlujo(nuevoFlujo);
+  }
+
+  function moverPunto(dir) {
+    if (!state.point || state.flujo.paso !== 'confirmar') return;
+    const q = Onboarding.desplazar(state.point, dir, state.moverMetros);
+    colocarPunto(q.lat, q.lon, { conservarMover: true });
+    if (!map.getBounds().pad(-0.15).contains([q.lat, q.lon])) map.panTo([q.lat, q.lon], { animate: !sinMovimiento() });
+    $('mover-estado').textContent = `Punto movido ${state.moverMetros} m ${DIR_TEXTO[dir]}. Coordenadas ${q.lat.toFixed(6)}, ${q.lon.toFixed(6)}.`;
+  }
+
+  function fijarSalto(metros) {
+    state.moverMetros = metros;
+    document.querySelectorAll('.paso-mov [data-metros]').forEach((b) => b.setAttribute('aria-pressed', String(Number(b.dataset.metros) === metros)));
+    $('pad-centro').textContent = `${metros} m`;
+    document.querySelectorAll('.pad-btn').forEach((b) => b.setAttribute('aria-label', `Mover el punto ${metros} m ${DIR_TEXTO[b.dataset.dir]}`));
+  }
+  fijarSalto(10);
+  document.querySelector('.paso-mov').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-metros]');
+    if (b) fijarSalto(Number(b.dataset.metros));
+  });
+  document.querySelector('.pad').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-dir]');
+    if (b) moverPunto(b.dataset.dir);
+  });
+  $('btn-mover').addEventListener('click', () => aplicarFlujo(Onboarding.transicion(state.flujo, 'mover'), { foco: false }));
+
+  map.on('click', (e) => colocarPunto(e.latlng.lat, e.latlng.lng));
+
+  // «Sí, verificar»: pasa al reporte y lanza todas las consultas locales.
+  $('btn-verificar').addEventListener('click', () => {
+    const nuevo = Onboarding.transicion(state.flujo, 'confirmar');
+    if (nuevo.paso !== 'reporte') return;
+    aplicarFlujo(nuevo);
+    consultar();
+  });
+
+  function consultar() {
+    const { lat, lon } = state.point;
+    state.anunciado = false;
     drawCircle();
     updateZona();
     if (MODULOS.riesgos) state.evaluacion = Riesgos.leerEvaluacion(lat, lon);
-    $('welcome').hidden = true;
-    $('ficha').hidden = false;
-    $('map-hint').classList.add('oculto');
-    $('point-distrito').textContent = 'Buscando distrito…';
     updateEntorno();
     if (MODULOS.desastre) updatePeligro();
-    updateDistrito(); // el distrito se muestra siempre como referencia; la zona sísmica solo con su módulo
+    if (state.distritoStatus === 'none' || state.distritoStatus === 'error') updateDistrito();
     if (MODULOS.seguridad) updateDelito();
     renderResumen();
-    $('point-info').innerHTML = `${lat.toFixed(6)}, ${lon.toFixed(6)} · <a href="https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=18/${lat}/${lon}" target="_blank" rel="noopener">ver en OSM</a>`;
   }
 
-  map.on('click', (e) => setPoint(e.latlng.lat, e.latlng.lng));
+  function limpiarMapa() {
+    if (state.zonOutline) { map.removeLayer(state.zonOutline); state.zonOutline = null; }
+    limpiarEntornoMapa();
+  }
+
+  $('btn-cambiar').addEventListener('click', () => {
+    limpiarMapa();
+    aplicarFlujo(Onboarding.transicion(state.flujo, 'cambiar'));
+    $('q').focus();
+  });
+
+  // «Nueva consulta»: vuelve al inicio sin punto ni resultados.
+  $('btn-nueva').addEventListener('click', () => {
+    ['zonaSeq', 'entornoSeq', 'peligroSeq', 'distritoSeq', 'delitoSeq'].forEach((k) => { state[k] += 1; });
+    limpiarMapa();
+    if (state.pointMarker) { map.removeLayer(state.pointMarker); state.pointMarker = null; }
+    if (state.ring) { map.removeLayer(state.ring); state.ring = null; }
+    Object.assign(state, {
+      point: null, etiqueta: '', etiquetaOrigen: null, distritoTexto: '', zona: null, zonaStatus: 'none', entorno: null, entornoStatus: 'none',
+      distrito: null, distritoStatus: 'none', peligro: null, peligroStatus: 'none', delito: null, evaluacion: {},
+    });
+    $('lote').value = '';
+    $('q').value = '';
+    $('zon-calc').innerHTML = '';
+    $('search-results').innerHTML = '';
+    $('search-status').textContent = '';
+    showSearchPop(false);
+    $('ubicacion-estado').textContent = '';
+    $('confirmar-aviso').textContent = '';
+    $('map-hint').classList.remove('oculto');
+    map.setView(CONFIG.center, CONFIG.zoom, { animate: false });
+    aplicarFlujo(Onboarding.transicion(state.flujo, 'nueva'));
+    $('q').focus();
+  });
+
+  // ------------------------------------------------------------ Usar mi ubicación
+  $('usar-ubicacion').addEventListener('click', () => {
+    const estado = $('ubicacion-estado');
+    const mensaje = (texto, error = false) => { estado.textContent = texto; estado.classList.toggle('error', error); };
+    if (!navigator.geolocation) { mensaje('Este navegador no puede darnos tu ubicación. Escribe una dirección o toca el mapa.', true); return; }
+    const boton = $('usar-ubicacion');
+    boton.disabled = true;
+    mensaje('Buscando tu ubicación…');
+    navigator.geolocation.getCurrentPosition((pos) => {
+      boton.disabled = false;
+      const { latitude: lat, longitude: lon, accuracy } = pos.coords;
+      if (!Onboarding.dentroDeCaja(lat, lon, CONFIG.viewbox)) {
+        mensaje('Tu ubicación parece estar fuera de Arequipa metropolitana. Escribe una dirección o toca el mapa.', true);
+        return;
+      }
+      mensaje('');
+      const aviso = accuracy > 150 ? `La ubicación del dispositivo tiene un margen de unos ${Math.round(accuracy)} m: revisa que el marcador esté sobre tu predio.` : '';
+      colocarPunto(lat, lon, { etiqueta: 'Tu ubicación', vista: 17, aviso });
+    }, (err) => {
+      boton.disabled = false;
+      mensaje(err.code === 1
+        ? 'No tenemos permiso para ver tu ubicación. Puedes permitirlo en el navegador, escribir una dirección o tocar el mapa.'
+        : 'No pudimos obtener tu ubicación. Escribe una dirección o toca el mapa.', true);
+    }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
+  });
+
+  // ------------------------------------------------------------ Ayuda y consejo (nada es obligatorio)
+  const dlgAyuda = $('ayuda');
+  const abrirAyuda = () => { if (typeof dlgAyuda.showModal === 'function') dlgAyuda.showModal(); else dlgAyuda.setAttribute('open', ''); };
+  const cerrarAyuda = () => { if (typeof dlgAyuda.close === 'function') dlgAyuda.close(); else dlgAyuda.removeAttribute('open'); };
+  $('ayuda-btn').addEventListener('click', abrirAyuda);
+  $('ayuda-cerrar').addEventListener('click', cerrarAyuda);
+  $('ayuda-ok').addEventListener('click', cerrarAyuda);
+  dlgAyuda.addEventListener('click', (e) => { if (e.target === dlgAyuda) cerrarAyuda(); });
+
+  $('consejo-ok').addEventListener('click', () => {
+    Onboarding.marcarConsejoVisto(almacen());
+    $('consejo').hidden = true;
+    $('zona-h').tabIndex = -1;
+    $('zona-h').focus();
+  });
 
   // ------------------------------------------------------------ Zonificación
   const fmtNum = (n) => Math.round(n).toLocaleString('es-PE');
   const has = (v) => v !== null && v !== undefined && v !== '';
+  // `cls` lo usan los avisos de módulos y el PDF; `clase` e `ico` dibujan la etiqueta con icono + texto.
   const ZON_BADGE = {
-    si: { cls: 'ok', text: 'Construible' },
-    condicionado: { cls: 'warn', text: 'Requiere consulta' },
-    no: { cls: 'no', text: 'No construible' },
+    si: { cls: 'ok', text: 'Construible', clase: 'cumple', ico: 'cumple' },
+    condicionado: { cls: 'warn', text: 'Requiere consulta', clase: 'parcial', ico: 'aviso' },
+    no: { cls: 'no', text: 'No construible', clase: 'nocumple', ico: 'nocumple' },
+  };
+  const ZON_SIN_REGLAS = { cls: 'warn', text: 'Sin reglas en la tabla', clase: 'sindato', ico: 'sindato' };
+  const ZON_SIGNIFICADO = {
+    si: 'En esta zona el plano permite construir. Los parámetros de abajo fijan cuánto y cómo.',
+    condicionado: 'En esta zona lo que se puede construir depende de la zona vecina, de un plan específico o de una norma especial. Consulta a la municipalidad.',
+    no: 'En esta zona el plano no prevé construir vivienda ni usos comunes. La nota de abajo explica el motivo.',
   };
 
-  $('zon-fuente').textContent = `Fuente: ${CONFIG.zonificacion.fuente}. Referencial: no reemplaza los certificados municipales.`;
+  $('zon-fuente').innerHTML = `<b>Fuente:</b> ${esc(CONFIG.zonificacion.fuente)} · <b>Fecha:</b> plano vigente 2016-2025 · <b>Método:</b> se ubica el punto dentro de los polígonos del plano. Es referencial: no reemplaza los certificados municipales.`;
 
   // V1b Zonificación proyectada: solo un aviso de texto, y únicamente si CONFIG.estadoPDM tiene fuente y fecha.
   const avisoPDM = Calculos.avisoPDMProyectado(CONFIG.estadoPDM);
@@ -226,16 +415,20 @@
   if (avisoPDM) {
     const f = enlaceSeguro(avisoPDM.url) ? `<a href="${esc(avisoPDM.url)}" target="_blank" rel="noopener">${esc(avisoPDM.fuente)}</a>` : esc(avisoPDM.fuente);
     $('pdm-aviso').innerHTML = `
-      <div class="pdm-aviso">
-        <strong>Zonificación proyectada (PDM nuevo)</strong>
-        <p>${esc(avisoPDM.texto)}</p>
-        <p class="small muted">Fuente: ${f}, ${esc(avisoPDM.fecha)}. Es una nota de prensa, no un documento oficial; no hay mapa de la zonificación proyectada.</p>
+      <div class="pdm-aviso" role="note">
+        ${icono('info', 'ico-lg')}
+        <div>
+          <strong>Zonificación proyectada (PDM nuevo)</strong>
+          <p>${esc(avisoPDM.texto)}</p>
+          <p class="small muted">Fuente: ${f} · Fecha: ${esc(avisoPDM.fecha)}. Es una nota de prensa, no un documento oficial; no hay mapa de la zonificación proyectada.</p>
+        </div>
       </div>`;
     $('credito-pdm').innerHTML = `${f} (${esc(avisoPDM.fecha)})`;
   }
 
   function zonMessage(kind, html) {
     $('zon').innerHTML = `<p class="zon-msg ${kind}">${html}</p>`;
+    $('zona-card').setAttribute('aria-busy', String(kind === 'loading'));
   }
 
   // «5 (hasta 6)» cuando la regla tiene un caso base y un máximo distintos.
@@ -268,16 +461,21 @@
     return html;
   }
 
+  function renderCalculo() {
+    $('zon-calc').innerHTML = state.zonaStatus === 'ok' ? potencialHtml(state.zona.regla) : '';
+  }
+
   function renderZona() {
     if (state.zonaStatus === 'outside') {
       zonMessage('empty', '<strong>Este punto está fuera del área zonificada.</strong> El plano no le asigna ninguna zona.');
+      renderCalculo();
       return;
     }
     if (state.zonaStatus !== 'ok') return;
 
     const z = state.zona;
     const r = z.regla;
-    const badge = ZON_BADGE[r && r.edificable] || { cls: 'warn', text: 'Sin reglas en la tabla' };
+    const badge = ZON_BADGE[r && r.edificable] || ZON_SIN_REGLAS;
     const filas = [];
     if (r) {
       if (has(r.pisos_base)) filas.push(['Pisos', baseMax(r.pisos_base, r.pisos_max)]);
@@ -290,24 +488,28 @@
     const b = z.borde;
     const nombreVecina = b && b.alerta ? ((state.reglas && state.reglas[b.codigo]) || {}).nombre : '';
     const alertaBorde = b && b.alerta
-      ? `<p class="zon-msg empty alerta-borde"><strong>Punto cerca del borde de la zona.</strong> A ${fmtDist(b.distanciaM)} (en línea recta) hay otra zona: <strong>${esc(b.codigo)}</strong>${nombreVecina ? ` · ${esc(nombreVecina)}` : ''}. El plano se extrajo de un PDF y cerca de un borde el resultado puede no ser exacto: confirma la zona con el certificado municipal. Aviso a ${b.umbralM} m o menos (convención del proyecto).</p>`
+      ? `<div class="alerta-borde" role="note">${icono('aviso', 'ico-lg')}<p><strong>Punto cerca del borde de la zona.</strong> A ${fmtDist(b.distanciaM)} (en línea recta) hay otra zona: <strong>${esc(b.codigo)}</strong>${nombreVecina ? ` · ${esc(nombreVecina)}` : ''}. El plano se extrajo de un PDF y cerca de un borde el resultado puede no ser exacto: confirma la zona con el certificado municipal. Aviso a ${b.umbralM} m o menos (convención del proyecto).</p></div>`
       : '';
+    const significado = r ? ZON_SIGNIFICADO[r.edificable] : 'El código del plano no está en la tabla de reglas de esta herramienta: confirma la zona con la municipalidad.';
 
     $('zon').innerHTML = `
       ${alertaBorde}
-      <div class="zon-card">
-        <div class="zon-head">
-          <span class="swatch" style="background:${esc(z.color)}"></span>
-          <span class="zon-code">${esc(z.codigo)}</span>
-          <span class="zon-name">${esc(r ? r.nombre : 'Código sin reglas en la tabla')}</span>
-          <span class="badge ${badge.cls}">${badge.text}</span>
+      <div class="zona-ficha">
+        <div class="zona-rotulo">
+          <span class="zona-codigo" style="--zona-color:${esc(z.color)}">${esc(z.codigo)}</span>
+          <div class="zona-titulo">
+            <p class="zona-nombre">${esc(r ? r.nombre : 'Código sin reglas en la tabla')}</p>
+            <span class="estado ${badge.clase}">${icono(badge.ico)}${esc(badge.text)}</span>
+          </div>
         </div>
-        ${filas.length ? `<dl class="zon-data">${filas.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>` : ''}
-        ${filas.length ? `<p class="zon-nota small">Parámetros del Reglamento del PDM Arequipa 2016-2025, Título III${r && r.articulo ? ` (${esc(r.articulo)})` : ''}.</p>` : ''}
-        ${r && r.nota ? `<p class="zon-nota small">${esc(r.nota)}</p>` : ''}
-        ${potencialHtml(r)}
-        ${z.coincidencias > 1 ? `<p class="zon-nota small">El plano tiene ${z.coincidencias} zonas superpuestas en este punto; se muestra la que queda encima.</p>` : ''}
+        ${significado ? `<p class="zona-significado">${esc(significado)}</p>` : ''}
+        ${filas.length ? `<dl class="param-lista">${filas.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>` : ''}
+        ${filas.length ? `<p class="zon-nota">Parámetros del Reglamento del PDM Arequipa 2016-2025, Título III${r && r.articulo ? ` (${esc(r.articulo)})` : ''}.</p>` : ''}
+        ${r && r.nota ? `<p class="zon-nota">${esc(r.nota)}</p>` : ''}
+        ${z.coincidencias > 1 ? `<p class="zon-nota">El plano tiene ${z.coincidencias} zonas superpuestas en este punto; se muestra la que queda encima.</p>` : ''}
       </div>`;
+    $('zona-card').setAttribute('aria-busy', 'false');
+    renderCalculo();
   }
 
   async function updateZona() {
@@ -336,7 +538,7 @@
     }
   }
 
-  $('lote').addEventListener('input', () => { renderZona(); renderResumen(); });
+  $('lote').addEventListener('input', () => { renderCalculo(); renderResumen(); });
 
   // ------------------------------------------------------------------ Peligros
   $('pel-fuente').textContent = `Fuente: ${CONFIG.peligros.fuente}. Es un inventario de eventos documentados: que no haya registros no significa que el lugar sea seguro.`;
@@ -446,12 +648,14 @@
       if (seq !== state.distritoSeq) return; // el usuario ya eligió otro punto
       state.distrito = d;
       state.distritoStatus = d ? 'ok' : 'outside';
-      $('point-distrito').textContent = d ? `Distrito de ${capitalizar(d.distrito)}` : 'Fuera de los distritos de Arequipa metropolitana';
+      state.distritoTexto = d ? `Distrito de ${capitalizar(d.distrito)}` : 'Fuera de los distritos de Arequipa metropolitana';
+      refrescarTextoPunto();
     } catch (err) {
       if (seq !== state.distritoSeq) return;
       state.distritoStatus = 'error';
       state.distritoError = err.message;
-      $('point-distrito').textContent = 'Punto seleccionado';
+      state.distritoTexto = '';
+      refrescarTextoPunto();
       console.error('[Distritos] fallo', err);
     }
     renderSismo();
@@ -459,129 +663,39 @@
   }
 
   // ------------------------------------------------------------------ Resumen
-  // Una tarjeta por tipo de riesgo con el dato tal cual lo entrega cada fuente (sin puntaje ni semáforo global).
-  // Al hacer clic se abre la pestaña con el detalle.
-  function tarjeta({ tab, kicker, valor, detalle, badge, wide, cargando }) {
-    return `
-      <button type="button" class="sum-card ${tab}${wide ? ' wide' : ''}${cargando ? ' loading' : ''}" data-tab="${tab}">
-        <span class="sum-kicker">${kicker}</span>
-        <span class="sum-value">${valor}</span>
-        ${detalle ? `<span class="sum-detail">${detalle}</span>` : ''}
-        ${badge ? `<span class="badge ${badge.cls}">${esc(badge.text)}</span>` : ''}
-        <span class="sum-go">Ver detalle →</span>
-      </button>`;
-  }
-  const cargandoHtml = '<span class="spinner"></span>Consultando…';
+  // La pantalla ya no tiene tarjetas de resumen: cada dato se lee en su propia tarjeta. Aquí solo se refrescan el
+  // registro de riesgos (si su módulo está activo) y el anuncio para lectores de pantalla cuando el reporte está listo.
   const fmtCorto = (n) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1).replace('.', ',')} k` : String(n));
 
-  function setBadge(id, texto, cls = '') {
-    const el = $(`badge-${id}`);
-    el.textContent = texto ?? '';
-    el.className = `tab-badge${cls ? ` ${cls}` : ''}`;
+  function textoResumen() {
+    const partes = [];
+    if (state.zonaStatus === 'ok') {
+      const r = state.zona.regla;
+      partes.push(`Zonificación ${state.zona.codigo}${r ? `, ${r.nombre}` : ''}`);
+    } else if (state.zonaStatus === 'outside') {
+      partes.push('El punto está fuera del área zonificada');
+    }
+    const e = state.entorno;
+    if (e) {
+      const t = (r) => `${r.estado.toLowerCase()}${r.distanciaM !== null ? `, ${fmtDist(r.distanciaM)}` : ''}`;
+      partes.push(`Salud: ${t(e.salud)}`);
+      const niv = Equipamiento.NIVELES;
+      partes.push(`Colegio: ${niv.filter((n) => e.educacion[n].estado === 'CUMPLE').length} de ${niv.length} niveles cumplen`);
+      partes.push(`Paradero: ${t(e.transporte)}`);
+      partes.push(`Área verde: ${t(e.areaVerde)}`);
+    }
+    return `Reporte listo. ${partes.join('. ')}.`;
   }
 
   function renderResumen() {
     if (!state.point) return;
     if (MODULOS.riesgos) renderRiesgos();
-    const cards = [];
-
-    // Zonificación (V1a vigente y V1b proyectada)
-    const aviso = avisoPDM ? '<br><strong>Aviso:</strong> el nuevo PDM no está aprobado; la zonificación puede cambiar.' : '';
-    if (state.zonaStatus === 'ok') {
-      const r = state.zona.regla;
-      const badge = ZON_BADGE[r && r.edificable];
-      const borde = state.zona.borde && state.zona.borde.alerta ? `<br><strong>Cerca del borde:</strong> otra zona (${esc(state.zona.borde.codigo)}) a ${fmtDist(state.zona.borde.distanciaM)}.` : '';
-      cards.push(tarjeta({ tab: 'normativo', kicker: 'Zonificación vigente', valor: esc(state.zona.codigo), detalle: `${esc(r ? r.nombre : 'Código sin reglas en la tabla')}${borde}${aviso}`, badge, wide: true }));
-      setBadge('normativo', state.zona.codigo, state.zona.borde && state.zona.borde.alerta ? 'alerta' : '');
-    } else if (state.zonaStatus === 'outside') {
-      cards.push(tarjeta({ tab: 'normativo', kicker: 'Zonificación vigente', valor: 'Sin zona', detalle: `El punto está fuera del área zonificada del plano.${aviso}`, badge: { cls: 'warn', text: 'Fuera del plano' }, wide: true }));
-      setBadge('normativo', '—');
-    } else if (state.zonaStatus === 'error') {
-      cards.push(tarjeta({ tab: 'normativo', kicker: 'Zonificación vigente', valor: 'No disponible', detalle: 'No se pudo consultar la zonificación.', wide: true }));
-      setBadge('normativo', '');
-    } else {
-      cards.push(tarjeta({ tab: 'normativo', kicker: 'Zonificación vigente', valor: cargandoHtml, cargando: true, wide: true }));
-      setBadge('normativo', '');
+    const listo = state.zonaStatus !== 'none' && state.zonaStatus !== 'loading' && state.entorno;
+    if (listo && !state.anunciado && state.flujo.paso === 'reporte') {
+      state.anunciado = true;
+      anunciar(textoResumen());
     }
-
-    // Servicios (V2 a V5)
-    const e = state.entorno;
-    const kicker = (v) => `${VARIABLES[v].icono} ${VARIABLES[v].titulo}`;
-    const estadoBadgeResumen = (r) => ({ cls: ESTADO_CLS[r.estado], text: r.estado });
-    const valorDist = (r) => (r.distanciaM === null ? 'Sin distancia' : r.distanciaM === 0 ? 'Dentro del área' : `${fmtDist(r.distanciaM)} en línea recta`);
-    const detalleDe = (r) => (r.error ? 'No se pudo obtener el dato.' : r.nombre ? `${esc(r.nombre)} · umbral ${fmtUmbral(r.umbralM)}` : `Umbral ${fmtUmbral(r.umbralM)}`);
-    if (e) {
-      cards.push(tarjeta({ tab: 'entorno', kicker: kicker('salud'), valor: valorDist(e.salud), detalle: detalleDe(e.salud), badge: estadoBadgeResumen(e.salud) }));
-      const niveles = Equipamiento.NIVELES;
-      const cumplen = niveles.filter((n) => e.educacion[n].estado === 'CUMPLE').length;
-      cards.push(tarjeta({
-        tab: 'entorno', kicker: kicker('educacion'), valor: `${cumplen} de ${niveles.length} niveles`,
-        detalle: niveles.map((n) => `${n[0].toUpperCase()}${n.slice(1)}: ${e.educacion[n].estado.toLowerCase()}${e.educacion[n].distanciaM !== null ? ` (${fmtDist(e.educacion[n].distanciaM)})` : ''}`).join('<br>'),
-        badge: { cls: cumplen === niveles.length ? 'ok' : cumplen === 0 ? 'no' : 'warn', text: cumplen === niveles.length ? 'CUMPLE' : cumplen === 0 ? 'NO CUMPLE' : 'PARCIAL' },
-      }));
-      cards.push(tarjeta({ tab: 'entorno', kicker: kicker('transporte'), valor: valorDist(e.transporte), detalle: detalleDe(e.transporte), badge: estadoBadgeResumen(e.transporte) }));
-      cards.push(tarjeta({ tab: 'entorno', kicker: kicker('areaVerde'), valor: valorDist(e.areaVerde), detalle: detalleDe(e.areaVerde), badge: estadoBadgeResumen(e.areaVerde) }));
-      const todos = [e.salud, ...niveles.map((n) => e.educacion[n]), e.transporte, e.areaVerde];
-      setBadge('entorno', `${todos.filter((r) => r.estado === 'CUMPLE').length}/${todos.length}`);
-    } else {
-      ['salud', 'educacion', 'transporte', 'areaVerde'].forEach((v) => cards.push(tarjeta({ tab: 'entorno', kicker: kicker(v), valor: cargandoHtml, cargando: true })));
-      setBadge('entorno', '');
-    }
-
-    // Módulos fuera de alcance (solo si CONFIG.modulos o ?modulos=todos los activan)
-    if (MODULOS.desastre || MODULOS.sismica) {
-      if (state.peligroStatus === 'ok' && MODULOS.desastre) {
-        const p = state.peligro;
-        const det = [`El más cercano a ${fmtDist(p.masCercano.distancia)}.`];
-        if (MODULOS.sismica && state.distritoStatus === 'ok') det.push(`Zona sísmica ${esc(state.distrito.zona)} (Z = ${esc(String(state.distrito.z).replace('.', ','))}).`);
-        cards.push(tarjeta({
-          tab: 'desastre', kicker: 'Desastre',
-          valor: `${fmtNum(p.total)} peligro${p.total === 1 ? '' : 's'} a ${p.radio} m`,
-          detalle: det.join(' '),
-          badge: enZonaRiesgo() ? { cls: 'no', text: `Zona de riesgo en el plano (${state.zona.codigo})` } : null,
-        }));
-        setBadge('desastre', enZonaRiesgo() ? '!' : String(p.total), enZonaRiesgo() ? 'alerta' : '');
-      } else if (state.peligroStatus === 'error') {
-        cards.push(tarjeta({ tab: 'desastre', kicker: 'Desastre', valor: 'No disponible', detalle: 'No se pudo consultar el inventario de peligros.' }));
-      } else if (MODULOS.desastre) {
-        cards.push(tarjeta({ tab: 'desastre', kicker: 'Desastre', valor: cargandoHtml, cargando: true }));
-      } else if (state.distritoStatus === 'ok') {
-        cards.push(tarjeta({ tab: 'desastre', kicker: 'Peligro sísmico', valor: `Zona ${esc(state.distrito.zona)}`, detalle: `Z = ${esc(String(state.distrito.z).replace('.', ','))} · Norma E.030 2026` }));
-      }
-    }
-
-    if (MODULOS.seguridad) {
-      if (state.delito) {
-        const { total, ROBO, HURTO } = state.delito.conteo;
-        cards.push(tarjeta({ tab: 'seguridad', kicker: 'Seguridad', valor: `${fmtNum(total)} denuncias`, detalle: `${fmtNum(ROBO)} robos · ${fmtNum(HURTO)} hurtos · ${state.delito.radio} m · ${state.delito.meta.meses} meses` }));
-        setBadge('seguridad', fmtCorto(total));
-      } else if (state.delitoError) {
-        cards.push(tarjeta({ tab: 'seguridad', kicker: 'Seguridad', valor: 'No disponible', detalle: 'No se pudo calcular el indicador de denuncias.' }));
-      } else {
-        cards.push(tarjeta({ tab: 'seguridad', kicker: 'Seguridad', valor: cargandoHtml, cargando: true }));
-      }
-    }
-
-    if (MODULOS.riesgos) {
-      const rs = state.riesgos || [];
-      const ev = state.evaluacion;
-      const evaluados = rs.filter((r) => Riesgos.nivel(ev[r.id]?.p, ev[r.id]?.i));
-      const altos = evaluados.filter((r) => Riesgos.nivel(ev[r.id].p, ev[r.id].i).texto === 'Alto').length;
-      cards.push(tarjeta({
-        tab: 'riesgos', kicker: 'Gestión de riesgos', wide: true,
-        valor: `${rs.length} riesgos identificados`,
-        detalle: evaluados.length ? `${evaluados.length} evaluados por ti · ${altos} de nivel alto.` : 'Evalúa la probabilidad y el impacto de cada uno y elige qué harás.',
-      }));
-      setBadge('riesgos', rs.length ? String(rs.length) : '', 'accent');
-    }
-
-    $('resumen').innerHTML = cards.join('');
   }
-
-  $('resumen').addEventListener('click', (e) => {
-    const card = e.target.closest('.sum-card');
-    if (card) selectTab(card.dataset.tab);
-  });
 
   // ------------------------------------------------------------ Gestión de riesgos
   function contextoRiesgos() {
@@ -853,13 +967,13 @@
 
     searching = true;
     $('search-btn').disabled = true;
-    box.textContent = 'Buscando en Nominatim…';
+    box.textContent = 'Buscando la dirección…';
     try {
-      const { results, cached, ms } = await Services.geocode(q, { bounded: $('bounded').checked });
+      const { results } = await Services.geocode(q, { bounded: $('bounded').checked });
       if (results.length === 0) {
-        box.innerHTML = 'Nominatim no encontró coincidencias. Prueba con otro formato (calle y distrito) o desmarca «Limitar la búsqueda a Arequipa».';
+        box.textContent = 'No encontramos esa dirección. Prueba con la calle y el distrito, o desmarca «Buscar solo en Arequipa». También puedes tocar el mapa.';
       } else {
-        box.textContent = cached ? 'Resultados (búsqueda repetida, sin nueva solicitud):' : `Resultados (${ms} ms). Elige uno:`;
+        box.textContent = results.length === 1 ? 'Encontramos este lugar. Tócalo para elegirlo:' : 'Elige el lugar que buscas:';
         results.forEach((r) => {
           const li = document.createElement('li');
           const b = document.createElement('button');
@@ -869,15 +983,14 @@
             list.innerHTML = '';
             box.textContent = '';
             showSearchPop(false);
-            setPoint(r.lat, r.lon);
-            map.setView([r.lat, r.lon], 16);
+            colocarPunto(r.lat, r.lon, { etiqueta: etiquetaCorta(r.name), vista: 17 });
           });
           li.appendChild(b);
           list.appendChild(li);
         });
       }
     } catch (err) {
-      box.innerHTML = `<span style="color:var(--danger)">${esc(describeError(err, 'Nominatim').title)}</span>`;
+      box.innerHTML = `<span class="texto-error">No pudimos buscar la dirección. ${esc(describeError(err, 'Nominatim').title)} Toca el mapa para elegir el punto.</span>`;
     } finally {
       searching = false;
       $('search-btn').disabled = false;
@@ -903,64 +1016,92 @@
   }
 
   // ------------------------------------------------------------ Servicios (V2 a V5)
+  // Cada estado lleva icono y texto (la forma del icono también lo distingue), nunca solo color.
   const ESTADO_CLS = { CUMPLE: 'ok', 'NO CUMPLE': 'no', 'SIN DATO': 'warn' };
-  const estadoBadge = (estado) => `<span class="badge ${ESTADO_CLS[estado]}">${estado}</span>`;
+  const ESTADO_UI = {
+    CUMPLE: { clase: 'cumple', ico: 'cumple' },
+    'NO CUMPLE': { clase: 'nocumple', ico: 'nocumple' },
+    'SIN DATO': { clase: 'sindato', ico: 'sindato' },
+    PARCIAL: { clase: 'parcial', ico: 'parcial' },
+  };
+  const estadoBadge = (estado, texto) => `<span class="estado ${ESTADO_UI[estado].clase}">${icono(ESTADO_UI[estado].ico)}${esc(texto || estado)}</span>`;
   const fmtArea = (m2) => `${fmtNum(m2)} m² (${(m2 / 10000).toFixed(2).replace('.', ',')} ha)`;
-  const distTexto = (r) => (r.distanciaM === 0 ? 'el punto está dentro del área' : `${fmtDist(r.distanciaM)} en línea recta`);
+  const fmtFechaDato = (iso) => (iso ? new Date(`${iso}T12:00:00Z`).toLocaleDateString('es-PE', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }) : 'sin fecha');
   const NIVEL_TXT = { inicial: 'Inicial', primaria: 'Primaria', secundaria: 'Secundaria' };
+  const SIN_DATO_TXT = 'Puede existir pero no estar en nuestros datos: OpenStreetMap es un mapa colaborativo.';
 
-  // Línea principal de un resultado: más cercano, distancia y umbral (o por qué no hay dato).
-  function lineaResultado(r, textos) {
+  // Distancia grande y, debajo, el nombre del más cercano.
+  function datoPrincipal(r) {
     if (r.error) return `<p class="zon-msg error"><strong>No se pudo obtener el dato.</strong> ${esc(r.error)}</p>`;
-    if (r.estado === 'SIN DATO') return `<p class="var-main muted">${textos.sinDato}</p>`;
-    if (r.distanciaM === null) return `<p class="var-main muted">${textos.sinDistancia} (umbral: ${fmtUmbral(r.umbralM)}).</p>`;
-    return `<p class="var-main"><strong>${esc(r.nombre)}</strong> · ${distTexto(r)} <span class="muted">(umbral: ${fmtUmbral(r.umbralM)})</span></p>`;
+    if (r.distanciaM === null) return '';
+    const dist = r.distanciaM === 0 ? '0 m' : fmtDist(r.distanciaM);
+    return `<div class="var-dato">
+      <p class="var-dist">${dist} <small>${r.distanciaM === 0 ? 'el punto está dentro del área' : 'en línea recta'}</small></p>
+      <p class="var-nombre">${esc(r.nombre)}</p>
+    </div>`;
   }
-  const metodoHtml = (r) => `<details class="var-metodo"><summary>Método</summary><p>${esc(r.metodo)}</p></details>`;
-  const fuenteHtml = (r) => `<p class="var-meta">Fuente: ${esc(r.fuente)}${r.fecha ? `, datos extraídos el ${esc(r.fecha)}` : ''}.</p>`;
 
-  function tarjetaVariable(v, estado, cuerpo) {
+  // Explicación en una frase: qué significa el estado frente a la distancia de referencia.
+  function explicacion(r, cosa) {
+    if (r.error) return '';
+    if (r.estado === 'SIN DATO') return `<p class="var-vacio"><strong>Sin dato.</strong> No hay ${cosa} en nuestros datos. ${SIN_DATO_TXT}</p>`;
+    if (r.distanciaM === null) return `<p class="var-explica">No se encontró ${cosa} dentro de los datos cercanos. Distancia de referencia: ${fmtUmbral(r.umbralM)}.</p>`;
+    return `<p class="var-explica">${r.estado === 'CUMPLE' ? `Está dentro de la distancia de referencia (${fmtUmbral(r.umbralM)}).` : `Está más lejos que la distancia de referencia (${fmtUmbral(r.umbralM)}).`}</p>`;
+  }
+
+  // Línea «Fuente · Fecha · Método» de cada tarjeta, con el método completo desplegable.
+  function lineaFuente(r, metodoCorto) {
+    return `<p class="var-meta"><b>Fuente:</b> ${esc(r.fuente)} · <b>Fecha:</b> ${esc(fmtFechaDato(r.fecha))} · <b>Método:</b> ${esc(metodoCorto)}</p>
+      <details class="var-metodo"><summary>Cómo se calculó</summary><p>${esc(r.metodo)}</p></details>`;
+  }
+
+  function tarjetaVariable(v, estado, cuerpo, textoEstado) {
     return `<article class="var-card">
-      <header class="var-head"><span class="var-icon" style="background:${v.color}">${v.icono}</span><h3>${v.titulo}</h3>${estadoBadge(estado)}</header>
+      <header class="var-head"><span class="var-icon${v.icono === 'verde' ? ' verde' : ''}">${icono(v.icono)}</span><h4>${v.titulo}</h4>${estadoBadge(estado, textoEstado)}</header>
       ${cuerpo}
     </article>`;
   }
 
   function renderEntorno() {
     const e = state.entorno;
-    const salud = tarjetaVariable(VARIABLES.salud, e.salud.estado,
-      lineaResultado(e.salud, { sinDato: 'No hay establecimientos de salud en los datos de OpenStreetMap.', sinDistancia: 'No se encontró ninguno cerca' })
-      + (e.salud.etiqueta ? `<p class="var-meta">Etiqueta de OSM: <code>${esc(e.salud.etiqueta)}</code></p>` : '') + fuenteHtml(e.salud) + metodoHtml(e.salud));
+    const etiq = (r) => (r.etiqueta ? `<p class="var-meta">Etiqueta de OpenStreetMap: <code>${esc(r.etiqueta)}</code></p>` : '');
+    const corto = (r) => `línea recta al más cercano, referencia ${fmtUmbral(r.umbralM)}`;
 
-    const peor = Equipamiento.NIVELES.map((n) => e.educacion[n]);
+    const salud = tarjetaVariable(VARIABLES.salud, e.salud.estado,
+      datoPrincipal(e.salud) + explicacion(e.salud, 'establecimientos de salud') + etiq(e.salud) + lineaFuente(e.salud, corto(e.salud)));
+
     const niveles = Equipamiento.NIVELES.map((n) => {
       const r = e.educacion[n];
       return `<div class="var-nivel">
         <div class="var-nivel-head"><strong>${NIVEL_TXT[n]}</strong>${estadoBadge(r.estado)}</div>
-        ${lineaResultado(r, { sinDato: `No hay colegios de nivel ${n} en los datos de OpenStreetMap.`, sinDistancia: 'No se encontró ninguno cerca' })}
-        ${r.etiqueta ? `<p class="var-meta">Etiqueta de OSM: <code>${esc(r.etiqueta)}</code></p>` : ''}
-        ${metodoHtml(r)}
+        ${datoPrincipal(r)}
+        ${explicacion(r, `colegios de nivel ${n}`)}
+        ${etiq(r)}
+        <details class="var-metodo"><summary>Cómo se calculó</summary><p>${esc(r.metodo)}</p></details>
       </div>`;
     }).join('');
-    const cumplen = peor.filter((r) => r.estado === 'CUMPLE').length;
-    const estadoEdu = cumplen === peor.length ? 'CUMPLE' : peor.every((r) => r.estado === 'SIN DATO') ? 'SIN DATO' : 'NO CUMPLE';
-    const educacion = tarjetaVariable(VARIABLES.educacion, estadoEdu, `${niveles}
-      <p class="var-meta">OSM casi no etiqueta el nivel de los colegios: uno sin nivel se toma como candidato a primaria y secundaria; los jardines cuentan como inicial.</p>
-      ${fuenteHtml(e.educacion.inicial)}`);
+    const edu = Equipamiento.NIVELES.map((n) => e.educacion[n]);
+    const cumplen = edu.filter((r) => r.estado === 'CUMPLE').length;
+    const estadoEdu = cumplen === edu.length ? 'CUMPLE' : edu.every((r) => r.estado === 'SIN DATO') ? 'SIN DATO' : cumplen === 0 ? 'NO CUMPLE' : 'PARCIAL';
+    const textoEdu = estadoEdu === 'PARCIAL' ? `${cumplen} de ${edu.length} niveles` : null;
+    const educacion = tarjetaVariable(VARIABLES.educacion, estadoEdu, `<div class="var-niveles">${niveles}</div>
+      <p class="var-meta">OpenStreetMap casi no etiqueta el nivel de los colegios: uno sin nivel se toma como candidato a primaria y secundaria; los jardines cuentan como inicial.</p>
+      <p class="var-meta"><b>Fuente:</b> ${esc(e.educacion.inicial.fuente)} · <b>Fecha:</b> ${esc(fmtFechaDato(e.educacion.inicial.fecha))} · <b>Método:</b> línea recta al más cercano de cada nivel, referencia ${fmtUmbral(e.educacion.inicial.umbralM)} / ${fmtUmbral(e.educacion.primaria.umbralM)} / ${fmtUmbral(e.educacion.secundaria.umbralM)}</p>`, textoEdu);
 
     const transporte = tarjetaVariable(VARIABLES.transporte, e.transporte.estado,
-      lineaResultado(e.transporte, { sinDato: 'No hay paraderos en los datos de OpenStreetMap.', sinDistancia: 'No se encontró ninguno cerca' })
-      + (e.transporte.etiqueta ? `<p class="var-meta">Etiqueta de OSM: <code>${esc(e.transporte.etiqueta)}</code></p>` : '') + fuenteHtml(e.transporte) + metodoHtml(e.transporte));
+      datoPrincipal(e.transporte) + explicacion(e.transporte, 'paraderos') + etiq(e.transporte) + lineaFuente(e.transporte, corto(e.transporte)));
 
     const v = e.areaVerde;
     const u = CONFIG.umbrales.areaVerde;
     const sens = v.error || v.estado === 'SIN DATO' ? '' : `<p class="var-meta">Superficie: ${v.areaM2 ? fmtArea(v.areaM2) : '—'}. Con el criterio más estricto (al menos ${fmtNum(u.areaGrandeM2)} m², 1 ha): ${v.cumple1ha ? `también hay una a ${fmtDist(v.distancia1haM)} (${esc(v.nombre1ha)})` : `no hay ninguna a ${u.distanciaM} m o menos`}.</p>`;
     const areaVerde = tarjetaVariable(VARIABLES.areaVerde, v.estado,
-      lineaResultado(v, { sinDato: 'No hay áreas verdes en los datos de OpenStreetMap.', sinDistancia: `Ninguna área verde de los datos mide al menos ${fmtNum(u.areaMinM2)} m²` })
-      + `<p class="var-meta">Criterio: un área verde de al menos ${fmtNum(u.areaMinM2)} m² a ${u.distanciaM} m o menos.</p>` + sens + fuenteHtml(v) + metodoHtml(v));
+      datoPrincipal(v) + explicacion(v, 'áreas verdes')
+      + `<p class="var-meta">Criterio: un área verde de al menos ${fmtNum(u.areaMinM2)} m² a ${u.distanciaM} m o menos.</p>` + sens
+      + lineaFuente(v, `área y distancia en línea recta al borde, referencia ${fmtUmbral(v.umbralM)}`));
 
     $('entorno').innerHTML = salud + educacion + transporte + areaVerde;
-    $('entorno-fuente').textContent = 'Distancias en línea recta, no recorrido a pie. OpenStreetMap es colaborativo: algo ausente puede existir. Los umbrales de salud, transporte y borde de zona son convenciones del proyecto.';
+    $('entorno').setAttribute('aria-busy', 'false');
+    $('entorno-fuente').textContent = 'Distancias en línea recta, no recorrido a pie. OpenStreetMap es colaborativo: algo ausente puede existir. Las distancias de referencia de salud, paradero y borde de zona son convenciones del proyecto.';
   }
 
   // Marcadores y línea recta hacia lo más cercano de cada variable (el área verde se dibuja como polígono).
@@ -973,10 +1114,12 @@
     const e = state.entorno;
     const { lat, lon } = state.point;
     const grupo = L.layerGroup();
+    const color = colorMapa('--map-poi');
+    const verde = colorMapa('--map-verde');
     const filas = [
       { v: VARIABLES.salud, r: e.salud, rotulo: 'Salud' },
-      ...Equipamiento.NIVELES.map((n) => ({ v: VARIABLES.educacion, r: e.educacion[n], rotulo: `Educación ${n}` })),
-      { v: VARIABLES.transporte, r: e.transporte, rotulo: 'Transporte' },
+      ...Equipamiento.NIVELES.map((n) => ({ v: VARIABLES.educacion, r: e.educacion[n], rotulo: `Colegio ${n}` })),
+      { v: VARIABLES.transporte, r: e.transporte, rotulo: 'Paradero' },
       { v: VARIABLES.areaVerde, r: e.areaVerde, rotulo: 'Área verde' },
     ].filter((f) => f.r.lat !== null && f.r.lat !== undefined);
     // Un mismo colegio puede ser el más cercano de varios niveles: un solo marcador con todos los rótulos.
@@ -986,15 +1129,25 @@
       if (!porElemento.has(k)) porElemento.set(k, { ...f, rotulos: [] });
       porElemento.get(k).rotulos.push(`${f.rotulo}: ${f.r.estado.toLowerCase()}`);
     });
+    const cercanos = [[lat, lon]];
     porElemento.forEach(({ v, r, rotulos }) => {
-      if (r.forma) L.geoJSON({ type: 'Feature', geometry: r.forma }, { style: { color: v.color, weight: 2, fillOpacity: 0.18 }, interactive: false }).addTo(grupo);
-      else L.polyline([[lat, lon], [r.lat, r.lon]], { color: v.color, weight: 2, dashArray: '4 6', interactive: false }).addTo(grupo);
+      const c = v.icono === 'verde' ? verde : color;
+      if (r.forma) L.geoJSON({ type: 'Feature', geometry: r.forma }, { style: { color: c, weight: 2, fillOpacity: 0.2 }, interactive: false }).addTo(grupo);
+      else L.polyline([[lat, lon], [r.lat, r.lon]], { color: c, weight: 2, dashArray: '4 6', interactive: false }).addTo(grupo);
       const enlace = r.osm ? `<br><small><a href="https://www.openstreetmap.org/${esc(r.osm)}" target="_blank" rel="noopener">${esc(r.osm)} en openstreetmap.org</a></small>` : '';
+      const dist = r.distanciaM === 0 ? 'el punto está dentro del área' : `${fmtDist(r.distanciaM)} en línea recta`;
       L.marker([r.lat, r.lon], { icon: poiIcon(v), title: r.nombre || v.titulo })
-        .bindPopup(`<strong>${esc(r.nombre)}</strong><br>${rotulos.map(esc).join('<br>')}<br>${distTexto(r)}${enlace}`)
+        .bindPopup(`<strong>${esc(r.nombre)}</strong><br>${rotulos.map(esc).join('<br>')}<br>${dist}${enlace}`)
         .addTo(grupo);
+      if (r.distanciaM <= 1500) cercanos.push([r.lat, r.lon]);
     });
     state.entornoLayer = grupo.addTo(map);
+    // El mapa acompaña al reporte: encuadra el punto y lo que tiene cerca.
+    requestAnimationFrame(() => {
+      map.invalidateSize({ pan: false });
+      if (cercanos.length > 1) map.fitBounds(L.latLngBounds(cercanos), { padding: [48, 48], maxZoom: 17, animate: !sinMovimiento() });
+      else map.setView([lat, lon], 17, { animate: !sinMovimiento() });
+    });
   }
 
   async function updateEntorno() {
@@ -1003,6 +1156,7 @@
     state.entorno = null;
     state.entornoStatus = 'loading';
     limpiarEntornoMapa();
+    $('entorno').setAttribute('aria-busy', 'true');
     $('entorno').innerHTML = '<p class="zon-msg loading"><span class="spinner"></span>Buscando los servicios más cercanos…</p>';
     const e = await Equipamiento.evaluar(lat, lon); // nunca rechaza: cada variable devuelve SIN DATO con su causa si falla
     if (seq !== state.entornoSeq) return; // el usuario ya eligió otro punto
