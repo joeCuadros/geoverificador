@@ -75,10 +75,10 @@ El frontend es JavaScript sin dependencias de compilación (Leaflet se carga des
 
 Los datos ya descargados están en el repositorio: solo es necesario regenerarlos si cambia la fuente.
 
-## Integración continua y GitHub Pages
+## Integración continua y despliegue
 
 - `.github/workflows/ci.yml` se ejecuta en cada `push` y `pull_request`: instala con `pnpm install --frozen-lockfile`, y corre `lint`, `test`, `build` y `datos:verificar`. No usa red para las pruebas.
-- `.github/workflows/pages.yml` publica `public/` en GitHub Pages con cada `push` a `main` (o manualmente). La versión en Pages es solo estática: no existe `GET /api` ni el servidor de Nest.
+- El sitio se despliega en Vercel como sitio estático (`vercel.json` publica `public/` sin instalación ni build). La versión desplegada no incluye `GET /api` ni el servidor de Nest.
 
 ## Datos y licencias
 
