@@ -1,18 +1,14 @@
 /**
- * config.js — Configuración única de la prueba técnica.
+ * config.js — Configuración única de la aplicación.
  *
- * Las etiquetas de OpenStreetMap de CATEGORIES se usan para DOS cosas:
- *   1) construir la consulta Overpass (services.js)
- *   2) clasificar los resultados devueltos (app.js)
- * Así lo que se consulta y lo que se documenta en pantalla nunca se desincroniza.
- * Para agregar un tipo (p. ej. supermercados) basta con añadir una línea a `values`.
+ * Alcance: 5 variables (zonificación vigente, zonificación proyectada, salud, educación, transporte y área verde).
+ * Los umbrales, el estado del PDM y los módulos visibles están en este archivo; las etiquetas de OpenStreetMap que
+ * entran en cada variable están en Calculos.FILTROS (calculos.js), que sirve a la vez para extraer los datos
+ * (scripts/extraer-equipamiento.mjs), clasificarlos y documentarlos en pantalla.
  */
 const CONFIG = {
   center: [-16.409, -71.5375], // Plaza de Armas de Arequipa (aprox.)
   zoom: 14,
-
-  radii: [500, 1000, 1500],
-  defaultRadius: 1000,
 
   overpassEndpoints: [
     { label: 'overpass-api.de (principal)', url: 'https://overpass-api.de/api/interpreter' },
@@ -23,11 +19,9 @@ const CONFIG = {
   overpassRetryDelayMs: 1500,   // espera creciente entre intentos: 1.5 s, 3 s, 4.5 s…
   overpassTimeoutSec: 25,     // timeout del servidor dentro de la consulta
   // Memoria que la consulta reserva en Overpass. El valor por defecto (512 MB) hace que un servidor
-  // saturado la rechace con HTTP 504 (Dispatcher_Client). 1.5 km de radio ocupa ~1 MB, así que 64 MB sobra.
+  // saturado la rechace con HTTP 504 (Dispatcher_Client). 5 km de radio ocupan pocos MB, así que 64 MB sobra.
   overpassMaxSizeBytes: 64 * 1024 * 1024,
   clientTimeoutMs: 35000,     // timeout del navegador
-  analyzeCooldownMs: 3000,    // mínimo entre consultas reales a Overpass
-  cacheTtlMs: 2 * 60 * 1000,  // misma consulta (punto+radio+endpoint) no se repite durante 2 min
 
   nominatimUrl: 'https://nominatim.openstreetmap.org/search',
   nominatimMinIntervalMs: 1100, // política de Nominatim: máximo 1 solicitud por segundo
@@ -66,68 +60,54 @@ const CONFIG = {
     suavizado: 200,  // σ del núcleo gaussiano del mapa de calor, en metros
     fuente: 'Mapa del Delito Georreferenciado (MININTER), datos SIDPOL de la PNP',
   },
-};
 
-const CATEGORIES = [
-  {
-    id: 'servicios',
-    label: 'Servicios',
-    color: '#c2410c',
-    icon: '🏥',
-    filters: [
-      {
-        key: 'amenity',
-        values: {
-          hospital: 'Hospital',
-          clinic: 'Clínica / centro de salud',
-          doctors: 'Consultorio médico',
-          school: 'Colegio',
-          kindergarten: 'Inicial / jardín',
-          marketplace: 'Mercado',
-        },
-      },
-      {
-        key: 'healthcare',
-        values: {
-          hospital: 'Hospital',
-          centre: 'Centro de salud',
-          clinic: 'Clínica / centro de salud',
-        },
-      },
-    ],
+  // ---------------------------------------------------------------- Alcance de 5 variables
+
+  // Umbrales de cada variable (metros, salvo que se indique). `fuentesUmbral` dice de dónde sale cada uno:
+  // «Convención del proyecto» significa que no hay una norma que lo fije y que se eligió como criterio de la herramienta.
+  umbrales: {
+    bordeZona: 20, // V1a: aviso si otra zona queda a esta distancia o menos del punto (convención del proyecto)
+    salud: 1000, // V2 (convención del proyecto)
+    educacion: { inicial: 500, primaria: 1500, secundaria: 3000 }, // V3
+    transporte: 400, // V4 (convención del proyecto)
+    areaVerde: { distanciaM: 300, areaMinM2: 5000, areaGrandeM2: 10000 }, // V5: ≥ 0,5 ha a ≤ 300 m; sensibilidad: ≥ 1 ha
   },
-  {
-    id: 'transporte',
-    label: 'Transporte',
-    color: '#1d4ed8',
-    icon: '🚌',
-    filters: [
-      { key: 'highway', values: { bus_stop: 'Paradero de bus' } },
-      {
-        key: 'public_transport',
-        values: { platform: 'Plataforma de transporte público', station: 'Estación de transporte público' },
-      },
-      { key: 'amenity', values: { bus_station: 'Terminal de buses', taxi: 'Parada de taxi' } },
-      { key: 'railway', values: { station: 'Estación de tren', halt: 'Apeadero de tren', tram_stop: 'Parada de tranvía' } },
-    ],
+  fuentesUmbral: {
+    bordeZona: 'Convención del proyecto',
+    salud: 'Convención del proyecto',
+    educacion: 'MEF/MINEDU, Instructivo FTE, Cuadro N.° 1 (RVM 104-2019-MINEDU y 208-2019-MINEDU)',
+    transporte: 'Convención del proyecto',
+    areaVerde: 'Indicador básico de la OMS Europa (2016): un espacio verde de al menos 0,5 ha a 300 m en línea recta',
   },
-  {
-    id: 'verdes',
-    label: 'Áreas verdes',
-    color: '#15803d',
-    icon: '🌳',
-    filters: [
-      {
-        key: 'leisure',
-        values: {
-          park: 'Parque',
-          garden: 'Jardín',
-          playground: 'Juegos infantiles',
-          pitch: 'Cancha deportiva',
-          sports_centre: 'Centro deportivo',
-        },
-      },
-      { key: 'landuse', values: { recreation_ground: 'Área recreativa' } },
-    ],
+
+  // V1b Zonificación proyectada: solo un aviso de texto. Se muestra ÚNICAMENTE si hay fuente y fecha; con null no se
+  // dibuja nada. No hay mapa de la zonificación proyectada.
+  estadoPDM: {
+    texto: 'El nuevo PDM no está aprobado; la zonificación puede cambiar.',
+    fuente: 'Diario Correo',
+    fecha: '2026-10-24',
+    url: 'https://diariocorreo.pe/edicion/arequipa/alcaldesa-de-arequipa-ruccy-oscco-desconoce-la-situacion-del-pdm-noticia/',
   },
-];
+
+  // Módulos fuera de alcance: su código sigue en el proyecto, pero no se muestran. `?modulos=todos` en la URL los
+  // vuelve a mostrar (ver Calculos.modulosEfectivos).
+  modulos: {
+    seguridad: false, // denuncias de robo y hurto, mapa de calor
+    desastre: false,  // peligros geológicos y aviso de zona de riesgo
+    riesgos: false,   // registro de riesgos y su CSV
+    sismica: false,   // zona sísmica de la Norma E.030
+  },
+
+  // Equipamiento de OpenStreetMap: archivos congelados con scripts/extraer-equipamiento.mjs (pnpm datos:extraer).
+  // Solo si falta un archivo se consulta Overpass en vivo, alrededor del punto y en este radio.
+  equipamiento: {
+    archivos: {
+      salud: 'data/equipamiento/salud.geojson',
+      educacion: 'data/equipamiento/educacion.geojson',
+      transporte: 'data/equipamiento/transporte.geojson',
+      areasVerdes: 'data/equipamiento/areas_verdes.geojson',
+    },
+    fuente: 'OpenStreetMap (ODbL)',
+    respaldoRadioM: 5000,
+  },
+};

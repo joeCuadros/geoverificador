@@ -1,33 +1,32 @@
 /**
- * app.js — Interfaz: mapa Leaflet, selección de punto, análisis y resultados.
- * Principio de uso responsable: NINGUNA consulta se lanza al hacer clic, escribir o cambiar el radio.
- * Solo se consulta al pulsar «Buscar» (Nominatim) o «Analizar entorno» (Overpass).
- * La zonificación, los peligros, la zona sísmica y las denuncias sí se muestran al elegir el punto, porque se
- * resuelven con archivos locales (zonificacion.js, peligros.js, distritos.js y delitos.js). El registro de riesgos
- * (riesgos.js) se arma con esos mismos datos.
+ * app.js — Interfaz: mapa Leaflet, selección de punto y ficha de las 5 variables.
+ * Al elegir el punto, todo se resuelve con archivos locales de public/data: zonificación vigente (V1a), aviso del PDM
+ * proyectado (V1b, texto de CONFIG.estadoPDM) y equipamiento de OpenStreetMap congelado (V2 a V5: salud, educación
+ * por nivel, transporte y área verde; ver equipamiento.js). Solo la búsqueda de direcciones (Nominatim) consulta un
+ * servicio externo, al pulsar «Buscar»; Overpass en vivo se usa únicamente si falta un archivo de equipamiento.
+ * Los módulos fuera de alcance (peligros, zona sísmica, denuncias y registro de riesgos) siguen en el código pero se
+ * ocultan con CONFIG.modulos; `?modulos=todos` en la URL los vuelve a mostrar.
  */
 (() => {
   'use strict';
 
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const fmtDist = (d) => (d < 1000 ? `${Math.round(d)} m` : `${(d / 1000).toFixed(2)} km`);
-  const METHOD_NOTE = {
-    point: '',
-    inside: '(el punto está dentro del área)',
-    edge: '(hasta el borde más cercano)',
-    center: '(hasta el centro; aproximado)',
-  };
+  const fmtDist = (d) => (d < 1000 ? `${Math.round(d)} m` : `${(d / 1000).toFixed(2).replace('.', ',')} km`);
+
+  const fmtUmbral = (m) => `${Math.round(m)} m`; // los umbrales se dicen siempre en metros
+
+  // Módulos visibles: CONFIG.modulos, o todos con ?modulos=todos (ver Calculos.modulosEfectivos).
+  const MODULOS = Calculos.modulosEfectivos(CONFIG.modulos, window.location.search);
 
   const state = {
     point: null,
     pointMarker: null,
     circle: null,
-    busy: false,
-    lastAnalyzeAt: 0,
-    items: [],
-    meta: null,
-    cache: new Map(),
+    entorno: null,       // resultado de Equipamiento.evaluar para el punto actual (salud, educación, transporte, área verde)
+    entornoStatus: 'none', // none | loading | ok
+    entornoSeq: 0,       // descarta respuestas de un punto anterior
+    entornoLayer: null,  // marcadores y líneas hacia lo más cercano de cada variable
     zona: null,          // resultado de Zonificacion.lookup para el punto actual
     zonaStatus: 'none',  // none | loading | ok | outside | error
     zonaSeq: 0,          // descarta respuestas de un punto anterior
@@ -65,52 +64,36 @@
   // Los peligros van encima del mapa de calor y sí reciben clics (para abrir su popup).
   map.createPane('peligros').style.zIndex = 450;
 
-  // ------------------------------------------------------- Controles iniciales
-  CONFIG.radii.forEach((r) => {
-    const o = new Option(r >= 1000 ? `${r / 1000} km` : `${r} m`, r);
-    if (r === CONFIG.defaultRadius) o.selected = true;
-    $('radius').add(o);
-  });
-  CONFIG.overpassEndpoints.forEach((e) => $('endpoint').add(new Option(e.label, e.url)));
-
-  // Categorías: bloque de UI + capa de Leaflet por categoría
-  const catUI = {};
-  CATEGORIES.forEach((cat) => {
-    const sec = document.createElement('section');
-    sec.className = 'osm-cat';
-    sec.innerHTML = `
-      <label class="osm-cat-head">
-        <input type="checkbox" checked aria-label="Mostrar ${esc(cat.label)}">
-        <span class="swatch" style="background:${cat.color}"></span>
-        <span class="name">${esc(cat.label)}</span>
-        <span class="count">–</span>
-      </label>
-      <div class="osm-cat-meta">Sin analizar</div>
-      <ul class="items"></ul>`;
-    $('cats').appendChild(sec);
-    const layer = L.layerGroup().addTo(map);
-    const ui = {
-      sec, layer,
-      check: sec.querySelector('input'),
-      count: sec.querySelector('.count'),
-      meta: sec.querySelector('.osm-cat-meta'),
-      list: sec.querySelector('.items'),
-    };
-    ui.check.addEventListener('change', () => {
-      if (ui.check.checked) map.addLayer(layer); else map.removeLayer(layer);
-      sec.classList.toggle('off', !ui.check.checked);
-    });
-    catUI[cat.id] = ui;
+  // ------------------------------------------------------- Módulos y documentación
+  // Lo que pertenece a un módulo oculto no se muestra (nunca se vuelve a mostrar un panel: eso lo decide la pestaña).
+  document.querySelectorAll('[data-modulo]').forEach((el) => {
+    if (!el.dataset.modulo.split(' ').some((m) => MODULOS[m])) el.hidden = true;
   });
 
-  // Documentación automática de las etiquetas realmente consultadas
-  $('filters-doc').innerHTML = CATEGORIES.map((cat) => `
-    <h4>${esc(cat.label)}</h4>
-    <ul>${cat.filters.map((f) => `<li><code>${esc(f.key)}</code> = ${Object.keys(f.values).map((v) => `<code>${esc(v)}</code>`).join(', ')}</li>`).join('')}</ul>`).join('')
-    + '<p>Cada elemento se clasifica en la primera categoría cuyo tag coincide. Se buscan nodos, vías y relaciones (<code>nwr</code>).</p>';
+  // Documentación automática de lo que realmente se consulta (mismas definiciones que usan la extracción y la clasificación)
+  const code = (v) => `<code>${esc(v)}</code>`;
+  const NOMBRE_VARIABLE = { salud: 'Salud', educacion: 'Educación', transporte: 'Transporte', areasVerdes: 'Áreas verdes' };
+  $('filters-doc').innerHTML = Object.entries(Calculos.FILTROS).map(([cat, filtros]) => `
+    <h4>${NOMBRE_VARIABLE[cat]}</h4>
+    <ul>${filtros.map((f) => `<li>${code(f.clave)} = ${f.valores ? f.valores.map(code).join(', ') : `cualquier valor${f.excluir ? ` salvo ${f.excluir.map(code).join(', ')}` : ''}`}</li>`).join('')}</ul>`).join('')
+    + `<h4>Niveles educativos</h4>
+    <ul>
+      <li>${code('amenity')} = ${code('kindergarten')} → inicial.</li>
+      <li>${code('amenity')} = ${code('school')} con ${code('isced:level')} (0 inicial, 1 primaria, 2 y 3 secundaria) o ${code('school')} = ${code('kindergarten')}, ${code('primary')}, ${code('secondary')} → los niveles que declare.</li>
+      <li>${code('amenity')} = ${code('school')} sin etiqueta de nivel → candidato a primaria y secundaria.</li>
+    </ul>
+    <h4>Umbrales</h4>
+    <ul>
+      <li>Salud: ${CONFIG.umbrales.salud} m (${esc(CONFIG.fuentesUmbral.salud.toLowerCase())}).</li>
+      <li>Educación: inicial ${CONFIG.umbrales.educacion.inicial} m, primaria ${CONFIG.umbrales.educacion.primaria} m, secundaria ${CONFIG.umbrales.educacion.secundaria} m (${esc(CONFIG.fuentesUmbral.educacion)}).</li>
+      <li>Transporte: ${CONFIG.umbrales.transporte} m (${esc(CONFIG.fuentesUmbral.transporte.toLowerCase())}).</li>
+      <li>Área verde: al menos ${CONFIG.umbrales.areaVerde.areaMinM2} m² a ${CONFIG.umbrales.areaVerde.distanciaM} m (${esc(CONFIG.fuentesUmbral.areaVerde)}).</li>
+      <li>Aviso de borde de zona: otra zona a ${CONFIG.umbrales.bordeZona} m o menos (${esc(CONFIG.fuentesUmbral.bordeZona.toLowerCase())}).</li>
+    </ul>
+    <p>Los archivos con estos elementos se generaron una vez con <code>pnpm datos:extraer</code> y están en <code>public/data/equipamiento</code>.</p>`;
 
   // ------------------------------------------------------------- Pestañas
-  const TABS = ['resumen', 'normativo', 'desastre', 'seguridad', 'entorno', 'riesgos', 'fuentes'];
+  const TABS = [...document.querySelectorAll('.tabs [role="tab"]')].filter((b) => !b.hidden).map((b) => b.dataset.tab);
   function selectTab(name, focus = false) {
     TABS.forEach((t) => {
       const btn = $(`tabbtn-${t}`);
@@ -118,7 +101,6 @@
       btn.setAttribute('aria-selected', String(on));
       btn.tabIndex = on ? 0 : -1;
       $(`tab-${t}`).hidden = !on;
-      if (on && t === 'entorno' && !state.mostrarEntorno) { state.mostrarEntorno = true; drawCircle(); }
       if (on && focus) btn.focus();
       // La pestaña activa siempre queda visible en la barra (que se desplaza en horizontal).
       if (on) { const bar = btn.parentElement; bar.scrollLeft = btn.offsetLeft - (bar.clientWidth - btn.offsetWidth) / 2; }
@@ -174,76 +156,29 @@
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') showSearchPop(false); });
 
   // ------------------------------------------------------------- Utilidades UI
-  function setStatus(kind, html) {
-    const el = $('status');
-    el.className = `status ${kind}`;
-    el.innerHTML = (kind === 'loading' ? '<span class="spinner"></span>' : '') + html;
-  }
+  const VARIABLES = {
+    salud: { titulo: 'Salud', icono: '🏥', color: '#c2410c' },
+    educacion: { titulo: 'Educación', icono: '🎓', color: '#7c3aed' },
+    transporte: { titulo: 'Transporte', icono: '🚌', color: '#1d4ed8' },
+    areaVerde: { titulo: 'Área verde', icono: '🌳', color: '#15803d' },
+  };
 
-  function setBusy(b) {
-    state.busy = b;
-    ['analyze', 'radius', 'endpoint'].forEach((id) => { $(id).disabled = b || (id === 'analyze' && !state.point); });
-    $('analyze').textContent = b ? 'Consultando…' : 'Analizar entorno';
-  }
-
-  function classify(tags) {
-    for (const cat of CATEGORIES) {
-      for (const f of cat.filters) {
-        const v = tags[f.key];
-        if (v !== undefined && Object.prototype.hasOwnProperty.call(f.values, v)) {
-          return { cat, subtype: f.values[v], tag: `${f.key}=${v}` };
-        }
-      }
-    }
-    return null;
-  }
-
-  function poiIcon(cat) {
+  function poiIcon(v) {
     return L.divIcon({
       className: 'poi-icon',
-      html: `<span style="background:${cat.color}">${cat.icon}</span>`,
+      html: `<span style="background:${v.color}">${v.icono}</span>`,
       iconSize: [26, 26], iconAnchor: [13, 13], popupAnchor: [0, -13],
     });
   }
 
-  function popupHtml(it) {
-    return `<strong>${esc(it.name || '(sin nombre en OSM)')}</strong><br>
-      ${esc(it.cat.label)} · ${esc(it.subtype)}<br>
-      Distancia: <strong>${fmtDist(it.distance)}</strong> ${esc(METHOD_NOTE[it.method])}<br>
-      <small>Etiqueta: <code>${esc(it.tag)}</code><br>
-      <a href="https://www.openstreetmap.org/${it.type}/${it.osmId}" target="_blank" rel="noopener">${it.type}/${it.osmId} en openstreetmap.org</a></small>`;
-  }
-
-  // ------------------------------------------------------------ Punto y radio
-  // Dos círculos: el radio de análisis de peligros y denuncias (siempre) y el radio del entorno de OSM
-  // (solo cuando se usa la pestaña Entorno, para no confundir qué se está midiendo).
+  // ------------------------------------------------------------ Punto
+  // Círculo de 500 m: solo lo usan los módulos de peligros y denuncias, así que solo se dibuja si alguno está visible.
   function drawCircle() {
-    if (state.circle) { map.removeLayer(state.circle); state.circle = null; }
     if (state.ring) { map.removeLayer(state.ring); state.ring = null; }
-    if (!state.point) return;
-    const c = [state.point.lat, state.point.lon];
-    state.ring = L.circle(c, {
+    if (!state.point || !(MODULOS.desastre || MODULOS.seguridad)) return;
+    state.ring = L.circle([state.point.lat, state.point.lon], {
       radius: CONFIG.peligros.radio, color: '#0f766e', weight: 2, fillColor: '#0f766e', fillOpacity: 0.06, interactive: false,
     }).addTo(map);
-    if (state.mostrarEntorno) {
-      state.circle = L.circle(c, {
-        radius: Number($('radius').value), color: '#16a34a', weight: 1.5, dashArray: '6 6', fill: false, interactive: false,
-      }).addTo(map);
-    }
-  }
-
-  function clearResults() {
-    state.items = [];
-    state.meta = null;
-    CATEGORIES.forEach((cat) => {
-      const ui = catUI[cat.id];
-      ui.layer.clearLayers();
-      ui.list.innerHTML = '';
-      ui.count.textContent = '–';
-      ui.meta.textContent = 'Sin analizar';
-    });
-    $('query-details').hidden = true;
-    renderResumen();
   }
 
   function setPoint(lat, lon) {
@@ -258,23 +193,21 @@
       state.pointMarker.setLatLng([lat, lon]);
     }
     drawCircle();
-    clearResults();
     updateZona();
-    state.evaluacion = Riesgos.leerEvaluacion(lat, lon);
+    if (MODULOS.riesgos) state.evaluacion = Riesgos.leerEvaluacion(lat, lon);
     $('welcome').hidden = true;
     $('ficha').hidden = false;
     $('map-hint').classList.add('oculto');
     $('point-distrito').textContent = 'Buscando distrito…';
-    updatePeligro();
-    updateDistrito();
-    updateDelito();
+    updateEntorno();
+    if (MODULOS.desastre) updatePeligro();
+    updateDistrito(); // el distrito se muestra siempre como referencia; la zona sísmica solo con su módulo
+    if (MODULOS.seguridad) updateDelito();
     renderResumen();
     $('point-info').innerHTML = `${lat.toFixed(6)}, ${lon.toFixed(6)} · <a href="https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=18/${lat}/${lon}" target="_blank" rel="noopener">ver en OSM</a>`;
-    $('analyze').disabled = state.busy;
-    setStatus('idle', 'Punto listo. Pulsa «Analizar entorno» para consultar Overpass.');
   }
 
-  map.on('click', (e) => { if (!state.busy) setPoint(e.latlng.lat, e.latlng.lng); });
+  map.on('click', (e) => setPoint(e.latlng.lat, e.latlng.lng));
 
   // ------------------------------------------------------------ Zonificación
   const fmtNum = (n) => Math.round(n).toLocaleString('es-PE');
@@ -286,6 +219,20 @@
   };
 
   $('zon-fuente').textContent = `Fuente: ${CONFIG.zonificacion.fuente}. Referencial: no reemplaza los certificados municipales.`;
+
+  // V1b Zonificación proyectada: solo un aviso de texto, y únicamente si CONFIG.estadoPDM tiene fuente y fecha.
+  const avisoPDM = Calculos.avisoPDMProyectado(CONFIG.estadoPDM);
+  const enlaceSeguro = (u) => (/^https?:\/\//.test(u || '') ? u : null);
+  if (avisoPDM) {
+    const f = enlaceSeguro(avisoPDM.url) ? `<a href="${esc(avisoPDM.url)}" target="_blank" rel="noopener">${esc(avisoPDM.fuente)}</a>` : esc(avisoPDM.fuente);
+    $('pdm-aviso').innerHTML = `
+      <div class="pdm-aviso">
+        <strong>Zonificación proyectada (PDM nuevo)</strong>
+        <p>${esc(avisoPDM.texto)}</p>
+        <p class="small muted">Fuente: ${f}, ${esc(avisoPDM.fecha)}. Es una nota de prensa, no un documento oficial; no hay mapa de la zonificación proyectada.</p>
+      </div>`;
+    $('credito-pdm').innerHTML = `${f} (${esc(avisoPDM.fecha)})`;
+  }
 
   function zonMessage(kind, html) {
     $('zon').innerHTML = `<p class="zon-msg ${kind}">${html}</p>`;
@@ -339,8 +286,15 @@
       if (has(r.lote_min_m2)) filas.push(['Lote mínimo', `${fmtNum(r.lote_min_m2)} m²`]);
       if (has(r.frente_min_m)) filas.push(['Frente mínimo', `${r.frente_min_m} m`]);
     }
+    // Alerta de borde (V1a): otra zona a CONFIG.umbrales.bordeZona m o menos del punto.
+    const b = z.borde;
+    const nombreVecina = b && b.alerta ? ((state.reglas && state.reglas[b.codigo]) || {}).nombre : '';
+    const alertaBorde = b && b.alerta
+      ? `<p class="zon-msg empty alerta-borde"><strong>Punto cerca del borde de la zona.</strong> A ${fmtDist(b.distanciaM)} (en línea recta) hay otra zona: <strong>${esc(b.codigo)}</strong>${nombreVecina ? ` · ${esc(nombreVecina)}` : ''}. El plano se extrajo de un PDF y cerca de un borde el resultado puede no ser exacto: confirma la zona con el certificado municipal. Aviso a ${b.umbralM} m o menos (convención del proyecto).</p>`
+      : '';
 
     $('zon').innerHTML = `
+      ${alertaBorde}
       <div class="zon-card">
         <div class="zon-head">
           <span class="swatch" style="background:${esc(z.color)}"></span>
@@ -349,6 +303,7 @@
           <span class="badge ${badge.cls}">${badge.text}</span>
         </div>
         ${filas.length ? `<dl class="zon-data">${filas.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>` : ''}
+        ${filas.length ? `<p class="zon-nota small">Parámetros del Reglamento del PDM Arequipa 2016-2025, Título III${r && r.articulo ? ` (${esc(r.articulo)})` : ''}.</p>` : ''}
         ${r && r.nota ? `<p class="zon-nota small">${esc(r.nota)}</p>` : ''}
         ${potencialHtml(r)}
         ${z.coincidencias > 1 ? `<p class="zon-nota small">El plano tiene ${z.coincidencias} zonas superpuestas en este punto; se muestra la que queda encima.</p>` : ''}
@@ -365,6 +320,7 @@
     try {
       const z = await Zonificacion.lookup(lat, lon);
       if (seq !== state.zonaSeq) return; // el usuario ya eligió otro punto
+      state.reglas = Zonificacion.reglas();
       state.zona = z;
       state.zonaStatus = z ? 'ok' : 'outside';
       if (z) state.zonOutline = Zonificacion.contorno(z.feature).addTo(map);
@@ -460,6 +416,7 @@
 
   function renderSismo() {
     const el = $('sismo');
+    if (!MODULOS.sismica) { el.innerHTML = ''; return; }
     if (state.distritoStatus === 'loading') { el.innerHTML = '<p class="zon-msg loading"><span class="spinner"></span>Buscando el distrito y su zona sísmica…</p>'; return; }
     if (state.distritoStatus === 'error') { el.innerHTML = `<p class="zon-msg error"><strong>No se pudo consultar la zona sísmica.</strong> ${esc(state.distritoError || '')}</p>`; return; }
     if (state.distritoStatus === 'outside') { el.innerHTML = '<p class="zon-msg empty">El punto está fuera de los distritos descargados: no se asigna zona sísmica.</p>'; return; }
@@ -525,79 +482,98 @@
 
   function renderResumen() {
     if (!state.point) return;
-    renderRiesgos();
+    if (MODULOS.riesgos) renderRiesgos();
     const cards = [];
 
-    // Normativo
+    // Zonificación (V1a vigente y V1b proyectada)
+    const aviso = avisoPDM ? '<br><strong>Aviso:</strong> el nuevo PDM no está aprobado; la zonificación puede cambiar.' : '';
     if (state.zonaStatus === 'ok') {
       const r = state.zona.regla;
       const badge = ZON_BADGE[r && r.edificable];
-      cards.push(tarjeta({ tab: 'normativo', kicker: 'Normativo', valor: esc(state.zona.codigo), detalle: esc(r ? r.nombre : 'Código sin reglas en la tabla'), badge }));
-      setBadge('normativo', state.zona.codigo);
+      const borde = state.zona.borde && state.zona.borde.alerta ? `<br><strong>Cerca del borde:</strong> otra zona (${esc(state.zona.borde.codigo)}) a ${fmtDist(state.zona.borde.distanciaM)}.` : '';
+      cards.push(tarjeta({ tab: 'normativo', kicker: 'Zonificación vigente', valor: esc(state.zona.codigo), detalle: `${esc(r ? r.nombre : 'Código sin reglas en la tabla')}${borde}${aviso}`, badge, wide: true }));
+      setBadge('normativo', state.zona.codigo, state.zona.borde && state.zona.borde.alerta ? 'alerta' : '');
     } else if (state.zonaStatus === 'outside') {
-      cards.push(tarjeta({ tab: 'normativo', kicker: 'Normativo', valor: 'Sin zona', detalle: 'El punto está fuera del área zonificada del plano.', badge: { cls: 'warn', text: 'Fuera del plano' } }));
+      cards.push(tarjeta({ tab: 'normativo', kicker: 'Zonificación vigente', valor: 'Sin zona', detalle: `El punto está fuera del área zonificada del plano.${aviso}`, badge: { cls: 'warn', text: 'Fuera del plano' }, wide: true }));
       setBadge('normativo', '—');
     } else if (state.zonaStatus === 'error') {
-      cards.push(tarjeta({ tab: 'normativo', kicker: 'Normativo', valor: 'No disponible', detalle: 'No se pudo consultar la zonificación.' }));
+      cards.push(tarjeta({ tab: 'normativo', kicker: 'Zonificación vigente', valor: 'No disponible', detalle: 'No se pudo consultar la zonificación.', wide: true }));
       setBadge('normativo', '');
     } else {
-      cards.push(tarjeta({ tab: 'normativo', kicker: 'Normativo', valor: cargandoHtml, cargando: true }));
+      cards.push(tarjeta({ tab: 'normativo', kicker: 'Zonificación vigente', valor: cargandoHtml, cargando: true, wide: true }));
       setBadge('normativo', '');
     }
 
-    // Desastre
-    if (state.peligroStatus === 'ok') {
-      const p = state.peligro;
-      const det = [`El más cercano a ${fmtDist(p.masCercano.distancia)}.`];
-      if (state.distritoStatus === 'ok') det.push(`Zona sísmica ${esc(state.distrito.zona)} (Z = ${esc(String(state.distrito.z).replace('.', ','))}).`);
+    // Servicios (V2 a V5)
+    const e = state.entorno;
+    const kicker = (v) => `${VARIABLES[v].icono} ${VARIABLES[v].titulo}`;
+    const estadoBadgeResumen = (r) => ({ cls: ESTADO_CLS[r.estado], text: r.estado });
+    const valorDist = (r) => (r.distanciaM === null ? 'Sin distancia' : r.distanciaM === 0 ? 'Dentro del área' : `${fmtDist(r.distanciaM)} en línea recta`);
+    const detalleDe = (r) => (r.error ? 'No se pudo obtener el dato.' : r.nombre ? `${esc(r.nombre)} · umbral ${fmtUmbral(r.umbralM)}` : `Umbral ${fmtUmbral(r.umbralM)}`);
+    if (e) {
+      cards.push(tarjeta({ tab: 'entorno', kicker: kicker('salud'), valor: valorDist(e.salud), detalle: detalleDe(e.salud), badge: estadoBadgeResumen(e.salud) }));
+      const niveles = Equipamiento.NIVELES;
+      const cumplen = niveles.filter((n) => e.educacion[n].estado === 'CUMPLE').length;
       cards.push(tarjeta({
-        tab: 'desastre', kicker: 'Desastre',
-        valor: `${fmtNum(p.total)} peligro${p.total === 1 ? '' : 's'} a ${p.radio} m`,
-        detalle: det.join(' '),
-        badge: enZonaRiesgo() ? { cls: 'no', text: `Zona de riesgo en el plano (${state.zona.codigo})` } : null,
+        tab: 'entorno', kicker: kicker('educacion'), valor: `${cumplen} de ${niveles.length} niveles`,
+        detalle: niveles.map((n) => `${n[0].toUpperCase()}${n.slice(1)}: ${e.educacion[n].estado.toLowerCase()}${e.educacion[n].distanciaM !== null ? ` (${fmtDist(e.educacion[n].distanciaM)})` : ''}`).join('<br>'),
+        badge: { cls: cumplen === niveles.length ? 'ok' : cumplen === 0 ? 'no' : 'warn', text: cumplen === niveles.length ? 'CUMPLE' : cumplen === 0 ? 'NO CUMPLE' : 'PARCIAL' },
       }));
-      setBadge('desastre', enZonaRiesgo() ? '!' : String(p.total), enZonaRiesgo() ? 'alerta' : '');
-    } else if (state.peligroStatus === 'error') {
-      cards.push(tarjeta({ tab: 'desastre', kicker: 'Desastre', valor: 'No disponible', detalle: 'No se pudo consultar el inventario de peligros.' }));
+      cards.push(tarjeta({ tab: 'entorno', kicker: kicker('transporte'), valor: valorDist(e.transporte), detalle: detalleDe(e.transporte), badge: estadoBadgeResumen(e.transporte) }));
+      cards.push(tarjeta({ tab: 'entorno', kicker: kicker('areaVerde'), valor: valorDist(e.areaVerde), detalle: detalleDe(e.areaVerde), badge: estadoBadgeResumen(e.areaVerde) }));
+      const todos = [e.salud, ...niveles.map((n) => e.educacion[n]), e.transporte, e.areaVerde];
+      setBadge('entorno', `${todos.filter((r) => r.estado === 'CUMPLE').length}/${todos.length}`);
     } else {
-      cards.push(tarjeta({ tab: 'desastre', kicker: 'Desastre', valor: cargandoHtml, cargando: true }));
-    }
-
-    // Seguridad
-    if (state.delito) {
-      const { total, ROBO, HURTO } = state.delito.conteo;
-      cards.push(tarjeta({ tab: 'seguridad', kicker: 'Seguridad', valor: `${fmtNum(total)} denuncias`, detalle: `${fmtNum(ROBO)} robos · ${fmtNum(HURTO)} hurtos · ${state.delito.radio} m · ${state.delito.meta.meses} meses` }));
-      setBadge('seguridad', fmtCorto(total));
-    } else if (state.delitoError) {
-      cards.push(tarjeta({ tab: 'seguridad', kicker: 'Seguridad', valor: 'No disponible', detalle: 'No se pudo calcular el indicador de denuncias.' }));
-    } else {
-      cards.push(tarjeta({ tab: 'seguridad', kicker: 'Seguridad', valor: cargandoHtml, cargando: true }));
-    }
-
-    // Entorno
-    if (state.items.length && state.meta) {
-      const por = CATEGORIES.map((c) => `${c.label.toLowerCase()} ${state.items.filter((i) => i.cat.id === c.id).length}`).join(' · ');
-      cards.push(tarjeta({ tab: 'entorno', kicker: 'Entorno', valor: `${state.items.length} elementos`, detalle: `${por} (${state.meta.radius} m)` }));
-      setBadge('entorno', String(state.items.length));
-    } else if (state.meta) {
-      cards.push(tarjeta({ tab: 'entorno', kicker: 'Entorno', valor: '0 elementos', detalle: `Sin elementos de OSM en ${state.meta.radius} m con las etiquetas consultadas.` }));
-      setBadge('entorno', '0');
-    } else {
-      cards.push(tarjeta({ tab: 'entorno', kicker: 'Entorno', valor: 'Sin analizar', detalle: 'Consulta OpenStreetMap desde la pestaña Entorno.' }));
+      ['salud', 'educacion', 'transporte', 'areaVerde'].forEach((v) => cards.push(tarjeta({ tab: 'entorno', kicker: kicker(v), valor: cargandoHtml, cargando: true })));
       setBadge('entorno', '');
     }
 
-    // Registro de riesgos
-    const rs = state.riesgos || [];
-    const ev = state.evaluacion;
-    const evaluados = rs.filter((r) => Riesgos.nivel(ev[r.id]?.p, ev[r.id]?.i));
-    const altos = evaluados.filter((r) => Riesgos.nivel(ev[r.id].p, ev[r.id].i).texto === 'Alto').length;
-    cards.push(tarjeta({
-      tab: 'riesgos', kicker: 'Gestión de riesgos', wide: true,
-      valor: `${rs.length} riesgos identificados`,
-      detalle: evaluados.length ? `${evaluados.length} evaluados por ti · ${altos} de nivel alto.` : 'Evalúa la probabilidad y el impacto de cada uno y elige qué harás.',
-    }));
-    setBadge('riesgos', rs.length ? String(rs.length) : '', 'accent');
+    // Módulos fuera de alcance (solo si CONFIG.modulos o ?modulos=todos los activan)
+    if (MODULOS.desastre || MODULOS.sismica) {
+      if (state.peligroStatus === 'ok' && MODULOS.desastre) {
+        const p = state.peligro;
+        const det = [`El más cercano a ${fmtDist(p.masCercano.distancia)}.`];
+        if (MODULOS.sismica && state.distritoStatus === 'ok') det.push(`Zona sísmica ${esc(state.distrito.zona)} (Z = ${esc(String(state.distrito.z).replace('.', ','))}).`);
+        cards.push(tarjeta({
+          tab: 'desastre', kicker: 'Desastre',
+          valor: `${fmtNum(p.total)} peligro${p.total === 1 ? '' : 's'} a ${p.radio} m`,
+          detalle: det.join(' '),
+          badge: enZonaRiesgo() ? { cls: 'no', text: `Zona de riesgo en el plano (${state.zona.codigo})` } : null,
+        }));
+        setBadge('desastre', enZonaRiesgo() ? '!' : String(p.total), enZonaRiesgo() ? 'alerta' : '');
+      } else if (state.peligroStatus === 'error') {
+        cards.push(tarjeta({ tab: 'desastre', kicker: 'Desastre', valor: 'No disponible', detalle: 'No se pudo consultar el inventario de peligros.' }));
+      } else if (MODULOS.desastre) {
+        cards.push(tarjeta({ tab: 'desastre', kicker: 'Desastre', valor: cargandoHtml, cargando: true }));
+      } else if (state.distritoStatus === 'ok') {
+        cards.push(tarjeta({ tab: 'desastre', kicker: 'Peligro sísmico', valor: `Zona ${esc(state.distrito.zona)}`, detalle: `Z = ${esc(String(state.distrito.z).replace('.', ','))} · Norma E.030 2026` }));
+      }
+    }
+
+    if (MODULOS.seguridad) {
+      if (state.delito) {
+        const { total, ROBO, HURTO } = state.delito.conteo;
+        cards.push(tarjeta({ tab: 'seguridad', kicker: 'Seguridad', valor: `${fmtNum(total)} denuncias`, detalle: `${fmtNum(ROBO)} robos · ${fmtNum(HURTO)} hurtos · ${state.delito.radio} m · ${state.delito.meta.meses} meses` }));
+        setBadge('seguridad', fmtCorto(total));
+      } else if (state.delitoError) {
+        cards.push(tarjeta({ tab: 'seguridad', kicker: 'Seguridad', valor: 'No disponible', detalle: 'No se pudo calcular el indicador de denuncias.' }));
+      } else {
+        cards.push(tarjeta({ tab: 'seguridad', kicker: 'Seguridad', valor: cargandoHtml, cargando: true }));
+      }
+    }
+
+    if (MODULOS.riesgos) {
+      const rs = state.riesgos || [];
+      const ev = state.evaluacion;
+      const evaluados = rs.filter((r) => Riesgos.nivel(ev[r.id]?.p, ev[r.id]?.i));
+      const altos = evaluados.filter((r) => Riesgos.nivel(ev[r.id].p, ev[r.id].i).texto === 'Alto').length;
+      cards.push(tarjeta({
+        tab: 'riesgos', kicker: 'Gestión de riesgos', wide: true,
+        valor: `${rs.length} riesgos identificados`,
+        detalle: evaluados.length ? `${evaluados.length} evaluados por ti · ${altos} de nivel alto.` : 'Evalúa la probabilidad y el impacto de cada uno y elige qué harás.',
+      }));
+      setBadge('riesgos', rs.length ? String(rs.length) : '', 'accent');
+    }
 
     $('resumen').innerHTML = cards.join('');
   }
@@ -841,10 +817,6 @@
       box.disabled = false;
     }
   });
-  $('radius').addEventListener('change', () => {
-    drawCircle();
-    if (state.point) { clearResults(); setStatus('idle', 'Radio cambiado. Pulsa «Analizar entorno» para actualizar.'); }
-  });
 
   $('del-layer').addEventListener('change', async (e) => {
     const box = e.target;
@@ -930,143 +902,115 @@
     return { title: err.message, hint: hints[err.kind] || '' };
   }
 
-  // --------------------------------------------------------------- Análisis
-  async function analyze() {
-    if (state.busy) return;
-    if (!state.point) { setStatus('error', 'Primero elige un punto en el mapa.'); return; }
+  // ------------------------------------------------------------ Servicios (V2 a V5)
+  const ESTADO_CLS = { CUMPLE: 'ok', 'NO CUMPLE': 'no', 'SIN DATO': 'warn' };
+  const estadoBadge = (estado) => `<span class="badge ${ESTADO_CLS[estado]}">${estado}</span>`;
+  const fmtArea = (m2) => `${fmtNum(m2)} m² (${(m2 / 10000).toFixed(2).replace('.', ',')} ha)`;
+  const distTexto = (r) => (r.distanciaM === 0 ? 'el punto está dentro del área' : `${fmtDist(r.distanciaM)} en línea recta`);
+  const NIVEL_TXT = { inicial: 'Inicial', primaria: 'Primaria', secundaria: 'Secundaria' };
 
+  // Línea principal de un resultado: más cercano, distancia y umbral (o por qué no hay dato).
+  function lineaResultado(r, textos) {
+    if (r.error) return `<p class="zon-msg error"><strong>No se pudo obtener el dato.</strong> ${esc(r.error)}</p>`;
+    if (r.estado === 'SIN DATO') return `<p class="var-main muted">${textos.sinDato}</p>`;
+    if (r.distanciaM === null) return `<p class="var-main muted">${textos.sinDistancia} (umbral: ${fmtUmbral(r.umbralM)}).</p>`;
+    return `<p class="var-main"><strong>${esc(r.nombre)}</strong> · ${distTexto(r)} <span class="muted">(umbral: ${fmtUmbral(r.umbralM)})</span></p>`;
+  }
+  const metodoHtml = (r) => `<details class="var-metodo"><summary>Método</summary><p>${esc(r.metodo)}</p></details>`;
+  const fuenteHtml = (r) => `<p class="var-meta">Fuente: ${esc(r.fuente)}${r.fecha ? `, datos extraídos el ${esc(r.fecha)}` : ''}.</p>`;
+
+  function tarjetaVariable(v, estado, cuerpo) {
+    return `<article class="var-card">
+      <header class="var-head"><span class="var-icon" style="background:${v.color}">${v.icono}</span><h3>${v.titulo}</h3>${estadoBadge(estado)}</header>
+      ${cuerpo}
+    </article>`;
+  }
+
+  function renderEntorno() {
+    const e = state.entorno;
+    const salud = tarjetaVariable(VARIABLES.salud, e.salud.estado,
+      lineaResultado(e.salud, { sinDato: 'No hay establecimientos de salud en los datos de OpenStreetMap.', sinDistancia: 'No se encontró ninguno cerca' })
+      + (e.salud.etiqueta ? `<p class="var-meta">Etiqueta de OSM: <code>${esc(e.salud.etiqueta)}</code></p>` : '') + fuenteHtml(e.salud) + metodoHtml(e.salud));
+
+    const peor = Equipamiento.NIVELES.map((n) => e.educacion[n]);
+    const niveles = Equipamiento.NIVELES.map((n) => {
+      const r = e.educacion[n];
+      return `<div class="var-nivel">
+        <div class="var-nivel-head"><strong>${NIVEL_TXT[n]}</strong>${estadoBadge(r.estado)}</div>
+        ${lineaResultado(r, { sinDato: `No hay colegios de nivel ${n} en los datos de OpenStreetMap.`, sinDistancia: 'No se encontró ninguno cerca' })}
+        ${r.etiqueta ? `<p class="var-meta">Etiqueta de OSM: <code>${esc(r.etiqueta)}</code></p>` : ''}
+        ${metodoHtml(r)}
+      </div>`;
+    }).join('');
+    const cumplen = peor.filter((r) => r.estado === 'CUMPLE').length;
+    const estadoEdu = cumplen === peor.length ? 'CUMPLE' : peor.every((r) => r.estado === 'SIN DATO') ? 'SIN DATO' : 'NO CUMPLE';
+    const educacion = tarjetaVariable(VARIABLES.educacion, estadoEdu, `${niveles}
+      <p class="var-meta">OSM casi no etiqueta el nivel de los colegios: uno sin nivel se toma como candidato a primaria y secundaria; los jardines cuentan como inicial.</p>
+      ${fuenteHtml(e.educacion.inicial)}`);
+
+    const transporte = tarjetaVariable(VARIABLES.transporte, e.transporte.estado,
+      lineaResultado(e.transporte, { sinDato: 'No hay paraderos en los datos de OpenStreetMap.', sinDistancia: 'No se encontró ninguno cerca' })
+      + (e.transporte.etiqueta ? `<p class="var-meta">Etiqueta de OSM: <code>${esc(e.transporte.etiqueta)}</code></p>` : '') + fuenteHtml(e.transporte) + metodoHtml(e.transporte));
+
+    const v = e.areaVerde;
+    const u = CONFIG.umbrales.areaVerde;
+    const sens = v.error || v.estado === 'SIN DATO' ? '' : `<p class="var-meta">Superficie: ${v.areaM2 ? fmtArea(v.areaM2) : '—'}. Con el criterio más estricto (al menos ${fmtNum(u.areaGrandeM2)} m², 1 ha): ${v.cumple1ha ? `también hay una a ${fmtDist(v.distancia1haM)} (${esc(v.nombre1ha)})` : `no hay ninguna a ${u.distanciaM} m o menos`}.</p>`;
+    const areaVerde = tarjetaVariable(VARIABLES.areaVerde, v.estado,
+      lineaResultado(v, { sinDato: 'No hay áreas verdes en los datos de OpenStreetMap.', sinDistancia: `Ninguna área verde de los datos mide al menos ${fmtNum(u.areaMinM2)} m²` })
+      + `<p class="var-meta">Criterio: un área verde de al menos ${fmtNum(u.areaMinM2)} m² a ${u.distanciaM} m o menos.</p>` + sens + fuenteHtml(v) + metodoHtml(v));
+
+    $('entorno').innerHTML = salud + educacion + transporte + areaVerde;
+    $('entorno-fuente').textContent = 'Distancias en línea recta, no recorrido a pie. OpenStreetMap es colaborativo: algo ausente puede existir. Los umbrales de salud, transporte y borde de zona son convenciones del proyecto.';
+  }
+
+  // Marcadores y línea recta hacia lo más cercano de cada variable (el área verde se dibuja como polígono).
+  function limpiarEntornoMapa() {
+    if (state.entornoLayer) { map.removeLayer(state.entornoLayer); state.entornoLayer = null; }
+  }
+
+  function dibujarEntorno() {
+    limpiarEntornoMapa();
+    const e = state.entorno;
     const { lat, lon } = state.point;
-    const radius = Number($('radius').value);
-    const endpoint = $('endpoint').value;
-    const query = Services.buildOverpassQuery(lat, lon, radius);
-    const key = `${endpoint}|${lat.toFixed(5)}|${lon.toFixed(5)}|${radius}`;
-
-    let payload;
-    let fromCache = false;
-    const hit = state.cache.get(key);
-    if (hit && Date.now() - hit.at < CONFIG.cacheTtlMs) {
-      payload = hit.payload;
-      fromCache = true;
-    } else {
-      const wait = state.lastAnalyzeAt + CONFIG.analyzeCooldownMs - Date.now();
-      if (wait > 0) {
-        setStatus('error', `Espera ${Math.ceil(wait / 1000)} s antes de otra consulta (límite propio para respetar Overpass).`);
-        return;
-      }
-      state.lastAnalyzeAt = Date.now();
-      setBusy(true);
-      setStatus('loading', 'Consultando Overpass API… puede tardar hasta unos 30 s.');
-      try {
-        payload = await Services.overpassWithFallback(endpoint, query, (n, total, url) => {
-          if (n === 1) return;
-          const label = (CONFIG.overpassEndpoints.find((e) => e.url === url) || { label: url }).label;
-          setStatus('loading', `El servidor está saturado. Reintentando con ${esc(label)} (intento ${n} de ${total})…`);
-        });
-        state.cache.set(key, { at: Date.now(), payload });
-      } catch (err) {
-        setBusy(false);
-        clearResults();
-        const d = describeError(err, 'Overpass');
-        setStatus('error', `<strong>No se pudieron obtener datos.</strong> ${esc(d.title)}<span class="hint">${esc(d.hint)}</span>`);
-        console.error('[Overpass] fallo', err);
-        return;
-      }
-      setBusy(false);
-    }
-
-    // ---- Procesar elementos reales devueltos por Overpass
-    console.debug('[Overpass] respuesta cruda', payload.data);
-    const seen = new Set();
-    const items = [];
-    let skipped = 0;
-    for (const el of payload.data.elements || []) {
-      if (!el.tags) continue;
-      const id = `${el.type}/${el.id}`;
-      if (seen.has(id)) continue;
-      seen.add(id);
-      const cls = classify(el.tags);
-      const loc = Geo.locate(el, lat, lon);
-      if (!cls || !loc) { skipped++; continue; }
-      items.push({
-        id, type: el.type, osmId: el.id,
-        cat: cls.cat, subtype: cls.subtype, tag: cls.tag,
-        name: el.tags.name || el.tags['name:es'] || el.tags.official_name || null,
-        tags: el.tags,
-        ...loc,
-      });
-    }
-    items.sort((a, b) => a.distance - b.distance);
-    state.items = items;
-    state.meta = {
-      generatedAt: new Date().toISOString(), endpoint, radius, lat, lon, query,
-      osmBase: payload.data.osm3s && payload.data.osm3s.timestamp_osm_base,
-      ms: payload.ms, rawCount: (payload.data.elements || []).length, skipped, fromCache,
-    };
-
-    render(items);
-    renderResumen();
-    showQuery(query);
-
-    const when = state.meta.osmBase ? ` · datos OSM al ${esc(state.meta.osmBase)}` : '';
-    if (items.length === 0) {
-      setStatus('empty', `<strong>La consulta funcionó, pero no hay elementos.</strong> Overpass respondió sin resultados para estas etiquetas en ${radius} m${when}. Puede que no existan o que no estén mapeados en OSM. Prueba un radio mayor.`);
-    } else {
-      const retried = payload.attempts > 1 ? ` Se obtuvo tras ${payload.attempts} intentos (servidor: ${esc(new URL(payload.endpoint).hostname)}).` : '';
-      const origin = fromCache ? 'Resultado guardado localmente (consulta repetida hace menos de 2 min; no se envió una nueva solicitud).' : `Respuesta real de Overpass en ${payload.ms} ms (HTTP ${payload.status}).${retried}`;
-      setStatus('ok', `<strong>${items.length} elementos encontrados</strong> en ${radius} m. ${origin}${when}`);
-    }
-    if (state.circle) map.fitBounds(state.circle.getBounds(), { padding: [20, 20] });
-  }
-
-  function render(items) {
-    CATEGORIES.forEach((cat) => {
-      const ui = catUI[cat.id];
-      ui.layer.clearLayers();
-      ui.list.innerHTML = '';
-      const list = items.filter((i) => i.cat.id === cat.id);
-      ui.count.textContent = list.length;
-
-      if (list.length === 0) {
-        ui.meta.textContent = 'No se encontraron elementos con estas etiquetas.';
-        return;
-      }
-      const named = list.filter((i) => i.name).length;
-      const byType = {};
-      list.forEach((i) => { byType[i.subtype] = (byType[i.subtype] || 0) + 1; });
-      ui.meta.textContent = `${Object.entries(byType).map(([k, v]) => `${k}: ${v}`).join(' · ')} — ${named} con nombre, ${list.length - named} sin nombre`;
-
-      list.forEach((it) => {
-        if (it.shape && it.shape.length > 1) {
-          const opts = { color: cat.color, weight: 2, fillOpacity: 0.15 };
-          (it.closed ? L.polygon(it.shape, opts) : L.polyline(it.shape, opts)).addTo(ui.layer);
-        }
-        const marker = L.marker([it.lat, it.lon], { icon: poiIcon(cat), title: it.name || it.subtype })
-          .bindPopup(popupHtml(it))
-          .addTo(ui.layer);
-
-        const li = document.createElement('li');
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'item';
-        btn.innerHTML = `
-          <span class="nm${it.name ? '' : ' none'}">${esc(it.name || 'Sin nombre en OSM')}</span>
-          <span class="ds">${fmtDist(it.distance)}</span>
-          <span class="sub">${esc(it.subtype)} · ${esc(it.tag)}</span>`;
-        btn.addEventListener('click', () => {
-          if (!ui.check.checked) { ui.check.checked = true; ui.check.dispatchEvent(new Event('change')); }
-          map.setView([it.lat, it.lon], Math.max(map.getZoom(), 17));
-          marker.openPopup();
-        });
-        li.appendChild(btn);
-        ui.list.appendChild(li);
-      });
+    const grupo = L.layerGroup();
+    const filas = [
+      { v: VARIABLES.salud, r: e.salud, rotulo: 'Salud' },
+      ...Equipamiento.NIVELES.map((n) => ({ v: VARIABLES.educacion, r: e.educacion[n], rotulo: `Educación ${n}` })),
+      { v: VARIABLES.transporte, r: e.transporte, rotulo: 'Transporte' },
+      { v: VARIABLES.areaVerde, r: e.areaVerde, rotulo: 'Área verde' },
+    ].filter((f) => f.r.lat !== null && f.r.lat !== undefined);
+    // Un mismo colegio puede ser el más cercano de varios niveles: un solo marcador con todos los rótulos.
+    const porElemento = new Map();
+    filas.forEach((f) => {
+      const k = f.r.osm || `${f.r.lat},${f.r.lon}`;
+      if (!porElemento.has(k)) porElemento.set(k, { ...f, rotulos: [] });
+      porElemento.get(k).rotulos.push(`${f.rotulo}: ${f.r.estado.toLowerCase()}`);
     });
+    porElemento.forEach(({ v, r, rotulos }) => {
+      if (r.forma) L.geoJSON({ type: 'Feature', geometry: r.forma }, { style: { color: v.color, weight: 2, fillOpacity: 0.18 }, interactive: false }).addTo(grupo);
+      else L.polyline([[lat, lon], [r.lat, r.lon]], { color: v.color, weight: 2, dashArray: '4 6', interactive: false }).addTo(grupo);
+      const enlace = r.osm ? `<br><small><a href="https://www.openstreetmap.org/${esc(r.osm)}" target="_blank" rel="noopener">${esc(r.osm)} en openstreetmap.org</a></small>` : '';
+      L.marker([r.lat, r.lon], { icon: poiIcon(v), title: r.nombre || v.titulo })
+        .bindPopup(`<strong>${esc(r.nombre)}</strong><br>${rotulos.map(esc).join('<br>')}<br>${distTexto(r)}${enlace}`)
+        .addTo(grupo);
+    });
+    state.entornoLayer = grupo.addTo(map);
   }
 
-  function showQuery(query) {
-    $('query-text').value = query;
-    $('turbo-link').href = `https://overpass-turbo.eu/?Q=${encodeURIComponent(query)}&R`;
-    $('query-details').hidden = false;
+  async function updateEntorno() {
+    const seq = ++state.entornoSeq;
+    const { lat, lon } = state.point;
+    state.entorno = null;
+    state.entornoStatus = 'loading';
+    limpiarEntornoMapa();
+    $('entorno').innerHTML = '<p class="zon-msg loading"><span class="spinner"></span>Buscando los servicios más cercanos…</p>';
+    const e = await Equipamiento.evaluar(lat, lon); // nunca rechaza: cada variable devuelve SIN DATO con su causa si falla
+    if (seq !== state.entornoSeq) return; // el usuario ya eligió otro punto
+    state.entorno = e;
+    state.entornoStatus = 'ok';
+    renderEntorno();
+    dibujarEntorno();
+    renderResumen();
   }
 
   // --------------------------------------------------------- Ficha en PDF
@@ -1077,11 +1021,35 @@
     const lote = Number($('lote').value);
     const d = state.distritoStatus === 'ok' ? state.distrito : null;
     const resumen = [];
-    resumen.push(['Normativo', zonaOk ? `${state.zona.codigo} · ${r ? r.nombre : ''}${ZON_BADGE[r && r.edificable] ? ` — ${ZON_BADGE[r.edificable].text.toLowerCase()}` : ''}` : state.zonaStatus === 'outside' ? 'Fuera del área zonificada' : 'No disponible']);
-    resumen.push(['Desastre', `${state.peligro ? `${fmtNum(state.peligro.total)} peligros geológicos registrados a ${state.peligro.radio} m` : 'Peligros no disponibles'}${d ? `; zona sísmica ${d.zona} (Z = ${String(d.z).replace('.', ',')})` : ''}${enZonaRiesgo() ? '; zona de riesgo muy alto en el plano' : ''}`]);
-    resumen.push(['Seguridad', state.delito ? `${fmtNum(state.delito.conteo.total)} denuncias de robo y hurto a ${state.delito.radio} m en ${state.delito.meta.meses} meses` : 'No disponible']);
-    resumen.push(['Entorno', state.meta ? `${state.items.length} elementos de OpenStreetMap en ${state.meta.radius} m` : 'No analizado']);
-    resumen.push(['Registro de riesgos', `${(state.riesgos || []).length} riesgos identificados`]);
+    resumen.push(['Zonificación vigente', zonaOk ? `${state.zona.codigo} · ${r ? r.nombre : ''}${ZON_BADGE[r && r.edificable] ? ` — ${ZON_BADGE[r.edificable].text.toLowerCase()}` : ''}${state.zona.borde && state.zona.borde.alerta ? `; cerca del borde: otra zona (${state.zona.borde.codigo}) a ${fmtDist(state.zona.borde.distanciaM)}` : ''}` : state.zonaStatus === 'outside' ? 'Fuera del área zonificada' : 'No disponible']);
+    if (avisoPDM) resumen.push(['Zonificación proyectada', `${avisoPDM.texto} (${avisoPDM.fuente}, ${avisoPDM.fecha})`]);
+    const e = state.entorno;
+    const linea = (x) => (x ? `${x.estado}${x.distanciaM !== null ? ` · ${fmtDist(x.distanciaM)}` : ''}${x.nombre ? ` · ${x.nombre}` : ''}` : 'No disponible');
+    if (e) {
+      resumen.push(['Salud', linea(e.salud)]);
+      Equipamiento.NIVELES.forEach((n) => resumen.push([`Educación ${n}`, linea(e.educacion[n])]));
+      resumen.push(['Transporte', linea(e.transporte)]);
+      resumen.push(['Área verde', linea(e.areaVerde)]);
+    }
+    const modulos = {};
+    if (MODULOS.desastre || MODULOS.sismica) {
+      modulos.desastre = {
+        zonaRiesgo: enZonaRiesgo(),
+        peligro: MODULOS.desastre && state.peligroStatus === 'ok' ? state.peligro : null,
+        distrito: MODULOS.sismica ? d : null,
+        mostrarPeligro: MODULOS.desastre,
+        mostrarSismica: MODULOS.sismica,
+      };
+      resumen.push(['Desastre', `${MODULOS.desastre ? (state.peligro ? `${fmtNum(state.peligro.total)} peligros geológicos registrados a ${state.peligro.radio} m` : 'Peligros no disponibles') : ''}${MODULOS.sismica && d ? `${MODULOS.desastre ? '; ' : ''}zona sísmica ${d.zona} (Z = ${String(d.z).replace('.', ',')})` : ''}${MODULOS.desastre && enZonaRiesgo() ? '; zona de riesgo muy alto en el plano' : ''}`]);
+    }
+    if (MODULOS.seguridad) {
+      modulos.seguridad = { delito: state.delito, periodo: state.delito ? `${fmtFecha(state.delito.meta.ventanaDesde)} – ${fmtFecha(state.delito.meta.hasta)}` : '' };
+      resumen.push(['Seguridad', state.delito ? `${fmtNum(state.delito.conteo.total)} denuncias de robo y hurto a ${state.delito.radio} m en ${state.delito.meta.meses} meses` : 'No disponible']);
+    }
+    if (MODULOS.riesgos) {
+      modulos.riesgos = { riesgos: state.riesgos || [], evaluacion: state.evaluacion, nivel: Riesgos.nivel, escala: Riesgos.ESCALA, decisiones: Riesgos.DECISIONES };
+      resumen.push(['Registro de riesgos', `${(state.riesgos || []).length} riesgos identificados`]);
+    }
     return {
       fecha: new Date().toLocaleString('es-PE', { dateStyle: 'long', timeStyle: 'short' }),
       punto: state.point,
@@ -1093,27 +1061,18 @@
       badgeZona: zonaOk && ZON_BADGE[r && r.edificable] ? ZON_BADGE[r.edificable].text : null,
       lote: lote > 0 ? lote : null,
       potencial: zonaOk && lote > 0 ? Zonificacion.potencial(r, lote) : null,
-      zonaRiesgo: enZonaRiesgo(),
-      peligro: state.peligroStatus === 'ok' ? state.peligro : null,
-      distrito: d,
-      delito: state.delito,
-      periodo: state.delito ? `${fmtFecha(state.delito.meta.ventanaDesde)} – ${fmtFecha(state.delito.meta.hasta)}` : '',
-      entorno: state.meta ? {
-        radio: state.meta.radius,
-        fecha: state.meta.osmBase ? state.meta.osmBase.slice(0, 10) : null,
-        categorias: CATEGORIES.map((c) => {
-          const lista = state.items.filter((i) => i.cat.id === c.id);
-          return { label: c.label, total: lista.length, cercanos: lista.slice(0, 3).map((i) => ({ nombre: i.name || `${i.subtype} sin nombre`, distancia: i.distance })) };
-        }),
-      } : null,
-      registro: { riesgos: state.riesgos || [], evaluacion: state.evaluacion, nivel: Riesgos.nivel, escala: Riesgos.ESCALA, decisiones: Riesgos.DECISIONES },
+      avisoPDM,
+      variables: e,
+      umbrales: CONFIG.umbrales,
+      fuentesUmbral: CONFIG.fuentesUmbral,
+      modulos,
       fuentes: { zonificacion: CONFIG.zonificacion.fuente, peligros: CONFIG.peligros.fuente, distritos: CONFIG.distritos.fuente, delitos: CONFIG.delitos.fuente },
     };
   }
 
   $('download').addEventListener('click', () => {
     if (!state.point) return;
-    renderResumen(); // asegura que el registro esté al día
+    renderResumen();
     Reporte.imprimir($('reporte'), datosReporte());
   });
 
@@ -1123,14 +1082,24 @@
     const out = {
       generado: new Date().toISOString(),
       punto: { lat: state.point.lat, lon: state.point.lon },
-      entorno_consulta: state.meta || null,
-      zonificacion: state.zona
-        ? { codigo: state.zona.codigo, regla: state.zona.regla, fuente: CONFIG.zonificacion.fuente }
+      zonificacion_vigente: state.zona
+        ? { codigo: state.zona.codigo, regla: state.zona.regla, borde: state.zona.borde, fuente: CONFIG.zonificacion.fuente }
         : null,
-      zona_sismica: state.distritoStatus === 'ok'
+      zonificacion_proyectada: avisoPDM,
+      salud: state.entorno && state.entorno.salud,
+      educacion: state.entorno && state.entorno.educacion,
+      transporte: state.entorno && state.entorno.transporte,
+      area_verde: state.entorno && state.entorno.areaVerde && { ...state.entorno.areaVerde, forma: undefined },
+      umbrales: CONFIG.umbrales,
+      fuentes_umbral: CONFIG.fuentesUmbral,
+    };
+    if (MODULOS.sismica) {
+      out.zona_sismica = state.distritoStatus === 'ok'
         ? { distrito: state.distrito.distrito, ubigeo: state.distrito.ubigeo, zona: state.distrito.zona, z: state.distrito.z, fuente: CONFIG.distritos.fuente }
-        : null,
-      registro_riesgos: (state.riesgos || []).map((r) => {
+        : null;
+    }
+    if (MODULOS.riesgos) {
+      out.registro_riesgos = (state.riesgos || []).map((r) => {
         const e = state.evaluacion[r.id] || {};
         const n = Riesgos.nivel(e.p, e.i);
         return {
@@ -1139,8 +1108,10 @@
           decision: e.decision != null ? Riesgos.DECISIONES[e.decision] : null,
           acciones: r.acciones.map((ac, k) => ({ accion: ac.texto, fuente: ac.fuente, hecha: (e.hechas || []).includes(k) })),
         };
-      }),
-      peligros_geologicos: state.peligro
+      });
+    }
+    if (MODULOS.desastre) {
+      out.peligros_geologicos = state.peligro
         ? {
           radio_m: state.peligro.radio,
           total: state.peligro.total,
@@ -1154,8 +1125,10 @@
           },
           fuente: CONFIG.peligros.fuente,
         }
-        : null,
-      denuncias: state.delito
+        : null;
+    }
+    if (MODULOS.seguridad) {
+      out.denuncias = state.delito
         ? {
           radio_m: state.delito.radio,
           desde: state.delito.meta.ventanaDesde,
@@ -1165,12 +1138,8 @@
           total: state.delito.conteo.total,
           fuente: CONFIG.delitos.fuente,
         }
-        : null,
-      elements: state.items.map((i) => ({
-        osm: i.id, category: i.cat.id, subtype: i.subtype, matchedTag: i.tag, name: i.name,
-        lat: i.lat, lon: i.lon, distance_m: Math.round(i.distance * 10) / 10, distance_method: i.method, tags: i.tags,
-      })),
-    };
+        : null;
+    }
     const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -1179,8 +1148,6 @@
     URL.revokeObjectURL(a.href);
   });
 
-  $('analyze').addEventListener('click', analyze);
-
   // Ayuda para verificar desde la consola del navegador (F12)
-  window.osmDebug = { map, state, Geo, Services, Zonificacion, Peligros, Distritos, Riesgos, Delitos, CATEGORIES };
+  window.osmDebug = { map, state, MODULOS, Calculos, Services, Zonificacion, Equipamiento, Peligros, Distritos, Riesgos, Delitos };
 })();

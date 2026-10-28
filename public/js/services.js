@@ -51,19 +51,18 @@ const Services = (() => {
 
   // ---------------------------------------------------------------- Overpass
 
-  /** Una sola consulta para las tres categorías (menos solicitudes al servicio público). */
-  function buildOverpassQuery(lat, lon, radius) {
+  /**
+   * Consulta de respaldo de UNA variable alrededor del punto (solo se usa si falta su archivo congelado).
+   * Las etiquetas salen de Calculos.FILTROS, las mismas con las que se extrajeron los archivos.
+   *   salud, educacion, transporte → `out center` (un punto por elemento)
+   *   areasVerdes                   → vías y relaciones con `out geom` (polígonos)
+   */
+  function buildOverpassQuery(categoria, lat, lon, radius) {
     const around = `(around:${radius},${lat.toFixed(6)},${lon.toFixed(6)})`;
-    const lines = [];
-    CATEGORIES.forEach((cat) => {
-      lines.push(`  // ${cat.label}`);
-      cat.filters.forEach((f) => {
-        const vals = Object.keys(f.values);
-        const sel = vals.length === 1 ? `["${f.key}"="${vals[0]}"]` : `["${f.key}"~"^(${vals.join('|')})$"]`;
-        lines.push(`  nwr${sel}${around};`);
-      });
-    });
-    return `[out:json][timeout:${CONFIG.overpassTimeoutSec}][maxsize:${CONFIG.overpassMaxSizeBytes}];\n(\n${lines.join('\n')}\n);\nout body geom;`;
+    const sel = Calculos.selectoresOverpass(categoria);
+    const areas = categoria === 'areasVerdes';
+    const lines = sel.flatMap((s) => (areas ? [`  way${s}${around};`, `  relation${s}${around};`] : [`  nwr${s}${around};`]));
+    return `[out:json][timeout:${CONFIG.overpassTimeoutSec}][maxsize:${CONFIG.overpassMaxSizeBytes}];\n(\n${lines.join('\n')}\n);\nout ${areas ? 'geom' : 'center'} tags;`;
   }
 
   async function overpass(endpoint, query) {

@@ -259,6 +259,18 @@ describe('clasificación de etiquetas y consulta Overpass', () => {
   });
 });
 
+describe('etiquetaDe (etiqueta de OSM que clasificó el elemento)', () => {
+  it('devuelve clave=valor de la primera regla que coincide', () => {
+    expect(Calculos.etiquetaDe({ amenity: 'hospital', healthcare: 'hospital' }, 'salud')).toBe('amenity=hospital');
+    expect(Calculos.etiquetaDe({ healthcare: 'centre' }, 'salud')).toBe('healthcare=centre');
+    expect(Calculos.etiquetaDe({ public_transport: 'platform' }, 'transporte')).toBe('public_transport=platform');
+  });
+
+  it('devuelve null si no coincide', () => {
+    expect(Calculos.etiquetaDe({ amenity: 'cafe' }, 'salud')).toBeNull();
+  });
+});
+
 describe('evaluarAreaVerde (V5: ≥ 5000 m² a ≤ 300 m)', () => {
   const opciones = {
     areaMinM2: 5000,

@@ -185,6 +185,13 @@ const Calculos = (() => {
     return Object.keys(FILTROS).filter((cat) => FILTROS[cat].some((f) => coincide(t, f)));
   }
 
+  /** Etiqueta «clave=valor» con la que un elemento entra en la variable (la primera regla que coincide), o null. */
+  function etiquetaDe(tags, categoria) {
+    const t = tags || {};
+    const f = (FILTROS[categoria] || []).find((x) => coincide(t, x));
+    return f ? `${f.clave}=${t[f.clave]}` : null;
+  }
+
   /** Selectores de Overpass QL de una variable, p. ej. ["amenity"~"^(hospital|clinic)$"]. */
   function selectoresOverpass(categoria) {
     return FILTROS[categoria].map((f) => {
@@ -462,6 +469,7 @@ const Calculos = (() => {
     areaGeometriaM2,
     centroDe,
     categoriasDe,
+    etiquetaDe,
     selectoresOverpass,
     nivelesEducativos,
     evaluarMasCercano,

@@ -112,7 +112,9 @@ const Zonificacion = (() => {
   /**
    * Zona que contiene el punto, o null si cae fuera del área zonificada.
    * Si dos polígonos se superponen, gana el último del archivo: es el que el plano dibuja encima.
-   * Devuelve { codigo, color, regla, feature, coincidencias }. `regla` es null si el código no está en la tabla.
+   * Devuelve { codigo, color, regla, feature, coincidencias, borde }. `regla` es null si el código no está en la tabla.
+   * `borde` es la alerta de borde (Calculos.alertaBorde): { alerta, codigo, distanciaM, umbralM }, con alerta = true si un
+   * polígono de OTRA zona queda a CONFIG.umbrales.bordeZona metros o menos del punto.
    */
   async function lookup(lat, lon) {
     await load();
@@ -127,7 +129,8 @@ const Zonificacion = (() => {
       }
     }
     if (!hit) return null;
-    return { codigo: hit.codigo, color: hit.color, regla: reglas[hit.codigo] || null, feature: hit.feature, coincidencias };
+    const borde = Calculos.alertaBorde({ lat, lon }, index, hit.codigo, CONFIG.umbrales.bordeZona);
+    return { codigo: hit.codigo, color: hit.color, regla: reglas[hit.codigo] || null, feature: hit.feature, coincidencias, borde };
   }
 
   // "35-40" → [35, 40]; 40 → [40, 40]; vacío → null
@@ -180,5 +183,8 @@ const Zonificacion = (() => {
     });
   }
 
-  return { load, lookup, potencial, rango, capa, contorno };
+  /** Tabla de reglas por código (vacía hasta que load() termina). */
+  const tablaReglas = () => reglas;
+
+  return { load, lookup, potencial, rango, capa, contorno, reglas: tablaReglas };
 })();

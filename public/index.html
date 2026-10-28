@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>GeoVerificador · Riesgos de un predio en Arequipa</title>
-  <meta name="description" content="Ficha de riesgos de un predio en Arequipa con datos públicos: zonificación, peligros, zona sísmica, denuncias y entorno, con su fuente y sus límites.">
+  <title>GeoVerificador · Zonificación y servicios de un predio en Arequipa</title>
+  <meta name="description" content="Ficha de un predio en Arequipa con datos públicos: zonificación vigente y aviso del PDM nuevo, y si hay cerca salud, colegios, transporte y un área verde, con su fuente y sus límites.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230f766e'/%3E%3Cpath d='M16 6c-4.4 0-8 3.4-8 7.7C8 19.5 16 26 16 26s8-6.5 8-12.3C24 9.4 20.4 6 16 6zm0 10.6a3 3 0 1 1 0-6 3 3 0 0 1 0 6z' fill='%23fff'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
         integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
@@ -18,7 +18,7 @@
         <svg class="brand-logo" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8"/><path d="M16 6c-4.4 0-8 3.4-8 7.7C8 19.5 16 26 16 26s8-6.5 8-12.3C24 9.4 20.4 6 16 6zm0 10.6a3 3 0 1 1 0-6 3 3 0 0 1 0 6z"/></svg>
         <div class="brand-text">
           <strong>GeoVerificador</strong>
-          <span>Riesgos de un predio · Arequipa</span>
+          <span>Zonificación y servicios · Arequipa</span>
         </div>
       </div>
 
@@ -41,16 +41,16 @@
 
       <!-- Bienvenida: se muestra hasta que se elige un punto -->
       <section id="welcome" class="welcome">
-        <p class="eyebrow">Ficha de riesgos con datos públicos</p>
-        <h1>Conoce los riesgos de un predio antes de invertir</h1>
-        <p class="lead">Elige un punto de Arequipa metropolitana y obtén, por separado y con su fuente, lo que dice la norma, los peligros documentados, la zona sísmica, las denuncias y el entorno.</p>
+        <p class="eyebrow">Ficha con datos públicos</p>
+        <h1>Conoce la zonificación y los servicios cercanos de un predio</h1>
+        <p class="lead">Elige un punto de Arequipa metropolitana y revisa, con su fuente: la zonificación vigente y el aviso del PDM nuevo, y si hay cerca un establecimiento de salud, colegios por nivel, un paradero y un área verde.</p>
         <ol class="steps">
           <li><span class="step-n">1</span><div><strong>Elige un punto</strong><span>Haz clic en el mapa, arrastra el marcador o busca una dirección arriba.</span></div></li>
-          <li><span class="step-n">2</span><div><strong>Revisa cada riesgo</strong><span>Cada dato dice de dónde viene y qué no cubre.</span></div></li>
-          <li><span class="step-n">3</span><div><strong>Evalúa y descarga</strong><span>Arma tu registro de riesgos con las acciones oficiales para cada uno.</span></div></li>
+          <li><span class="step-n">2</span><div><strong>Revisa cada variable</strong><span>Cada una dice si cumple, la distancia en línea recta, de dónde viene el dato y qué no cubre.</span></div></li>
+          <li><span class="step-n">3</span><div><strong>Descarga la ficha</strong><span>Guárdala como PDF para consultarla o compartir el archivo.</span></div></li>
         </ol>
         <button id="probar" type="button" class="primary">Probar con el centro de Arequipa</button>
-        <p class="disclaimer">No es una recomendación de compra ni reemplaza los certificados municipales.</p>
+        <p class="disclaimer">No es una recomendación de compra ni reemplaza los certificados municipales. Las distancias son en línea recta, no recorrido a pie.</p>
       </section>
 
       <!-- Ficha: aparece al elegir un punto -->
@@ -61,30 +61,30 @@
             <span id="point-distrito" class="point-distrito">Punto seleccionado</span>
             <span id="point-info" class="point-info">Ningún punto seleccionado.</span>
           </div>
-          <button id="download" type="button" class="ghost pdf-btn" title="Resumen de la ficha y tu registro de riesgos, para guardar como PDF">Descargar PDF</button>
+          <button id="download" type="button" class="ghost pdf-btn" title="Resumen de la ficha para guardar como PDF">Descargar PDF</button>
         </div>
 
         <nav class="tabs" role="tablist" aria-label="Secciones de la ficha">
           <button role="tab" id="tabbtn-resumen" data-tab="resumen" aria-controls="tab-resumen" aria-selected="true">Resumen</button>
-          <button role="tab" id="tabbtn-normativo" data-tab="normativo" aria-controls="tab-normativo" aria-selected="false" tabindex="-1">Normativo <span class="tab-badge" id="badge-normativo"></span></button>
-          <button role="tab" id="tabbtn-desastre" data-tab="desastre" aria-controls="tab-desastre" aria-selected="false" tabindex="-1">Desastre <span class="tab-badge" id="badge-desastre"></span></button>
-          <button role="tab" id="tabbtn-seguridad" data-tab="seguridad" aria-controls="tab-seguridad" aria-selected="false" tabindex="-1">Seguridad <span class="tab-badge" id="badge-seguridad"></span></button>
-          <button role="tab" id="tabbtn-entorno" data-tab="entorno" aria-controls="tab-entorno" aria-selected="false" tabindex="-1">Entorno <span class="tab-badge" id="badge-entorno"></span></button>
-          <button role="tab" id="tabbtn-riesgos" data-tab="riesgos" aria-controls="tab-riesgos" aria-selected="false" tabindex="-1">Riesgos <span class="tab-badge accent" id="badge-riesgos"></span></button>
+          <button role="tab" id="tabbtn-normativo" data-tab="normativo" aria-controls="tab-normativo" aria-selected="false" tabindex="-1">Zonificación <span class="tab-badge" id="badge-normativo"></span></button>
+          <button role="tab" id="tabbtn-entorno" data-tab="entorno" aria-controls="tab-entorno" aria-selected="false" tabindex="-1">Servicios <span class="tab-badge" id="badge-entorno"></span></button>
+          <button role="tab" id="tabbtn-desastre" data-tab="desastre" data-modulo="desastre sismica" aria-controls="tab-desastre" aria-selected="false" tabindex="-1">Desastre <span class="tab-badge" id="badge-desastre"></span></button>
+          <button role="tab" id="tabbtn-seguridad" data-tab="seguridad" data-modulo="seguridad" aria-controls="tab-seguridad" aria-selected="false" tabindex="-1">Seguridad <span class="tab-badge" id="badge-seguridad"></span></button>
+          <button role="tab" id="tabbtn-riesgos" data-tab="riesgos" data-modulo="riesgos" aria-controls="tab-riesgos" aria-selected="false" tabindex="-1">Riesgos <span class="tab-badge accent" id="badge-riesgos"></span></button>
           <button role="tab" id="tabbtn-fuentes" data-tab="fuentes" aria-controls="tab-fuentes" aria-selected="false" tabindex="-1">Fuentes</button>
         </nav>
 
         <!-- Resumen -->
         <section class="tabpanel" id="tab-resumen" role="tabpanel" aria-labelledby="tabbtn-resumen">
           <div id="resumen" class="summary-grid"></div>
-          <p class="note">Son hechos de cada fuente, no una calificación: no se suman en un puntaje porque no existe una base para decidir cuánto pesa cada riesgo.</p>
+          <p class="note">Cada variable se evalúa por separado contra su propio umbral: no se suman en un puntaje porque no existe una base para decidir cuánto pesa cada una. Las distancias son en línea recta.</p>
         </section>
 
         <!-- Normativo -->
         <section class="tabpanel" id="tab-normativo" role="tabpanel" aria-labelledby="tabbtn-normativo" hidden>
           <header class="panel-head">
             <span class="dot normativo"></span>
-            <div><h2>Riesgo normativo</h2><p>Zonificación del PDM y cuánto se puede construir</p></div>
+            <div><h2>Zonificación</h2><p>Zonificación vigente (PDM 2016-2025) y estado del PDM nuevo</p></div>
             <button type="button" class="ghost capa-btn" data-capa="zon-layer" aria-pressed="false">Ver plano</button>
           </header>
           <label class="lote-field">
@@ -95,27 +95,44 @@
             <p class="muted small">Elige un punto para ver qué zona le corresponde y cuánto se puede construir.</p>
           </div>
           <p id="zon-fuente" class="source"></p>
+          <div id="pdm-aviso"></div>
+        </section>
+
+        <!-- Servicios: salud, educación, transporte y área verde (V2 a V5) -->
+        <section class="tabpanel" id="tab-entorno" role="tabpanel" aria-labelledby="tabbtn-entorno" hidden>
+          <header class="panel-head">
+            <span class="dot entorno"></span>
+            <div><h2>Servicios cercanos</h2><p>Salud, educación, transporte y área verde, en línea recta desde el punto</p></div>
+          </header>
+          <div id="entorno" class="entorno" role="status" aria-live="polite">
+            <p class="muted small">Elige un punto para ver qué servicios hay cerca.</p>
+          </div>
+          <p id="entorno-fuente" class="source"></p>
         </section>
 
         <!-- Desastre -->
-        <section class="tabpanel" id="tab-desastre" role="tabpanel" aria-labelledby="tabbtn-desastre" hidden>
+        <section class="tabpanel" id="tab-desastre" role="tabpanel" aria-labelledby="tabbtn-desastre" data-modulo="desastre sismica" hidden>
           <header class="panel-head">
             <span class="dot desastre"></span>
             <div><h2>Riesgo de desastre</h2><p>Peligros geológicos documentados y zona sísmica</p></div>
             <button type="button" class="ghost capa-btn" data-capa="pel-layer" aria-pressed="false">Ver peligros</button>
           </header>
-          <h3 class="sub-head">Peligros geológicos registrados</h3>
-          <div id="pel" class="zon" role="status" aria-live="polite">
-            <p class="muted small">Elige un punto para ver qué peligros geológicos hay registrados cerca.</p>
+          <div data-modulo="desastre">
+            <h3 class="sub-head">Peligros geológicos registrados</h3>
+            <div id="pel" class="zon" role="status" aria-live="polite">
+              <p class="muted small">Elige un punto para ver qué peligros geológicos hay registrados cerca.</p>
+            </div>
+            <p id="pel-fuente" class="source"></p>
           </div>
-          <p id="pel-fuente" class="source"></p>
-          <h3 class="sub-head">Peligro sísmico</h3>
-          <div id="sismo" class="zon sismo" role="status" aria-live="polite"></div>
-          <p id="sismo-fuente" class="source"></p>
+          <div data-modulo="sismica">
+            <h3 class="sub-head">Peligro sísmico</h3>
+            <div id="sismo" class="zon sismo" role="status" aria-live="polite"></div>
+            <p id="sismo-fuente" class="source"></p>
+          </div>
         </section>
 
         <!-- Seguridad -->
-        <section class="tabpanel" id="tab-seguridad" role="tabpanel" aria-labelledby="tabbtn-seguridad" hidden>
+        <section class="tabpanel" id="tab-seguridad" role="tabpanel" aria-labelledby="tabbtn-seguridad" data-modulo="seguridad" hidden>
           <header class="panel-head">
             <span class="dot seguridad"></span>
             <div><h2>Riesgo de seguridad</h2><p>Robos y hurtos denunciados alrededor del punto</p></div>
@@ -127,34 +144,8 @@
           <p id="del-fuente" class="source"></p>
         </section>
 
-        <!-- Entorno -->
-        <section class="tabpanel" id="tab-entorno" role="tabpanel" aria-labelledby="tabbtn-entorno" hidden>
-          <header class="panel-head">
-            <span class="dot entorno"></span>
-            <div><h2>Entorno</h2><p>Servicios, transporte y áreas verdes en OpenStreetMap</p></div>
-          </header>
-          <div class="entorno-controls">
-            <label class="field">
-              <span>Radio</span>
-              <select id="radius"></select>
-            </label>
-            <label class="field grow">
-              <span>Servidor Overpass</span>
-              <select id="endpoint"></select>
-            </label>
-          </div>
-          <button id="analyze" class="primary" type="button" disabled>Analizar entorno</button>
-          <div id="status" class="status idle" role="status" aria-live="polite">Selecciona un punto para empezar.</div>
-          <div id="cats" class="osm-cats"></div>
-          <details id="query-details" class="disclosure" hidden>
-            <summary>Consulta enviada a Overpass</summary>
-            <textarea id="query-text" readonly rows="10" aria-label="Consulta Overpass QL"></textarea>
-            <p class="small"><a id="turbo-link" href="#" target="_blank" rel="noopener">Ejecutar esta misma consulta en Overpass Turbo</a></p>
-          </details>
-        </section>
-
         <!-- Gestión de riesgos -->
-        <section class="tabpanel" id="tab-riesgos" role="tabpanel" aria-labelledby="tabbtn-riesgos" hidden>
+        <section class="tabpanel" id="tab-riesgos" role="tabpanel" aria-labelledby="tabbtn-riesgos" data-modulo="riesgos" hidden>
           <header class="panel-head">
             <span class="dot riesgos"></span>
             <div><h2>Gestión de riesgos del predio</h2><p>Identificar · analizar · tratar · dar seguimiento</p></div>
@@ -182,7 +173,8 @@
               <li>Es el plano del PDM 2016-2025. El Reglamento fija su vigencia en 10 años, luego de los cuales debe revisarse, y la Municipalidad tiene un PDM nuevo en consulta pública (octubre a diciembre de 2025). No incluye los planes específicos aprobados después ni el plan nuevo.</li>
               <li>Una sentencia judicial (Sentencia de Vista N.° 183-2019) suspendió actos administrativos de ejecución del PDM en cuatro puntos: certificados de zonificación para predios que antes eran zona agrícola o reserva paisajista, la compatibilidad de la zona agrícola con otros usos, los planes específicos sobre esos predios y la delimitación del centro histórico. No se pudo comprobar si la suspensión sigue vigente. Si el predio fue zona agrícola o de reserva paisajista, consulta al IMPLA antes de confiar en este resultado.</li>
               <li>Es referencial: no reemplaza los certificados municipales (el Certificado de Parámetros Urbanísticos y Edificatorios de la municipalidad distrital o el Certificado de Zonificación y Vías de la municipalidad provincial).</li>
-              <li>Los polígonos se extrajeron del PDF del plano y el código se asignó por el color de relleno. Cerca del borde entre dos zonas el resultado puede no ser exacto.</li>
+              <li>Los polígonos se extrajeron del PDF del plano y el código se asignó por el color de relleno. Cerca del borde entre dos zonas el resultado puede no ser exacto: por eso la ficha avisa cuando otra zona queda a 20 m o menos del punto (umbral de la herramienta, una convención del proyecto).</li>
+              <li>La zonificación proyectada (la del PDM nuevo) no se muestra en el mapa: solo se advierte, con su fuente y fecha, que el plan nuevo no está aprobado y que la zonificación puede cambiar. Esa fuente es una nota de prensa, no un documento oficial.</li>
               <li>El plano pinta igual todos los niveles de educación (<code>E</code>) y de salud (<code>H</code>), y también la zona agrícola y la de expansión agrícola (<code>ZA</code>).</li>
               <li>Colegios, salud, usos especiales y zonas de reglamentación especial no tienen coeficiente propio: se rigen por su entorno o por un plan específico, así que no se calcula cuánto se puede construir.</li>
               <li>En zonas comerciales la altura no es un número fijo de pisos: depende del ancho de la calle (1,5 × ancho de vía más retiros).</li>
@@ -190,7 +182,7 @@
               <li>Los m² construibles son un máximo teórico (área del lote × coeficiente). No consideran retiros, estacionamientos ni la forma del lote.</li>
             </ul>
           </details>
-          <details class="disclosure">
+          <details class="disclosure" data-modulo="desastre sismica">
             <summary>Limitaciones de los peligros y la zona sísmica</summary>
             <ul class="limits">
               <li>Es un inventario de eventos documentados (por geólogos en campo, informes técnicos o fotointerpretación), no un mapa de susceptibilidad. Si no hay registros cerca, no significa que el lugar sea seguro: solo que nadie documentó un evento ahí.</li>
@@ -204,7 +196,7 @@
               <li>Además de este inventario, el plano de zonificación marca zonas de riesgo muy alto (<code>ZRE-RI1</code>, <code>ZRE-RI2</code>); se avisa en la sección de peligros si el punto cae en una.</li>
             </ul>
           </details>
-          <details class="disclosure">
+          <details class="disclosure" data-modulo="seguridad">
             <summary>Limitaciones de las denuncias</summary>
             <ul class="limits">
               <li>Son denuncias, no delitos: muchos robos y hurtos no se denuncian, y la costumbre de denunciar cambia de un barrio a otro.</li>
@@ -219,16 +211,16 @@
             </ul>
           </details>
           <details class="disclosure">
-            <summary>Limitaciones del entorno (OpenStreetMap)</summary>
+            <summary>Limitaciones de los servicios (OpenStreetMap)</summary>
             <ul class="limits">
-              <li>OSM es un mapa colaborativo: un elemento ausente puede existir en la realidad y simplemente no estar mapeado.</li>
-              <li>Solo aparece lo que tiene exactamente las etiquetas listadas abajo. Quedan fuera, por ejemplo, plazas (<code>place=square</code>), alamedas, bermas arboladas, postas o centros de salud mapeados con otras etiquetas, y colegios cuyo tag sea distinto de <code>amenity=school</code>.</li>
-              <li>Las paradas de transporte informal (combis, micros) rara vez están completas; no hay horarios ni frecuencias.</li>
-              <li>Muchos elementos no tienen nombre; se cuentan igual y se marcan como «sin nombre».</li>
-              <li>Una misma instalación puede estar mapeada dos veces (punto y área) y contarse dos veces.</li>
-              <li>Parques y canchas son áreas: la distancia es al borde más cercano (0 m si el punto está dentro). Las relaciones (multipolígonos) usan el centro de su caja envolvente, así que son aproximadas.</li>
-              <li>Distancia en línea recta, no recorrido a pie. Un parque puede estar cerca pero tener acceso lejano.</li>
-              <li>Overpass y Nominatim públicos no tienen disponibilidad garantizada: pueden limitar, saturarse o bloquear solicitudes.</li>
+              <li>OSM es un mapa colaborativo: un elemento ausente puede existir en la realidad y simplemente no estar mapeado. «Sin dato» significa que no hay ninguno en el archivo, no que no exista.</li>
+              <li>Los datos se extrajeron una sola vez y se guardaron en archivos locales (fecha de extracción en cada resultado); no se actualizan solos. Solo aparece lo que tiene las etiquetas listadas abajo: por ejemplo, una plaza mapeada como <code>place=square</code> no cuenta como área verde, y un centro de salud con otras etiquetas queda fuera.</li>
+              <li>Todas las distancias son en línea recta (fórmula del haversine), no recorrido a pie: un servicio puede estar cerca pero tener acceso lejano o del otro lado de una quebrada o una avenida.</li>
+              <li>Los umbrales de salud (1000 m), transporte (400 m) y de aviso de borde de zona (20 m) son convenciones de este proyecto, no normas. Los de educación (inicial 500 m, primaria 1500 m, secundaria 3000 m) vienen del Instructivo FTE del MEF/MINEDU (Cuadro N.° 1; RVM 104-2019 y 208-2019-MINEDU). El de área verde (al menos 5000 m² a 300 m) es el indicador básico de la OMS Europa (2016).</li>
+              <li>OSM casi no etiqueta el nivel de los colegios. Un colegio sin etiqueta de nivel se toma como candidato a primaria y secundaria (no a inicial); los jardines (<code>amenity=kindergarten</code>) cuentan como inicial. Esa regla puede sobrestimar la oferta de un nivel y se indica en el resultado.</li>
+              <li>Área verde: se mide el área geodésica de cada polígono y la distancia a su borde más cercano (0 m si el punto está dentro). Un parque cuyo contorno no está cerrado en OSM no aparece, y una misma instalación mapeada dos veces cuenta como dos.</li>
+              <li>Las paradas informales (combis, micros) rara vez están completas, y no hay horarios ni frecuencias. Muchos elementos no tienen nombre y se muestran como «Sin nombre en OSM».</li>
+              <li>Si falta un archivo local, la aplicación consulta Overpass en vivo (servicio público sin disponibilidad garantizada) en un radio de 5 km; el resultado lo indica.</li>
             </ul>
           </details>
           <details class="disclosure">
@@ -239,11 +231,14 @@
           <div class="credits">
             <h3 class="sub-head">Fuentes de datos</h3>
             <ul>
-              <li><strong>Zonificación:</strong> Municipalidad Provincial de Arequipa (IMPLA), PDM 2016-2025.</li>
-              <li><strong>Peligros geológicos y límites distritales:</strong> INGEMMET (GEOCATMIN; límites del INEI).</li>
-              <li><strong>Zona sísmica:</strong> Norma E.030 Diseño Sismorresistente 2026 (MVCS).</li>
-              <li><strong>Denuncias:</strong> Ministerio del Interior, Mapa del Delito Georreferenciado (SIDPOL-PNP).</li>
-              <li><strong>Entorno y mapa base:</strong> © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">colaboradores de OpenStreetMap</a> (ODbL), vía Overpass API y Nominatim.</li>
+              <li><strong>Zonificación vigente:</strong> Municipalidad Provincial de Arequipa (IMPLA), PDM 2016-2025.</li>
+              <li><strong>Estado del PDM nuevo:</strong> <span id="credito-pdm">sin fuente registrada (no se muestra el aviso)</span>.</li>
+              <li><strong>Límites distritales:</strong> INEI, vía GEOCATMIN (INGEMMET); solo para indicar el distrito del punto.</li>
+              <li data-modulo="desastre"><strong>Peligros geológicos:</strong> INGEMMET (GEOCATMIN).</li>
+              <li data-modulo="sismica"><strong>Zona sísmica:</strong> Norma E.030 Diseño Sismorresistente 2026 (MVCS).</li>
+              <li data-modulo="seguridad"><strong>Denuncias:</strong> Ministerio del Interior, Mapa del Delito Georreferenciado (SIDPOL-PNP).</li>
+              <li><strong>Salud, educación, transporte y áreas verdes, y mapa base:</strong> © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">colaboradores de OpenStreetMap</a> (ODbL); búsqueda de direcciones con Nominatim.</li>
+              <li><strong>Umbrales de educación:</strong> MEF/MINEDU, Instructivo FTE, Cuadro N.° 1 (RVM 104-2019 y 208-2019-MINEDU). <strong>Área verde:</strong> OMS Europa (2016).</li>
             </ul>
           </div>
         </section>
@@ -261,11 +256,10 @@
         </button>
         <div class="layers-body" id="layers-body">
           <label class="layer-row"><input id="zon-layer" type="checkbox"><span class="layer-swatch zon"></span><span>Plano de zonificación</span></label>
-          <label class="layer-row"><input id="pel-layer" type="checkbox"><span class="layer-swatch pel"></span><span>Peligros geológicos</span></label>
-          <label class="layer-row"><input id="del-layer" type="checkbox"><span class="layer-swatch del"></span><span>Mapa de calor de denuncias</span></label>
-          <div class="ring-legend">
+          <label class="layer-row" data-modulo="desastre"><input id="pel-layer" type="checkbox"><span class="layer-swatch pel"></span><span>Peligros geológicos</span></label>
+          <label class="layer-row" data-modulo="seguridad"><input id="del-layer" type="checkbox"><span class="layer-swatch del"></span><span>Mapa de calor de denuncias</span></label>
+          <div class="ring-legend" data-modulo="desastre seguridad">
             <span><i class="ring r500"></i>Radio de peligros y denuncias (500 m)</span>
-            <span><i class="ring rent"></i>Radio del entorno (pestaña Entorno)</span>
           </div>
           <div id="del-leyenda" class="del-leyenda" hidden>
             <span>Menos</span><span class="del-bar" aria-hidden="true"></span><span>Más</span>
@@ -283,9 +277,11 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
           integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="js/config.js"></script>
+  <script src="js/calculos.js"></script>
   <script src="js/geo.js"></script>
   <script src="js/services.js"></script>
   <script src="js/zonificacion.js"></script>
+  <script src="js/equipamiento.js"></script>
   <script src="js/peligros.js"></script>
   <script src="js/distritos.js"></script>
   <script src="js/riesgos.js"></script>

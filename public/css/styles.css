@@ -608,3 +608,27 @@ body.vista-reporte .reporte { display: block; max-width: 800px; margin: 20px aut
   .reporte { display: block !important; }
   .reporte * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+
+/* ==========================================================================
+   Alcance de 5 variables: tarjetas de servicios, aviso del PDM y alerta de borde
+   ========================================================================== */
+[hidden] { display: none !important; }
+
+.entorno { display: grid; gap: 10px; }
+.var-card { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); padding: 12px 14px; box-shadow: var(--shadow-sm); display: grid; gap: 6px; }
+.var-head { display: flex; align-items: center; gap: 10px; }
+.var-head h3 { font-size: 1rem; margin: 0; flex: 1; }
+.var-icon { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; color: #fff; font-size: 14px; flex: none; }
+.var-main { margin: 0; font-size: .92rem; line-height: 1.4; }
+.var-meta { margin: 0; font-size: .78rem; color: var(--muted); line-height: 1.4; }
+.var-meta code { font-size: .74rem; }
+.var-nivel { border-top: 1px solid var(--line); padding-top: 8px; display: grid; gap: 4px; }
+.var-nivel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.var-metodo { font-size: .78rem; color: var(--muted); }
+.var-metodo summary { cursor: pointer; width: fit-content; }
+.var-metodo p { margin: 4px 0 0; }
+
+.pdm-aviso { margin-top: 10px; padding: 11px 13px; border-radius: var(--radius-sm); border: 1px solid var(--warn-line); background: var(--warn-soft); color: #5c3d00; font-size: .88rem; }
+.pdm-aviso p { margin: 4px 0 0; }
+.pdm-aviso a { color: inherit; }
+.alerta-borde { margin-bottom: 10px; }
