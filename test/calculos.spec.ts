@@ -7,7 +7,7 @@
 const Calculos = require('../public/js/calculos.js');
 
 type Punto = { lat: number; lon: number };
-const P: Punto = { lat: -16.409, lon: -71.5375 }; // Plaza de Armas de Arequipa (aprox.)
+const P: Punto = { lat: -16.409, lon: -71.5375 }; // Punto de prueba en el Cercado de Arequipa
 
 // Metros → grados en el punto P (aproximación local, suficiente para armar casos de prueba).
 const M_POR_GRADO_LAT = (Math.PI / 180) * 6371008.8;

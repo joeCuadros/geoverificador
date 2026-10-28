@@ -7,7 +7,7 @@
  * (scripts/extraer-equipamiento.mjs), clasificarlos y documentarlos en pantalla.
  */
 const CONFIG = {
-  center: [-16.409, -71.5375], // Plaza de Armas de Arequipa (aprox.)
+  center: [-16.39883, -71.53697], // Plaza de Armas de Arequipa (Nominatim, way 23811932)
   zoom: 14,
 
   overpassEndpoints: [
