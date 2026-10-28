@@ -1,5 +1,7 @@
 # GeoVerificador — Metodología y trazabilidad
 
+> **Alcance vigente: 5 variables** (zonificación vigente, zonificación proyectada, salud, educación por nivel, transporte y área verde; ver §6 y §6b). Los capítulos de desastre, seguridad y gestión de riesgos (§4, §5, §10) describen módulos que siguen en el código pero están ocultos (`CONFIG.modulos`; se ven con `?modulos=todos`).
+>
 > Cada dato que muestra la aplicación tiene aquí su origen, su transformación, la decisión que lo justifica y su límite.
 > Lo que **no** se pudo comprobar está marcado como tal. Cifras consultadas el 2026-10-12 y, para el peligro sísmico y la gestión de riesgos, el 2026-10-13.
 
@@ -193,13 +195,34 @@ Descarga: `node scripts/descargar-delitos.mjs` → `public/data/delitos_aqp.geoj
 - El color del mapa de calor es relativo (frente al máximo de la ciudad), no un nivel absoluto de riesgo.
 - **No comprobado:** que el patrón espacial represente el delito real. Solo se puede decir que es coherente con lo esperado (concentración en el centro y en ejes comerciales); ver `VALIDACION.md` §3.3.
 
-## 6. Entorno: servicios, transporte y áreas verdes
+## 6. Servicios: salud, educación, transporte y área verde (V2 a V5)
 
-**Fuente.** OpenStreetMap, consultado en vivo con Overpass API (geocodificación con Nominatim). Las etiquetas que se consultan están en `CATEGORIES` (`public/js/config.js`) y la aplicación las lista en pantalla; la misma definición se usa para consultar y para clasificar.
+**Fuente.** OpenStreetMap (ODbL), extraído **una sola vez** con `pnpm datos:extraer` (`scripts/extraer-equipamiento.mjs`: una consulta a Overpass para la caja de Arequipa metropolitana, con reintentos y un espejo de respaldo) y congelado en `public/data/equipamiento/{salud,educacion,transporte,areas_verdes}.geojson`. Cada archivo trae `metadata: { fuente, fecha_extraccion, consulta }`. La aplicación lee esos archivos; solo si falta alguno consulta Overpass en vivo, alrededor del punto, y lo dice en el método del resultado. Las etiquetas de cada variable están en `Calculos.FILTROS` (`public/js/calculos.js`); la misma definición sirve para consultar, clasificar y documentar en pantalla.
 
-**Qué se calcula.** Elementos dentro del radio elegido (500 m, 1 km o 1,5 km) y su distancia: exacta para puntos; 0 m si el punto está dentro de un área; hasta el borde más cercano para áreas; hasta el centro de la caja envolvente para relaciones (aproximado).
+**Qué se calcula.** Para el punto elegido, el elemento más cercano de cada variable (distancia en línea recta, haversine con R = 6 371 008,8 m) y su veredicto contra el umbral: `CUMPLE` (distancia ≤ umbral), `NO CUMPLE` o `SIN DATO` (no hay elementos en los datos).
 
-**Límites** (visibles en la aplicación): OSM es colaborativo, un elemento ausente puede existir; distancia en línea recta; el servicio público de Overpass puede limitar o caerse. Esta parte depende de internet y de un servicio de terceros, a diferencia de las otras tres, que usan archivos locales. El 2026-10-12 los dos servidores configurados no respondieron durante las pruebas (HTTP 504 y sin respuesta): la aplicación muestra ese error tal cual y no inventa resultados.
+| Variable | Elementos (etiquetas de OSM) | Umbral | Origen del umbral |
+|---|---|---|---|
+| V2 Salud | `amenity=hospital, clinic, doctors` y `healthcare=*` | 1000 m | Convención del proyecto |
+| V3 Educación inicial | `amenity=kindergarten`; `amenity=school` con `isced:level=0` o `school=kindergarten` | 500 m | MEF/MINEDU, Instructivo FTE, Cuadro N.° 1 (RVM 104-2019 y 208-2019-MINEDU) |
+| V3 Educación primaria | `amenity=school` con `isced:level=1` o `school=primary`; sin etiqueta de nivel | 1500 m | ídem |
+| V3 Educación secundaria | `amenity=school` con `isced:level=2 o 3` o `school=secondary`; sin etiqueta de nivel | 3000 m | ídem |
+| V4 Transporte | `highway=bus_stop`, `public_transport=platform, stop_position` | 400 m | Convención del proyecto |
+| V5 Área verde | Polígonos `leisure=park, garden`, `landuse=recreation_ground` | al menos 5000 m² a 300 m | Indicador básico de la OMS Europa (2016) |
+
+**Decisiones que la fuente no resuelve.**
+- `healthcare=*` incluye farmacias, laboratorios y consultas de una sola especialidad; se excluyen `pharmacy`, `optometrist`, `alternative`, `blood_donation`, `laboratory`, `sample_collection`, `dentist`, `physiotherapist`, `occupational_therapist`, `psychotherapist`, `speech_therapist`, `audiologist` y `podiatrist`, que no son centros de atención general.
+- OSM casi no etiqueta el nivel de los colegios. Un `amenity=school` sin `isced:level` ni `school` es candidato a primaria y secundaria (no a inicial; los jardines se mapean como `kindergarten`); uno etiquetado solo con `isced:level` ≥ 4 (superior mal etiquetada) no cuenta. Esa regla puede sobrestimar la oferta de un nivel (`Calculos.nivelesEducativos`).
+- Área verde: el área de cada polígono es geodésica (esfera de R = 6 371 008,8 m, fórmula de Chamberlain y Duquette) y la distancia es hasta su borde más cercano, 0 si el punto está dentro (proyección local plana, error de milímetros a 300 m). Se informa también si hay una de al menos 1 ha a 300 m (sensibilidad). Las relaciones multipolígono se ensamblan a partir de sus miembros; si el contorno exterior no cierra, se descartan.
+- Salud, educación y transporte se guardan como puntos (nodo, o centro de la vía o relación): la distancia a un hospital mapeado como edificio es al centro.
+
+**Límites.** OSM es colaborativo: lo ausente puede existir y `SIN DATO` significa que no está en el archivo. Los datos no se actualizan solos (fecha de extracción en cada resultado). Distancia en línea recta, no recorrido. Los umbrales de salud, transporte y borde de zona son convenciones del proyecto, no normas.
+
+## 6b. Zonificación: alerta de borde y PDM proyectado (V1a y V1b)
+
+- **Alerta de borde.** Si un polígono de otra zona queda a `CONFIG.umbrales.bordeZona` (20 m, convención del proyecto) o menos del punto, la ficha lo avisa (`Calculos.alertaBorde`). Responde a que los polígonos se extrajeron de un PDF y cerca del borde el resultado puede no ser exacto.
+- **Zonificación proyectada.** Solo un aviso de texto sobre el estado del PDM nuevo, con su fuente y fecha, tomado de `CONFIG.estadoPDM`. Si ese valor es `null` o le falta fuente o fecha, no se muestra nada (`Calculos.avisoPDMProyectado`). La fuente actual es una nota de prensa (Diario Correo, 2026-10-24), no un documento oficial. No hay mapa de la zonificación proyectada.
+- **Artículo del Reglamento.** La tabla de reglas no guarda el artículo de cada parámetro; la ficha cita el Título III del Reglamento y mostrará el artículo si una regla trae el campo opcional `articulo`.
 
 ## 7. Trazabilidad: de dónde sale cada cifra de la pantalla
 
@@ -215,17 +238,23 @@ Descarga: `node scripts/descargar-delitos.mjs` → `public/data/delitos_aqp.geoj
 | N denuncias a 500 m, robos y hurtos | Conteo con haversine sobre el periodo elegido | `delitos.js`, `delitos_aqp.geojson` |
 | Periodo y cobertura | Regla de cobertura sobre `metadata.cobertura` | `Delitos.load`, `metadata.cobertura` |
 | Mapa de calor | Densidad gaussiana (σ 200 m, celdas 100 m) | `Delitos.capa` |
-| Elementos del entorno | Overpass en vivo | `services.js`, `geo.js` |
+| Salud, educación por nivel, transporte y área verde (estado, distancia, nombre) | Más cercano por haversine y umbral; área geodésica y distancia al borde en áreas verdes | `calculos.js`, `equipamiento.js`, `data/equipamiento/*.geojson` |
+| Aviso de borde de zona | Otra zona a ≤ 20 m del punto | `Calculos.alertaBorde`, `zonificacion.js` |
+| Aviso del PDM proyectado | Texto de `CONFIG.estadoPDM` (solo con fuente y fecha) | `config.js`, `calculos.js` |
 | Distrito, zona sísmica y Z | Punto-en-polígono sobre los límites del INEI; zona y Z de la E.030 | `distritos.js`, `distritos_aqp.geojson`, `zonas_sismicas_e030.json` |
 | Riesgos identificados | Reglas del catálogo sobre los datos anteriores | `riesgos.js` (`CATALOGO`, `identificar`) |
 | Nivel de cada riesgo | Probabilidad × impacto elegidos por el usuario (matriz 3 × 3) | `riesgos.js` (`nivel`) |
 | Resumen del punto | Une las líneas anteriores sin puntaje | `app.js` (`renderResumen`) |
+
+Las filas de peligros, zona sísmica, denuncias y riesgos corresponden a los módulos fuera de alcance, que se ven con `?modulos=todos`.
+
 | Ficha en PDF | Los mismos datos de la pantalla, sin cálculos nuevos, en un informe para imprimir | `reporte.js`, `app.js` (`datosReporte`), reglas `@media print` de `styles.css` |
 
 ## 8. Cómo reproducir
 
 ```bash
 npm install
+npm run datos:extraer                 # public/data/equipamiento/*.geojson (OpenStreetMap, una consulta)
 node scripts/descargar-peligros.mjs   # public/data/peligros_aqp.geojson
 node scripts/descargar-delitos.mjs    # public/data/delitos_aqp.geojson
 node scripts/descargar-distritos.mjs  # public/data/distritos_aqp.geojson

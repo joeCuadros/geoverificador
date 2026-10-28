@@ -1,17 +1,23 @@
 # GeoVerificador
 
-Ficha de riesgos de un predio en Arequipa metropolitana, con datos públicos. Eliges un punto en el mapa y la aplicación muestra, por separado y con su fuente:
+Ficha de un predio en Arequipa metropolitana, con datos públicos. Eliges un punto en el mapa y la aplicación evalúa **5 variables**, por separado y con su fuente:
 
-| Riesgo | Qué muestra | Fuente |
-|---|---|---|
-| Normativo | Zona, reglas de edificación y m² construibles según el tamaño del lote | Plano y Reglamento del PDM Arequipa 2016-2025 |
-| De desastre | Peligros geológicos registrados cerca, aviso de zona de riesgo y zona sísmica del distrito | INGEMMET (GEOCATMIN), plano de zonificación, Norma E.030 y límites del INEI |
-| De seguridad | Robos y hurtos denunciados cerca, y mapa de calor | MININTER / SIDPOL-PNP |
-| De entorno | Servicios, transporte y áreas verdes cercanos | OpenStreetMap |
+| Variable | Qué muestra | Umbral | Fuente |
+|---|---|---|---|
+| V1a Zonificación vigente | Zona, nombre, parámetros (pisos, coeficiente, área libre, lote), m² construibles según el lote y alerta si otra zona queda a 20 m o menos | 20 m (convención del proyecto) | Plano y Reglamento del PDM Arequipa 2016-2025 |
+| V1b Zonificación proyectada | Solo un aviso de texto sobre el estado del PDM nuevo; aparece únicamente si `CONFIG.estadoPDM` tiene fuente y fecha. No hay mapa | — | Diario Correo (nota de prensa) |
+| V2 Salud | Establecimiento de salud más cercano | 1000 m (convención del proyecto) | OpenStreetMap |
+| V3 Educación | Colegio más cercano por nivel: inicial, primaria y secundaria | 500 / 1500 / 3000 m (MEF/MINEDU, Instructivo FTE, Cuadro N.° 1; RVM 104-2019 y 208-2019-MINEDU) | OpenStreetMap |
+| V4 Transporte | Paradero más cercano | 400 m (convención del proyecto) | OpenStreetMap |
+| V5 Área verde | Área verde de al menos 5000 m² a 300 m o menos (y, como sensibilidad, de al menos 1 ha) | 300 m / 5000 m² (OMS Europa, 2016) | OpenStreetMap |
 
-Con esos datos arma un **registro de riesgos**: identifica cada riesgo con su evidencia y fuente, propone trámites o normas oficiales para tratarlo, y deja que el usuario evalúe probabilidad e impacto y descargue el registro.
+Cada resultado es `{ estado: 'CUMPLE' | 'NO CUMPLE' | 'SIN DATO', nombre, distanciaM, umbralM, fuente, fecha, metodo }`. Las distancias son **en línea recta** (haversine, R = 6 371 008,8 m), no recorrido a pie. Los cálculos están en `public/js/calculos.js` (funciones puras con pruebas en `test/calculos.spec.ts`).
 
-**No recomienda dónde comprar ni construir y no da un puntaje global**: no hay base para decidir cuánto pesa cada riesgo. Cada dato indica qué no cubre. No reemplaza el Certificado de Zonificación y Vías.
+**No recomienda dónde comprar ni construir y no da un puntaje global**: no hay base para decidir cuánto pesa cada variable. Cada dato indica qué no cubre. No reemplaza el Certificado de Zonificación y Vías.
+
+### Módulos fuera de alcance
+
+Seguridad (denuncias), desastre (peligros geológicos), zona sísmica y registro de riesgos siguen en el código pero están ocultos (`CONFIG.modulos` en `public/js/config.js`). Se muestran de nuevo con `?modulos=todos` en la URL (por ejemplo `http://localhost:3000/?modulos=todos`).
 
 ## Documentación
 
@@ -34,7 +40,7 @@ El puerto se cambia con la variable de entorno `PORT`.
 - `allowBuilds`: los scripts de instalación de `@parcel/watcher` y `unrs-resolver` están desactivados a propósito (ambos traen binarios precompilados; esos scripts solo compilan desde el código fuente).
 - `overrides`: parches de seguridad para dependencias transitivas de desarrollo.
 
-El frontend es JavaScript sin dependencias (Leaflet desde CDN). Zonificación, peligros y denuncias se resuelven con archivos locales de `public/data`; solo el entorno (OpenStreetMap) y la búsqueda de direcciones consultan servicios externos, y únicamente al pulsar los botones. Si un servidor público de Overpass está saturado, la aplicación reintenta automáticamente con los demás servidores de `CONFIG.overpassEndpoints` (hasta 4 intentos).
+El frontend es JavaScript sin dependencias (Leaflet desde CDN). Las cinco variables se resuelven con archivos locales de `public/data` (la zonificación y el equipamiento congelado de OpenStreetMap en `public/data/equipamiento`); solo la búsqueda de direcciones (Nominatim) consulta un servicio externo, al pulsar «Buscar». Si falta un archivo de equipamiento, la aplicación consulta Overpass en vivo como respaldo, con reintentos entre los servidores de `CONFIG.overpassEndpoints`.
 
 ## Pruebas
 
@@ -48,6 +54,7 @@ pnpm run build
 ## Datos y verificación
 
 ```bash
+pnpm run datos:extraer                # public/data/equipamiento/{salud,educacion,transporte,areas_verdes}.geojson (una consulta a Overpass)
 node scripts/descargar-peligros.mjs   # public/data/peligros_aqp.geojson
 node scripts/descargar-delitos.mjs    # public/data/delitos_aqp.geojson
 node scripts/descargar-distritos.mjs  # public/data/distritos_aqp.geojson (zona sísmica E.030)
