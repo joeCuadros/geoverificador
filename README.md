@@ -69,11 +69,33 @@ El frontend es JavaScript sin dependencias de compilación (Leaflet se carga des
 | `pnpm datos:extraer` | Descarga el equipamiento de OpenStreetMap a `public/data/equipamiento` | Sí (Overpass) |
 | `pnpm datos:validar-osm` | Contrasta la zonificación con lugares de OpenStreetMap (usa la referencia guardada en `docs/validacion/`) | No |
 | `pnpm datos:validar-plano` | Contrasta la zonificación con el PDF oficial del plano (la ruta del PDF se pasa como argumento) | No |
+| `pnpm db:create` | Crea y comprueba la base MySQL local | No |
+| `pnpm db:migrate` | Aplica las migraciones MySQL numeradas | No |
+| `pnpm db:import` | Recarga en MySQL las fuentes GeoJSON actuales | No |
+| `pnpm db:grid` | Recorta a 100 m EPSG:32719 la zonificación y recalcula sus métricas en MySQL | No |
 | `node scripts/descargar-peligros.mjs` | Genera `public/data/peligros_aqp.geojson` | Sí |
 | `node scripts/descargar-delitos.mjs` | Genera `public/data/delitos_aqp.geojson` | Sí |
 | `node scripts/descargar-distritos.mjs` | Genera `public/data/distritos_aqp.geojson` (zona sísmica E.030) | Sí |
 
 Los datos ya descargados están en el repositorio: solo es necesario regenerarlos si cambia la fuente.
+
+### Cuadrícula MySQL
+
+Después de cargar los datos y aplicar migraciones, ejecuta `pnpm db:grid`. Genera cuadrados de 100 m en UTM 19S,
+recorta cada uno a la zonificación y guarda las geometrías en SRID 4326. Se excluyen los cuadrados recortados cuyo
+centro UTM original queda fuera de una zona; así cada métrica y código de zona corresponde a un punto que la app
+puede ubicar. La proyección se ajusta a 1 cm y se omiten fragmentos aislados menores de 1 m², artefactos topológicos
+despreciables a esta resolución.
+
+El cálculo reutiliza `public/js/calculos.js`: Haversine para equipamientos y peligros, y distancia al borde de la
+geometría apta para áreas verdes de al menos 5000 m². Los 23 colegios OSM que no tienen un nivel básico asignable no
+participan en las tres métricas escolares. La distancia a áreas verdes de 1 ha se conserva como columna heredada y
+queda `NULL`; no es un criterio de esta cuadrícula.
+
+Los índices B-tree individuales cubren las distancias que se consultarán por umbral en búsquedas con pesos dinámicos.
+El índice existente `(buildability, zone_code)` cubre zonificación/construibilidad; `hazard_count_500m` no se indexa
+porque se almacena para consulta y no filtra ni puntúa la versión 1. El script contrasta diez centros con los datos y
+funciones actuales de la app, verifica SRID/validez y emite un SHA-256 estable de los valores para comprobar recargas.
 
 ## Integración continua y despliegue
 
