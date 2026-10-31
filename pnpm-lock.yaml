@@ -61,6 +61,9 @@ importers:
       jest:
         specifier: ^30.0.0
         version: 30.5.2(@types/node@24.19.2)(ts-node@10.9.2(@types/node@24.19.2)(typescript@6.0.3))
+      jsts:
+        specifier: ^2.12.1
+        version: 2.12.1
       oxlint:
         specifier: ^1.58.0
         version: 1.87.0(oxlint-tsgolint@7.0.2003)
@@ -1737,6 +1740,9 @@ packages:
   fast-wrap-ansi@0.2.2:
     resolution: {integrity: sha512-7F2Fl+TjRSenLqlU3UjSH0iyqopqoZIu7eZVpEirP2g1GtWa2G/ecEmBdgz31+Mxr+ELclgg6sokpSFIQiZ02Q==}
 
+  fastpriorityqueue@0.7.5:
+    resolution: {integrity: sha512-3Pa0n9gwy8yIbEsT3m2j/E9DXgWvvjfiZjjqcJ+AdNKTAlVMIuFYrYG5Y3RHEM8O6cwv9hOpOWY/NaMfywoQVA==}
+
   fb-watchman@2.0.4:
     resolution: {integrity: sha512-tGQtaoYisPDriJBN0mT5yZSyNETnJGA1gTYxaVRAE5KUO3LI9kPUc9WIu8JXcxaIci+faIKlzXqXyPgrmubtBQ==}
 
@@ -2121,6 +2127,10 @@ packages:
 
   jsonc-parser@3.3.1:
     resolution: {integrity: sha512-HUgH65KyejrUFPvHFPbqOY0rsFip3Bo5wb4ngvdi1EpCYWUQDC5V+Y7mZws+DLkr4M//zQJoanu1SP+87Dv1oQ==}
+
+  jsts@2.12.1:
+    resolution: {integrity: sha512-aaiCZeGfeU5o9TbrYF1KF0VvhGGLtG3w7vNynmaTjC8XRmS2v15lq+2Bxa8lMtprsFFJiIpAayJZguLruiHd0w==}
+    engines: {node: '>= 18'}
 
   leven@3.1.0:
     resolution: {integrity: sha512-qsda+H8jTaUaN/x5vzW2rzc+8Rw4TAQ/4KjB46IwK5VH+IlVeeeje/EoZRpiXvIqjFgK84QffqPztGI3VBLG1A==}
@@ -4592,6 +4602,8 @@ snapshots:
     dependencies:
       fast-string-width: 3.0.2
 
+  fastpriorityqueue@0.7.5: {}
+
   fb-watchman@2.0.4:
     dependencies:
       bser: 2.1.2
@@ -5175,6 +5187,10 @@ snapshots:
   json5@2.2.3: {}
 
   jsonc-parser@3.3.1: {}
+
+  jsts@2.12.1:
+    dependencies:
+      fastpriorityqueue: 0.7.5
 
   leven@3.1.0: {}
 

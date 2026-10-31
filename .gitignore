@@ -65,3 +65,4 @@ qwen-image-ui/
 
 .env*
 !.env.example
+scripts/reportes/reparaciones-zonificacion.json
