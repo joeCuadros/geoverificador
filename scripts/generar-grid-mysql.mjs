@@ -471,11 +471,11 @@ function validateTenPoints(cells, frontendData) {
       || Number(metrics.hazard_count_500m) !== expected.hazard_count_500m;
     validation.push({
       punto: point.name,
-      cellKey: cell.cellKey,
+      cellKey: cell.cellKey ?? cell.cell_key,
       centro: `${lat.toFixed(6)}, ${lon.toFixed(6)}`,
       diferencias_m: diffs.map(({ diff }) => diff),
-      zona_ok: cell.metrics.zone_code === expected.zone_code && cell.metrics.buildability === expected.buildability,
-      peligros_ok: cell.metrics.hazard_count_500m === expected.hazard_count_500m,
+      zona_ok: metrics.zone_code === expected.zone_code && metrics.buildability === expected.buildability,
+      peligros_ok: Number(metrics.hazard_count_500m) === expected.hazard_count_500m,
       correcto: !failed,
     });
   }
@@ -600,6 +600,39 @@ function canonicalValues(rows) {
   ].join('|')).join('\n');
 }
 
+function assertPersistedValues(expectedRows, storedRows) {
+  const storedByKey = new Map(storedRows.map((row) => [row.cell_key, row]));
+  if (expectedRows.length !== storedRows.length) {
+    throw new Error(`Conteo del grid persistido distinto al calculado: ${storedRows.length} frente a ${expectedRows.length}.`);
+  }
+  for (const expected of expectedRows) {
+    const stored = storedByKey.get(expected.cell_key);
+    if (!stored) throw new Error(`Falta la celda ${expected.cell_key} en la lectura posterior a la inserción.`);
+    const [expectedLon, expectedLat] = expected.centerWkt.match(/POINT\(([-0-9.]+) ([-0-9.]+)\)/).slice(1).map(Number);
+    if (Math.abs(Number(stored.center_lon) - expectedLon) > 1e-9
+      || Math.abs(Number(stored.center_lat) - expectedLat) > 1e-9) {
+      throw new Error(`El centro persistido de ${expected.cell_key} difiere del centro UTM calculado.`);
+    }
+    if (Math.abs(Number(stored.area_m2) - expected.area_m2) > 0.0050001) {
+      throw new Error(`El área persistida de ${expected.cell_key} difiere más del redondeo a 2 decimales.`);
+    }
+    for (const column of METRIC_COLUMNS) {
+      const expectedValue = expected[column];
+      const storedValue = stored[column];
+      if (expectedValue === null && storedValue === null) continue;
+      if (expectedValue === null || storedValue === null
+        || Math.abs(Number(storedValue) - expectedValue) > 0.00000051) {
+        throw new Error(`La métrica ${column} de ${expected.cell_key} difiere más del redondeo a 6 decimales.`);
+      }
+    }
+    if (stored.zone_code !== expected.zone_code
+      || stored.buildability !== expected.buildability
+      || Number(stored.hazard_count_500m) !== expected.hazard_count_500m) {
+      throw new Error(`La zonificación o el conteo de peligros de ${expected.cell_key} no coincide con lo calculado.`);
+    }
+  }
+}
+
 async function main() {
   const startedAt = performance.now();
   const connection = await mysql.createConnection(loadMysqlConfig());
@@ -633,14 +666,12 @@ async function main() {
     const persistedValidation = validateTenPoints(stored.cells, frontendData);
     const expectedRows = cells.map((cell) => ({
       cell_key: cell.cellKey,
+      centerWkt: cell.centerWkt,
       area_m2: cell.areaM2,
       ...cell.metrics,
     }));
     const storedHash = createHash('sha256').update(canonicalValues(stored.cells)).digest('hex');
-    const expectedHash = createHash('sha256').update(canonicalValues(expectedRows)).digest('hex');
-    if (storedHash !== expectedHash) {
-      throw new Error('Las métricas recuperadas de MySQL no coinciden con los valores calculados antes de guardarlos.');
-    }
+    assertPersistedValues(expectedRows, stored.cells);
     await connection.commit();
     transactionOpen = false;
 
