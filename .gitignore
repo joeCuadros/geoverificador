@@ -64,3 +64,4 @@ qwen-image-ui/
 .vercel
 
 .env*
+!.env.example
