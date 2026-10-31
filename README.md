@@ -46,6 +46,7 @@ pnpm start             # compila y arranca en http://localhost:3000
 
 - Para desarrollo con recarga automática: `pnpm start:dev`.
 - Nest sirve el frontend estático de `public/` y expone `GET /api`.
+- La API de búsqueda `POST /api/v1/zonas/buscar` requiere MySQL con las migraciones y la cuadrícula cargadas; el frontend actual sigue funcionando sin llamarla.
 - El puerto se cambia con la variable de entorno `PORT`.
 
 `pnpm-workspace.yaml` guarda dos ajustes de pnpm:
@@ -63,7 +64,7 @@ El frontend es JavaScript sin dependencias de compilación (Leaflet se carga des
 | `pnpm start:dev` | Arranca con recarga automática | No |
 | `pnpm build` | Compila TypeScript a `dist/` | No |
 | `pnpm test` | Pruebas unitarias (Jest) | No |
-| `pnpm test:e2e` | Pruebas extremo a extremo (`GET /` y `GET /api`) | No |
+| `pnpm test:e2e` | Pruebas e2e de la app estática, API y rate limit | No |
 | `pnpm lint` | Análisis estático con oxlint (`src/` y `test/`) | No |
 | `pnpm datos:verificar` | Integridad de los datos y cálculos frente a un método independiente | No |
 | `pnpm datos:extraer` | Descarga el equipamiento de OpenStreetMap a `public/data/equipamiento` | Sí (Overpass) |
@@ -96,6 +97,41 @@ Los índices B-tree individuales cubren las distancias que se consultarán por u
 El índice existente `(buildability, zone_code)` cubre zonificación/construibilidad; `hazard_count_500m` no se indexa
 porque se almacena para consulta y no filtra ni puntúa la versión 1. El script contrasta diez centros con los datos y
 funciones actuales de la app, verifica SRID/validez y emite un SHA-256 estable de los valores para comprobar recargas.
+
+### API de búsqueda de zonas
+
+`POST /api/v1/zonas/buscar` recibe estrellas enteras de 0 a 5 (0 ignora el criterio). El cuerpo permite
+`estrellas` con `salud`, `colegio_inicial`, `colegio_primaria`, `colegio_secundaria`, `paradero` y `area_verde`;
+`puntajeMinimo` (0–100, predeterminado 60), `minimoCeldasZona` (1–1000, predeterminado 4) e
+`incluirCondicional` (predeterminado `false`). Todas las estrellas en cero producen HTTP 400.
+
+El puntaje normalizado vale 1 hasta el umbral correspondiente de `public/js/config.js`, decrece linealmente hasta
+0 a tres veces ese umbral y trata distancias `NULL` como 0. La agrupación considera vecinas las ocho celdas que
+rodean cada celda, incluidas las diagonales. La respuesta es un GeoJSON `FeatureCollection`; cada feature incluye
+puntajes promedio/máximo, área aproximada, distritos, códigos de zonificación y desglose promedio por criterio.
+
+Las métricas y geometrías se precargan de MySQL al arrancar y se mantienen en memoria; si MySQL no está disponible,
+Nest sigue sirviendo el frontend y la API devuelve un error claro. Cada búsqueda comprueba una huella barata
+(`COUNT`, máximo ID y fecha de cálculo) para recargar la caché tras `pnpm db:grid`. Las preferencias no se guardan.
+La búsqueda está limitada a 30 solicitudes por IP cada 60 segundos, no registra cuerpos ni criterios, y
+rechaza parámetros desconocidos. Detrás de un proxy inverso, configura `TRUST_PROXY_HOPS` con el número exacto de
+saltos confiables; omítelo para acceso directo. La unión y simplificación de geometrías se calcula en EPSG:32719
+con tolerancia de 5 m y se devuelve en GeoJSON WGS84. `metadata.tiempoCalculoMs` reporta el tiempo de cálculo
+después de cargar la cuadrícula.
+
+```json
+{
+  "estrellas": {
+    "salud": 5,
+    "colegio_primaria": 5,
+    "area_verde": 3,
+    "paradero": 2
+  }
+}
+```
+
+La respuesta contiene `{ "type": "FeatureCollection", "features": [...], "metadata": {...} }`; cada elemento de
+`features` es una geometría `Polygon` o `MultiPolygon` con los datos agregados de una zona.
 
 ## Integración continua y despliegue
 
