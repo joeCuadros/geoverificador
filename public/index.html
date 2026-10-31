@@ -95,6 +95,11 @@
 
         <p class="limite">Consulta referencial: no reemplaza el certificado municipal de zonificación.</p>
         <p class="ejemplo"><button id="probar" type="button" class="link">Ver un ejemplo en la Plaza de Armas</button></p>
+        <div class="o-separador"><span>o</span></div>
+        <button id="buscar-vivienda" type="button" class="primary">
+          <svg class="ico" aria-hidden="true"><use href="#i-buscar"/></svg>Buscar dónde vivir
+        </button>
+        <p class="small muted">Compara zonas según los servicios que más te importan.</p>
       </section>
 
       <!-- Paso 2: Confirma el punto -->
@@ -328,6 +333,35 @@
       </div>
     </aside>
 
+    <aside class="panel vivienda-panel" id="vivienda-panel" aria-label="Buscar dónde vivir" hidden>
+      <section class="vivienda-cab">
+        <button id="volver-predio" type="button" class="link">← Volver a consultar un predio</button>
+        <h2 tabindex="-1" id="vivienda-titulo">Buscar dónde vivir</h2>
+        <p class="small muted">Cuatro preguntas breves; toma menos de un minuto.</p>
+      </section>
+      <section id="chat-vivienda" class="chat-vivienda" tabindex="-1" aria-label="Asistente de preferencias">
+        <div id="chat-log" class="chat-log" role="log" aria-live="polite" aria-relevant="additions"></div>
+        <div id="chat-content"></div>
+        <div id="chat-actions" class="chat-actions"></div>
+        <p id="chat-storage-status" class="estado-linea small" role="status" aria-live="polite"></p>
+      </section>
+      <section id="resultados-vivienda" class="resultados-vivienda" aria-labelledby="resultados-titulo" hidden>
+        <h2 id="resultados-titulo" tabindex="-1">Zonas para revisar</h2>
+        <div id="resultados-aviso" class="aviso-referencial" role="note">
+          <svg class="ico ico-lg" aria-hidden="true"><use href="#i-aviso"/></svg>
+          <p>Resultados referenciales, no son una recomendación de compra. Dependen de OpenStreetMap y del PDM 2016–2025; confirma la vigencia de la zonificación en la municipalidad antes de comprar o construir.</p>
+        </div>
+        <p id="resultados-estado" class="resultados-estado" role="status" aria-live="polite" aria-busy="false"></p>
+        <div id="resultados-leyenda" class="resultados-leyenda" role="group" aria-label="Leyenda de puntajes" hidden></div>
+        <ol id="lista-zonas" class="lista-zonas" aria-label="Zonas ordenadas por puntaje"></ol>
+        <div class="acciones-vivienda">
+          <button id="cambiar-preferencias" type="button" class="primary">Cambiar preferencias</button>
+          <button id="repetir-busqueda" type="button" class="secondary" hidden>Volver a buscar</button>
+          <button id="borrar-preferencias" type="button" class="link">Borrar preferencias guardadas</button>
+        </div>
+      </section>
+    </aside>
+
     <!-- ============================================================ Mapa -->
     <main class="map-wrap" id="mapa-zona">
       <div id="map" role="application" aria-label="Mapa de Arequipa. Toca un lugar para elegir el punto."></div>
@@ -351,6 +385,7 @@
       </div>
 
       <div class="map-hint" id="map-hint">Toca el mapa para elegir un punto</div>
+      <div id="leyenda-mapa-zonas" class="leyenda-mapa-zonas" role="group" aria-label="Leyenda del puntaje de zonas" hidden></div>
     </main>
   </div>
 
@@ -366,6 +401,7 @@
       <li><strong>Lee tu reporte.</strong> Verás la zonificación del plano y si hay cerca un establecimiento de salud, un colegio por nivel, un paradero y un área verde. Cada dato dice su fuente, su fecha y cómo se midió.</li>
     </ol>
     <p>Las distancias son en línea recta, no recorrido a pie. <strong>Sin dato</strong> significa que el servicio no figura en nuestros datos (OpenStreetMap), no que no exista.</p>
+    <p>También puedes usar <strong>Buscar dónde vivir</strong> para comparar zonas según tus prioridades. Es una búsqueda referencial, no una recomendación de compra.</p>
     <p>Es una consulta referencial: no reemplaza el certificado municipal de zonificación ni es una recomendación de compra.</p>
     <button id="ayuda-ok" type="button" class="primary">Entendido</button>
   </dialog>
@@ -391,5 +427,8 @@
   <script src="js/reporte.js"></script>
   <script src="js/delitos.js"></script>
   <script src="js/app.js"></script>
+  <script src="js/buscador-logica.js"></script>
+  <script src="js/chat.js"></script>
+  <script src="js/buscador.js"></script>
 </body>
 </html>

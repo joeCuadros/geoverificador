@@ -13,7 +13,7 @@ Ficha de un predio en Arequipa metropolitana, con datos públicos. Se elige un p
 
 Cada resultado tiene la forma `{ estado: 'CUMPLE' | 'NO CUMPLE' | 'SIN DATO', nombre, distanciaM, umbralM, fuente, fecha, metodo }`. Las distancias son **en línea recta** (haversine, R = 6 371 008,8 m), no recorrido a pie. Los cálculos están en `public/js/calculos.js`, como funciones puras con pruebas en `test/calculos.spec.ts`.
 
-La aplicación **no recomienda** dónde comprar ni construir y **no da un puntaje global**: no hay base para decidir cuánto pesa cada variable. Cada dato indica qué no cubre.
+La ficha de un predio presenta cada variable por separado y no recomienda dónde comprar ni construir. El modo opcional **Buscar dónde vivir** calcula un puntaje referencial según las estrellas que asigna el usuario; no es una recomendación ni sustituye la revisión de los datos y de la zonificación.
 
 ### Módulos fuera de alcance
 
@@ -112,7 +112,7 @@ puntajes promedio/máximo, área aproximada, distritos, códigos de zonificació
 
 Las métricas y geometrías se precargan de MySQL al arrancar y se mantienen en memoria; si MySQL no está disponible,
 Nest sigue sirviendo el frontend y la API devuelve un error claro. Cada búsqueda comprueba una huella barata
-(`COUNT`, máximo ID y fecha de cálculo) para recargar la caché tras `pnpm db:grid`. Las preferencias no se guardan.
+(`COUNT`, máximo ID y fecha de cálculo) para recargar la caché tras `pnpm db:grid`. El servidor no guarda preferencias.
 La búsqueda está limitada a 30 solicitudes por IP cada 60 segundos, no registra cuerpos ni criterios, y
 rechaza parámetros desconocidos. Detrás de un proxy inverso, configura `TRUST_PROXY_HOPS` con el número exacto de
 saltos confiables; omítelo para acceso directo. La unión y simplificación de geometrías se calcula en EPSG:32719
@@ -136,6 +136,19 @@ La respuesta contiene `{ "type": "FeatureCollection", "features": [...], "metada
 Para evitar repetir conversiones por coordenada en cada petición, Nest precalcula las geometrías de celda en UTM 19S
 al cargar la caché. La unión, simplificación y transformación de las zonas finales conserva el algoritmo y la
 tolerancia existentes; una prueba compara las geometrías y puntajes con la ruta anterior sin proyección precalculada.
+
+### Modo «Buscar dónde vivir»
+
+El botón de la pantalla inicial abre un guion local de cuatro preguntas (salud, necesidad y nivel escolar, paraderos
+y áreas verdes). Las estrellas y la opción de construcción condicional se guardan únicamente en `localStorage`;
+`Borrar preferencias guardadas` las elimina. La única petición envía `estrellas` e `incluirCondicional` a
+`POST /api/v1/zonas/buscar`; no se envían ubicaciones, identificadores ni datos personales. Los resultados se dibujan
+en Leaflet y se muestran en una lista ordenada con una leyenda textual además del color.
+
+Los resultados son referenciales y dependen de OpenStreetMap y del PDM 2016-2025; se debe confirmar la vigencia de
+la zonificación en la municipalidad antes de comprar o construir. La API requiere que NestJS esté conectado a MySQL
+con la cuadrícula cargada. El despliegue actual de Vercel sirve solo `public/`, así que el modo de búsqueda requiere
+un despliegue de backend que exponga esa ruta.
 
 ## Integración continua y despliegue
 

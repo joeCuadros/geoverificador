@@ -72,6 +72,67 @@
   calorPane.style.pointerEvents = 'none';
   // Los peligros van encima del mapa de calor y sí reciben clics (para abrir su popup).
   map.createPane('peligros').style.zIndex = 450;
+  const viviendaPane = map.createPane('zonas-vivienda');
+  viviendaPane.style.zIndex = 380;
+  const estiloVivienda = (feature) => {
+    const score = Number(feature.properties?.puntajePromedio) || 0;
+    const band = score >= 75
+      ? { color: '#17603a', dashArray: null }
+      : score >= 50
+        ? { color: '#986000', dashArray: '8 5' }
+        : { color: '#526579', dashArray: '2 5' };
+    return {
+      color: band.color,
+      weight: 1.5,
+      dashArray: band.dashArray,
+      fillColor: band.color,
+      fillOpacity: 0.35,
+    };
+  };
+  const viviendaLayer = L.geoJSON(null, {
+    pane: 'zonas-vivienda',
+    style: estiloVivienda,
+    onEachFeature: (feature, layer) => {
+      const name = String(feature.properties?.nombre || 'Zona');
+      const score = Number(feature.properties?.puntajePromedio) || 0;
+      layer.bindTooltip(`${name}: ${score.toFixed(2)} de 100`, { sticky: true });
+      layer.on('click', () => {
+        window.dispatchEvent(new CustomEvent('geoverificador:zona-seleccionada', { detail: { name } }));
+      });
+    },
+  });
+  window.GeoVerificadorMapa = Object.freeze({
+    showZones(featureCollection) {
+      viviendaLayer.clearLayers();
+      viviendaLayer.addData(featureCollection);
+      if (!map.hasLayer(viviendaLayer)) viviendaLayer.addTo(map);
+      requestAnimationFrame(() => {
+        map.invalidateSize({ pan: false });
+        const bounds = viviendaLayer.getBounds();
+        if (bounds.isValid()) map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15, animate: !sinMovimiento() });
+      });
+    },
+    selectZone(name) {
+      let selectedLayer = null;
+      viviendaLayer.eachLayer((layer) => {
+        const selected = layer.feature?.properties?.nombre === name;
+        layer.setStyle(selected
+          ? { color: '#10233f', weight: 4, fillOpacity: 0.58, dashArray: null }
+          : estiloVivienda(layer.feature));
+        if (selected) selectedLayer = layer;
+      });
+      if (selectedLayer) {
+        selectedLayer.bringToFront();
+        const bounds = selectedLayer.getBounds();
+        if (bounds.isValid()) map.fitBounds(bounds, { padding: [40, 40], maxZoom: 16, animate: !sinMovimiento() });
+      }
+    },
+    clearZones() {
+      viviendaLayer.clearLayers();
+      if (map.hasLayer(viviendaLayer)) map.removeLayer(viviendaLayer);
+      $('leyenda-mapa-zonas').hidden = true;
+    },
+  });
 
   // ------------------------------------------------------- Módulos y documentación
   // Lo que pertenece a un módulo oculto no se muestra (nunca se vuelve a mostrar un panel: eso lo decide la pestaña).
@@ -291,7 +352,25 @@
   });
   $('btn-mover').addEventListener('click', () => aplicarFlujo(Onboarding.transicion(state.flujo, 'mover'), { foco: false }));
 
-  map.on('click', (e) => colocarPunto(e.latlng.lat, e.latlng.lng));
+  map.on('click', (e) => {
+    if ($('app').dataset.modo !== 'vivienda') colocarPunto(e.latlng.lat, e.latlng.lng);
+  });
+
+  document.addEventListener('geoverificador:modo', (event) => {
+    const active = event.detail?.active === true;
+    if (active) {
+      $('app').dataset.modo = 'vivienda';
+      $('app').dataset.paso = 'ubicar';
+      $('map-hint').hidden = true;
+      $('map').setAttribute('aria-label', 'Mapa de zonas comparadas por puntaje. Selecciona una zona para resaltarla y centrarla.');
+    } else {
+      delete $('app').dataset.modo;
+      $('app').dataset.paso = state.flujo.paso;
+      $('map-hint').hidden = false;
+      $('map').setAttribute('aria-label', 'Mapa de Arequipa. Toca un lugar para elegir el punto.');
+    }
+    requestAnimationFrame(() => map.invalidateSize({ pan: false }));
+  });
 
   // «Sí, verificar»: pasa al reporte y lanza todas las consultas locales.
   $('btn-verificar').addEventListener('click', () => {
