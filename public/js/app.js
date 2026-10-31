@@ -127,6 +127,18 @@
         if (bounds.isValid()) map.fitBounds(bounds, { padding: [40, 40], maxZoom: 16, animate: !sinMovimiento() });
       }
     },
+    preparePointExploration() {
+      if (state.flujo.paso !== 'reporte') return;
+      limpiarMapa();
+      aplicarFlujo(Onboarding.transicion(state.flujo, 'cambiar'), { foco: false });
+    },
+    choosePoint(lat, lon) {
+      if (state.flujo.paso === 'reporte') {
+        limpiarMapa();
+        aplicarFlujo(Onboarding.transicion(state.flujo, 'cambiar'), { foco: false });
+      }
+      colocarPunto(lat, lon);
+    },
     clearZones() {
       viviendaLayer.clearLayers();
       if (map.hasLayer(viviendaLayer)) map.removeLayer(viviendaLayer);
@@ -354,6 +366,9 @@
 
   map.on('click', (e) => {
     if ($('app').dataset.modo !== 'vivienda') colocarPunto(e.latlng.lat, e.latlng.lng);
+    else window.dispatchEvent(new CustomEvent('geoverificador:mapa-vivienda-click', {
+      detail: { lat: e.latlng.lat, lng: e.latlng.lng },
+    }));
   });
 
   document.addEventListener('geoverificador:modo', (event) => {
@@ -361,10 +376,15 @@
     if (active) {
       $('app').dataset.modo = 'vivienda';
       $('app').dataset.paso = 'ubicar';
+      if (event.detail?.results) $('app').dataset.viviendaResultados = 'true';
+      else delete $('app').dataset.viviendaResultados;
       $('map-hint').hidden = true;
-      $('map').setAttribute('aria-label', 'Mapa de zonas comparadas por puntaje. Selecciona una zona para resaltarla y centrarla.');
+      $('map').setAttribute('aria-label', event.detail?.results
+        ? 'Mapa de Arequipa. Toca una zona para resaltarla o el mapa para consultar un punto.'
+        : 'Mapa de Arequipa. Explora visualmente las zonas; para consultar un punto, usa el botón Explorar un punto del mapa.');
     } else {
       delete $('app').dataset.modo;
+      delete $('app').dataset.viviendaResultados;
       $('app').dataset.paso = state.flujo.paso;
       $('map-hint').hidden = false;
       $('map').setAttribute('aria-label', 'Mapa de Arequipa. Toca un lugar para elegir el punto.');

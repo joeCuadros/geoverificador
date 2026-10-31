@@ -26,21 +26,28 @@
   }
 
   function loadPreferences() {
+    let saved;
     try {
-      const saved = window.localStorage.getItem(STORE_KEY);
-      if (saved === null) return;
-      savedPreferences = true;
-      preferences = LOGIC.normalizePreferences(JSON.parse(saved));
+      saved = window.localStorage.getItem(STORE_KEY);
     } catch {
       setStorageMessage('No se pudieron leer las preferencias guardadas. Puedes continuar y volver a intentarlo.', true);
+      return;
     }
+    if (saved === null) return;
+    let parsed;
+    try {
+      parsed = JSON.parse(saved);
+    } catch {
+      return;
+    }
+    if (!LOGIC.isInterpretablePreferences(parsed)) return;
+    preferences = LOGIC.normalizePreferences(parsed);
+    savedPreferences = preferences.selectedCriteria.length > 0 || preferences.includeConditional;
   }
 
   function savePreferences(value) {
     preferences = LOGIC.normalizePreferences(value);
-    const hasPreferences = Object.values(preferences.stars).some((score) => score > 0)
-      || preferences.schoolLevels.length > 0
-      || preferences.includeConditional;
+    const hasPreferences = preferences.selectedCriteria.length > 0 || preferences.includeConditional;
     if (!hasPreferences) {
       try {
         window.localStorage.removeItem(STORE_KEY);
@@ -54,6 +61,7 @@
     try {
       window.localStorage.setItem(STORE_KEY, JSON.stringify({
         estrellas: preferences.stars,
+        criteriosSeleccionados: preferences.selectedCriteria,
         nivelesEscolares: preferences.schoolLevels,
         necesitaColegios: preferences.needsSchools,
         incluirCondicional: preferences.includeConditional,
@@ -68,29 +76,32 @@
   function clearPreferences() {
     preferences = LOGIC.normalizePreferences({});
     savedPreferences = false;
+    let message = 'Se borraron las preferencias guardadas.';
+    let isError = false;
     try {
       window.localStorage.removeItem(STORE_KEY);
-      setStorageMessage('Se borraron las preferencias guardadas.');
     } catch {
-      setStorageMessage('Se restablecieron para esta sesión, pero el navegador no permitió borrar el almacenamiento.', true);
+      message = 'Se restablecieron para esta sesión, pero el navegador no permitió borrar el almacenamiento.';
+      isError = true;
     }
     chat.setPreferences(preferences);
-    chat.showWelcome();
+    chat.showChecklist();
     showChat();
+    setStorageMessage(message, isError);
   }
 
   function showChat() {
     $('chat-vivienda').hidden = false;
     $('resultados-vivienda').hidden = true;
     $('chat-vivienda').focus({ preventScroll: true });
-    document.dispatchEvent(new CustomEvent('geoverificador:modo', { detail: { active: true } }));
+    document.dispatchEvent(new CustomEvent('geoverificador:modo', { detail: { active: true, results: false } }));
   }
 
   function showResults() {
     $('chat-vivienda').hidden = true;
     $('resultados-vivienda').hidden = false;
     $('resultados-titulo').focus({ preventScroll: true });
-    document.dispatchEvent(new CustomEvent('geoverificador:modo', { detail: { active: true } }));
+    document.dispatchEvent(new CustomEvent('geoverificador:modo', { detail: { active: true, results: true } }));
   }
 
   function leaveMode() {
@@ -100,6 +111,19 @@
     document.dispatchEvent(new CustomEvent('geoverificador:modo', { detail: { active: false } }));
     window.GeoVerificadorMapa?.clearZones();
     window.setTimeout(() => $('buscar-vivienda').focus({ preventScroll: true }), 0);
+  }
+
+  function explorePoint() {
+    leaveMode();
+    window.GeoVerificadorMapa?.preparePointExploration();
+  }
+
+  function openPointFromResults(event) {
+    if ($('resultados-vivienda').hidden) return;
+    const { lat, lng } = event.detail || {};
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    leaveMode();
+    window.GeoVerificadorMapa?.choosePoint(lat, lng);
   }
 
   function renderLegend(container) {
@@ -241,7 +265,7 @@
   function openMode() {
     $('contenido').hidden = true;
     $('vivienda-panel').hidden = false;
-    document.dispatchEvent(new CustomEvent('geoverificador:modo', { detail: { active: true } }));
+    document.dispatchEvent(new CustomEvent('geoverificador:modo', { detail: { active: true, results: Boolean(latestResults) } }));
     if (latestResults) {
       showResults();
       if (latestResults.features.length > 0) {
@@ -249,8 +273,7 @@
         window.GeoVerificadorMapa.showZones(latestResults);
         if (selectedZone) selectZone(selectedZone);
       }
-    } else if (savedPreferences) chat.showSummary();
-    else chat.showWelcome();
+    } else chat.showChecklist();
     requestAnimationFrame(() => $('vivienda-titulo').focus({ preventScroll: true }));
   }
 
@@ -260,13 +283,13 @@
     preferences,
     onChange: savePreferences,
     onSearch: searchZones,
-    onClose: () => (latestResults ? showResults() : leaveMode()),
     onClear: clearPreferences,
   });
-  if (savedPreferences) chat.setPreferences(preferences);
+  chat.setPreferences(preferences);
+  if (savedPreferences) savePreferences(preferences);
 
   $('buscar-vivienda').addEventListener('click', openMode);
-  $('volver-predio').addEventListener('click', leaveMode);
+  $('explorar-punto').addEventListener('click', explorePoint);
   $('cambiar-preferencias').addEventListener('click', () => {
     showChat();
     chat.showSummary();
@@ -277,4 +300,10 @@
     const name = event.detail?.name;
     if (typeof name === 'string') selectZone(name);
   });
+  window.addEventListener('geoverificador:mapa-vivienda-click', openPointFromResults);
+
+  $('contenido').hidden = true;
+  $('vivienda-panel').hidden = false;
+  document.dispatchEvent(new CustomEvent('geoverificador:modo', { detail: { active: true, results: false } }));
+  requestAnimationFrame(() => $('vivienda-titulo').focus({ preventScroll: true }));
 })();

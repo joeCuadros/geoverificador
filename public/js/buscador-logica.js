@@ -10,6 +10,7 @@
     'area_verde',
   ]);
   const SCHOOL_LEVELS = Object.freeze(['colegio_inicial', 'colegio_primaria', 'colegio_secundaria']);
+  const CRITERION_SET = new Set(CRITERIA);
   const LABELS = Object.freeze({
     salud: 'Salud',
     colegio_inicial: 'Colegio inicial',
@@ -28,6 +29,21 @@
     return Object.fromEntries(CRITERIA.map((criterion) => [criterion, 0]));
   }
 
+  function isInterpretablePreferences(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    const rawStars = value.estrellas ?? value.stars;
+    const hasStars = rawStars && typeof rawStars === 'object' && !Array.isArray(rawStars)
+      && CRITERIA.some((criterion) => Number.isInteger(rawStars[criterion]) && rawStars[criterion] >= 0 && rawStars[criterion] <= 5);
+    const rawCriteria = value.criteriosSeleccionados ?? value.selectedCriteria;
+    const hasCriteria = Array.isArray(rawCriteria) && rawCriteria.some((criterion) => CRITERION_SET.has(criterion));
+    const hasLevels = Array.isArray(value.nivelesEscolares)
+      && value.nivelesEscolares.some((level) => SCHOOL_LEVELS.includes(level));
+    return hasStars || hasCriteria || hasLevels
+      || typeof value.necesitaColegios === 'boolean'
+      || typeof value.incluirCondicional === 'boolean'
+      || typeof value.includeConditional === 'boolean';
+  }
+
   function normalizePreferences(value) {
     const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
     const rawStars = source.estrellas && typeof source.estrellas === 'object' && !Array.isArray(source.estrellas)
@@ -40,16 +56,26 @@
       const score = rawStars[criterion];
       if (Number.isInteger(score) && score >= 0 && score <= 5) stars[criterion] = score;
     });
-    const selectedLevels = Array.isArray(source.nivelesEscolares)
-      ? source.nivelesEscolares.filter((level) => SCHOOL_LEVELS.includes(level))
-      : SCHOOL_LEVELS.filter((level) => stars[level] > 0);
-    const needsSchools = source.necesitaColegios === true
-      || selectedLevels.length > 0
-      || SCHOOL_LEVELS.some((level) => stars[level] > 0);
+    const rawSelected = source.criteriosSeleccionados ?? source.selectedCriteria;
+    const hasExplicitSelection = Array.isArray(rawSelected);
+    const selectedCriteria = hasExplicitSelection
+      ? [...new Set(rawSelected.filter((criterion) => CRITERION_SET.has(criterion)))]
+      : CRITERIA.filter((criterion) => stars[criterion] > 0);
+    if (!hasExplicitSelection && Array.isArray(source.nivelesEscolares)) {
+      source.nivelesEscolares.forEach((level) => {
+        if (SCHOOL_LEVELS.includes(level) && !selectedCriteria.includes(level)) selectedCriteria.push(level);
+      });
+    }
+    CRITERIA.forEach((criterion) => {
+      if (!selectedCriteria.includes(criterion)) stars[criterion] = 0;
+      else if (stars[criterion] === 0) stars[criterion] = 1;
+    });
+    const selectedLevels = SCHOOL_LEVELS.filter((level) => selectedCriteria.includes(level));
     return {
       stars,
+      selectedCriteria,
       schoolLevels: [...new Set(selectedLevels)],
-      needsSchools,
+      needsSchools: selectedLevels.length > 0,
       includeConditional: source.incluirCondicional === true || source.includeConditional === true,
     };
   }
@@ -87,6 +113,7 @@
     buildRequest,
     emptyStars,
     formatArea,
+    isInterpretablePreferences,
     normalizePreferences,
   });
 })();

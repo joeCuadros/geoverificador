@@ -13,7 +13,7 @@ Ficha de un predio en Arequipa metropolitana, con datos públicos. Se elige un p
 
 Cada resultado tiene la forma `{ estado: 'CUMPLE' | 'NO CUMPLE' | 'SIN DATO', nombre, distanciaM, umbralM, fuente, fecha, metodo }`. Las distancias son **en línea recta** (haversine, R = 6 371 008,8 m), no recorrido a pie. Los cálculos están en `public/js/calculos.js`, como funciones puras con pruebas en `test/calculos.spec.ts`.
 
-La ficha de un predio presenta cada variable por separado y no recomienda dónde comprar ni construir. El modo opcional **Buscar dónde vivir** calcula un puntaje referencial según las estrellas que asigna el usuario; no es una recomendación ni sustituye la revisión de los datos y de la zonificación.
+La pantalla de inicio es **Buscar dónde vivir**: calcula un puntaje referencial según las estrellas que asigna la persona; no es una recomendación ni sustituye la revisión de los datos y de la zonificación. La consulta de un punto del mapa sigue disponible como herramienta secundaria.
 
 ### Módulos fuera de alcance
 
@@ -139,11 +139,17 @@ tolerancia existentes; una prueba compara las geometrías y puntajes con la ruta
 
 ### Modo «Buscar dónde vivir»
 
-El botón de la pantalla inicial abre un guion local de cuatro preguntas (salud, necesidad y nivel escolar, paraderos
-y áreas verdes). Las estrellas y la opción de construcción condicional se guardan únicamente en `localStorage`;
-`Borrar preferencias guardadas` las elimina. La única petición envía `estrellas` e `incluirCondicional` a
-`POST /api/v1/zonas/buscar`; no se envían ubicaciones, identificadores ni datos personales. Los resultados se dibujan
-en Leaflet y se muestran en una lista ordenada con una leyenda textual además del color.
+Es la pantalla de inicio. Primero se marca un checklist de salud, niveles escolares, paraderos y áreas verdes; se
+debe marcar al menos un criterio. En la segunda etapa se asignan de 1 a 5 estrellas únicamente a los criterios
+marcados, todos juntos para compararlos. Después se revisa un resumen editable y se decide si incluir zonas de
+construcción condicional. Las preferencias se guardan únicamente en `localStorage`; `Borrar preferencias guardadas`
+las elimina. Los datos guardados por la versión anterior se interpretan y migran al checklist cuando es posible; los
+datos ilegibles se ignoran. La única petición envía `estrellas` e `incluirCondicional` a
+`POST /api/v1/zonas/buscar`; no se envían ubicaciones, identificadores ni datos personales.
+
+Los resultados se dibujan en Leaflet y se muestran en una lista ordenada con una leyenda textual además del color.
+Se puede seleccionar una zona o tocar el mapa para consultar un punto con la ficha existente. El botón
+**Explorar un punto del mapa** también abre directamente esa herramienta secundaria.
 
 Los resultados son referenciales y dependen de OpenStreetMap y del PDM 2016-2025; se debe confirmar la vigencia de
 la zonificación en la municipalidad antes de comprar o construir. La API requiere que NestJS esté conectado a MySQL

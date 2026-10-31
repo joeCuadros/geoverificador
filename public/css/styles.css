@@ -279,6 +279,7 @@ input[type="search"]:focus-visible, input[type="number"]:focus-visible, select:f
 .busqueda-fila { display: flex; gap: 8px; }
 .busqueda-fila input { flex: 1; min-width: 0; }
 .busqueda-fila button { flex: none; padding: 0 18px; }
+.modo-vivienda-regreso { margin: 12px 16px 0; }
 .search-bounded { min-height: 40px; }
 
 .busqueda-resultados { margin-top: 8px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--surface); padding: 8px; }
@@ -307,6 +308,9 @@ input[type="search"]:focus-visible, input[type="number"]:focus-visible, select:f
 .chat-criterio { min-width: 0; margin: 10px 0; padding: 0; border: 0; }
 .chat-criterio legend { margin-bottom: 8px; font-weight: 700; color: var(--ink); }
 .star-options { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 5px; }
+.priority-stars { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.priority-list { display: grid; gap: 8px; }
+.priority-help { margin: 0 0 8px; padding: 9px 11px; border-left: 3px solid var(--tinta); background: var(--tinta-soft); color: var(--ink); font-weight: 650; }
 .star-option {
   display: grid; place-items: center; min-width: 0; min-height: 48px; padding: 4px;
   border: 1.5px solid var(--line-strong); border-radius: 9px; background: var(--surface); color: var(--ink);
@@ -315,6 +319,16 @@ input[type="search"]:focus-visible, input[type="number"]:focus-visible, select:f
 .star-option:hover, .star-option.seleccionado { border-color: var(--tinta); background: var(--tinta-soft); color: var(--tinta); }
 .star-zero-label { font-size: .69rem; line-height: 1.05; text-align: center; }
 .chat-ayuda { margin: 5px 0 8px; color: var(--muted); font-size: .8125rem; }
+.checklist { margin-top: 12px; }
+.checklist-items { display: grid; gap: 7px; }
+.checklist-criterion {
+  display: flex; align-items: flex-start; gap: 10px; min-height: 54px; padding: 9px 10px;
+  border: 1px solid var(--line-strong); border-radius: 9px; background: var(--surface); cursor: pointer;
+}
+.checklist-criterion:has(input:checked) { border-color: var(--tinta); background: var(--tinta-soft); }
+.checklist-criterion input { width: 21px; height: 21px; margin: 1px 0 0; flex: none; accent-color: var(--tinta); }
+.checklist-criterion > span { display: grid; gap: 2px; }
+.checklist-criterion small { color: var(--ink-2); font-size: .8125rem; line-height: 1.35; }
 .choice-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .choice-option { min-height: 48px; padding: 8px; border: 1.5px solid var(--line-strong); border-radius: 9px; background: var(--surface); color: var(--ink); font: inherit; cursor: pointer; }
 .choice-option.seleccionado { border-color: var(--tinta); background: var(--tinta-soft); color: var(--tinta); font-weight: 700; }
@@ -368,6 +382,9 @@ input[type="search"]:focus-visible, input[type="number"]:focus-visible, select:f
 .leyenda-mapa-zonas .leyenda-muestra { width: 25px; height: 20px; }
 .app[data-modo="vivienda"] #layers-card { display: none; }
 .app[data-modo="vivienda"] .stepper { display: none; }
+@media (min-width: 900px) {
+  .priority-list { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 18px; }
+}
 
 /* ------------------------------------------------------------------ Paso 2: confirmar */
 .lugar { display: flex; gap: 12px; align-items: flex-start; padding: 12px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--surface); }
@@ -736,6 +753,12 @@ input[type="search"]:focus-visible, input[type="number"]:focus-visible, select:f
   .app[data-paso="reporte"] .res-fuentes { order: 3; }
   .app[data-paso="reporte"] .res-acciones { order: 4; }
   .layers-card { width: 220px; }
+  .app[data-modo="vivienda"]:not([data-vivienda-resultados]) .vivienda-panel {
+    order: 1; border-radius: 0 0 18px 18px;
+  }
+  .app[data-modo="vivienda"]:not([data-vivienda-resultados]) .map-wrap {
+    order: 2; flex: 1 1 180px; min-height: 180px;
+  }
 }
 @media (max-width: 420px) {
   .r-eval { grid-template-columns: 1fr; }

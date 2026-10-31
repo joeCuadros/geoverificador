@@ -10,8 +10,10 @@ interface BrowserSearchLogic {
   buildRequest(value: unknown): { estrellas: Record<string, number>; incluirCondicional: boolean };
   emptyStars(): Record<string, number>;
   formatArea(areaM2: number): string;
+  isInterpretablePreferences(value: unknown): boolean;
   normalizePreferences(value: unknown): {
     stars: Record<string, number>;
+    selectedCriteria: string[];
     schoolLevels: string[];
     needsSchools: boolean;
     includeConditional: boolean;
@@ -38,11 +40,12 @@ describe('lógica pura del buscador del navegador', () => {
       paradero: 0,
       area_verde: 0,
     });
+    expect(logic.normalizePreferences({}).selectedCriteria).toEqual([]);
   });
 
-  it('normaliza estrellas y niveles guardados sin conservar valores inválidos', () => {
+  it('migra preferencias de la versión anterior al checklist y conserva criterios interpretables', () => {
     const result = logic.normalizePreferences({
-      estrellas: { salud: 5, colegio_primaria: 3, paradero: 6, desconocido: 4 },
+      estrellas: { salud: 5, colegio_primaria: 0, paradero: 6, desconocido: 4 },
       nivelesEscolares: ['colegio_primaria', 'intruso'],
       incluirCondicional: true,
     });
@@ -51,14 +54,50 @@ describe('lógica pura del buscador del navegador', () => {
       stars: {
         salud: 5,
         colegio_inicial: 0,
-        colegio_primaria: 3,
+        colegio_primaria: 1,
         colegio_secundaria: 0,
         paradero: 0,
         area_verde: 0,
       },
+      selectedCriteria: ['salud', 'colegio_primaria'],
       schoolLevels: ['colegio_primaria'],
       needsSchools: true,
       includeConditional: true,
+    });
+  });
+
+  it('ignora preferencias guardadas que no puede interpretar', () => {
+    expect(logic.isInterpretablePreferences('no es json')).toBe(false);
+    expect(logic.isInterpretablePreferences({ estrellas: { desconocido: 4 } })).toBe(false);
+    expect(JSON.parse(JSON.stringify(logic.normalizePreferences({ criteriosSeleccionados: ['intruso'] })))).toEqual({
+      stars: {
+        salud: 0,
+        colegio_inicial: 0,
+        colegio_primaria: 0,
+        colegio_secundaria: 0,
+        paradero: 0,
+        area_verde: 0,
+      },
+      selectedCriteria: [],
+      schoolLevels: [],
+      needsSchools: false,
+      includeConditional: false,
+    });
+  });
+
+  it('normaliza el checklist y elimina las estrellas de criterios no seleccionados', () => {
+    const result = logic.normalizePreferences({
+      selectedCriteria: ['salud', 'area_verde', 'intruso'],
+      stars: { salud: 4, area_verde: 0, paradero: 5 },
+    });
+    expect(result.selectedCriteria).toEqual(['salud', 'area_verde']);
+    expect(result.stars).toEqual({
+      salud: 4,
+      colegio_inicial: 0,
+      colegio_primaria: 0,
+      colegio_secundaria: 0,
+      paradero: 0,
+      area_verde: 1,
     });
   });
 

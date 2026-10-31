@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>GeoVerificador · Zonificación y servicios de un predio en Arequipa</title>
+  <title>Buscar dónde vivir en Arequipa · GeoVerificador</title>
   <meta name="color-scheme" content="light dark">
   <meta name="theme-color" content="#f3eee3" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#101520" media="(prefers-color-scheme: dark)">
-  <meta name="description" content="Ficha de un predio en Arequipa con datos públicos: zonificación vigente y aviso del PDM nuevo, y si hay cerca salud, colegios, transporte y un área verde, con su fuente y sus límites.">
+  <meta name="description" content="Compara zonas de Arequipa según tus prioridades de salud, colegios, transporte público, áreas verdes y zonificación.">
   <link rel="preload" href="fonts/public-sans-latin-wght.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="fonts/source-serif-4-latin-wght.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231c3a6b'/%3E%3Cpath d='M16 6c-4.4 0-8 3.4-8 7.7C8 19.5 16 26 16 26s8-6.5 8-12.3C24 9.4 20.4 6 16 6zm0 10.6a3 3 0 1 1 0-6 3 3 0 0 1 0 6z' fill='%23fff'/%3E%3C/svg%3E">
@@ -41,14 +41,14 @@
     </defs>
   </svg>
 
-  <div class="app" id="app" data-paso="ubicar">
+  <div class="app" id="app" data-paso="ubicar" data-modo="vivienda">
     <!-- ============================================================ Barra superior -->
     <header class="topbar">
       <div class="brand">
         <svg class="brand-logo" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7"/><path d="M5 22.500h22M5 17.500h22" class="brand-juntas"/><path d="M16 5.500c-3.900 0-7 3-7 6.800 0 5 7 11 7 11s7-6 7-11c0-3.800-3.100-6.800-7-6.800zm0 9.400a2.600 2.600 0 1 1 0-5.200 2.600 2.600 0 0 1 0 5.200z" class="brand-pin"/></svg>
         <div class="brand-text">
           <h1>GeoVerificador</h1>
-          <span>Predios de Arequipa</span>
+          <span>Zonas de Arequipa</span>
         </div>
       </div>
 
@@ -64,7 +64,8 @@
     </header>
 
     <!-- ============================================================ Panel -->
-    <aside class="panel" id="contenido" aria-label="Consulta de un predio">
+    <aside class="panel" id="contenido" aria-label="Consulta de un predio" hidden>
+      <button id="buscar-vivienda" type="button" class="link modo-vivienda-regreso">← Volver a buscar dónde vivir</button>
 
       <!-- Paso 1: Ubica tu predio -->
       <section id="paso-ubicar" class="paso" aria-labelledby="ubicar-h">
@@ -96,10 +97,6 @@
         <p class="limite">Consulta referencial: no reemplaza el certificado municipal de zonificación.</p>
         <p class="ejemplo"><button id="probar" type="button" class="link">Ver un ejemplo en la Plaza de Armas</button></p>
         <div class="o-separador"><span>o</span></div>
-        <button id="buscar-vivienda" type="button" class="primary">
-          <svg class="ico" aria-hidden="true"><use href="#i-buscar"/></svg>Buscar dónde vivir
-        </button>
-        <p class="small muted">Compara zonas según los servicios que más te importan.</p>
       </section>
 
       <!-- Paso 2: Confirma el punto -->
@@ -333,11 +330,11 @@
       </div>
     </aside>
 
-    <aside class="panel vivienda-panel" id="vivienda-panel" aria-label="Buscar dónde vivir" hidden>
+    <aside class="panel vivienda-panel" id="vivienda-panel" aria-label="Buscar dónde vivir">
       <section class="vivienda-cab">
-        <button id="volver-predio" type="button" class="link">← Volver a consultar un predio</button>
+        <button id="explorar-punto" type="button" class="secondary">Explorar un punto del mapa</button>
         <h2 tabindex="-1" id="vivienda-titulo">Buscar dónde vivir</h2>
-        <p class="small muted">Cuatro preguntas breves; toma menos de un minuto.</p>
+        <p class="small muted">Elige criterios y priorízalos para comparar zonas.</p>
       </section>
       <section id="chat-vivienda" class="chat-vivienda" tabindex="-1" aria-label="Asistente de preferencias">
         <div id="chat-log" class="chat-log" role="log" aria-live="polite" aria-relevant="additions"></div>
@@ -396,12 +393,12 @@
       <button id="ayuda-cerrar" type="button" class="icon-btn" aria-label="Cerrar la ayuda"><svg class="ico" aria-hidden="true"><use href="#i-cerrar"/></svg></button>
     </div>
     <ol class="ayuda-pasos">
-      <li><strong>Ubica tu predio.</strong> Escribe una dirección, usa tu ubicación o toca el mapa.</li>
-      <li><strong>Confirma el punto.</strong> Revisa que el marcador esté sobre tu predio. Puedes tocar otro lugar o moverlo con las flechas.</li>
-      <li><strong>Lee tu reporte.</strong> Verás la zonificación del plano y si hay cerca un establecimiento de salud, un colegio por nivel, un paradero y un área verde. Cada dato dice su fuente, su fecha y cómo se midió.</li>
+      <li><strong>Elige tus criterios.</strong> Marca salud, niveles escolares, paraderos o áreas verdes que te importen.</li>
+      <li><strong>Prioriza y compara.</strong> Asigna de 1 a 5 estrellas, revisa el resumen y explora las zonas referenciales encontradas.</li>
+      <li><strong>Consulta un punto.</strong> Usa «Explorar un punto del mapa» para ver su zonificación y los servicios cercanos.</li>
     </ol>
     <p>Las distancias son en línea recta, no recorrido a pie. <strong>Sin dato</strong> significa que el servicio no figura en nuestros datos (OpenStreetMap), no que no exista.</p>
-    <p>También puedes usar <strong>Buscar dónde vivir</strong> para comparar zonas según tus prioridades. Es una búsqueda referencial, no una recomendación de compra.</p>
+    <p>Los puntajes y zonas son referenciales, no una recomendación de compra ni un certificado municipal.</p>
     <p>Es una consulta referencial: no reemplaza el certificado municipal de zonificación ni es una recomendación de compra.</p>
     <button id="ayuda-ok" type="button" class="primary">Entendido</button>
   </dialog>
