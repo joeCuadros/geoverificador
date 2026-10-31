@@ -9,6 +9,7 @@ import mysql from 'mysql2/promise';
 import Flatbush from 'flatbush';
 import { loadMysqlConfig } from '../../scripts/mysql-config.mjs';
 import {
+  prepareProjectedGeometries,
   searchZones,
   type Buildability,
   type Coordinate,
@@ -184,6 +185,7 @@ export class ZonasService implements OnModuleDestroy {
         transitDistanceM: nullableDistance(row.transit_distance_m, 'paradero'),
         greenDistanceM: nullableDistance(row.green_5000_distance_m, 'área verde'),
       }));
+      prepareProjectedGeometries(cells);
     } catch {
       throw new InternalServerErrorException(
         'La cuadrícula contiene geometrías o métricas inválidas y no se puede generar la búsqueda.',

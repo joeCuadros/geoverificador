@@ -1,8 +1,11 @@
+import { createHash } from 'node:crypto';
 import {
   clusterCells,
   createZoneFeatures,
   parseSearchParameters,
+  prepareProjectedGeometries,
   scoreCell,
+  searchZones,
   type ScoredCell,
   type SearchCell,
   type Stars,
@@ -141,5 +144,46 @@ describe('validación de búsqueda', () => {
     expect(() => parseSearchParameters({ estrellas: { salud: 1 }, sql: 'select' })).toThrow('no reconocido');
     expect(() => parseSearchParameters({ estrellas: { salud: null } })).toThrow('entero de 0 a 5');
     expect(() => parseSearchParameters({ estrellas: { salud: 1 }, puntajeMinimo: null })).toThrow('puntajeMinimo');
+  });
+});
+
+describe('proyección precalculada', () => {
+  it('conserva exactamente las zonas, geometrías y puntajes de la búsqueda anterior', () => {
+    const makeCells = (): SearchCell[] => {
+      const cells: SearchCell[] = [];
+      for (let row = 10; row < 12; row += 1) {
+        for (let column = 10; column < 12; column += 1) {
+          const west = -71.54 + (column - 10) * 0.001;
+          const south = -16.4 + (row - 10) * 0.001;
+          const item = cell(`32719:${column}:${row}`, 500);
+          item.geometry = {
+            type: 'Polygon',
+            coordinates: [[
+              [west, south],
+              [west + 0.001, south],
+              [west + 0.001, south + 0.001],
+              [west, south + 0.001],
+              [west, south],
+            ]],
+          };
+          cells.push(item);
+        }
+      }
+      return cells;
+    };
+    const parameters = parseSearchParameters({
+      estrellas: { salud: 5 },
+      puntajeMinimo: 0,
+    });
+    const previousResult = searchZones(makeCells(), parameters, '2026-01-01');
+    const optimizedCells = makeCells();
+    prepareProjectedGeometries(optimizedCells);
+    const optimizedResult = searchZones(optimizedCells, parameters, '2026-01-01');
+    const signature = createHash('sha256')
+      .update(JSON.stringify(optimizedResult.features))
+      .digest('hex');
+
+    expect(optimizedResult.features).toEqual(previousResult.features);
+    expect(signature).toBe('ae7a8247e890dc9ff15a8d9e1b7763d4032036322f800de73f136717c8ec138a');
   });
 });

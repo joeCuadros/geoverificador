@@ -133,6 +133,10 @@ después de cargar la cuadrícula.
 La respuesta contiene `{ "type": "FeatureCollection", "features": [...], "metadata": {...} }`; cada elemento de
 `features` es una geometría `Polygon` o `MultiPolygon` con los datos agregados de una zona.
 
+Para evitar repetir conversiones por coordenada en cada petición, Nest precalcula las geometrías de celda en UTM 19S
+al cargar la caché. La unión, simplificación y transformación de las zonas finales conserva el algoritmo y la
+tolerancia existentes; una prueba compara las geometrías y puntajes con la ruta anterior sin proyección precalculada.
+
 ## Integración continua y despliegue
 
 - `.github/workflows/ci.yml` se ejecuta en cada `push` y `pull_request`: instala con `pnpm install --frozen-lockfile`, y corre `lint`, `test`, `build` y `datos:verificar`. No usa red para las pruebas.

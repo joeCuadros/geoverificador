@@ -39,6 +39,7 @@ export interface SearchParameters {
 export interface SearchCell {
   cellKey: string;
   geometry: GeoJsonGeometry;
+  projectedGeometry?: GeoJsonGeometry;
   areaM2: number;
   buildability: Buildability | null;
   zoneCode: string | null;
@@ -280,7 +281,18 @@ function transformGeometry(
   return { ...geometry, coordinates: mapCoordinates(geometry.coordinates, transform) };
 }
 
-function buildComponentGeometry(component: ScoredCell[]): GeoJsonGeometry {
+export function prepareProjectedGeometries(cells: SearchCell[]): void {
+  for (const cell of cells) {
+    cell.projectedGeometry = transformGeometry(cell.geometry, ([longitude, latitude]) => {
+      const [x, y] = proj4('EPSG:4326', 'EPSG:32719', [longitude, latitude]);
+      return [Math.round(x * 100) / 100, Math.round(y * 100) / 100];
+    });
+  }
+}
+
+function buildComponentGeometry(
+  component: ScoredCell[],
+): GeoJsonGeometry {
   const points = new Map<string, [number, number]>();
   const edges = new Map<number, { id: number; from: string; to: string }>();
   const edgesByDirection = new Map<string, number[]>();
@@ -306,12 +318,19 @@ function buildComponentGeometry(component: ScoredCell[]): GeoJsonGeometry {
   };
 
   for (const cell of component) {
-    for (const polygon of polygonsOfGeoJson(cell.geometry)) {
+    const projectedGeometry = cell.projectedGeometry ?? transformGeometry(
+      cell.geometry,
+      ([longitude, latitude]) => {
+        const [x, y] = proj4('EPSG:4326', 'EPSG:32719', [longitude, latitude]);
+        return [Math.round(x * 100) / 100, Math.round(y * 100) / 100];
+      },
+    );
+    cell.projectedGeometry ??= projectedGeometry;
+    for (const polygon of polygonsOfGeoJson(projectedGeometry)) {
       for (let ringIndex = 0; ringIndex < polygon.length; ringIndex += 1) {
         const ring = polygon[ringIndex] as Coordinate[];
-        const projected = ring.map(([longitude, latitude]) => {
-          const [x, y] = proj4('EPSG:4326', 'EPSG:32719', [longitude, latitude]);
-          const coordinate: [number, number] = [Math.round(x * 100) / 100, Math.round(y * 100) / 100];
+        const projected = ring.map(([x, y]) => {
+          const coordinate: [number, number] = [x, y];
           const key = `${Math.round(coordinate[0] * 100)},${Math.round(coordinate[1] * 100)}`;
           points.set(key, coordinate);
           return key;
@@ -373,7 +392,6 @@ function buildComponentGeometry(component: ScoredCell[]): GeoJsonGeometry {
     candidates[0].holes.push(hole);
   }
   if (polygons.length === 0) throw new Error('La zona no produjo polígonos exteriores.');
-
   const projectedGeometry: GeoJsonGeometry = polygons.length === 1
     ? { type: 'Polygon', coordinates: [polygons[0].exterior, ...polygons[0].holes] }
     : { type: 'MultiPolygon', coordinates: polygons.map((polygon) => [polygon.exterior, ...polygon.holes]) };
@@ -522,7 +540,7 @@ export function searchZones(
   }
   const components = clusterCells(scoredCells, parameters.minimumZoneCells);
   const features = createZoneFeatures(components);
-  return {
+  const result: ZoneSearchResult = {
     type: 'FeatureCollection',
     features,
     metadata: {
@@ -541,4 +559,5 @@ export function searchZones(
       tiempoCalculoMs: rounded(performance.now() - startedAt),
     },
   };
+  return result;
 }
