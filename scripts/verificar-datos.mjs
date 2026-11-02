@@ -45,6 +45,8 @@ const reglas = json('data/reglas_zonas.json');
 const delitos = json('data/delitos_aqp.geojson');
 const peligros = json('data/peligros_aqp.geojson');
 const distritos = json('data/distritos_aqp.geojson');
+const quebradas = json('data/quebradas_aqp.geojson');
+const sismos = json('data/sismos_igp.geojson');
 const e030 = json('data/zonas_sismicas_e030.json');
 const equipamiento = Object.fromEntries(['salud', 'educacion', 'transporte', 'areas_verdes'].map((n) => [n, json(`data/equipamiento/${n}.geojson`)]));
 
@@ -155,6 +157,36 @@ console.log('\n== A. Integridad de los archivos ==');
   comprobar('Distritos: todos tienen zona sísmica en la transcripción del Anexo II', sinZona.length === 0, sinZona.map((x) => x.properties.distrito).join(', '));
 }
 
+// Quebradas y cauces (ANA): red hidrográfica congelada con scripts/descargar-quebradas.mjs
+{
+  const f = quebradas.features;
+  const m = quebradas.metadata || {};
+  comprobar('Quebradas: FeatureCollection con solo líneas (LineString o MultiLineString) y al menos 2 puntos por línea', quebradas.type === 'FeatureCollection' && f.length > 0 && f.every((x) => {
+    const lineas = x.geometry?.type === 'LineString' ? [x.geometry.coordinates] : x.geometry?.type === 'MultiLineString' ? x.geometry.coordinates : null;
+    return lineas && lineas.every((l) => l.length >= 2);
+  }), `${f.length} tramos`);
+  comprobar('Quebradas: metadata con fuente (ANA), capa, fecha de extracción, elaboración, atribución y licencia', /Autoridad Nacional del Agua/.test(m.fuente || '') && /^https:\/\//.test(m.capa || '') && /^\d{4}-\d{2}-\d{2}T/.test(m.descargado || '') && !!m.elaboracion && !!m.atribucion && !!m.licencia, m.descargado);
+  comprobar('Quebradas: metadata.registros coincide con el número de features y los ids son únicos', m.registros === f.length && new Set(f.map((x) => x.properties.id)).size === f.length);
+  const nombres = [...new Set(f.map((x) => x.properties.nombre).filter(Boolean))].sort();
+  comprobar('Quebradas: metadata.nombres lista exactamente los cursos del archivo', JSON.stringify(nombres) === JSON.stringify(m.nombres), nombres.join(', '));
+  const puntos = f.flatMap((x) => (x.geometry.type === 'LineString' ? x.geometry.coordinates : x.geometry.coordinates.flat()));
+  comprobar('Quebradas: coordenadas dentro del departamento de Arequipa y alrededores (lon -73 a -70, lat -17,5 a -15,5)', puntos.every(([x, y]) => x > -73 && x < -70 && y > -17.5 && y < -15.5), `${puntos.length} vértices`);
+  console.log(`INFO  Quebradas: ${nombres.join(', ')} (red de ANA de escala nacional; no figuran Añashuayco ni San Lázaro: ${['añashuayco', 'san lázaro'].every((n) => !nombres.some((x) => x.toLowerCase().includes(n))) ? 'confirmado' : 'REVISAR'})`);
+}
+
+// Sismos reportados (IGP): congelados con scripts/descargar-sismos.mjs
+{
+  const f = sismos.features;
+  const m = sismos.metadata || {};
+  comprobar('Sismos: solo puntos, con fecha AAAA-MM-DD, magnitud numérica e id único', sismos.type === 'FeatureCollection' && f.every((x) => x.geometry?.type === 'Point' && /^\d{4}-\d{2}-\d{2}$/.test(x.properties.fecha) && typeof x.properties.magnitud === 'number') && new Set(f.map((x) => x.properties.id)).size === f.length, `${f.length} sismos`);
+  comprobar('Sismos: metadata con fuente (IGP), capa, fecha de extracción, periodo y licencia', /Instituto Geofísico/.test(m.fuente || '') && /^https:\/\//.test(m.capa || '') && /^\d{4}-\d{2}-\d{2}T/.test(m.descargado || '') && /^\d{4}-\d{2}-\d{2}$/.test(m.fechaDesde || '') && /^\d{4}-\d{2}-\d{2}$/.test(m.fechaHasta || '') && !!m.licencia, `${m.fechaDesde} a ${m.fechaHasta}`);
+  comprobar('Sismos: metadata.registros y magnitudMaxima coinciden con el archivo', m.registros === f.length && m.magnitudMaxima === Math.max(...f.map((x) => x.properties.magnitud)), `magnitud máxima ${m.magnitudMaxima}`);
+  comprobar('Sismos: todas las fechas caen dentro del periodo declarado y el total de la capa no es menor que los guardados', f.every((x) => x.properties.fecha >= m.fechaDesde && x.properties.fecha <= m.fechaHasta) && m.totalCapa >= f.length, `capa: ${m.totalCapa}`);
+  const [oeste, sur, este, norte] = m.caja;
+  comprobar('Sismos: coordenadas dentro del recuadro declarado', f.every((x) => x.geometry.coordinates[0] >= oeste && x.geometry.coordinates[0] <= este && x.geometry.coordinates[1] >= sur && x.geometry.coordinates[1] <= norte));
+  console.log(`INFO  Sismos: ventana de la capa ${m.fechaDesde} a ${m.fechaHasta} (no es el catálogo histórico); extraído ${m.descargado.slice(0, 10)}`);
+}
+
 // Equipamiento de OpenStreetMap (salud, educación, transporte y áreas verdes)
 {
   const caja = [-71.75, -16.6, -71.35, -16.2];
@@ -191,7 +223,7 @@ const ctx = vm.createContext({
     }
   },
 });
-for (const f of ['js/config.js', 'js/calculos.js', 'js/geo.js', 'js/zonificacion.js', 'js/peligros.js', 'js/delitos.js', 'js/distritos.js', 'js/riesgos.js']) {
+for (const f of ['js/config.js', 'js/calculos.js', 'js/geo.js', 'js/zonificacion.js', 'js/peligros.js', 'js/contexto.js', 'js/delitos.js', 'js/distritos.js', 'js/riesgos.js']) {
   vm.runInContext(leer(f), ctx, { filename: f });
 }
 const app = (expr) => vm.runInContext(expr, ctx);
@@ -391,6 +423,75 @@ const dentro = (x, y, anillos) => vueltas(x, y, anillos[0]) && !anillos.slice(1)
   comprobar('Distritos: 1 500 puntos al azar coinciden con el método independiente', malos === 0, `${malos} diferencias; ${dentroN} dentro de algún distrito`);
   const plaza = await Dis.lookup(-16.3988, -71.5369);
   comprobar('Distritos: la Plaza de Armas cae en el distrito AREQUIPA, zona sísmica 3, Z = 0,35', plaza?.distrito === 'AREQUIPA' && plaza.zona === 3 && plaza.z === 0.35);
+}
+
+// B7. Quebradas y contexto: distancia a líneas frente a un método independiente (líneas densificadas y ley esférica de los cosenos).
+{
+  const R = 6371008.8;
+  const rad = (d) => (d * Math.PI) / 180;
+  const cosenos = (la1, lo1, la2, lo2) => R * Math.acos(Math.min(1, Math.sin(rad(la1)) * Math.sin(rad(la2)) + Math.cos(rad(la1)) * Math.cos(rad(la2)) * Math.cos(rad(lo2 - lo1))));
+  // Cada línea se densifica a pasos de ~5 m: la distancia mínima a esos puntos tiene un error menor que ~3 m.
+  const densas = [];
+  for (const x of quebradas.features) {
+    const lineas = x.geometry.type === 'LineString' ? [x.geometry.coordinates] : x.geometry.coordinates;
+    for (const l of lineas) {
+      for (let i = 1; i < l.length; i++) {
+        const [x0, y0] = l[i - 1];
+        const [x1, y1] = l[i];
+        const largo = cosenos(y0, x0, y1, x1);
+        const n = Math.max(1, Math.ceil(largo / 5));
+        for (let k = 0; k <= n; k++) densas.push([y0 + ((y1 - y0) * k) / n, x0 + ((x1 - x0) * k) / n, x.properties.nombre]);
+      }
+    }
+  }
+  let peorError = 0;
+  let nombresOk = true;
+  const probados = 60;
+  for (let i = 0; i < probados; i++) {
+    const la = -16.2 - azar() * 0.4;
+    const lo = -71.75 + azar() * 0.4;
+    let mejor = Infinity;
+    let nombre = null;
+    for (const [pla, plo, nom] of densas) {
+      const d = cosenos(la, lo, pla, plo);
+      if (d < mejor) { mejor = d; nombre = nom; }
+    }
+    const r = Calc.evaluarCauces({ lat: la, lon: lo }, quebradas.features.map((x) => ({ nombre: x.properties.nombre, tipo: x.properties.tipo, geometry: x.geometry })), {});
+    peorError = Math.max(peorError, Math.abs(r.distanciaM - mejor));
+    if (r.nombre !== nombre) nombresOk = false;
+  }
+  comprobar(`Quebradas: la distancia a la red coincide con un método independiente (${probados} puntos al azar; error máximo ${peorError.toFixed(1)} m)`, peorError < 6);
+  comprobar('Quebradas: el cauce más cercano es el mismo con ambos métodos', nombresOk);
+  comprobar('Quebradas: sin umbral del usuario el estado es INFORMATIVO; con él, CUMPLE o NO CUMPLE (nunca un umbral por defecto)', (() => {
+    const r0 = Calc.evaluarCauces({ lat: -16.399, lon: -71.537 }, quebradas.features.map((x) => ({ nombre: x.properties.nombre, geometry: x.geometry })), {});
+    const c = Calc.evaluarCauces({ lat: -16.399, lon: -71.537 }, quebradas.features.map((x) => ({ nombre: x.properties.nombre, geometry: x.geometry })), { umbralUsuarioM: 1 });
+    const n = Calc.evaluarCauces({ lat: -16.399, lon: -71.537 }, quebradas.features.map((x) => ({ nombre: x.properties.nombre, geometry: x.geometry })), { umbralUsuarioM: 50000 });
+    return r0.estado === 'INFORMATIVO' && r0.umbralM === null && c.estado === 'CUMPLE' && n.estado === 'NO CUMPLE';
+  })());
+}
+
+// B7b. Contexto: el módulo del navegador da lo mismo que un conteo independiente y rotula lo que corresponde.
+{
+  const Ctx = app('Contexto');
+  const R = 6371008.8;
+  const rad = (d) => (d * Math.PI) / 180;
+  const cosenos = (la1, lo1, la2, lo2) => R * Math.acos(Math.min(1, Math.sin(rad(la1)) * Math.sin(rad(la2)) + Math.cos(rad(la1)) * Math.cos(rad(la2)) * Math.cos(rad(lo2 - lo1))));
+  const la = -16.399;
+  const lo = -71.537;
+  const radio = app('CONFIG.sismos.radioM');
+  const esperado = sismos.features.filter((x) => cosenos(la, lo, x.geometry.coordinates[1], x.geometry.coordinates[0]) <= radio);
+  const s = await Ctx.sismos(la, lo);
+  comprobar('Sismos: el conteo en el radio coincide con un recuento independiente (ley esférica de los cosenos)', s.estado === 'INFORMATIVO' && s.total === esperado.length, `${s.total} sismos a ${radio / 1000} km`);
+  comprobar('Sismos: la magnitud máxima y el periodo salen del archivo', s.magnitudMaxima === Math.max(...esperado.map((x) => x.properties.magnitud)) && s.desde === sismos.metadata.fechaDesde && s.hasta === sismos.metadata.fechaHasta);
+  const p = await Ctx.peligros(la, lo);
+  const enRadio = peligros.features.filter((x) => cosenos(la, lo, x.geometry.coordinates[1], x.geometry.coordinates[0]) <= p.radioM);
+  comprobar('Peligros (contexto): el conteo en el radio coincide con un recuento independiente y siempre es INFORMATIVO', p.estado === 'INFORMATIVO' && p.total === enRadio.length, `${p.total} a ${p.radioM} m; el más cercano a ${Math.round(p.distanciaM)} m`);
+  const q = await Ctx.quebradas(la, lo, null);
+  comprobar('Quebradas (módulo): INFORMATIVO sin umbral, con nombre y distancia; según tu umbral solo si la persona lo fija', q.estado === 'INFORMATIVO' && q.nombre && q.distanciaM > 0 && q.segunUmbralUsuario === false && (await Ctx.quebradas(la, lo, 100)).segunUmbralUsuario === true);
+  const sinArchivo = vm.createContext({ console, fetch: async () => ({ ok: false, status: 404, json: async () => ({}) }) });
+  for (const f of ['js/config.js', 'js/calculos.js', 'js/geo.js', 'js/peligros.js', 'js/contexto.js']) vm.runInContext(leer(f), sinArchivo, { filename: f });
+  const vacio = await vm.runInContext('Contexto.evaluar(-16.399, -71.537, 200)', sinArchivo);
+  comprobar('Contexto: si faltan los archivos congelados, las tres variables quedan SIN DATO con su causa (no se inventan datos)', ['quebradas', 'peligros', 'sismos'].every((k) => vacio[k].estado === 'SIN DATO' && !!vacio[k].error));
 }
 
 // B6. Gestión de riesgos: catálogo con fuentes, reglas que se activan solo con su dato, sin valores precargados y matriz.
