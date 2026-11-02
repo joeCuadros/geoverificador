@@ -19,6 +19,17 @@ La aplicación **no recomienda** dónde comprar ni construir y **no da un puntaj
 
 Seguridad (denuncias), desastre (peligros geológicos), zona sísmica y registro de riesgos siguen en el código, pero están ocultos (`CONFIG.modulos` en `public/js/config.js`). Para mostrarlos se usa el parámetro `?modulos=todos`, por ejemplo `http://localhost:3000/?modulos=todos`.
 
+## Asistente de chat
+
+El botón **Asistente** de la barra superior abre un chat que usa los mismos datos y umbrales de la ficha. No usa un modelo de lenguaje ni envía nada a un servidor: entiende frases en español con reglas explícitas (`public/js/asistente.js`), así que funciona en el sitio estático y no puede inventar un dato.
+
+- **Sobre tu punto:** «¿qué zona es?», «¿hay un colegio cerca de mi punto?», «¿cuánto puedo construir en un lote de 200 m²?», «¿cambiará la zonificación?», «dame un resumen».
+- **Buscar zonas:** «busco cerca de un colegio y un parque, lo más importante es el parque, en un radio de 1 km». Revisa una cuadrícula de 250 m sobre las zonas construibles del plano y las agrupa por distrito. Informa el **porcentaje del suelo habitable** que cumple lo pedido (no una probabilidad). Se ajusta con «agrega transporte», «quita el parque», «prioriza el colegio» o «incluye zonas condicionales». Cada distrito trae botones para verlo en el mapa y consultar su mejor punto con la ficha completa.
+- **Qué entiende:** salud, colegio (inicial, primaria o secundaria), transporte, área verde, campiña (zona agrícola), zona residencial, tranquilo, comercial y centro histórico. «Tranquilo», «mall» y «barrio tradicional» son aproximaciones con la zonificación y el chat lo avisa.
+- **Qué no sabe:** seguridad, precios y ruido. Lo dice en vez de responder a medias.
+
+Las reglas y sus límites están en [`docs/METODOLOGIA.md`](docs/METODOLOGIA.md), §11.
+
 ## Límites
 
 - **Distancia en línea recta**, no recorrido real. Un colegio o paradero a 400 m en línea recta puede estar mucho más lejos por la red vial.

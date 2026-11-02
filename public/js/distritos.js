@@ -98,5 +98,14 @@ const Distritos = (() => {
     };
   }
 
-  return { load, lookup };
+  /** Nombre del distrito que contiene el punto, sin esperar (hay que haber llamado antes a `load`). null si no hay. */
+  function nombreDe(lat, lon) {
+    const hit = index.find((d) => {
+      const b = d.bbox;
+      return lon >= b[0] && lon <= b[2] && lat >= b[1] && lat <= b[3] && d.polys.some((rings) => inPolygon(lon, lat, rings));
+    });
+    return hit ? hit.props.distrito : null;
+  }
+
+  return { load, lookup, nombreDe };
 })();

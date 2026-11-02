@@ -98,6 +98,18 @@ const CONFIG = {
     sismica: false,   // zona sísmica de la Norma E.030
   },
 
+  // Asistente de chat (public/js/asistente.js). Busca zonas sobre una cuadrícula de las zonas construibles del plano y agrupa
+  // por distrito. `umbralesZona` son convenciones del proyecto (ninguna norma los fija): campiña, zona comercial y centro
+  // histórico se miden como la distancia al polígono más cercano de esas zonas del plano.
+  asistente: {
+    pasoCeldaM: 250,        // lado de las celdas de la búsqueda
+    minCeldasArea: 8,       // un distrito con menos celdas no se lista: la cifra sería engañosa
+    maxPuntos: 5,           // mejores puntos separados entre sí que calcula la búsqueda
+    separacionPuntosM: 600, // distancia mínima entre esos puntos
+    radioAreaM: 3000,       // radio de la búsqueda con «cerca de mi punto» cuando no se dice cuánto
+    umbralesZona: { campina: 500, comercial: 600, historico: 800 },
+  },
+
   // Equipamiento de OpenStreetMap: archivos congelados con scripts/extraer-equipamiento.mjs (pnpm datos:extraer).
   // Solo si falta un archivo se consulta Overpass en vivo, alrededor del punto y en este radio.
   equipamiento: {

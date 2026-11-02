@@ -18,6 +18,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
+import { createRequire } from 'node:module';
 
 const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..', 'public');
 const leer = (ruta) => readFileSync(join(RAIZ, ruta), 'utf8');
@@ -421,6 +422,86 @@ const dentro = (x, y, anillos) => vueltas(x, y, anillos[0]) && !anillos.slice(1)
   comprobar('Riesgos: la herramienta no precarga probabilidad, impacto ni decisión', todos.every((r) => !('p' in r) && !('i' in r) && !('decision' in r) && !('nivel' in r)));
   const m = [[1, 1, 'Bajo'], [1, 2, 'Bajo'], [2, 1, 'Bajo'], [1, 3, 'Medio'], [3, 1, 'Medio'], [2, 2, 'Medio'], [2, 3, 'Alto'], [3, 2, 'Alto'], [3, 3, 'Alto']];
   comprobar('Riesgos: matriz 3 × 3 (1-2 bajo, 3-4 medio, 6-9 alto) y sin nivel si falta un valor', m.every(([p, i, n]) => Rsg.nivel(p, i)?.texto === n) && Rsg.nivel(null, 2) === null && Rsg.nivel(2, null) === null);
+}
+
+// ------------------------------------------------- C. Asistente de chat
+console.log('\n== C. Asistente: búsqueda de zonas frente a un método independiente ==');
+{
+  vm.runInContext(leer('js/asistente.js'), ctx, { filename: 'js/asistente.js' });
+  const A = app('Asistente');
+  const U = { ...CONFIG.umbrales, zona: CONFIG.asistente.umbralesZona };
+  const zonasLista = await Zon.zonas();
+  const datos = A.prepararDatos({
+    salud: equipamiento.salud.features, educacion: equipamiento.educacion.features, transporte: equipamiento.transporte.features, areasVerdes: equipamiento.areas_verdes.features,
+  }, zonasLista, U);
+  const celdas = A.generarCeldas(zonasLista, { pasoM: CONFIG.asistente.pasoCeldaM });
+  comprobar('Asistente: la cuadrícula tiene celdas solo en zonas construibles', celdas.length > 1000 && celdas.every((c) => reglas[c.zona]?.edificable === 'si'), `${celdas.length} celdas de ${CONFIG.asistente.pasoCeldaM} m`);
+
+  // La zona de cada celda coincide con la que devuelve la búsqueda por punto de la ficha (otro camino de código).
+  const muestra = Array.from({ length: 300 }, () => celdas[Math.floor(azar() * celdas.length)]);
+  let difZona = 0;
+  for (const c of muestra) if ((await Zon.lookup(c.lat, c.lon))?.codigo !== c.zona) difZona++;
+  comprobar('Asistente: la zona de 300 celdas al azar coincide con Zonificacion.lookup', difZona === 0, `${difZona} diferencias`);
+
+  // Distancias: fuerza bruta con la ley esférica de los cosenos (sin el atajo de latitud ni el haversine del código).
+  const R = 6371008.8;
+  const rad = (d) => (d * Math.PI) / 180;
+  const cosenos = (la1, lo1, la2, lo2) => R * Math.acos(Math.min(1, Math.sin(rad(la1)) * Math.sin(rad(la2)) + Math.cos(rad(la1)) * Math.cos(rad(la2)) * Math.cos(rad(lo2 - lo1))));
+  const brutoMin = (features, filtro) => (c) => Math.min(...features.filter(filtro).map((f) => cosenos(c.lat, c.lon, f.geometry.coordinates[1], f.geometry.coordinates[0])));
+  const bruto = {
+    salud: brutoMin(equipamiento.salud.features, () => true),
+    transporte: brutoMin(equipamiento.transporte.features, () => true),
+    // Definición escrita aquí, aparte de Calculos.nivelesEducativos: jardín, o colegio etiquetado con nivel 0 / school=kindergarten.
+    inicial: brutoMin(equipamiento.educacion.features, (f) => {
+      const t = f.properties.tags;
+      return t.amenity === 'kindergarten' || (t.amenity === 'school' && (/(^|[;,\s])0($|[;,\s])/.test(t['isced:level'] ?? '') || /kindergarten/.test(t.school ?? '')));
+    }),
+  };
+  const req = (id) => ({ id, umbralM: null, prioridad: 1 });
+  const dif = { salud: 0, transporte: 0, inicial: 0 };
+  const lejos = { salud: 0, transporte: 0, inicial: 0 };
+  const ejemplos = [];
+  const pocas = muestra.slice(0, 120);
+  for (const c of pocas) {
+    const e = A.evaluarCelda(c, datos, [req('salud'), req('transporte'), req('inicial')], U);
+    for (const id of ['salud', 'transporte', 'inicial']) {
+      const b = bruto[id](c);
+      const umbral = id === 'inicial' ? U.educacion.inicial : U[id];
+      if (Math.abs(e[id].distanciaM - b) > 0.5 || e[id].cumple !== (b <= umbral)) {
+        dif[id]++;
+        if (ejemplos.length < 3) ejemplos.push(`${id}: código ${e[id].distanciaM?.toFixed(1)} m / cosenos ${b.toFixed(1)} m (cumple ${e[id].cumple}, umbral ${umbral})`);
+      }
+      if (b > 3000) lejos[id]++;
+    }
+  }
+  comprobar('Asistente: distancia y veredicto de salud, transporte e inicial en 120 celdas coinciden con la fuerza bruta (ley de cosenos)', Object.values(dif).every((n) => n === 0), `diferencias: ${JSON.stringify(dif)}${ejemplos.length ? ` · ${ejemplos.join(' | ')}` : ''}`);
+
+  // Búsqueda completa con los datos reales: tiempo, orden y coherencia de las áreas.
+  await Dis.load();
+  const criterios = [req('colegio'), { ...req('salud'), prioridad: 2 }, req('areaVerde')];
+  const r = A.buscar({ criterios, zonas: zonasLista, datos, umbrales: U, distritoDe: (la, lo) => Dis.nombreDe(la, lo), pasoM: CONFIG.asistente.pasoCeldaM, minCeldas: CONFIG.asistente.minCeldasArea });
+  // El tiempo se mide con el módulo cargado como CommonJS: dentro de `vm` el código corre varias veces más lento que en el
+  // navegador y la cifra no diría nada de lo que vive la persona.
+  const Rapido = createRequire(import.meta.url)('../public/js/asistente.js');
+  const datosRapido = Rapido.prepararDatos({
+    salud: equipamiento.salud.features, educacion: equipamiento.educacion.features, transporte: equipamiento.transporte.features, areasVerdes: equipamiento.areas_verdes.features,
+  }, zonasLista, U);
+  const parametros = { criterios, zonas: zonasLista, datos: datosRapido, umbrales: U, distritoDe: (la, lo) => Dis.nombreDe(la, lo), pasoM: CONFIG.asistente.pasoCeldaM, minCeldas: CONFIG.asistente.minCeldasArea };
+  let t0 = Date.now();
+  const rapida = Rapido.buscar(parametros);
+  const msPrimera = Date.now() - t0;
+  const celdasListas = Rapido.generarCeldas(zonasLista, { pasoM: CONFIG.asistente.pasoCeldaM });
+  t0 = Date.now();
+  Rapido.buscar({ ...parametros, celdas: celdasListas });
+  const msReuso = Date.now() - t0;
+  comprobar('Asistente: una búsqueda con 3 criterios sobre los datos reales tarda menos de 2 s', msPrimera < 2000, `${msPrimera} ms, ${rapida.totalCeldas} celdas`);
+  comprobar('Asistente: con la cuadrícula ya calculada («agrega…», «quita…») tarda menos de 1 s', msReuso < 1000, `${msReuso} ms`);
+  comprobar('Asistente: dentro y fuera de `vm` la búsqueda da las mismas áreas y porcentajes', JSON.stringify(rapida.areas.map((a) => [a.nombre, a.celdas, Math.round(a.pctCumpleTodo * 100)])) === JSON.stringify(r.areas.map((a) => [a.nombre, a.celdas, Math.round(a.pctCumpleTodo * 100)])));
+  comprobar('Asistente: los porcentajes están entre 0 y 100 y las áreas vienen ordenadas por coincidencia', r.areas.length > 0 && r.areas.every((a, i) => a.pctCumpleTodo >= 0 && a.pctCumpleTodo <= 100 && a.puntajePct >= 0 && a.puntajePct <= 100 && (i === 0 || r.areas[i - 1].puntajePct >= a.puntajePct)), `${r.areas.length} distritos`);
+  comprobar('Asistente: la mejor celda de cada área cae realmente en ese distrito', r.areas.every((a) => Dis.nombreDe(a.mejor.lat, a.mejor.lon) === a.nombre));
+  comprobar('Asistente: la suma de celdas por distrito no supera el total', r.areas.reduce((s, a) => s + a.celdas, 0) <= r.totalCeldas);
+  const cubre = (id) => `${id} ${Math.round((100 * celdas.filter((c) => A.evaluarCelda(c, datos, [req(id)], U)[id].cumple).length) / celdas.length)} %`;
+  console.log(`INFO  Parte de las celdas que cumple cada criterio con su umbral: ${['colegio', 'inicial', 'primaria', 'secundaria', 'salud', 'transporte', 'areaVerde', 'campina'].map(cubre).join(' · ')}`);
 }
 
 console.log(`\n${pruebas - fallos} de ${pruebas} comprobaciones correctas.`);
