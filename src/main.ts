@@ -3,6 +3,15 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
 import { AppModule, ObserveInstrument } from './app.module';
 
+// Local development: load the key from .env.local / .env (already-set variables win). Values are never printed.
+for (const archivo of ['.env.local', '.env']) {
+  try {
+    process.loadEnvFile(archivo);
+  } catch {
+    // The file is optional.
+  }
+}
+
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     instrument: ObserveInstrument,
