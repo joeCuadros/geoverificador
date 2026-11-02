@@ -394,6 +394,7 @@ const AsistenteUI = (() => {
     const panel = $('asistente');
     panel.hidden = false;
     $('asistente-btn').setAttribute('aria-expanded', 'true');
+    if (esMovil()) $('app').inert = true; // en el móvil el chat cubre toda la pantalla: el teclado no debe llegar a lo que queda detrás
     if (!saludado) {
       saludado = true;
       mensaje('asistente', { ...Asistente.responder({ tipo: 'saludo', criterios: [] }, {}), explicacion: Asistente.explicar('saludo') }); // trae sus sugerencias
@@ -404,6 +405,7 @@ const AsistenteUI = (() => {
 
   function cerrar({ devolverFoco = true } = {}) {
     $('asistente').hidden = true;
+    $('app').inert = false;
     $('asistente-btn').setAttribute('aria-expanded', 'false');
     if (devolverFoco) $('asistente-btn').focus();
   }

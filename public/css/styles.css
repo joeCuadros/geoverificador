@@ -1092,3 +1092,8 @@ summary { -webkit-tap-highlight-color: transparent; }
   .btn-barra { min-width: 40px; min-height: 40px; }
   .contador { top: -7px; right: -5px; }
 }
+
+/* Enlace para saltar la barra superior: solo se ve al recibir el foco con el teclado. */
+.saltar { position: fixed; top: 8px; left: 8px; z-index: 3000; padding: 10px 14px; border-radius: 8px; background: var(--on-band); color: var(--band); font-weight: 700; transform: translateY(-200%); }
+.saltar:focus { transform: none; }
+#contenido:focus { outline: none; }

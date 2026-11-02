@@ -16,6 +16,7 @@
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
+  <a class="saltar" href="#contenido">Saltar a la consulta</a>
   
   <!-- Iconos: un solo trazo (1,75 px, extremos redondeados). Se usan con <use href="#i-...">. -->
   <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
@@ -88,7 +89,7 @@
     </header>
 
     <!-- ============================================================ Panel -->
-    <aside class="panel" id="contenido" aria-label="Consulta de un predio">
+    <aside class="panel" id="contenido" tabindex="-1" aria-label="Consulta de un predio">
 
       <!-- Paso 1: Ubica tu predio -->
       <section id="paso-ubicar" class="paso" aria-labelledby="ubicar-h">
@@ -506,7 +507,7 @@
       <button id="tour-cerrar" type="button" class="icon-btn" aria-label="Omitir el recorrido"><svg class="ico" aria-hidden="true"><use href="#i-cerrar"/></svg></button>
     </div>
     <ol class="tour-puntos" id="tour-puntos" aria-hidden="true"></ol>
-    <div id="tour-cuerpo" class="tour-cuerpo"></div>
+    <div id="tour-cuerpo" class="tour-cuerpo" role="group" aria-labelledby="tour-h"></div>
     <div class="dialogo-pie tour-pie">
       <button id="tour-omitir" type="button" class="link">Omitir recorrido</button>
       <div class="tour-nav">
