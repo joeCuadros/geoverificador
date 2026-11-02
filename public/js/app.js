@@ -1438,6 +1438,9 @@
       potencial: zonaOk && lote > 0 ? Zonificacion.potencial(r, lote) : null,
       avisoPDM,
       variables: e,
+      cauce: state.cauce,                 // quebradas: INFORMATIVO, o cumple / no cumple según el umbral de la persona
+      contextoRiesgo: state.contextoRiesgo, // peligros geológicos y sismos (informativo)
+      verificaciones: { calculado: Verificaciones.CALCULADO, items: Verificaciones.ITEMS, aviso: Verificaciones.AVISO },
       umbrales: CONFIG.umbrales,
       fuentesUmbral: CONFIG.fuentesUmbral,
       modulos,
