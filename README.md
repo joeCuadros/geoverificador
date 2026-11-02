@@ -23,7 +23,19 @@ Seguridad (denuncias), desastre (peligros geológicos), zona sísmica y registro
 
 ## Asistente de chat
 
-El botón **Asistente** de la barra superior abre un chat que usa los mismos datos y umbrales de la ficha. No usa un modelo de lenguaje ni envía nada a un servidor: entiende frases en español con reglas explícitas (`public/js/asistente.js`), así que funciona en el sitio estático y no puede inventar un dato.
+El botón **Asistente** de la barra superior abre un chat que usa los mismos datos y umbrales de la ficha. Los números, distancias y estados los calcula siempre el motor determinista (`public/js/asistente.js`) en el navegador, con los archivos congelados. Si el servidor tiene configurado Gemini, el modelo solo **interpreta** la frase y **redacta** la respuesta; si no, el chat entiende el texto con reglas explícitas. La cabecera del chat indica «Modo: Gemini» o «Modo: reglas».
+
+### Asistente con Gemini
+
+- **Qué hace el modelo:**
+  1. Convierte la frase en una consulta estructurada. Lo hace con la única función que puede llamar (`consulta_asistente`). La salida se valida contra un esquema (`public/js/asistente-llm.js`), en el servidor y otra vez en el navegador.
+  2. Reescribe en pocas líneas la respuesta que ya calculó el motor. Se comprueba que cada cifra y cada nombre propio estén en ese resultado, que se conserve el aviso «referencial» y que no haya recomendaciones de compra. Si algo no pasa, se muestra el texto determinista.
+- **Qué no hace:** no calcula, no elige pesos, no da puntajes ni recomienda comprar. No recibe los datos geográficos, solo la frase, los últimos turnos y, al redactar, el texto ya calculado.
+- **Respaldo:** si no hay clave (503), si falla, si tarda más de 8 s o si el sitio no tiene la función (por ejemplo, un servidor estático), el chat usa las reglas sin interrumpirse.
+- **Clave:** se lee solo en el servidor, desde `GEMINI_API_KEY`; nunca llega al navegador. Opcionalmente, `GEMINI_MODEL` cambia el modelo (por defecto `gemini-3.5-flash-lite`).
+  - **Local:** crea `.env.local` con `GEMINI_API_KEY=...`, como muestra `.env.example`. `pnpm start` lo lee y git lo ignora.
+  - **Vercel:** Project → Settings → Environment Variables → `GEMINI_API_KEY`. La función está en `api/chat.js`.
+- **Límite:** 20 solicitudes por minuto por IP y mensajes de 300 caracteres como máximo.
 
 - **Sobre tu punto:** «¿qué zona es?», «¿hay un colegio cerca de mi punto?», «¿cuánto puedo construir en un lote de 200 m²?», «¿cambiará la zonificación?», «dame un resumen».
 - **Buscar zonas:** «busco cerca de un colegio y un parque, lo más importante es el parque, en un radio de 1 km». Revisa una cuadrícula de 250 m sobre las zonas construibles del plano y las agrupa por distrito. Informa el **porcentaje del suelo habitable** que cumple lo pedido (no una probabilidad). Se ajusta con «agrega transporte», «quita el parque», «prioriza el colegio» o «incluye zonas condicionales». Cada distrito trae botones para verlo en el mapa y consultar su mejor punto con la ficha completa.

@@ -332,7 +332,12 @@ Las fuentes públicas cambian: al volver a descargar, las cifras de este documen
 
 **Qué es.** Un chat (`public/js/asistente.js` para la lógica y `public/js/asistente-ui.js` para la vista) que responde sobre el punto ya consultado y busca zonas de Arequipa según lo que la persona pide. Usa los mismos archivos, umbrales y cálculos de las cinco variables; no agrega fuentes de datos.
 
-**Por qué no usa un modelo de lenguaje.** El proyecto se publica como sitio estático (sin servidor ni claves) y su regla es no inventar datos. Un modelo de lenguaje podría responder con cifras que no están en ninguna fuente. El asistente entiende el texto con reglas explícitas (palabras clave sin tildes ni mayúsculas) y responde únicamente con lo que calculan `Calculos`, `Zonificacion` y `Equipamiento`. Si no entiende, lo dice y da ejemplos. Nada de lo que se escribe sale del navegador ni se guarda.
+**Papel del modelo de lenguaje (Gemini).** La regla del proyecto es no inventar datos: un modelo de lenguaje podría responder con cifras que no están en ninguna fuente. Por eso el modelo nunca calcula ni responde por su cuenta. Solo tiene dos tareas acotadas, que corren en el servidor (`api/_lib/gemini.js`, la función `/api/chat`), con la clave en una variable de entorno:
+
+1. **Interpretar.** Convierte la frase en la misma consulta estructurada que produce el intérprete de reglas. Usa como única salida una función declarada (`consulta_asistente`, en modo de llamada obligatoria). El resultado se valida con un esquema (`AsistenteLLM.validarSpec`): campos desconocidos, enumeraciones y rangos recortados. Después lo ejecuta el motor determinista en el navegador, con `Calculos`, `Zonificacion`, `Equipamiento` y `Contexto`.
+2. **Redactar.** Reescribe la respuesta determinista. `AsistenteLLM.verificarTexto` exige que toda cifra y todo nombre propio del texto estén en el resultado del motor. También que se mantenga el aviso «referencial» y que no haya recomendaciones de compra. Si algo no se cumple, se muestra el texto determinista.
+
+Ante cualquier fallo se usa el intérprete de reglas (palabras clave sin tildes ni mayúsculas): no hay clave, el servidor da error, se pasa el tiempo límite o el sitio es estático. La explicación «Por qué, fuente y límites» se arma siempre de forma determinista. Al modelo solo se envían la frase, los últimos seis turnos y, al redactar, el texto ya calculado; los datos geográficos no salen del navegador. **Límite:** la calidad de la interpretación depende del modelo. Si entiende mal una frase, la consulta resultante sigue siendo válida, pero puede no ser la que la persona quería. La frase equivalente se muestra en las búsquedas armadas con los menús.
 
 **Qué entiende.**
 
