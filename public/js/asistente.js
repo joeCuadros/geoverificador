@@ -850,20 +850,22 @@ const Asistente = (() => {
     // Distancia MÍNIMA a quebradas y ríos para «lejos de quebradas». Son opciones para elegir, no umbrales recomendados:
     // ninguna norma fija esa distancia. null = no importa.
     cauces: [null, 100, 200, 300, 500, 1000],
+    // Casilla «Solo cerca de mi punto»: limita la búsqueda a celdas alrededor del punto elegido (CONFIG.asistente.radioAreaM si no hay radio).
+    cercaDeMiPunto: { etiqueta: 'Solo cerca de mi punto' },
   };
 
   const NIVELES_MENU = OPCIONES.niveles.map((n) => n.id);
 
   /**
    * La estructura que produce `interpretar` para una búsqueda nueva, armada desde los menús en vez de desde un texto.
-   *   entrada: { criterios: [id…], prioridades: [id…], nivel, radioM, incluirCondicional, lejosQuebradaM }
+   *   entrada: { criterios: [id…], prioridades: [id…], nivel, radioM, incluirCondicional, lejosQuebradaM, cercaDeMiPunto }
    *   lejosQuebradaM (metros, opcional) agrega «lejos de quebradas y ríos» con esa distancia mínima.
    * «colegio» se reemplaza por el nivel elegido (inicial, primaria o secundaria); sin nivel válido queda «colegio»
    * (inicial o primaria). Una prioridad pesa 2 y el resto 1, igual que «lo más importante es…». Sin criterios válidos
    * devuelve la misma intención «desconocido» que el intérprete con un texto vacío.
    */
   function construirConsulta(entrada = {}) {
-    const { criterios = [], prioridades = [], nivel = 'colegio', radioM = null, incluirCondicional = false, lejosQuebradaM = null } = entrada || {};
+    const { criterios = [], prioridades = [], nivel = 'colegio', radioM = null, incluirCondicional = false, lejosQuebradaM = null, cercaDeMiPunto = false } = entrada || {};
     const aId = (id) => (id === 'colegio' && NIVELES_MENU.includes(nivel) ? nivel : id);
     const elegidos = [];
     (Array.isArray(criterios) ? criterios : []).forEach((id) => {
@@ -881,6 +883,8 @@ const Asistente = (() => {
     q.aproximados = q.criterios.filter((c) => CRITERIOS[c.id].aproximado).map((c) => c.id);
     q.radioGlobalM = esNumero(radioM) && radioM > 0 ? radioM : null;
     q.incluirCondicional = Boolean(incluirCondicional);
+    // «Solo cerca de mi punto»: lo mismo que el intérprete saca de «… cerca de mi punto». La distancia máxima pasa a ser el radio del área.
+    q.limitarAlPunto = cercaDeMiPunto === true;
     return q;
   }
 
@@ -902,6 +906,7 @@ const Asistente = (() => {
     if (!q || !q.criterios || q.criterios.length === 0) return '';
     const partes = [`Busco una zona con ${listaEs(q.criterios.map(enFrase))}`];
     q.criterios.filter((c) => c.prioridad > 1).forEach((c) => partes.push(`lo más importante es ${EN_FRASE[c.id]}`));
+    if (q.limitarAlPunto) partes.push('cerca de mi punto');
     if (esNumero(q.radioGlobalM)) partes.push(`en un radio de ${fmtRadioFrase(q.radioGlobalM)}`);
     if (q.incluirCondicional) partes.push('incluye zonas condicionales');
     return `${partes.join(', ')}.`;

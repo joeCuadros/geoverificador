@@ -263,6 +263,7 @@ const AsistenteUI = (() => {
     const prio = $('cons-prio').value;
     return {
       lejosQuebradaM: $('cons-cauce').value ? Number($('cons-cauce').value) : null,
+      cercaDeMiPunto: $('cons-punto').checked && !$('cons-punto').disabled,
       criterios: elegidos(),
       prioridades: prio ? [prio] : [],
       nivel: $('cons-nivel').value,
@@ -282,6 +283,25 @@ const AsistenteUI = (() => {
     $('cons-prio').innerHTML = `<option value="">Ninguna</option>${conCauce.map((id) => `<option value="${id}">${esc(etiquetaCorta(id))}</option>`).join('')}`;
     $('cons-prio').value = conCauce.includes(prevista) ? prevista : '';
     $('cons-error').hidden = true;
+    actualizarPunto();
+  }
+
+  /**
+   * «Solo cerca de mi punto» solo se puede elegir con un punto en el mapa. Con la casilla marcada, la distancia máxima pasa a
+   * ser el radio del área alrededor del punto: se dice en la etiqueta y en la ayuda.
+   */
+  function actualizarPunto() {
+    const hay = Boolean(api && api.obtenerPunto());
+    const c = $('cons-punto');
+    c.disabled = !hay;
+    if (!hay) c.checked = false;
+    const cerca = c.checked;
+    $('cons-radio-l').textContent = cerca ? 'Radio alrededor de mi punto' : 'Distancia máxima';
+    $('cons-punto-ayuda').textContent = !hay
+      ? 'Disponible cuando eliges un punto en el mapa.'
+      : cerca
+        ? `Solo miro celdas dentro de ese radio (${Asistente.fmtDist(CONFIG.asistente.radioAreaM)} si no eliges uno). Los servicios se miden con la distancia de cada uno en la ficha.`
+        : 'Limita la búsqueda a lo que rodea el punto que elegiste.';
   }
 
   /** Pone en los menús lo que se buscó (también cuando se pidió escribiendo: «agrega transporte», «prioriza el parque»…). */
@@ -309,6 +329,7 @@ const AsistenteUI = (() => {
     $('cons-nivel').value = 'colegio';
     $('cons-radio').value = '';
     $('cons-cauce').value = '';
+    $('cons-punto').checked = false;
     $('cons-cond').checked = false;
     actualizarFormulario();
   }
@@ -377,6 +398,7 @@ const AsistenteUI = (() => {
       saludado = true;
       mensaje('asistente', { ...Asistente.responder({ tipo: 'saludo', criterios: [] }, {}), explicacion: Asistente.explicar('saludo') }); // trae sus sugerencias
     }
+    actualizarPunto(); // el punto pudo cambiar desde la última vez
     $('asistente-texto').focus();
   }
 

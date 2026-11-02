@@ -464,7 +464,7 @@
             <select id="cons-prio"></select>
           </label>
           <label class="campo">
-            <span class="campo-etiqueta">Distancia máxima</span>
+            <span class="campo-etiqueta" id="cons-radio-l">Distancia máxima</span>
             <select id="cons-radio"></select>
           </label>
         </div>
@@ -475,6 +475,10 @@
           <small id="cons-cauce-ayuda" class="campo-ayuda">Tú eliges la distancia mínima: no existe una distancia oficial. Usa la red de la ANA, que no incluye todas las quebradas urbanas.</small>
         </label>
 
+        <div class="campo">
+          <label class="check"><input id="cons-punto" type="checkbox" aria-describedby="cons-punto-ayuda"><span id="cons-punto-t">Solo cerca de mi punto</span></label>
+          <small id="cons-punto-ayuda" class="campo-ayuda"></small>
+        </div>
         <label class="check"><input id="cons-cond" type="checkbox"><span>Incluir zonas condicionales</span></label>
         <p id="cons-error" class="texto-error small" role="alert" hidden></p>
         <div class="constructor-acciones">
