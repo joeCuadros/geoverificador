@@ -141,41 +141,60 @@ const CompararUI = (() => {
     return `<span class="res-prio sindato">${icono('sindato')}Falta dato en: ${esc(listaTexto([...ev.sinDato, ...ev.informativas]))}</span>`;
   }
 
-  function celdaHtml(c, id, mejor, prioritaria, contexto = false) {
-    const cel = contexto ? Comparar.celdaContexto(c, id) : Comparar.celda(c, id, umbrales());
-    const partes = cel.partes.map((p) => `<p class="celda-parte">${p.etiqueta ? `${miniEstado(p.estado)}<span class="celda-nivel">${esc(p.etiqueta)}</span> ` : ''}${esc(p.texto)}</p>`).join('');
-    return `<td class="${mejor ? 'mejor' : ''}${prioritaria ? ' prioritaria' : ''}">${estadoHtml(cel.estado)}${partes}</td>`;
+  // La tabla (escritorio) y las tarjetas (móvil, hasta 480 px) se dibujan con las mismas filas de Comparar.filas.
+  function partesHtml(cel) {
+    return cel.partes.map((p) => `<p class="celda-parte">${p.etiqueta ? `${miniEstado(p.estado)}<span class="celda-nivel">${esc(p.etiqueta)}</span> ` : ''}${esc(p.texto)}</p>`).join('');
   }
 
-  function tablaHtml() {
-    const evals = candidatos.map((c) => Comparar.evaluarPrioridades(c, prioridades, umbrales()));
-    const ganan = new Set(Comparar.quienesCumplen(candidatos, prioridades, umbrales()));
+  function celdaHtml(cel, prioritaria) {
+    return `<td class="${cel.mejor ? 'mejor' : ''}${prioritaria ? ' prioritaria' : ''}">${estadoHtml(cel.estado)}${partesHtml(cel)}</td>`;
+  }
+
+  const textoContexto = 'Contexto de riesgo (informativo): no es una evaluación ni cuenta para tus prioridades';
+  const tagPrio = () => `<span class="tag-prio">${icono('estrella')}Tu prioridad</span>`;
+
+  function tablaHtml(f, evals, ganan) {
     const cabeceras = candidatos.map((c, i) => `<th scope="col" class="col-punto${ganan.has(c.id) ? ' mejor' : ''}">
       <span class="punto-nombre">${esc(c.etiqueta)}</span>
       <span class="punto-det">${c.distrito ? `${esc(c.distrito)} · ` : ''}${c.lat.toFixed(4)}, ${c.lon.toFixed(4)}</span>
       ${chipResultado(evals[i])}
       <button type="button" class="link" data-quitar="${esc(c.id)}" aria-label="Quitar «${esc(c.etiqueta)}» de la comparación">Quitar</button>
     </th>`).join('');
-    const filas = Comparar.VARIABLES.map((v) => {
-      const prio = prioridades.includes(v.id);
-      return `<tr${prio ? ' class="prioritaria"' : ''}>
-        <th scope="row"><span class="var-nombre-fila">${esc(v.titulo)}</span>${prio ? `<span class="tag-prio">${icono('estrella')}Tu prioridad</span>` : ''}</th>
-        ${candidatos.map((c) => celdaHtml(c, v.id, ganan.has(c.id), prio)).join('')}
-      </tr>`;
-    }).join('');
-    const filasContexto = Comparar.CONTEXTO.map((v) => `<tr class="fila-contexto">
+    const filas = f.variables.map((v) => `<tr${v.prioritaria ? ' class="prioritaria"' : ''}>
+        <th scope="row"><span class="var-nombre-fila">${esc(v.titulo)}</span>${v.prioritaria ? tagPrio() : ''}</th>
+        ${v.celdas.map((cel) => celdaHtml(cel, v.prioritaria)).join('')}
+      </tr>`).join('');
+    const filasContexto = f.contexto.map((v) => `<tr class="fila-contexto">
         <th scope="row"><span class="var-nombre-fila">${esc(v.titulo)}</span></th>
-        ${candidatos.map((c) => celdaHtml(c, v.id, false, false, true)).join('')}
+        ${v.celdas.map((cel) => celdaHtml(cel, false)).join('')}
       </tr>`).join('');
     return `<table class="tabla-comparar" style="--cols:${candidatos.length}">
       <caption class="sr-only">Comparación de ${candidatos.length} ${candidatos.length === 1 ? 'punto' : 'puntos'}. Cada celda indica el estado, la distancia en línea recta y la distancia de referencia (ref.). Las últimas filas son contexto de riesgo informativo.</caption>
       <thead><tr><td class="esquina"><span class="sr-only">Variable</span></td>${cabeceras}</tr></thead>
       <tbody>${filas}</tbody>
       <tbody class="contexto-filas">
-        <tr class="sep"><th scope="colgroup" colspan="${candidatos.length + 1}">Contexto de riesgo (informativo): no es una evaluación ni cuenta para tus prioridades</th></tr>
+        <tr class="sep"><th scope="colgroup" colspan="${candidatos.length + 1}">${textoContexto}</th></tr>
         ${filasContexto}
       </tbody>
     </table>`;
+  }
+
+  /** Móvil: una tarjeta por punto (nombre, resultado, quitar) y una tarjeta por variable con los puntos apilados. */
+  function cartasHtml(f, evals, ganan) {
+    const puntos = candidatos.map((c, i) => `<article class="carta-punto${ganan.has(c.id) ? ' mejor' : ''}">
+        <h3 class="punto-nombre">${esc(c.etiqueta)}</h3>
+        <p class="punto-det">${c.distrito ? `${esc(c.distrito)} · ` : ''}${c.lat.toFixed(4)}, ${c.lon.toFixed(4)}</p>
+        ${chipResultado(evals[i])}
+        <button type="button" class="link" data-quitar="${esc(c.id)}" aria-label="Quitar «${esc(c.etiqueta)}» de la comparación">Quitar</button>
+      </article>`).join('');
+    const nombreDe = (id) => esc(nombreCorto(candidatos.find((c) => c.id === id)));
+    const tarjeta = (v) => `<section class="carta-var${v.prioritaria ? ' prioritaria' : ''}" aria-labelledby="cv-${v.id}">
+        <h3 id="cv-${v.id}">${esc(v.titulo)}${v.prioritaria ? tagPrio() : ''}</h3>
+        <ul>${v.celdas.map((cel) => `<li class="${cel.mejor ? 'mejor' : ''}"><span class="carta-quien">${nombreDe(cel.candidatoId)}</span>${estadoHtml(cel.estado)}${partesHtml(cel)}</li>`).join('')}</ul>
+      </section>`;
+    return `<h3 class="carta-sep">Puntos guardados</h3>${puntos}
+      <h3 class="carta-sep">Comparación por variable</h3>${f.variables.map(tarjeta).join('')}
+      <h3 class="carta-sep">${textoContexto}</h3>${f.contexto.map(tarjeta).join('')}`;
   }
 
   function render() {
@@ -190,7 +209,17 @@ const CompararUI = (() => {
     const dom = hay ? dominanciaHtml() : '';
     $('comparar-dominancia').innerHTML = dom;
     $('comparar-dominancia').hidden = dom === '';
-    $('comparar-tabla-wrap').innerHTML = hay ? tablaHtml() : '';
+    $('comparar-cartas').hidden = !hay;
+    if (hay) {
+      const f = Comparar.filas(candidatos, prioridades, umbrales());
+      const evals = candidatos.map((c) => Comparar.evaluarPrioridades(c, prioridades, umbrales()));
+      const ganan = new Set(Comparar.quienesCumplen(candidatos, prioridades, umbrales()));
+      $('comparar-tabla-wrap').innerHTML = tablaHtml(f, evals, ganan);
+      $('comparar-cartas').innerHTML = cartasHtml(f, evals, ganan);
+    } else {
+      $('comparar-tabla-wrap').innerHTML = '';
+      $('comparar-cartas').innerHTML = '';
+    }
     const fechas = [...new Set(candidatos.map((c) => c.fechaDatos).filter(Boolean))];
     $('comparar-fuente').textContent = hay
       ? `Zonificación: plano del PDM Arequipa 2016-2025. Salud, colegios, paraderos y áreas verdes: OpenStreetMap${fechas.length ? `, datos del ${fechas.join(' y del ')}` : ''}. Quebradas: red hidrográfica de la ANA. Peligros geológicos: INGEMMET. Sismos: IGP. Distancias en línea recta. Esta tabla muestra lo que la herramienta calculó y es referencial; lo que tú debes comprobar (certificados, partida registral, servicios, peligros) está en «Verificaciones recomendadas antes de comprar», en el reporte.`
@@ -235,13 +264,15 @@ const CompararUI = (() => {
       const foco = document.querySelector(`#prioridades-lista input[value="${e.target.value}"]`);
       if (foco) foco.focus(); // el redibujado reemplaza la casilla: se devuelve el foco a la misma
     });
-    $('comparar-tabla-wrap').addEventListener('click', (e) => {
+    const alQuitar = (e) => {
       const b = e.target.closest('[data-quitar]');
       if (!b) return;
       candidatos = Comparar.quitar(candidatos, b.dataset.quitar);
       persistir();
       if (candidatos.length === 0) $('comparar-ok').focus(); else $('comparar-h').focus();
-    });
+    };
+    $('comparar-tabla-wrap').addEventListener('click', alQuitar);
+    $('comparar-cartas').addEventListener('click', alQuitar);
     $('comparar-limpiar').addEventListener('click', () => {
       candidatos = [];
       persistir();

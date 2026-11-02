@@ -286,6 +286,31 @@ const Comparar = (() => {
     return { estado: 'INFORMATIVO', partes };
   }
 
+  /**
+   * Todo lo que muestra la comparación, fila por fila: la tabla (escritorio) y las tarjetas (móvil) se dibujan con esto, así
+   * no pueden diferir. Cada celda: { candidatoId, estado, partes, mejor } (mejor = el punto cumple todas las prioridades).
+   *   Devuelve { variables: [{ id, titulo, prioritaria, celdas }], contexto: [{ id, titulo, prioritaria: false, celdas }] }
+   */
+  function filas(candidatos, prioridades, umbrales = null) {
+    const lista = candidatos || [];
+    const prio = normalizarPrioridades(prioridades);
+    const ganan = new Set(quienesCumplen(lista, prio, umbrales));
+    return {
+      variables: VARIABLES.map((v) => ({
+        id: v.id,
+        titulo: v.titulo,
+        prioritaria: prio.includes(v.id),
+        celdas: lista.map((c) => ({ candidatoId: c.id, ...celda(c, v.id, umbrales), mejor: ganan.has(c.id) })),
+      })),
+      contexto: CONTEXTO.map((v) => ({
+        id: v.id,
+        titulo: v.titulo,
+        prioritaria: false,
+        celdas: lista.map((c) => ({ candidatoId: c.id, ...celdaContexto(c, v.id), mejor: false })),
+      })),
+    };
+  }
+
   // ------------------------------------------------------------ Almacenamiento
   // El almacenamiento del navegador puede faltar o lanzar (ventana privada, datos bloqueados): nunca debe romper la página.
 
@@ -336,7 +361,7 @@ const Comparar = (() => {
   return {
     MAX_CANDIDATOS, VARIABLES, CONTEXTO, NIVELES, CLAVE_PRIORIDADES, CLAVE_CANDIDATOS,
     estadoEducacion, crearCandidato, conUmbrales, agregar, quitar, estaGuardado,
-    normalizarPrioridades, alternar, evaluarPrioridades, quienesCumplen, dominancias, celda, celdaContexto, fmtDist,
+    normalizarPrioridades, alternar, evaluarPrioridades, quienesCumplen, dominancias, celda, celdaContexto, filas, fmtDist,
     leerPrioridades, guardarPrioridades, leerCandidatos, guardarCandidatos,
   };
 })();

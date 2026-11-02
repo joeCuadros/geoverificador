@@ -443,3 +443,51 @@ describe('Comparar: contexto de riesgo (peligros geológicos y sismos), siempre 
     expect(Comparar.leerCandidatos(alm)).toHaveLength(1);
   });
 });
+
+// ------------------------------------------------- Filas de la comparación (las usan la tabla y las tarjetas del móvil)
+describe('Comparar.filas', () => {
+  const ctxOk2 = {
+    peligros: { estado: 'INFORMATIVO', total: 1, radioM: 500, distanciaM: 200, masCercano: { tipo: 'Flujos' } },
+    sismos: { estado: 'INFORMATIVO', total: 5, radioM: 100000, magnitudMaxima: 4, desde: '2026-01-01', hasta: '2026-11-02' },
+  };
+
+  it('devuelve una fila por variable y una por contexto, cada una con una celda por punto y en el mismo orden', () => {
+    const a = crear({ cauce: cauce(900), contexto: ctxOk2 });
+    const b = crear({ cauce: cauce(100), contexto: ctxOk2 });
+    const f = Comparar.filas([a, b], ['salud'], { quebradaMinM: 300 });
+    expect(f.variables.map((x: { id: string }) => x.id)).toEqual(['zonificacion', 'salud', 'educacion', 'transporte', 'areaVerde', 'quebradas']);
+    expect(f.contexto.map((x: { id: string }) => x.id)).toEqual(['peligros', 'sismos']);
+    [...f.variables, ...f.contexto].forEach((fila: { celdas: { candidatoId: string }[] }) => {
+      expect(fila.celdas.map((c) => c.candidatoId)).toEqual([a.id, b.id]);
+    });
+  });
+
+  it('marca las filas que son prioridad y los puntos que cumplen todas', () => {
+    const a = crear({ cauce: cauce(900) });
+    const b = crear({ cauce: cauce(100) });
+    const f = Comparar.filas([a, b], ['quebradas'], { quebradaMinM: 300 });
+    expect(f.variables.find((x: { id: string }) => x.id === 'quebradas').prioritaria).toBe(true);
+    expect(f.variables.find((x: { id: string }) => x.id === 'salud').prioritaria).toBe(false);
+    expect(f.contexto.every((x: { prioritaria: boolean }) => x.prioritaria === false)).toBe(true);
+    const q = f.variables.find((x: { id: string }) => x.id === 'quebradas');
+    expect(q.celdas.map((c: { mejor: boolean }) => c.mejor)).toEqual([true, false]);
+  });
+
+  it('cada celda trae lo mismo que celda() y celdaContexto(), con el umbral del usuario', () => {
+    const a = crear({ cauce: cauce(180), contexto: ctxOk2 });
+    const f = Comparar.filas([a], [], { quebradaMinM: 250 });
+    const q = f.variables.find((x: { id: string }) => x.id === 'quebradas').celdas[0];
+    expect(q).toMatchObject({ estado: 'NO CUMPLE', partes: Comparar.celda(a, 'quebradas', { quebradaMinM: 250 }).partes });
+    expect(f.contexto[1].celdas[0]).toMatchObject({ estado: 'INFORMATIVO', partes: Comparar.celdaContexto(a, 'sismos').partes });
+  });
+
+  it('sin prioridades ningún punto aparece como «mejor»', () => {
+    const f = Comparar.filas([crear(), crear()], [], null);
+    expect([...f.variables, ...f.contexto].every((x: { celdas: { mejor: boolean }[] }) => x.celdas.every((c) => c.mejor === false))).toBe(true);
+  });
+
+  it('sin candidatos devuelve filas vacías, no rompe', () => {
+    const f = Comparar.filas([], ['salud'], null);
+    expect(f.variables.every((x: { celdas: unknown[] }) => x.celdas.length === 0)).toBe(true);
+  });
+});
