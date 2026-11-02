@@ -1,15 +1,24 @@
 /**
  * descargar-peligros.mjs — Descarga el inventario de peligros geológicos de Arequipa como GeoJSON.
  *
- * Fuente: capa «Peligro Geológico» de GEOCATMIN (INGEMMET), servicio
- * DGAR/SRV__PELIGRO__GEOLOGICO. Es un INVENTARIO de eventos registrados (movimientos en masa,
+ * Fuente: capa «Peligros Geológicos» de GEOCATMIN (INGEMMET), servicio público
+ * SERV_PELIGROS_GEOLOGICOS/MapServer/0. (El servicio anterior, DGAR/SRV__PELIGRO__GEOLOGICO, responde hoy HTTP 200 con
+ * «499 Token Required»: ya no se puede usar sin credenciales; ver docs/INVESTIGACION-VARIABLES.md §1 punto 4.)
+ * Es un INVENTARIO de eventos registrados (movimientos en masa,
  * erosión, inundaciones), no un mapa de susceptibilidad: solo existe el punto donde un geólogo,
  * un informe o una fotointerpretación documentó el evento.
  *
- * Uso:   node scripts/descargar-peligros.mjs
+ * Uso:   node --use-system-ca scripts/descargar-peligros.mjs
+ *        El servidor de INGEMMET no envía su certificado intermedio: sin `--use-system-ca` Node responde
+ *        «unable to verify the first certificate». No se desactiva la verificación TLS.
  * Sale:  public/data/peligros_aqp.geojson
  *
+ * Opciones: --forzar  guarda aunque el resultado tenga menos registros que el archivo congelado actual.
+ *
  * Decisiones:
+ *  - El servicio público solo trae los movimientos en masa (291 registros el 2026-11-02). El archivo congelado de octubre de
+ *    2026 se obtuvo del servicio DGAR (hoy con token) y tiene 394, porque incluye erosión e inundación. Por eso el script NO
+ *    sobrescribe un archivo con más registros sin `--forzar`: perder esos eventos sería un retroceso silencioso.
  *  - Se consulta por caja envolvente (la de CONFIG.viewbox: Arequipa metropolitana). El servicio no
  *    admite paginación y entrega hasta 2000 registros; si llega ese tope el script falla en vez de
  *    guardar datos incompletos.
@@ -19,14 +28,14 @@
  *    en null («sin clasificar») y los códigos se listan en metadata.codigosSinDefinir.
  *  - No se guardan nombres de responsables ni datos de contacto; solo lo necesario para ubicar y describir el evento.
  */
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // ------------------------------------------------------------------ CONFIGURACIÓN
 const SERVICIO =
   process.env.PELIGROS_URL ||
-  'https://geocatmin.ingemmet.gob.pe/arcgis/rest/services/DGAR/SRV__PELIGRO__GEOLOGICO/MapServer/0';
+  'https://geocatmin.ingemmet.gob.pe/arcgis/rest/services/SERV_PELIGROS_GEOLOGICOS/MapServer/0';
 
 // Misma caja que CONFIG.viewbox en public/js/config.js (oeste, sur, este, norte).
 const CAJA = [-71.75, -16.6, -71.35, -16.2];
@@ -49,7 +58,11 @@ async function pedir(url, params) {
       if (data.error) throw new Error(`el servicio respondió ${data.error.code}: ${data.error.message}`);
       return data;
     } catch (err) {
-      if (intento >= 3) throw new Error(`Falló la consulta tras 3 intentos (${err.message}).\nURL: ${destino}`);
+      if (intento >= 3) {
+        const causa = String((err.cause && err.cause.message) || '');
+        const pista = /certificate/i.test(causa) ? '\nPista: el servidor no envía su certificado intermedio; ejecuta con `node --use-system-ca`.' : '';
+        throw new Error(`Falló la consulta tras 3 intentos (${err.message}${causa ? `: ${causa}` : ''}).${pista}\nURL: ${destino}`);
+      }
       await esperar(2000 * intento);
     }
   }
@@ -122,6 +135,15 @@ async function main() {
     console.warn(`Aviso: códigos que el diccionario oficial no define; quedan como «sin clasificar»: ${[...desconocidos].join(', ')}`);
   }
 
+  // No pisar un archivo congelado más completo (ver «Decisiones»).
+  const anterior = await readFile(SALIDA, 'utf8').then((s) => JSON.parse(s)).catch(() => null);
+  const previos = anterior && anterior.metadata ? anterior.metadata.registros : 0;
+  if (previos > features.length && !process.argv.includes('--forzar')) {
+    console.warn(`\nSe recibieron ${features.length} registros y el archivo congelado tiene ${previos} (${anterior.metadata.descargado}). No se escribió nada.`);
+    console.warn('Si el servicio público es ahora la única fuente, repite con --forzar.');
+    return;
+  }
+
   const anios = features.map((f) => f.properties.anio).filter(Boolean).sort();
   const salida = {
     type: 'FeatureCollection',
@@ -130,6 +152,7 @@ async function main() {
       capa: SERVICIO,
       caja: CAJA,
       descargado: new Date().toISOString(),
+      licencia: 'No localizada en el servicio; se atribuye a INGEMMET',
       registros: features.length,
       anioDesde: anios[0] ?? null,
       anioHasta: anios[anios.length - 1] ?? null,
@@ -153,5 +176,6 @@ async function main() {
 
 main().catch((err) => {
   console.error(`\nNo se pudo completar la descarga: ${err.message}`);
+  console.error('Se conserva el archivo congelado anterior (public/data/peligros_aqp.geojson); no se escribió nada.');
   process.exit(1);
 });
