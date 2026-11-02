@@ -1302,6 +1302,21 @@
     URL.revokeObjectURL(a.href);
   });
 
+  // ------------------------------------------------------------- Asistente de chat
+  // «Consultar ese punto» desde el chat: deja el punto elegido y abre su reporte, como si se hubiera pulsado «Sí, verificar».
+  function consultarPunto(lat, lon, etiqueta) {
+    if (state.flujo.paso === 'reporte') {
+      limpiarMapa();
+      aplicarFlujo(Onboarding.transicion(state.flujo, 'cambiar'), { foco: false });
+    }
+    colocarPunto(lat, lon, { etiqueta, vista: 16 });
+    const nuevo = Onboarding.transicion(state.flujo, 'confirmar');
+    if (nuevo.paso !== 'reporte') return;
+    aplicarFlujo(nuevo);
+    consultar();
+  }
+  AsistenteUI.iniciar({ map, obtenerPunto: () => state.point, consultarPunto });
+
   // Ayuda para verificar desde la consola del navegador (F12)
-  window.osmDebug = { map, state, MODULOS, Calculos, Services, Zonificacion, Equipamiento, Peligros, Distritos, Riesgos, Delitos };
+  window.osmDebug = { map, state, MODULOS, Calculos, Services, Zonificacion, Equipamiento, Peligros, Distritos, Riesgos, Delitos, Asistente };
 })();
