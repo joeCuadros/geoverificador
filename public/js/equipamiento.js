@@ -159,5 +159,16 @@ const Equipamiento = (() => {
     return { salud: s, educacion: e, transporte: t, areaVerde: v };
   }
 
-  return { NIVELES, evaluar };
+  /**
+   * Los archivos congelados tal como se leyeron ({ features, fecha, origen }), o null si falta alguno. Los usa el asistente
+   * de chat para buscar zonas: ahí no hay un punto alrededor del cual consultar Overpass en vivo, así que sin archivos no busca.
+   */
+  async function datosCongelados() {
+    const categorias = ['salud', 'educacion', 'transporte', 'areasVerdes'];
+    const lista = await Promise.all(categorias.map((c) => archivo(c)));
+    if (lista.some((d) => !d)) return null;
+    return Object.fromEntries(categorias.map((c, i) => [c, lista[i]]));
+  }
+
+  return { NIVELES, evaluar, datosCongelados };
 })();

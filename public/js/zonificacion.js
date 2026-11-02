@@ -186,5 +186,11 @@ const Zonificacion = (() => {
   /** Tabla de reglas por código (vacía hasta que load() termina). */
   const tablaReglas = () => reglas;
 
-  return { load, lookup, potencial, rango, capa, contorno, reglas: tablaReglas };
+  /** Zonas del plano listas para recorrerlas: [{ codigo, color, bbox, polys, regla }]. La usa el asistente de chat. */
+  async function zonas() {
+    await load();
+    return index.map((z) => ({ codigo: z.codigo, color: z.color, bbox: z.bbox, polys: z.polys, regla: reglas[z.codigo] || null }));
+  }
+
+  return { load, lookup, potencial, rango, capa, contorno, reglas: tablaReglas, zonas };
 })();
