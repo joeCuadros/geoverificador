@@ -5,11 +5,14 @@
  * de impresión del navegador, donde se elige «Guardar como PDF». Así no hace falta ninguna librería: el diseño del
  * informe está en las reglas @media print de styles.css.
  *
- * Incluye las 5 variables del alcance: zonificación vigente, zonificación proyectada, salud, educación, transporte y
- * área verde. Los módulos fuera de alcance (peligros, zona sísmica, denuncias, registro de riesgos) solo aparecen si
+ * Incluye las variables del alcance: zonificación vigente, zonificación proyectada, salud, educación, transporte y
+ * área verde, más quebradas y cauces (INFORMATIVO, o cumple / no cumple «según tu umbral» si la persona fijó el suyo), el
+ * contexto de riesgo (peligros geológicos y sismos, siempre informativo) y las verificaciones recomendadas antes de comprar
+ * (lo que la herramienta calculó frente a lo que la persona debe comprobar; las URL se imprimen como texto). Los módulos fuera de alcance (peligros, zona sísmica, denuncias, registro de riesgos) solo aparecen si
  * están activos (`d.modulos`, ver CONFIG.modulos y ?modulos=todos); con los módulos ocultos el informe no los menciona.
  *
- * Recibe un objeto `d` con lo que ya calculó app.js (ver app.js, datosReporte).
+ * Recibe un objeto `d` con lo que ya calculó app.js (ver app.js, datosReporte). Las funciones que arman el HTML de cada
+ * sección son puras (no tocan el DOM) y se prueban en test/reporte.spec.ts; solo `imprimir` usa document y window.
  */
 const Reporte = (() => {
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -22,7 +25,7 @@ const Reporte = (() => {
 
   function seccion(titulo, color, cuerpo, fuente) {
     return `
-      <section class="rp-sec" style="--rp-c:${color}">
+      <section class="rp-sec${titulo.includes('Verificaciones') ? ' rp-largo' : ''}" style="--rp-c:${color}">
         <h2>${esc(titulo)}</h2>
         ${cuerpo}
         ${fuente ? `<p class="rp-fuente">Fuente: ${esc(fuente)}</p>` : ''}
@@ -70,8 +73,9 @@ const Reporte = (() => {
   }
 
   // ------------------------------------------------------- V2 a V5: servicios
-  const ESTADO_CLS = { CUMPLE: 'rp-bajo', 'SIN DATO': 'rp-medio', 'NO CUMPLE': 'rp-alto' };
-  const estado = (e) => `<span class="rp-niv ${ESTADO_CLS[e]}">${esc(e)}</span>`;
+  const ESTADO_CLS = { CUMPLE: 'rp-bajo', 'SIN DATO': 'rp-medio', 'NO CUMPLE': 'rp-alto', INFORMATIVO: 'rp-info' };
+  const estado = (e) => `<span class="rp-niv ${ESTADO_CLS[e] || 'rp-medio'}">${esc(e)}</span>`;
+  const estadoHtml = estado;
   const fuenteDe = (r) => `${r.fuente}${r.fecha ? `, datos extraídos el ${r.fecha}` : ''}`;
   const sinResultado = '<p class="rp-muted">No se calcularon los servicios cercanos.</p>';
 
@@ -119,6 +123,157 @@ const Reporte = (() => {
       filas.push(fila('Criterio más estricto (≥ 1 ha)', r.cumple1ha ? `También hay una a ${dist(r.distancia1haM)} (${esc(r.nombre1ha)})` : `Ninguna de al menos ${num(u.areaGrandeM2)} m² a ${u.distanciaM} m o menos`));
     }
     return `<table class="rp-tabla">${filas.join('')}</table><p class="rp-nota">Criterio: un área verde de al menos ${num(u.areaMinM2)} m² a ${u.distanciaM} m o menos. ${esc(r.metodo)}</p>`;
+  }
+
+  // ------------------------------------------------ Quebradas y cauces (ANA)
+  const QUEBRADAS_CITADAS = ['Añashuayco', 'San Lázaro']; // las que citan los informes de INGEMMET (docs/INVESTIGACION-VARIABLES.md)
+  const sinTildes = (s) => String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+  function seccionQuebradas(d) {
+    const q = d.cauce;
+    if (!q) return '<p class="rp-muted">No se calcularon las quebradas y los cauces cercanos.</p>';
+    if (q.estado === 'SIN DATO') {
+      return `<table class="rp-tabla">${fila('Estado', estado('SIN DATO'))}${fila('Resultado', `No se pudo obtener el dato${q.error ? `: ${esc(q.error)}` : ''}`)}</table>
+        <p class="rp-nota">Que no haya dato no significa que no haya una quebrada cerca: consulta SIGRID (CENEPRED) y al IMPLA.</p>`;
+    }
+    const nombres = q.nombres || [];
+    const ausentes = QUEBRADAS_CITADAS.filter((n) => !nombres.some((x) => sinTildes(x).includes(sinTildes(n))));
+    const filas = [
+      fila('Estado', estado(q.estado) + (q.segunUmbralUsuario ? ' <span class="rp-muted">según tu umbral</span>' : '')),
+      fila('Cauce más cercano', `${esc(q.nombre)}${q.tipo ? ` (${esc(String(q.tipo).toLowerCase())})` : ''}`),
+      fila('Distancia', `${dist(q.distanciaM)} en línea recta`),
+      fila('Umbral', q.segunUmbralUsuario ? `Según tu umbral: al menos ${dist(q.umbralM)} de un cauce (es tu criterio, no una norma)` : 'Sin umbral normativo: no existe una distancia oficial a una quebrada, así que el dato es solo informativo'),
+    ];
+    const cubre = `La red hidrográfica de la ANA es de escala nacional${q.elaboracion ? ` (elaboración: ${esc(q.elaboracion)})` : ''}: no incluye todas las quebradas urbanas${ausentes.length ? ` (en el archivo no figura${ausentes.length > 1 ? 'n' : ''} ${ausentes.join(' ni ')}, que citan los informes de INGEMMET)` : ''}. La red no es un mapa de peligro de huaicos ni de inundación y no delimita la faja marginal. La distancia es a la línea del mapa, no al cauce real.`;
+    return `<table class="rp-tabla">${filas.join('')}</table><p class="rp-nota">${cubre}</p>${q.metodo ? `<p class="rp-nota">${esc(q.metodo)}</p>` : ''}`;
+  }
+
+  // ------------------------------------------ Contexto de riesgo (informativo)
+  const NO_CALCULADO = '<p class="rp-muted">No se calculó el contexto de riesgo.</p>';
+
+  function bloquePeligros(p) {
+    if (!p || p.estado === 'SIN DATO') {
+      return `<table class="rp-tabla">${fila('Peligros geológicos registrados', `${estado('SIN DATO')} ${p && p.error ? esc(p.error) : ''}`)}</table>`;
+    }
+    const m = p.masCercano;
+    const filas = [
+      fila(`Peligros geológicos registrados a ${num(p.radioM)} m o menos`, `${estado('INFORMATIVO')} <strong>${num(p.total)}</strong>${p.porTipo && p.porTipo.length ? ` (${p.porTipo.map(([tp, n]) => `${esc(tp)} ${n}`).join(', ')})` : ''}`),
+    ];
+    if (m) filas.push(fila('Registro más cercano', `${dist(p.distanciaM)} en línea recta · ${esc(m.subtipo || m.tipo)}${m.sector ? ` · «${esc(m.sector)}»` : ''}${m.anio ? ` · ${esc(m.anio)}` : ''}`));
+    return `<table class="rp-tabla">${filas.join('')}</table>
+      <p class="rp-nota">Es un inventario de eventos documentados (${esc(p.anioDesde)}–${esc(p.anioHasta)}, ${num(p.registros)} registros en Arequipa metropolitana), no un mapa de susceptibilidad: que no haya registros cerca no significa que el lugar sea seguro. Datos congelados el ${esc(p.fecha || 'sin fecha')}.</p>`;
+  }
+
+  function bloqueSismos(s) {
+    if (!s || s.estado === 'SIN DATO') {
+      return `<table class="rp-tabla">${fila('Sismos reportados', `${estado('SIN DATO')} ${s && s.error ? esc(s.error) : ''}`)}</table>`;
+    }
+    const km = coma(s.radioM / 1000);
+    const filas = [
+      fila(`Sismos reportados a ${km} km o menos (en línea recta)`, `${estado('INFORMATIVO')} <strong>${num(s.total)}</strong>`),
+      fila('Periodo que cubre', `${esc(s.desde)} a ${esc(s.hasta)}`),
+    ];
+    if (s.magnitudMaxima !== null && s.magnitudMaxima !== undefined) filas.push(fila('Magnitud máxima', coma(s.magnitudMaxima)));
+    if (s.masReciente) filas.push(fila('Más reciente', esc(s.masReciente)));
+    return `<table class="rp-tabla">${filas.join('')}</table>
+      <p class="rp-nota">Es actividad reciente reportada por el IGP en el periodo indicado: no predice sismos ni mide el peligro del lugar, y un conteo bajo no dice nada de otros periodos. Para construir, la referencia normativa es la zona sísmica de la Norma E.030, que depende del distrito, y el Estudio de Mecánica de Suelos. El radio es una convención del proyecto. Datos congelados el ${esc(s.fecha || 'sin fecha')}.</p>`;
+  }
+
+  function seccionContexto(d) {
+    const c = d.contextoRiesgo;
+    if (!c) return NO_CALCULADO;
+    return `<p class="rp-nota">Datos de contexto, no una evaluación de peligro: no hay umbral que diga si un lugar es seguro. Que algo no aparezca aquí no significa que el lugar esté libre de riesgo.</p>${bloquePeligros(c.peligros)}${bloqueSismos(c.sismos)}`;
+  }
+
+  // ------------------------------- Verificaciones recomendadas antes de comprar
+  // En papel no se puede hacer clic: las URL se imprimen como texto, sin enlaces.
+  function seccionVerificaciones(d) {
+    const v = d.verificaciones;
+    if (!v) return '';
+    const calc = (v.calculado || []).map((c) => `<li><strong>${esc(c.titulo)}.</strong> ${esc(c.texto)}</li>`).join('');
+    const items = (v.items || []).map((it) => `<li class="rp-verif">
+        <span class="rp-caja" aria-hidden="true">☐</span>
+        <div>
+          <strong>${esc(it.titulo)}</strong>
+          <div class="rp-muted">${esc(it.entidad)}</div>
+          <div>${esc(it.queConfirma)}</div>
+          ${it.nota ? `<div class="rp-muted">${esc(it.nota)}</div>` : ''}
+          ${(it.enlaces || []).length ? `<div class="rp-url">${it.enlaces.map((e) => `${esc(e.texto)}: ${esc(e.url)}`).join(' · ')}</div>` : ''}
+        </div>
+      </li>`).join('');
+    return `<div class="rp-grupo">
+        <h3>Lo que GeoVerificador ya calculó <span class="rp-etiqueta">Referencial</span></h3>
+        <ul>${calc}</ul>
+      </div>
+      <div class="rp-grupo rp-grupo-fuerte">
+        <h3>Lo que debes comprobar tú <span class="rp-etiqueta">Fuera de esta herramienta</span></h3>
+        <ul class="rp-verifs">${items}</ul>
+      </div>
+      <p class="rp-nota">${esc(v.aviso || '')}</p>`;
+  }
+
+  // ------------------------------------------------------------ Resumen, secciones y límites
+  /** Filas que se suman al resumen: quebradas y contexto (solo si ya se calcularon). */
+  function filasResumenExtra(d) {
+    const out = [];
+    const q = d.cauce;
+    if (q) {
+      let v;
+      if (q.estado === 'SIN DATO') v = 'SIN DATO';
+      else {
+        v = `${q.estado} · ${q.nombre} a ${dist(q.distanciaM)} en línea recta`;
+        v += q.segunUmbralUsuario ? ` (según tu umbral de ${dist(q.umbralM)})` : ' (sin umbral normativo)';
+      }
+      out.push(['Quebradas y cauces', v]);
+    }
+    const c = d.contextoRiesgo;
+    if (c) {
+      const p = c.peligros;
+      out.push(['Peligros geológicos registrados (contexto)', !p || p.estado === 'SIN DATO' ? 'SIN DATO' : `INFORMATIVO · ${num(p.total)} a ${num(p.radioM)} m o menos${p.masCercano ? `; el más cercano a ${dist(p.distanciaM)} en línea recta` : ''}`]);
+      const s = c.sismos;
+      out.push(['Sismos recientes (contexto)', !s || s.estado === 'SIN DATO' ? 'SIN DATO' : `INFORMATIVO · ${num(s.total)} a ${coma(s.radioM / 1000)} km o menos entre el ${s.desde} y el ${s.hasta}${s.magnitudMaxima !== null && s.magnitudMaxima !== undefined ? `; magnitud máxima ${coma(s.magnitudMaxima)}` : ''}`]);
+    }
+    return out;
+  }
+
+  const fuenteCauce = (q) => (q ? `${q.fuente}${q.fecha ? `, datos extraídos el ${q.fecha}` : ''}` : '');
+  const fuenteContexto = (c) => (c ? [c.peligros && c.peligros.fuente, c.sismos && c.sismos.fuente].filter(Boolean).join('; ') : '');
+
+  /** Las secciones del informe en orden: [{ titulo, color, cuerpo, fuente }]. */
+  function construirSecciones(d) {
+    const m = d.modulos || {};
+    const lista = [
+      ['Zonificación vigente y proyectada', '#4f46e5', zonificacion(d), d.fuentes.zonificacion],
+      ['Salud', '#c2410c', salud(d), d.variables ? fuenteDe(d.variables.salud) : ''],
+      ['Educación por nivel', '#7c3aed', educacion(d), d.variables ? fuenteDe(d.variables.educacion.inicial) : ''],
+      ['Transporte', '#1d4ed8', transporte(d), d.variables ? fuenteDe(d.variables.transporte) : ''],
+      ['Área verde', '#15803d', areaVerde(d), d.variables ? fuenteDe(d.variables.areaVerde) : ''],
+      ['Quebradas y cauces', '#0369a1', seccionQuebradas(d), fuenteCauce(d.cauce)],
+      ['Contexto de riesgo (informativo)', '#64748b', seccionContexto(d), fuenteContexto(d.contextoRiesgo)],
+    ];
+    if (m.desastre) lista.push(['Desastre', '#ea580c', desastre(d), [m.desastre.mostrarPeligro ? d.fuentes.peligros : '', m.desastre.mostrarSismica ? d.fuentes.distritos : ''].filter(Boolean).join('; ')]);
+    if (m.seguridad) lista.push(['Seguridad', '#dc2626', seguridad(d), d.fuentes.delitos]);
+    if (m.riesgos) lista.push(['Registro de riesgos', '#0f766e', registro(d), '']);
+    if (d.verificaciones) lista.push(['Verificaciones recomendadas antes de comprar', '#334155', seccionVerificaciones(d), '']);
+    return lista.map(([titulo, color, cuerpo, fuente]) => ({ titulo, color, cuerpo, fuente }));
+  }
+
+  /** Limitaciones principales del informe. */
+  function limites(d) {
+    const m = d.modulos || {};
+    const l = [
+      'La zonificación vigente es la del PDM 2016-2025, cuya vigencia de 10 años se cumplió; hay un PDM nuevo en trámite y una sentencia (183-2019) que suspendió ciertos actos para predios antes agrícolas o de reserva paisajista. La zonificación proyectada no se muestra: solo se advierte su estado, con la fuente indicada.',
+      'Los polígonos de la zonificación se extrajeron de un PDF: cerca del borde entre dos zonas el resultado puede no ser exacto (por eso se avisa cuando otra zona queda a 20 m o menos).',
+      'Salud, educación, transporte y área verde salen de OpenStreetMap, un mapa colaborativo: algo ausente puede existir. Los datos se extrajeron una vez (fecha indicada en cada sección) y no se actualizan solos.',
+      'Todas las distancias son en línea recta, no recorrido a pie. Los umbrales de salud (1000 m), transporte (400 m) y borde de zona (20 m) son convenciones del proyecto; los de educación vienen del Instructivo FTE del MEF/MINEDU y el de área verde, de la OMS Europa (2016).',
+      'OpenStreetMap casi no etiqueta el nivel de los colegios: un colegio sin nivel se toma como candidato a primaria y secundaria, lo que puede sobrestimar la oferta de un nivel.',
+      'Quebradas y cauces: no existe una distancia normativa a una quebrada, así que el estado es INFORMATIVO salvo que la persona fije su propio umbral («según tu umbral»). La red de la ANA es de escala nacional: no incluye todas las quebradas urbanas, no es un mapa de peligro y no delimita la faja marginal.',
+      'El contexto de riesgo (peligros geológicos de INGEMMET y sismos reportados por el IGP en el periodo indicado) es informativo: no es una evaluación, no predice sismos y que no haya registros no significa que el lugar sea seguro.',
+    ];
+    if (m.desastre) l.push('Los peligros geológicos son un inventario de eventos documentados, no un mapa de susceptibilidad. La zona sísmica es regional y no considera el suelo del predio. No se evalúa el peligro volcánico (Misti).');
+    if (m.seguridad) l.push('Las denuncias no son todos los delitos y solo se cuentan las que tienen ubicación.');
+    l.push('Metodología, fuentes y validaciones completas: docs/METODOLOGIA.md y docs/VALIDACION.md del proyecto.');
+    return l;
   }
 
   // ------------------------------------------- Módulos fuera de alcance (solo si están activos)
@@ -199,30 +354,10 @@ const Reporte = (() => {
   /** Construye el informe dentro de `contenedor` y abre el diálogo de impresión. */
   function imprimir(contenedor, d) {
     const m = d.modulos || {};
-    // Secciones numeradas en orden: primero las 5 variables, luego los módulos activos.
-    const secciones = [
-      ['Zonificación vigente y proyectada', '#4f46e5', zonificacion(d), d.fuentes.zonificacion],
-      ['Salud', '#c2410c', salud(d), d.variables ? fuenteDe(d.variables.salud) : ''],
-      ['Educación por nivel', '#7c3aed', educacion(d), d.variables ? fuenteDe(d.variables.educacion.inicial) : ''],
-      ['Transporte', '#1d4ed8', transporte(d), d.variables ? fuenteDe(d.variables.transporte) : ''],
-      ['Área verde', '#15803d', areaVerde(d), d.variables ? fuenteDe(d.variables.areaVerde) : ''],
-    ];
-    if (m.desastre) secciones.push(['Desastre', '#ea580c', desastre(d), [m.desastre.mostrarPeligro ? d.fuentes.peligros : '', m.desastre.mostrarSismica ? d.fuentes.distritos : ''].filter(Boolean).join('; ')]);
-    if (m.seguridad) secciones.push(['Seguridad', '#dc2626', seguridad(d), d.fuentes.delitos]);
-    if (m.riesgos) secciones.push(['Registro de riesgos', '#0f766e', registro(d), '']);
+    const secciones = construirSecciones(d);
+    const resumen = [...d.resumen, ...filasResumenExtra(d)];
 
-    const limites = [
-      'La zonificación vigente es la del PDM 2016-2025, cuya vigencia de 10 años se cumplió; hay un PDM nuevo en trámite y una sentencia (183-2019) que suspendió ciertos actos para predios antes agrícolas o de reserva paisajista. La zonificación proyectada no se muestra: solo se advierte su estado, con la fuente indicada.',
-      'Los polígonos de la zonificación se extrajeron de un PDF: cerca del borde entre dos zonas el resultado puede no ser exacto (por eso se avisa cuando otra zona queda a 20 m o menos).',
-      'Salud, educación, transporte y área verde salen de OpenStreetMap, un mapa colaborativo: algo ausente puede existir. Los datos se extrajeron una vez (fecha indicada en cada sección) y no se actualizan solos.',
-      'Todas las distancias son en línea recta, no recorrido a pie. Los umbrales de salud (1000 m), transporte (400 m) y borde de zona (20 m) son convenciones del proyecto; los de educación vienen del Instructivo FTE del MEF/MINEDU y el de área verde, de la OMS Europa (2016).',
-      'OpenStreetMap casi no etiqueta el nivel de los colegios: un colegio sin nivel se toma como candidato a primaria y secundaria, lo que puede sobrestimar la oferta de un nivel.',
-    ];
-    if (m.desastre) limites.push('Los peligros geológicos son un inventario de eventos documentados, no un mapa de susceptibilidad. La zona sísmica es regional y no considera el suelo del predio. No se evalúa el peligro volcánico (Misti).');
-    if (m.seguridad) limites.push('Las denuncias no son todos los delitos y solo se cuentan las que tienen ubicación.');
-    limites.push('Metodología, fuentes y validaciones completas: docs/METODOLOGIA.md y docs/VALIDACION.md del proyecto.');
-
-    const datos = ['MPA/IMPLA (zonificación)', '© colaboradores de OpenStreetMap (ODbL)'];
+    const datos = ['MPA/IMPLA (zonificación)', '© colaboradores de OpenStreetMap (ODbL)', 'ANA (red hidrográfica)', 'INGEMMET (peligros geológicos)', 'IGP (sismos reportados)'];
     if (m.desastre) datos.push('INGEMMET (GEOCATMIN), INEI, MVCS (E.030)');
     if (m.seguridad) datos.push('MININTER (SIDPOL)');
 
@@ -239,14 +374,14 @@ const Reporte = (() => {
 
       <section class="rp-sec rp-resumen">
         <h2>Resumen</h2>
-        <table class="rp-tabla">${d.resumen.map(([k, v]) => fila(k, esc(v))).join('')}</table>
+        <table class="rp-tabla">${resumen.map(([k, v]) => fila(k, esc(v))).join('')}</table>
       </section>
 
-      ${secciones.map(([t, color, cuerpo, fuente], i) => seccion(`${i + 1}. ${t}`, color, cuerpo, fuente)).join('')}
+      ${secciones.map((s, i) => seccion(`${i + 1}. ${s.titulo}`, s.color, s.cuerpo, s.fuente)).join('')}
 
       <section class="rp-sec rp-limites">
         <h2>Limitaciones principales</h2>
-        <ul>${limites.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>
+        <ul>${limites(d).map((l) => `<li>${esc(l)}</li>`).join('')}</ul>
       </section>
       <footer class="rp-pie">GeoVerificador · datos: ${datos.join(', ')}.</footer>`;
 
@@ -258,5 +393,7 @@ const Reporte = (() => {
     window.print();
   }
 
-  return { imprimir };
+  return { imprimir, seccionQuebradas, seccionContexto, seccionVerificaciones, filasResumenExtra, construirSecciones, limites, estadoHtml };
 })();
+
+if (typeof module !== 'undefined' && module.exports) module.exports = Reporte;

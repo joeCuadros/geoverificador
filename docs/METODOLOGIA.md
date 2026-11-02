@@ -118,7 +118,9 @@ Observaciones del contraste:
 
 **Fuente.** Capa «Peligro Geológico» de GEOCATMIN (INGEMMET), servicio
 `https://geocatmin.ingemmet.gob.pe/arcgis/rest/services/DGAR/SRV__PELIGRO__GEOLOGICO/MapServer/0` (35 932 registros en todo el país; 394 en Arequipa metropolitana).
-Descarga: `node scripts/descargar-peligros.mjs` → `public/data/peligros_aqp.geojson` (descargado el 2026-10-12).
+Descarga: `node scripts/descargar-peligros.mjs` → `public/data/peligros_aqp.geojson` (el archivo congelado es del 2026-10-12).
+
+**Cambio de servicio (2026-11-02).** El servicio DGAR **ya responde HTTP 200 con `{"error":{"code":499,"message":"Token Required"}}`** [INVESTIGACION-VARIABLES.md §1, punto 4]. El script apunta ahora al servicio público `https://geocatmin.ingemmet.gob.pe/arcgis/rest/services/SERV_PELIGROS_GEOLOGICOS/MapServer/0` (mismos campos `TIP_PELIGRO`, `NOM_PELIGRO`, `NM_*`, `FECHA`, `FUENTE`; los diccionarios se leen de los dominios de la capa). **Ese servicio solo trae los movimientos en masa: 291 registros, todos ya incluidos en el archivo congelado con las mismas coordenadas.** Faltan los 103 de erosión (fluvial y de ladera), inundación fluvial y arenamiento. Por eso **se conserva el archivo congelado de 394 registros** y el script no lo sobrescribe si recibe menos registros (salvo con `--forzar`); `metadata.nota` lo explica. El servidor de INGEMMET no envía su certificado intermedio: se ejecuta con `node --use-system-ca scripts/descargar-peligros.mjs` (no se desactiva la verificación TLS).
 
 **Qué es el dato.** Un **inventario** de eventos documentados (caídas, flujos, deslizamientos, erosión, inundaciones…), un punto por evento o sector inspeccionado. **No** es un mapa de susceptibilidad ni de amenaza.
 
@@ -246,7 +248,12 @@ Descarga: `node scripts/descargar-delitos.mjs` → `public/data/delitos_aqp.geoj
 | Nivel de cada riesgo | Probabilidad × impacto elegidos por el usuario (matriz 3 × 3) | `riesgos.js` (`nivel`) |
 | Resumen del punto | Une las líneas anteriores sin puntaje | `app.js` (`renderResumen`) |
 
-Las filas de peligros, zona sísmica, denuncias y riesgos corresponden a los módulos fuera de alcance, que se ven con `?modulos=todos`.
+| Quebradas y cauces: nombre, distancia, estado INFORMATIVO | Distancia a la línea más cercana de la red de la ANA; el estado solo cambia con el umbral de «Mis umbrales» | `calculos.js` (`evaluarCauces`), `contexto.js`, `umbrales.js`, `quebradas_aqp.geojson` |
+| Contexto de riesgo: peligros geológicos a 500 m | Conteo con haversine sobre el inventario de INGEMMET; siempre INFORMATIVO | `contexto.js`, `peligros.js`, `peligros_aqp.geojson` |
+| Contexto de riesgo: sismos a 100 km | Conteo con haversine sobre los sismos reportados por el IGP en el periodo del archivo; siempre INFORMATIVO | `calculos.js` (`resumirSismos`), `contexto.js`, `sismos_igp.geojson` |
+| Tabla de «Comparar puntos» | Instantánea de cada punto guardado; prioridades de la persona; sin puntaje | `comparar.js`, `comparar-ui.js` |
+
+Las filas de peligros (módulo), zona sísmica, denuncias y riesgos corresponden a los módulos fuera de alcance, que se ven con `?modulos=todos`. Los peligros geológicos del contexto de riesgo (§12) sí se ven siempre, rotulados como informativos.
 
 | Ficha en PDF | Los mismos datos de la pantalla, sin cálculos nuevos, en un informe para imprimir | `reporte.js`, `app.js` (`datosReporte`), reglas `@media print` de `styles.css` |
 
@@ -255,7 +262,9 @@ Las filas de peligros, zona sísmica, denuncias y riesgos corresponden a los mó
 ```bash
 npm install
 npm run datos:extraer                 # public/data/equipamiento/*.geojson (OpenStreetMap, una consulta)
-node scripts/descargar-peligros.mjs   # public/data/peligros_aqp.geojson
+node --use-system-ca scripts/descargar-peligros.mjs   # public/data/peligros_aqp.geojson (no sobrescribe un archivo con más registros)
+node scripts/descargar-quebradas.mjs  # public/data/quebradas_aqp.geojson (ANA)
+node scripts/descargar-sismos.mjs     # public/data/sismos_igp.geojson (IGP)
 node scripts/descargar-delitos.mjs    # public/data/delitos_aqp.geojson
 node scripts/descargar-distritos.mjs  # public/data/distritos_aqp.geojson
 node scripts/verificar-datos.mjs      # comprobaciones automáticas
@@ -266,6 +275,7 @@ Las fuentes públicas cambian: al volver a descargar, las cifras de este documen
 
 ## 9. Lo que la ficha no cubre (huecos declarados)
 
+- **Quebradas y huaicos.** La red de la ANA no incluye todas las quebradas urbanas y no es un mapa de peligro (§12). La faja marginal no está delimitada en la ficha. Las fuentes que sí delimitan peligro (CENEPRED/SIGRID, susceptibilidad de INGEMMET) no se pudieron consumir (ver [`INVESTIGACION-VARIABLES.md`](INVESTIGACION-VARIABLES.md), tabla A) y se remiten como verificación a hacer.
 - Peligro volcánico (Misti), licuación y amplificación por el suelo del predio, y tsunami. El peligro sísmico solo está a escala de distrito (zona E.030).
 - Precio del suelo, rentabilidad o demanda: no se relaciona ningún factor con el valor de un predio. Eso exigiría datos de precios y es un trabajo aparte.
 - Calidad de la construcción, servicios básicos (agua, desagüe, luz) y situación legal del predio (títulos, cargas).
@@ -322,7 +332,12 @@ Las fuentes públicas cambian: al volver a descargar, las cifras de este documen
 
 **Qué es.** Un chat (`public/js/asistente.js` para la lógica y `public/js/asistente-ui.js` para la vista) que responde sobre el punto ya consultado y busca zonas de Arequipa según lo que la persona pide. Usa los mismos archivos, umbrales y cálculos de las cinco variables; no agrega fuentes de datos.
 
-**Por qué no usa un modelo de lenguaje.** El proyecto se publica como sitio estático (sin servidor ni claves) y su regla es no inventar datos. Un modelo de lenguaje podría responder con cifras que no están en ninguna fuente. El asistente entiende el texto con reglas explícitas (palabras clave sin tildes ni mayúsculas) y responde únicamente con lo que calculan `Calculos`, `Zonificacion` y `Equipamiento`. Si no entiende, lo dice y da ejemplos. Nada de lo que se escribe sale del navegador ni se guarda.
+**Papel del modelo de lenguaje (Gemini).** La regla del proyecto es no inventar datos: un modelo de lenguaje podría responder con cifras que no están en ninguna fuente. Por eso el modelo nunca calcula ni responde por su cuenta. Solo tiene dos tareas acotadas, que corren en el servidor (`api/_lib/gemini.js`, la función `/api/chat`), con la clave en una variable de entorno:
+
+1. **Interpretar.** Convierte la frase en la misma consulta estructurada que produce el intérprete de reglas. Usa como única salida una función declarada (`consulta_asistente`, en modo de llamada obligatoria). El resultado se valida con un esquema (`AsistenteLLM.validarSpec`): campos desconocidos, enumeraciones y rangos recortados. Después lo ejecuta el motor determinista en el navegador, con `Calculos`, `Zonificacion`, `Equipamiento` y `Contexto`.
+2. **Redactar.** Reescribe la respuesta determinista. `AsistenteLLM.verificarTexto` exige que toda cifra y todo nombre propio del texto estén en el resultado del motor. También que se mantenga el aviso «referencial» y que no haya recomendaciones de compra. Si algo no se cumple, se muestra el texto determinista.
+
+Ante cualquier fallo se usa el intérprete de reglas (palabras clave sin tildes ni mayúsculas): no hay clave, el servidor da error, se pasa el tiempo límite o el sitio es estático. La explicación «Por qué, fuente y límites» se arma siempre de forma determinista. Al modelo solo se envían la frase, los últimos seis turnos y, al redactar, el texto ya calculado; los datos geográficos no salen del navegador. **Límite:** la calidad de la interpretación depende del modelo. Si entiende mal una frase, la consulta resultante sigue siendo válida, pero puede no ser la que la persona quería. La frase equivalente se muestra en las búsquedas armadas con los menús.
 
 **Qué entiende.**
 
@@ -369,3 +384,41 @@ Los umbrales de campiña, comercial y centro histórico son convenciones del pro
 - `test/asistente.spec.ts`: 63 pruebas de la lógica (interpretación, evaluación de celdas, búsqueda, respuestas y textos).
 - `scripts/verificar-datos.mjs`, sección C, con los datos reales: la zona de 300 celdas al azar coincide con `Zonificacion.lookup`; las distancias y veredictos de salud, transporte e inicial en 120 celdas coinciden con una fuerza bruta con la ley esférica de los cosenos; las áreas vienen ordenadas, con porcentajes entre 0 y 100, y la mejor celda de cada una cae en su distrito; y los tiempos (con los datos reales, la primera búsqueda tarda unos 0,7 s y un ajuste con la cuadrícula ya calculada, unos 0,3 s).
 - **Lo que no se verificó:** que el ranking refleje lo que una persona consideraría mejor; no hay una prueba con usuarios del chat. Tampoco se validó la comprensión del lenguaje más allá de los casos de prueba: una frase fuera de las reglas se reconoce como «no entendí».
+
+## 12. Quebradas y cauces, y contexto de riesgo (informativo)
+
+> Origen de la elección: [`INVESTIGACION-VARIABLES.md`](INVESTIGACION-VARIABLES.md) §2.1 (fila 2), §3 (tabla A) y §4 (variables N1 y N9). Allí están las fuentes, lo verificado y lo no verificado. Esta sección dice cómo se implementó.
+
+**Regla común.** Nada de esto es una evaluación de peligro. No existe un umbral normativo para ninguna de estas variables, así que su estado es **INFORMATIVO**: se muestra el dato, su fuente, su fecha y lo que no cubre, sin decir «cumple» ni «no cumple». Un estado INFORMATIVO nunca cuenta como prioridad en «Comparar puntos» ni entra en una búsqueda del asistente salvo por el umbral que fija la persona.
+
+### 12.1 Cercanía a quebradas y cauces (ANA)
+
+- **Fuente.** Autoridad Nacional del Agua, servicio `https://geosnirh.ana.gob.pe/server/rest/services/ws_Rios_Quebradas/MapServer`, capa 37 «Cuerpos de Agua» (única capa del servicio; polilíneas). Es la red hidrográfica codificada con el sistema Pfafstetter, **elaborada en enero de 2018** por la DCERH-ANA (según el propio servicio). No se localizó una licencia; se atribuye a la ANA.
+- **Descarga.** `node scripts/descargar-quebradas.mjs` → `public/data/quebradas_aqp.geojson`: consulta por la caja de `CONFIG.viewbox` con paginación (`resultOffset`), `outSR=4326`, y guarda la línea completa de cada curso que toca la caja. **Resultado del 2026-11-02: 14 tramos de 7 cursos** (Río Chili, Río Yura, Río Yarabamba, Quebrada El Cuico, Quebrada Estanquillo, Quebrada La Paccha, Quebrada Linga). Si la descarga falla no se escribe nada; si el archivo falta, la variable queda SIN DATO.
+- **Cálculo.** `Calculos.distanciaALineaM` proyecta cada tramo a un plano local centrado en el punto (la misma proyección de los polígonos) y toma el tramo más cercano; `Calculos.evaluarCauces` devuelve el nombre, el tipo y la distancia al cauce más cercano. `scripts/verificar-datos.mjs` la contrasta con un método independiente (líneas densificadas a ~5 m y ley esférica de los cosenos): error máximo de 1,5 m en 60 puntos al azar.
+- **Estado.** INFORMATIVO sin umbral. **«Mis umbrales»** (`public/js/umbrales.js`, en la tarjeta de quebradas): la persona puede fijar su **distancia mínima** a un cauce (1 a 50 000 m); entonces el estado pasa a CUMPLE si el cauce está a esa distancia o más lejos y NO CUMPLE si no, rotulado «según tu umbral». Se guarda solo en localStorage (con try/catch). No hay valor por defecto ni opciones recomendadas: ninguna norma fija esta distancia (la faja marginal solo existe donde la ANA la delimitó; [`INVESTIGACION-VARIABLES.md`](INVESTIGACION-VARIABLES.md) §4, N1).
+- **Qué no cubre** (se muestra en la tarjeta): no es un mapa de peligro de huaicos ni de inundación; la faja marginal no está delimitada; la red es de escala nacional y **no incluye todas las quebradas urbanas** (en el archivo no figuran Añashuayco ni San Lázaro, citadas en informes de INGEMMET); la distancia es a la línea del mapa, no al cauce real, y es en línea recta.
+
+### 12.2 Peligros geológicos (INGEMMET) como contexto
+
+El mismo inventario de §4, ahora visible siempre dentro de «Contexto de riesgo (informativo)». Se cuentan los eventos a 500 m o menos (`CONFIG.peligros.radio`) y se da el más cercano con su tipo, sector y año. **No es una evaluación**: es un inventario de eventos documentados; que no haya registros cerca no significa que el lugar sea seguro. El archivo congelado tiene 394 registros (2003 a 2023; ver §4 sobre el cambio de servicio).
+
+### 12.3 Sismicidad reciente (IGP)
+
+- **Fuente.** Instituto Geofísico del Perú, `https://ide.igp.gob.pe/arcgis/rest/services/monitoreocensis/SismosReportados/MapServer/0` (CORS abierto; catálogo en datosabiertos con Open Data Commons Attribution; no se localizó la licencia del servicio).
+- **Qué contiene de verdad.** El 2026-11-02 la capa tenía **765 sismos de todo el país entre el 1 de enero y el 2 de noviembre de 2026**: una ventana de unos 10 meses, **no** el catálogo histórico 1960-2025 que menciona [`INVESTIGACION-VARIABLES.md`](INVESTIGACION-VARIABLES.md) (ese es un CSV aparte). Por eso la ficha siempre muestra el periodo junto al conteo.
+- **Descarga.** `node scripts/descargar-sismos.mjs` → `public/data/sismos_igp.geojson` (recuadro de ±1,2° alrededor de Arequipa, 94 sismos, magnitud máxima 5,1). Guarda `fechaDesde`, `fechaHasta` y `totalCapa`.
+- **Cálculo.** `Calculos.resumirSismos`: sismos con epicentro a `CONFIG.sismos.radioM` (100 km, **convención del proyecto para dar contexto, no un umbral**) o menos, con la magnitud máxima y el más reciente del radio.
+- **Qué no es.** No predice sismos ni mide el peligro del lugar; no reemplaza la zona sísmica de la Norma E.030 (por distrito, §4) ni el Estudio de Mecánica de Suelos. Un conteo bajo no dice nada del pasado fuera del periodo.
+
+### 12.4 En la ficha, en «Comparar puntos» y en el asistente
+
+- **Ficha.** La tarjeta «Quebradas y cauces» está junto a los servicios; peligros y sismos están en el desplegable «Contexto de riesgo (informativo)». Todas son tarjetas desplegables con fuente, fecha, método y «Qué no cubre», y el estado INFORMATIVO tiene su propio icono y texto (no solo color).
+- **Comparar puntos.** «Quebradas y cauces» es una fila más; puede marcarse como prioridad, pero solo se puede confirmar con el umbral de la persona (sin él, el punto queda «incompleto»: no se supone que cumple). Peligros y sismos son filas de contexto separadas, nunca prioridad. Los puntos guardados conservan la distancia, no el estado: al cambiar el umbral, la tabla se recalcula.
+- **Asistente.** Responde sobre el punto a «quebrada, torrentera, cauce, huaico», «sismos, temblores» y «peligros, riesgo geológico», siempre con la fuente y los límites (y con «Por qué, fuente y límites» desplegable). **También se puede buscar «lejos de quebradas a más de N m»**: encaja con la búsqueda porque la persona fija la distancia mínima; sin distancia el asistente la pide en vez de usar un valor por defecto. En los menús es el selector «Lejos de quebradas y ríos». La búsqueda usa la misma red de la ANA y lo advierte (limitaciones de §12.1). «Cerca de una quebrada» no es una búsqueda: es una pregunta sobre el punto.
+
+### 12.5 Verificación
+
+- `test/contexto.spec.ts` (distancia a líneas, estado INFORMATIVO / «según tu umbral», conteo de sismos, almacenamiento de umbrales), `test/comparar.spec.ts` (filas informativas, umbral, dominancia) y `test/asistente-riesgo.spec.ts` (preguntas, búsqueda «lejos de quebradas», textos con fuente y límites).
+- `scripts/verificar-datos.mjs`: integridad de `quebradas_aqp.geojson` y `sismos_igp.geojson` (formato, metadatos, conteos que cuadran, periodo y recuadro), distancia a la red frente a un método independiente, conteos de sismos y peligros frente a un recuento por ley esférica de los cosenos, y que sin archivos las tres variables queden en SIN DATO.
+- **Lo que no se verificó:** que la red de la ANA coincida con el terreno real (no se contrastó con imágenes ni con los informes de INGEMMET), que el sentido de «cerca» de una quebrada coincida con el peligro real de huaico, ni los datos de CENEPRED/SIGRID (`sig.cenepred.gob.pe` no respondió desde la red de prueba).

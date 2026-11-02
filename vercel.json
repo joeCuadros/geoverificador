@@ -4,5 +4,11 @@
   "installCommand": "echo \"Sitio estático: sin instalación\"",
   "buildCommand": "echo \"Sitio estático: sin build\"",
   "outputDirectory": "public",
-  "cleanUrls": false
+  "cleanUrls": false,
+  "functions": {
+    "api/chat.js": {
+      "maxDuration": 20,
+      "includeFiles": "public/js/{asistente-llm,asistente,calculos}.js"
+    }
+  }
 }

@@ -8,7 +8,9 @@
  * ocultan con CONFIG.modulos; `?modulos=todos` en la URL los vuelve a mostrar.
  *
  * La pantalla sigue 3 pasos (ver onboarding.js): 1 ubicar el predio, 2 confirmar el punto y 3 leer el reporte.
- * El primer paso es la propia pantalla de inicio: no hay tour ni ventana obligatoria.
+ * El primer paso es la propia pantalla de inicio. La primera visita abre un recorrido guiado que se puede omitir y que se
+ * vuelve a abrir con «¿Cómo funciona?» (tour.js, tour-ui.js). Cada servicio es una tarjeta desplegable; «Comparar puntos»
+ * (comparar.js, comparar-ui.js) y las verificaciones antes de comprar (verificaciones.js) completan la ayuda a decidir.
  */
 (() => {
   'use strict';
@@ -21,6 +23,8 @@
 
   // Módulos visibles: CONFIG.modulos, o todos con ?modulos=todos (ver Calculos.modulosEfectivos).
   const MODULOS = Calculos.modulosEfectivos(CONFIG.modulos, window.location.search);
+
+  const almacen = () => { try { return window.localStorage; } catch (err) { return null; } };
 
   const state = {
     flujo: { ...Onboarding.ESTADO_INICIAL }, // paso actual (Onboarding.transicion)
@@ -50,6 +54,10 @@
     distritoStatus: 'none', // none | loading | ok | outside | error
     distritoSeq: 0,      // descarta respuestas de un punto anterior
     evaluacion: {},      // evaluación del usuario por riesgo: { id: { p, i, decision, hechas } }
+    umbrales: Umbrales.leer(almacen()), // «Mis umbrales»: lo que fija la persona (hoy, distancia mínima a una quebrada)
+    cauce: null,         // resultado de Contexto.quebradas para el punto actual (INFORMATIVO, o según el umbral de la persona)
+    contextoRiesgo: null, // { peligros, sismos } de Contexto: contexto informativo, no una evaluación
+    contextoSeq: 0,      // descarta respuestas de un punto anterior
   };
 
   // ------------------------------------------------------------------ Mapa
@@ -134,10 +142,12 @@
     educacion: { titulo: 'Colegio', icono: 'colegio' },
     transporte: { titulo: 'Paradero', icono: 'paradero' },
     areaVerde: { titulo: 'Área verde', icono: 'verde' },
+    quebradas: { titulo: 'Quebradas y cauces', icono: 'quebrada' },
+    peligros: { titulo: 'Peligros geológicos registrados', icono: 'aviso' },
+    sismos: { titulo: 'Sismos recientes (IGP)', icono: 'sismo' },
   };
   const colorMapa = (nombre) => getComputedStyle(document.documentElement).getPropertyValue(nombre).trim() || '#1c3a6b';
   const sinMovimiento = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const almacen = () => { try { return window.localStorage; } catch (err) { return null; } };
   const anunciar = (texto) => { $('anuncios').textContent = ''; setTimeout(() => { $('anuncios').textContent = texto; }, 60); };
   // Nominatim devuelve la dirección completa (hasta el país); para el reporte basta lo primero.
   const etiquetaCorta = (nombre) => String(nombre).split(',').map((p) => p.trim()).filter(Boolean).slice(0, 3).join(', ');
@@ -308,6 +318,7 @@
     updateZona();
     if (MODULOS.riesgos) state.evaluacion = Riesgos.leerEvaluacion(lat, lon);
     updateEntorno();
+    updateContexto();
     if (MODULOS.desastre) updatePeligro();
     if (state.distritoStatus === 'none' || state.distritoStatus === 'error') updateDistrito();
     if (MODULOS.seguridad) updateDelito();
@@ -327,13 +338,13 @@
 
   // «Nueva consulta»: vuelve al inicio sin punto ni resultados.
   $('btn-nueva').addEventListener('click', () => {
-    ['zonaSeq', 'entornoSeq', 'peligroSeq', 'distritoSeq', 'delitoSeq'].forEach((k) => { state[k] += 1; });
+    ['zonaSeq', 'entornoSeq', 'peligroSeq', 'distritoSeq', 'delitoSeq', 'contextoSeq'].forEach((k) => { state[k] += 1; });
     limpiarMapa();
     if (state.pointMarker) { map.removeLayer(state.pointMarker); state.pointMarker = null; }
     if (state.ring) { map.removeLayer(state.ring); state.ring = null; }
     Object.assign(state, {
       point: null, etiqueta: '', etiquetaOrigen: null, distritoTexto: '', zona: null, zonaStatus: 'none', entorno: null, entornoStatus: 'none',
-      distrito: null, distritoStatus: 'none', peligro: null, peligroStatus: 'none', delito: null, evaluacion: {},
+      distrito: null, distritoStatus: 'none', peligro: null, peligroStatus: 'none', delito: null, evaluacion: {}, cauce: null, contextoRiesgo: null,
     });
     $('lote').value = '';
     $('q').value = '';
@@ -343,9 +354,11 @@
     showSearchPop(false);
     $('ubicacion-estado').textContent = '';
     $('confirmar-aviso').textContent = '';
+    $('guardar-estado').textContent = '';
     $('map-hint').classList.remove('oculto');
     map.setView(CONFIG.center, CONFIG.zoom, { animate: false });
     aplicarFlujo(Onboarding.transicion(state.flujo, 'nueva'));
+    CompararUI.actualizarBoton();
     $('q').focus();
   });
 
@@ -375,15 +388,8 @@
     }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
   });
 
-  // ------------------------------------------------------------ Ayuda y consejo (nada es obligatorio)
-  const dlgAyuda = $('ayuda');
-  const abrirAyuda = () => { if (typeof dlgAyuda.showModal === 'function') dlgAyuda.showModal(); else dlgAyuda.setAttribute('open', ''); };
-  const cerrarAyuda = () => { if (typeof dlgAyuda.close === 'function') dlgAyuda.close(); else dlgAyuda.removeAttribute('open'); };
-  $('ayuda-btn').addEventListener('click', abrirAyuda);
-  $('ayuda-cerrar').addEventListener('click', cerrarAyuda);
-  $('ayuda-ok').addEventListener('click', cerrarAyuda);
-  dlgAyuda.addEventListener('click', (e) => { if (e.target === dlgAyuda) cerrarAyuda(); });
-
+  // ------------------------------------------------------------ Consejo del reporte (nada es obligatorio)
+  // El recorrido guiado («¿Cómo funciona?») vive en tour.js y tour-ui.js.
   $('consejo-ok').addEventListener('click', () => {
     Onboarding.marcarConsejoVisto(almacen());
     $('consejo').hidden = true;
@@ -688,6 +694,7 @@
   }
 
   function renderResumen() {
+    CompararUI.actualizarBoton(); // el botón «Guardar para comparar» depende de que la consulta esté lista
     if (!state.point) return;
     if (MODULOS.riesgos) renderRiesgos();
     const listo = state.zonaStatus !== 'none' && state.zonaStatus !== 'loading' && state.entorno;
@@ -1023,6 +1030,7 @@
     'NO CUMPLE': { clase: 'nocumple', ico: 'nocumple' },
     'SIN DATO': { clase: 'sindato', ico: 'sindato' },
     PARCIAL: { clase: 'parcial', ico: 'parcial' },
+    INFORMATIVO: { clase: 'informativo', ico: 'info' }, // dato sin umbral normativo: se muestra sin cumple / no cumple
   };
   const estadoBadge = (estado, texto) => `<span class="estado ${ESTADO_UI[estado].clase}">${icono(ESTADO_UI[estado].ico)}${esc(texto || estado)}</span>`;
   const fmtArea = (m2) => `${fmtNum(m2)} m² (${(m2 / 10000).toFixed(2).replace('.', ',')} ha)`;
@@ -1049,26 +1057,50 @@
     return `<p class="var-explica">${r.estado === 'CUMPLE' ? `Está dentro de la distancia de referencia (${fmtUmbral(r.umbralM)}).` : `Está más lejos que la distancia de referencia (${fmtUmbral(r.umbralM)}).`}</p>`;
   }
 
-  // Línea «Fuente · Fecha · Método» de cada tarjeta, con el método completo desplegable.
-  function lineaFuente(r, metodoCorto) {
-    return `<p class="var-meta"><b>Fuente:</b> ${esc(r.fuente)} · <b>Fecha:</b> ${esc(fmtFechaDato(r.fecha))} · <b>Método:</b> ${esc(metodoCorto)}</p>
-      <details class="var-metodo"><summary>Cómo se calculó</summary><p>${esc(r.metodo)}</p></details>`;
+  // Lo que cada dato NO dice. Va dentro de cada tarjeta, junto a la fuente y la fecha.
+  const QUE_NO_CUBRE = {
+    salud: 'Solo cuenta lo mapeado en OpenStreetMap con etiquetas de salud. No dice si atiende emergencias, su horario ni su categoría, y la distancia es en línea recta, no recorrido a pie.',
+    educacion: 'OpenStreetMap casi no etiqueta el nivel: un colegio sin nivel se toma como candidato a primaria y secundaria, y los jardines cuentan como inicial. No dice si es público o privado, ni si hay vacantes.',
+    transporte: 'Un paradero no es un servicio: no hay rutas, horarios ni frecuencias, y las paradas informales (combis, micros) rara vez están completas.',
+    areaVerde: `Solo cuenta polígonos cerrados en OpenStreetMap de al menos ${fmtNum(CONFIG.umbrales.areaVerde.areaMinM2)} m²; una plaza mapeada de otra forma no cuenta. No dice si el acceso es público ni cómo está mantenida.`,
+  };
+
+  // Fuente, fecha, método y límites de un dato: el detalle que se abre al tocar la tarjeta.
+  function detalleDato(r, noCubre, { metodo = true } = {}) {
+    return `<dl class="var-detalle">
+      <div><dt>Fuente</dt><dd>${esc(r.fuente)}</dd></div>
+      <div><dt>Fecha de los datos</dt><dd>${esc(fmtFechaDato(r.fecha))}</dd></div>
+      ${metodo ? `<div><dt>Método</dt><dd>${esc(r.metodo)}</dd></div>` : ''}
+      <div><dt>Qué no cubre</dt><dd>${esc(noCubre)}</dd></div>
+    </dl>`;
   }
 
-  function tarjetaVariable(v, estado, cuerpo, textoEstado) {
-    return `<article class="var-card">
-      <header class="var-head"><span class="var-icon${v.icono === 'verde' ? ' verde' : ''}">${icono(v.icono)}</span><h4>${v.titulo}</h4>${estadoBadge(estado, textoEstado)}</header>
-      ${cuerpo}
-    </article>`;
+  // Línea de la tarjeta cerrada: distancia frente a la distancia de referencia.
+  function lineaResumen(r) {
+    if (r.error) return 'No se pudo obtener el dato';
+    if (r.estado === 'SIN DATO' || r.distanciaM === null) return `Sin dato · referencia ${fmtUmbral(r.umbralM)}`;
+    return `${r.distanciaM === 0 ? '0 m (dentro del área)' : `${fmtDist(r.distanciaM)} en línea recta`} · referencia ${fmtUmbral(r.umbralM)}`;
+  }
+
+  // Cada tarjeta es un desplegable accesible: el resumen (estado y distancia frente al umbral) siempre se ve.
+  function tarjetaVariable(v, estado, resumen, cuerpo, textoEstado) {
+    return `<details class="var-card">
+      <summary class="var-resumen">
+        <span class="var-icon${v.icono === 'verde' ? ' verde' : ''}">${icono(v.icono)}</span>
+        <span class="var-resumen-t"><span class="var-titulo">${v.titulo}</span><span class="var-linea">${esc(resumen)}</span></span>
+        ${estadoBadge(estado, textoEstado)}
+        <span class="var-chevron" aria-hidden="true"></span>
+      </summary>
+      <div class="var-cuerpo">${cuerpo}</div>
+    </details>`;
   }
 
   function renderEntorno() {
     const e = state.entorno;
     const etiq = (r) => (r.etiqueta ? `<p class="var-meta">Etiqueta de OpenStreetMap: <code>${esc(r.etiqueta)}</code></p>` : '');
-    const corto = (r) => `línea recta al más cercano, referencia ${fmtUmbral(r.umbralM)}`;
 
-    const salud = tarjetaVariable(VARIABLES.salud, e.salud.estado,
-      datoPrincipal(e.salud) + explicacion(e.salud, 'establecimientos de salud') + etiq(e.salud) + lineaFuente(e.salud, corto(e.salud)));
+    const salud = tarjetaVariable(VARIABLES.salud, e.salud.estado, lineaResumen(e.salud),
+      datoPrincipal(e.salud) + explicacion(e.salud, 'establecimientos de salud') + etiq(e.salud) + detalleDato(e.salud, QUE_NO_CUBRE.salud));
 
     const niveles = Equipamiento.NIVELES.map((n) => {
       const r = e.educacion[n];
@@ -1077,32 +1109,220 @@
         ${datoPrincipal(r)}
         ${explicacion(r, `colegios de nivel ${n}`)}
         ${etiq(r)}
-        <details class="var-metodo"><summary>Cómo se calculó</summary><p>${esc(r.metodo)}</p></details>
+        <p class="var-meta"><b>Método:</b> ${esc(r.metodo)}</p>
       </div>`;
     }).join('');
     const edu = Equipamiento.NIVELES.map((n) => e.educacion[n]);
     const cumplen = edu.filter((r) => r.estado === 'CUMPLE').length;
     const estadoEdu = cumplen === edu.length ? 'CUMPLE' : edu.every((r) => r.estado === 'SIN DATO') ? 'SIN DATO' : cumplen === 0 ? 'NO CUMPLE' : 'PARCIAL';
     const textoEdu = estadoEdu === 'PARCIAL' ? `${cumplen} de ${edu.length} niveles` : null;
-    const educacion = tarjetaVariable(VARIABLES.educacion, estadoEdu, `<div class="var-niveles">${niveles}</div>
-      <p class="var-meta">OpenStreetMap casi no etiqueta el nivel de los colegios: uno sin nivel se toma como candidato a primaria y secundaria; los jardines cuentan como inicial.</p>
-      <p class="var-meta"><b>Fuente:</b> ${esc(e.educacion.inicial.fuente)} · <b>Fecha:</b> ${esc(fmtFechaDato(e.educacion.inicial.fecha))} · <b>Método:</b> línea recta al más cercano de cada nivel, referencia ${fmtUmbral(e.educacion.inicial.umbralM)} / ${fmtUmbral(e.educacion.primaria.umbralM)} / ${fmtUmbral(e.educacion.secundaria.umbralM)}</p>`, textoEdu);
+    const resumenEdu = estadoEdu === 'SIN DATO' ? 'Sin dato en los tres niveles'
+      : `${cumplen} de ${edu.length} niveles dentro de la distancia de referencia (${edu.map((r) => fmtUmbral(r.umbralM)).join(' / ')})`;
+    const educacion = tarjetaVariable(VARIABLES.educacion, estadoEdu, resumenEdu,
+      `<div class="var-niveles">${niveles}</div>${detalleDato(e.educacion.inicial, QUE_NO_CUBRE.educacion, { metodo: false })}`, textoEdu);
 
-    const transporte = tarjetaVariable(VARIABLES.transporte, e.transporte.estado,
-      datoPrincipal(e.transporte) + explicacion(e.transporte, 'paraderos') + etiq(e.transporte) + lineaFuente(e.transporte, corto(e.transporte)));
+    const transporte = tarjetaVariable(VARIABLES.transporte, e.transporte.estado, lineaResumen(e.transporte),
+      datoPrincipal(e.transporte) + explicacion(e.transporte, 'paraderos') + etiq(e.transporte) + detalleDato(e.transporte, QUE_NO_CUBRE.transporte));
 
     const v = e.areaVerde;
     const u = CONFIG.umbrales.areaVerde;
     const sens = v.error || v.estado === 'SIN DATO' ? '' : `<p class="var-meta">Superficie: ${v.areaM2 ? fmtArea(v.areaM2) : '—'}. Con el criterio más estricto (al menos ${fmtNum(u.areaGrandeM2)} m², 1 ha): ${v.cumple1ha ? `también hay una a ${fmtDist(v.distancia1haM)} (${esc(v.nombre1ha)})` : `no hay ninguna a ${u.distanciaM} m o menos`}.</p>`;
-    const areaVerde = tarjetaVariable(VARIABLES.areaVerde, v.estado,
+    const areaVerde = tarjetaVariable(VARIABLES.areaVerde, v.estado, lineaResumen(v),
       datoPrincipal(v) + explicacion(v, 'áreas verdes')
       + `<p class="var-meta">Criterio: un área verde de al menos ${fmtNum(u.areaMinM2)} m² a ${u.distanciaM} m o menos.</p>` + sens
-      + lineaFuente(v, `área y distancia en línea recta al borde, referencia ${fmtUmbral(v.umbralM)}`));
+      + detalleDato(v, QUE_NO_CUBRE.areaVerde));
 
-    $('entorno').innerHTML = salud + educacion + transporte + areaVerde;
+    $('entorno').innerHTML = salud + educacion + transporte + areaVerde + '<div id="card-quebradas"></div>';
+    renderQuebradas(); // llega aparte (archivo congelado de la ANA)
     $('entorno').setAttribute('aria-busy', 'false');
+    $('entorno-toggle').hidden = false;
+    actualizarToggleTarjetas();
     $('entorno-fuente').textContent = 'Distancias en línea recta, no recorrido a pie. OpenStreetMap es colaborativo: algo ausente puede existir. Las distancias de referencia de salud, paradero y borde de zona son convenciones del proyecto.';
   }
+
+  // ------------------------------------------------------ Quebradas y cauces (ANA)
+  // Sin umbral normativo: INFORMATIVO. Si la persona fija el suyo en «Mis umbrales», CUMPLE / NO CUMPLE «según tu umbral».
+  const NORMALIZA = (s) => String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const QUEBRADAS_CITADAS = ['Añashuayco', 'San Lázaro']; // quebradas de Arequipa que citan los informes de INGEMMET (docs/INVESTIGACION-VARIABLES.md)
+
+  function resumenQuebradas(q) {
+    if (q.estado === 'SIN DATO') return 'Sin dato: no se pudo leer la red de cauces';
+    const base = `${q.nombre} · ${fmtDist(q.distanciaM)} en línea recta`;
+    return q.segunUmbralUsuario ? `${base} · según tu umbral de ${fmtUmbral(q.umbralM)}` : `${base} · sin umbral normativo`;
+  }
+
+  function umbralFormHtml(q) {
+    const v = state.umbrales.quebradaMinM;
+    return `<form class="umbral-form" novalidate>
+      <h5>Mis umbrales</h5>
+      <label for="umbral-quebrada">Distancia mínima a una quebrada o un río</label>
+      <div class="umbral-fila">
+        <span class="input-unit"><input id="umbral-quebrada" name="quebradaMinM" type="number" min="1" max="${Umbrales.MAXIMO_M}" step="1" inputmode="numeric" placeholder="Ej.: 200" value="${v === null ? '' : v}" aria-describedby="umbral-ayuda"><em>m</em></span>
+        <button type="submit" class="secondary compacto">Guardar mi umbral</button>
+        <button type="button" class="link" data-umbral-quitar${v === null ? ' hidden' : ''}>Quitar</button>
+      </div>
+      <p id="umbral-ayuda" class="small muted">Es tu criterio, no una norma: ninguna fija esta distancia. Con tu umbral, la tarjeta dice «cumple» si el cauce está a esa distancia o más lejos. Se guarda solo en este navegador.</p>
+      <p class="texto-error small umbral-error" role="alert" hidden></p>
+    </form>`;
+  }
+
+  function cuerpoQuebradas(q) {
+    if (q.estado === 'SIN DATO') {
+      return `<p class="zon-msg error"><strong>No se pudo obtener el dato.</strong> ${esc(q.error || 'El archivo de quebradas no está disponible.')}</p>${umbralFormHtml(q)}`;
+    }
+    const ausentes = QUEBRADAS_CITADAS.filter((n) => !(q.nombres || []).some((x) => NORMALIZA(x).includes(NORMALIZA(n))));
+    const cubre = `La red hidrográfica de la ANA es de escala nacional: en este archivo figuran ${q.tramos} tramos de ${(q.nombres || []).length} cursos (${esc((q.nombres || []).join(', '))}). No incluye todas las quebradas urbanas${ausentes.length ? ` (por ejemplo, no figura${ausentes.length > 1 ? 'n' : ''} ${ausentes.join(' ni ')}, que citan los informes de INGEMMET)` : ''}. No es un mapa de peligro de huaicos ni de inundación, y la faja marginal no está delimitada aquí.`;
+    const explica = q.segunUmbralUsuario
+      ? `<p class="var-explica"><strong>Según tu umbral</strong> (al menos ${fmtUmbral(q.umbralM)} de un cauce): ${q.estado === 'CUMPLE' ? 'cumple' : 'no cumple'}. Es tu criterio, no una norma.</p>`
+      : '<p class="var-explica"><strong>Informativo.</strong> No existe una distancia normativa a una quebrada, así que no decimos si es cerca o lejos. Si quieres un criterio propio, fija tu distancia mínima abajo.</p>';
+    return `<div class="var-dato">
+        <p class="var-dist">${fmtDist(q.distanciaM)} <small>en línea recta</small></p>
+        <p class="var-nombre">${esc(q.nombre)}${q.tipo ? ` (${esc(q.tipo.toLowerCase())})` : ''}</p>
+      </div>
+      ${explica}
+      ${umbralFormHtml(q)}
+      <dl class="var-detalle">
+        <div><dt>Fuente</dt><dd>${esc(q.fuente)}</dd></div>
+        <div><dt>Fecha de los datos</dt><dd>${esc(fmtFechaDato(q.fecha))} (extracción)${q.elaboracion ? `. Elaboración: ${esc(q.elaboracion)}` : ''}</dd></div>
+        <div><dt>Método</dt><dd>${esc(q.metodo)}</dd></div>
+        <div><dt>Qué no cubre</dt><dd>${cubre}</dd></div>
+      </dl>`;
+  }
+
+  function renderQuebradas() {
+    const host = $('card-quebradas');
+    if (!host) return;
+    const q = state.cauce;
+    if (!q) { host.innerHTML = '<p class="zon-msg loading"><span class="spinner"></span>Buscando la quebrada o el río más cercano…</p>'; return; }
+    const abierta = host.querySelector('details') && host.querySelector('details').open;
+    host.innerHTML = tarjetaVariable(VARIABLES.quebradas, q.estado, resumenQuebradas(q), cuerpoQuebradas(q), q.segunUmbralUsuario ? `${q.estado} (tu umbral)` : q.estado === 'INFORMATIVO' ? 'Informativo' : null);
+    if (abierta) host.querySelector('details').open = true;
+    actualizarToggleTarjetas();
+  }
+
+  // «Mis umbrales»: guardar o quitar la distancia mínima. La tarjeta se recalcula con la distancia ya conocida.
+  async function aplicarUmbral(valor) {
+    state.umbrales = Umbrales.guardar(almacen(), { quebradaMinM: valor });
+    if (!state.point) return;
+    const seq = state.contextoSeq;
+    const q = await Contexto.quebradas(state.point.lat, state.point.lon, state.umbrales.quebradaMinM);
+    if (seq !== state.contextoSeq) return;
+    state.cauce = q;
+    renderQuebradas();
+    const abierta = $('card-quebradas').querySelector('details');
+    if (abierta) abierta.open = true;
+    const campo = $('umbral-quebrada');
+    if (campo) campo.focus();
+    anunciar(state.umbrales.quebradaMinM === null ? 'Umbral quitado. La distancia a quebradas vuelve a ser informativa.' : `Umbral guardado: ${fmtUmbral(state.umbrales.quebradaMinM)}. Estado: ${q.estado === 'CUMPLE' ? 'cumple' : q.estado === 'NO CUMPLE' ? 'no cumple' : 'informativo'} según tu umbral.`);
+    CompararUI.refrescar();
+  }
+
+  $('entorno').addEventListener('submit', (e) => {
+    const f = e.target.closest('.umbral-form');
+    if (!f) return;
+    e.preventDefault();
+    const crudo = f.elements.quebradaMinM.value.trim();
+    const valido = Umbrales.normalizar({ quebradaMinM: crudo }).quebradaMinM;
+    const err = f.querySelector('.umbral-error');
+    if (crudo === '' || valido === null) {
+      err.textContent = `Escribe una distancia entre 1 y ${fmtNum(Umbrales.MAXIMO_M)} m, o pulsa «Quitar».`;
+      err.hidden = false;
+      return;
+    }
+    err.hidden = true;
+    aplicarUmbral(valido);
+  });
+  $('entorno').addEventListener('click', (e) => {
+    if (e.target.closest('[data-umbral-quitar]')) aplicarUmbral(null);
+  });
+
+  // ------------------------------------------------------ Contexto de riesgo (informativo)
+  function tarjetaPeligros(p) {
+    if (p.estado === 'SIN DATO') {
+      return tarjetaVariable(VARIABLES.peligros, 'SIN DATO', 'Sin dato: no se pudo leer el inventario', `<p class="zon-msg error"><strong>No se pudo obtener el dato.</strong> ${esc(p.error || '')}</p>`);
+    }
+    const resumen = `${p.total} a ${fmtUmbral(p.radioM)} o menos${p.masCercano ? ` · el más cercano a ${fmtDist(p.distanciaM)} en línea recta` : ''}`;
+    const m = p.masCercano;
+    const tipos = p.porTipo.length ? `<ul class="pel-tipos">${p.porTipo.map(([tp, n]) => `<li>${esc(tp)} · ${fmtNum(n)}</li>`).join('')}</ul>` : '';
+    const cuerpo = `<div class="var-dato">
+        <p class="var-dist">${fmtNum(p.total)} <small>registrado${p.total === 1 ? '' : 's'} a ${fmtUmbral(p.radioM)} o menos</small></p>
+        ${m ? `<p class="var-nombre">El más cercano: ${esc(m.subtipo || m.tipo)}, a ${fmtDist(p.distanciaM)} en línea recta${m.anio ? ` (registrado en ${esc(m.anio)})` : ''}${m.sector ? `. Sector: ${esc(m.sector)}` : ''}</p>` : ''}
+      </div>
+      <p class="var-explica"><strong>Informativo.</strong> Es un inventario de eventos documentados, no una evaluación del lugar.</p>
+      ${tipos}
+      <dl class="var-detalle">
+        <div><dt>Fuente</dt><dd>${esc(p.fuente)}</dd></div>
+        <div><dt>Fecha de los datos</dt><dd>Inventario de ${esc(p.anioDesde)} a ${esc(p.anioHasta)} (${fmtNum(p.registros)} registros en Arequipa metropolitana). Datos congelados el ${esc(fmtFechaDato(p.fecha))}</dd></div>
+        <div><dt>Método</dt><dd>${esc(p.metodo)}</dd></div>
+        <div><dt>Qué no cubre</dt><dd>No es un mapa de susceptibilidad: que no haya registros cerca no significa que el lugar sea seguro, solo que nadie documentó un evento ahí. Un registro es un sector inspeccionado, no el alcance real del evento. Faltan los eventos posteriores al inventario y los de erosión o inundación que no estén en él.</dd></div>
+      </dl>`;
+    return tarjetaVariable(VARIABLES.peligros, 'INFORMATIVO', resumen, cuerpo, 'Informativo');
+  }
+
+  function tarjetaSismos(s) {
+    if (s.estado === 'SIN DATO') {
+      return tarjetaVariable(VARIABLES.sismos, 'SIN DATO', 'Sin dato: no se pudo leer el archivo de sismos', `<p class="zon-msg error"><strong>No se pudo obtener el dato.</strong> ${esc(s.error || '')}</p>`);
+    }
+    const km = s.radioM / 1000;
+    const resumen = `${s.total} sismo${s.total === 1 ? '' : 's'} a ${km} km o menos entre el ${fmtFechaDato(s.desde)} y el ${fmtFechaDato(s.hasta)}${s.magnitudMaxima !== null ? ` · magnitud máxima ${String(s.magnitudMaxima).replace('.', ',')}` : ''}`;
+    const cuerpo = `<div class="var-dato">
+        <p class="var-dist">${fmtNum(s.total)} <small>sismo${s.total === 1 ? '' : 's'} reportado${s.total === 1 ? '' : 's'} a ${km} km o menos</small></p>
+        <p class="var-nombre">Periodo: ${esc(fmtFechaDato(s.desde))} a ${esc(fmtFechaDato(s.hasta))}${s.magnitudMaxima !== null ? `. Magnitud máxima: ${esc(String(s.magnitudMaxima).replace('.', ','))}` : ''}${s.masReciente ? `. El más reciente: ${esc(fmtFechaDato(s.masReciente))}` : ''}</p>
+      </div>
+      <p class="var-explica"><strong>Informativo.</strong> Es actividad reciente reportada: no predice sismos ni mide el peligro del lugar.</p>
+      <dl class="var-detalle">
+        <div><dt>Fuente</dt><dd>${esc(s.fuente)}</dd></div>
+        <div><dt>Fecha de los datos</dt><dd>Sismos del ${esc(fmtFechaDato(s.desde))} al ${esc(fmtFechaDato(s.hasta))}. Datos congelados el ${esc(fmtFechaDato(s.fecha))}</dd></div>
+        <div><dt>Método</dt><dd>${esc(s.metodo)}</dd></div>
+        <div><dt>Qué no cubre</dt><dd>No es el catálogo histórico: solo cubre el periodo indicado, así que un conteo bajo no dice nada del pasado. El radio de ${km} km es una convención del proyecto para dar contexto. El peligro sísmico para construir lo fija la zona sísmica de la Norma E.030, que depende del distrito, y el Estudio de Mecánica de Suelos.</dd></div>
+      </dl>`;
+    return tarjetaVariable(VARIABLES.sismos, 'INFORMATIVO', resumen, cuerpo, 'Informativo');
+  }
+
+  function renderContexto() {
+    const host = $('contexto-cuerpo');
+    const c = state.contextoRiesgo;
+    if (!c) {
+      host.setAttribute('aria-busy', 'true');
+      host.innerHTML = '<p class="zon-msg loading"><span class="spinner"></span>Buscando peligros registrados y sismos reportados…</p>';
+      return;
+    }
+    const abiertas = [...host.querySelectorAll('details.var-card')].map((d) => d.open);
+    host.innerHTML = tarjetaPeligros(c.peligros) + tarjetaSismos(c.sismos);
+    host.querySelectorAll('details.var-card').forEach((d, i) => { d.open = Boolean(abiertas[i]); });
+    host.setAttribute('aria-busy', 'false');
+    $('contexto-fuente').textContent = 'Contexto informativo, no una evaluación de peligro. Distancias en línea recta. Para decidir, consulta SIGRID (CENEPRED) y al IMPLA.';
+  }
+
+  async function updateContexto() {
+    const seq = ++state.contextoSeq;
+    const { lat, lon } = state.point;
+    state.cauce = null;
+    state.contextoRiesgo = null;
+    renderQuebradas();
+    renderContexto();
+    const r = await Contexto.evaluar(lat, lon, state.umbrales.quebradaMinM); // nunca rechaza: cada variable devuelve SIN DATO con su causa
+    if (seq !== state.contextoSeq) return; // la persona ya eligió otro punto
+    state.cauce = r.quebradas;
+    state.contextoRiesgo = { peligros: r.peligros, sismos: r.sismos };
+    renderQuebradas();
+    renderContexto();
+    renderResumen();
+  }
+
+  // «Abrir todas» / «Cerrar todas» las tarjetas de servicios.
+  const tarjetas = () => [...$('entorno').querySelectorAll('details.var-card')];
+  function actualizarToggleTarjetas() {
+    const t = tarjetas();
+    $('entorno-toggle').textContent = t.length > 0 && t.every((d) => d.open) ? 'Cerrar todas' : 'Abrir todas';
+  }
+  $('entorno-toggle').addEventListener('click', () => {
+    const t = tarjetas();
+    const abrir = !t.every((d) => d.open);
+    t.forEach((d) => { d.open = abrir; });
+    actualizarToggleTarjetas();
+  });
+  $('entorno').addEventListener('toggle', actualizarToggleTarjetas, true); // `toggle` no burbujea: se escucha en captura
 
   // Marcadores y línea recta hacia lo más cercano de cada variable (el área verde se dibuja como polígono).
   function limpiarEntornoMapa() {
@@ -1157,6 +1377,7 @@
     state.entornoStatus = 'loading';
     limpiarEntornoMapa();
     $('entorno').setAttribute('aria-busy', 'true');
+    $('entorno-toggle').hidden = true;
     $('entorno').innerHTML = '<p class="zon-msg loading"><span class="spinner"></span>Buscando los servicios más cercanos…</p>';
     const e = await Equipamiento.evaluar(lat, lon); // nunca rechaza: cada variable devuelve SIN DATO con su causa si falla
     if (seq !== state.entornoSeq) return; // el usuario ya eligió otro punto
@@ -1217,6 +1438,9 @@
       potencial: zonaOk && lote > 0 ? Zonificacion.potencial(r, lote) : null,
       avisoPDM,
       variables: e,
+      cauce: state.cauce,                 // quebradas: INFORMATIVO, o cumple / no cumple según el umbral de la persona
+      contextoRiesgo: state.contextoRiesgo, // peligros geológicos y sismos (informativo)
+      verificaciones: { calculado: Verificaciones.CALCULADO, items: Verificaciones.ITEMS, aviso: Verificaciones.AVISO },
       umbrales: CONFIG.umbrales,
       fuentesUmbral: CONFIG.fuentesUmbral,
       modulos,
@@ -1315,7 +1539,43 @@
     aplicarFlujo(nuevo);
     consultar();
   }
-  AsistenteUI.iniciar({ map, obtenerPunto: () => state.point, consultarPunto });
+  AsistenteUI.iniciar({ map, obtenerPunto: () => state.point, consultarPunto, umbrales: () => state.umbrales });
+
+  // ------------------------------------------------------------- Comparar puntos
+  // Instantánea del punto actual con lo que la ficha ya calculó; null mientras la consulta no termina.
+  function candidatoActual() {
+    if (!state.point || !state.entorno || !state.cauce || !state.contextoRiesgo || state.zonaStatus === 'loading' || state.zonaStatus === 'none') return null;
+    const distrito = state.distritoStatus === 'ok' ? capitalizar(state.distrito.distrito) : '';
+    return Comparar.crearCandidato({
+      lat: state.point.lat,
+      lon: state.point.lon,
+      etiqueta: state.etiqueta || (distrito ? `Punto en ${distrito}` : 'Punto elegido en el mapa'),
+      distrito,
+      zona: state.zonaStatus === 'ok' ? state.zona : null,
+      entorno: state.entorno,
+      cauce: state.cauce,
+      contexto: state.contextoRiesgo,
+    });
+  }
+  CompararUI.iniciar({ punto: () => state.point, candidatoActual, umbrales: () => state.umbrales });
+
+  // ------------------------------------------------------------- Verificaciones antes de comprar
+  // Lista estática de verificaciones.js: para agregar una basta con sumarla allí.
+  const enlaceVerif = (e) => `<a href="${esc(e.url)}" target="_blank" rel="noopener">${esc(e.texto)}<span class="sr-only"> (se abre en una pestaña nueva)</span></a>`;
+  $('verif-lista').innerHTML = Verificaciones.ITEMS.map((it) => `<li>
+      <span class="verif-marca" aria-hidden="true"></span>
+      <div>
+        <p class="verif-titulo">${esc(it.titulo)}</p>
+        <p class="verif-entidad">${esc(it.entidad)}</p>
+        <p>${esc(it.queConfirma)}</p>
+        ${it.nota ? `<p class="small muted">${esc(it.nota)}</p>` : ''}
+        ${it.enlaces.length ? `<p class="small">${it.enlaces.map(enlaceVerif).join(' · ')}</p>` : ''}
+      </div>
+    </li>`).join('');
+  $('verif-calculado').innerHTML = Verificaciones.CALCULADO.map((c) => `<li><strong>${esc(c.titulo)}.</strong> ${esc(c.texto)}</li>`).join('');
+  $('verif-aviso').textContent = Verificaciones.AVISO;
+
+  TourUI.iniciar();
 
   // Ayuda para verificar desde la consola del navegador (F12)
   window.osmDebug = { map, state, MODULOS, Calculos, Services, Zonificacion, Equipamiento, Peligros, Distritos, Riesgos, Delitos, Asistente };

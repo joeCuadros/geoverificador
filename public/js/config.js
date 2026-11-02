@@ -36,6 +36,21 @@ const CONFIG = {
     fuente: 'Plano de Zonificación del PDM Arequipa 2016-2025 (PDM aprobado por la Ordenanza 961-MPA; zonificación restituida por la Ordenanza 975-MPA)',
   },
 
+  // Quebradas y cauces (ANA): red hidrográfica congelada con scripts/descargar-quebradas.mjs. NO hay umbral normativo para la
+  // distancia a una quebrada: la variable es INFORMATIVA salvo que la persona fije el suyo en «Mis umbrales».
+  quebradas: {
+    geojsonUrl: 'data/quebradas_aqp.geojson',
+    fuente: 'Red hidrográfica (capa «Cuerpos de Agua»), Autoridad Nacional del Agua (ANA)',
+  },
+
+  // Sismos reportados por el IGP, congelados con scripts/descargar-sismos.mjs. `radioM` es el radio de CONTEXTO para contar
+  // sismos (convención del proyecto, no un umbral de peligro).
+  sismos: {
+    geojsonUrl: 'data/sismos_igp.geojson',
+    radioM: 100000,
+    fuente: 'Sismos reportados, Instituto Geofísico del Perú (IGP)',
+  },
+
   // Distritos (límites del INEI vía GEOCATMIN) y zona sísmica de la Norma E.030: archivos locales.
   distritos: {
     geojsonUrl: 'data/distritos_aqp.geojson', // generado con scripts/descargar-distritos.mjs

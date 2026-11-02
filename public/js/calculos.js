@@ -92,6 +92,30 @@ const Calculos = (() => {
     return min;
   }
 
+  /**
+   * Distancia en metros de un punto a una polilínea `coords` = [[lon, lat], …]. Se proyecta cada tramo a un plano local
+   * centrado en el punto (la misma proyección que usan los polígonos: a menos de 50 km difiere del haversine en menos del
+   * 0,5 %) y se toma el tramo más cercano. Infinity si no hay ningún punto.
+   */
+  function distanciaALineaM(lat, lon, coords) {
+    let min = Infinity;
+    let previo = null;
+    for (const coord of coords || []) {
+      const p = aMetros(lat, lon, coord);
+      min = Math.min(min, previo ? distOrigenASegmento(previo, p) : Math.hypot(p.x, p.y));
+      previo = p;
+    }
+    return min;
+  }
+
+  /** Distancia a una geometría LineString o MultiLineString. Infinity para cualquier otra (no se inventa una distancia). */
+  function distanciaAGeometriaLineaM(lat, lon, geometria) {
+    if (!geometria) return Infinity;
+    if (geometria.type === 'LineString') return distanciaALineaM(lat, lon, geometria.coordinates);
+    if (geometria.type === 'MultiLineString') return Math.min(Infinity, ...geometria.coordinates.map((l) => distanciaALineaM(lat, lon, l)));
+    return Infinity;
+  }
+
   // -------------------------------------------------------------------- Área
 
   /**
@@ -366,6 +390,88 @@ const Calculos = (() => {
     return { texto: estado.texto, fuente: estado.fuente, fecha: estado.fecha, url: lleno(estado.url) ? estado.url : null };
   }
 
+  // ----------------------------------------------- Quebradas y cauces (ANA)
+
+  /**
+   * Estado de la cercanía a un cauce. NO existe un umbral normativo para esta distancia: sin un umbral que la persona
+   * fije, el estado es INFORMATIVO (solo se muestran la distancia y el nombre). Con su umbral (distancia MÍNIMA a la que
+   * quiere estar de un cauce) pasa a CUMPLE o NO CUMPLE, y la vista lo rotula «según tu umbral».
+   */
+  function clasificarCauce(distanciaM, umbralUsuarioM) {
+    if (!esNumero(distanciaM)) return 'SIN DATO';
+    if (!esNumero(umbralUsuarioM) || umbralUsuarioM <= 0) return 'INFORMATIVO';
+    return distanciaM >= umbralUsuarioM ? 'CUMPLE' : 'NO CUMPLE';
+  }
+
+  const SIN_NOMBRE_ANA = 'Sin nombre en la ANA';
+
+  /**
+   * Cauce más cercano al punto.
+   *   cauces:   [{ nombre, tipo, categoria, geometry }]   (geometry LineString o MultiLineString)
+   *   opciones: { umbralUsuarioM?, fuente, fecha, metodo }
+   * Sin cauces (archivo ausente o vacío) devuelve SIN DATO: que no haya datos no significa que no haya cauce.
+   */
+  function evaluarCauces(punto, cauces, opciones = {}) {
+    const { umbralUsuarioM = null, fuente = null, fecha = null, metodo = null } = opciones;
+    const umbral = esNumero(umbralUsuarioM) && umbralUsuarioM > 0 ? umbralUsuarioM : null;
+    let mejor = null;
+    let mejorD = Infinity;
+    for (const c of cauces || []) {
+      const d = c ? distanciaAGeometriaLineaM(punto.lat, punto.lon, c.geometry) : Infinity;
+      if (d < mejorD) { mejor = c; mejorD = d; }
+    }
+    const base = { umbralM: umbral, segunUmbralUsuario: umbral !== null, fuente, fecha, metodo };
+    if (!mejor) return { estado: 'SIN DATO', nombre: null, tipo: null, categoria: null, distanciaM: null, ...base };
+    return {
+      estado: clasificarCauce(mejorD, umbral),
+      nombre: mejor.nombre || SIN_NOMBRE_ANA,
+      tipo: mejor.tipo || null,
+      categoria: mejor.categoria || null,
+      distanciaM: mejorD,
+      ...base,
+    };
+  }
+
+  // ------------------------------------------------------ Contexto de riesgo
+
+  /**
+   * Cuántos elementos (con lat y lon) hay a `radioM` metros o menos del punto, y el más cercano de todos.
+   * Devuelve { total, masCercano: { …elemento, distanciaM } | null }.
+   */
+  function resumirCercanos(punto, elementos, radioM) {
+    let total = 0;
+    let masCercano = null;
+    for (const e of elementos || []) {
+      if (!e || !esNumero(e.lat) || !esNumero(e.lon)) continue;
+      const d = haversine(punto.lat, punto.lon, e.lat, e.lon);
+      if (d <= radioM) total++;
+      if (!masCercano || d < masCercano.distanciaM) masCercano = { ...e, distanciaM: d };
+    }
+    return { total, masCercano };
+  }
+
+  /**
+   * Sismos reportados dentro de un radio: cuántos, magnitud máxima y fecha del más reciente (solo entre los del radio).
+   * Es contexto de actividad reciente: ni predicción ni zona sísmica oficial.
+   *   sismos: [{ lat, lon, magnitud, fecha: 'AAAA-MM-DD' }]
+   */
+  function resumirSismos(punto, sismos, { radioM = 0 } = {}) {
+    let total = 0;
+    let magnitudMaxima = null;
+    let masReciente = null;
+    let masCercano = null;
+    for (const s of sismos || []) {
+      if (!s || !esNumero(s.lat) || !esNumero(s.lon)) continue;
+      const d = haversine(punto.lat, punto.lon, s.lat, s.lon);
+      if (d > radioM) continue;
+      total++;
+      if (esNumero(s.magnitud) && (magnitudMaxima === null || s.magnitud > magnitudMaxima)) magnitudMaxima = s.magnitud;
+      if (typeof s.fecha === 'string' && (masReciente === null || s.fecha > masReciente)) masReciente = s.fecha;
+      if (!masCercano || d < masCercano.distanciaM) masCercano = { ...s, distanciaM: d };
+    }
+    return { total, magnitudMaxima, masReciente, masCercano };
+  }
+
   // --------------------------------------------------- Módulos fuera de alcance
 
   const MODULOS_RECORTADOS = ['seguridad', 'desastre', 'riesgos', 'sismica'];
@@ -464,6 +570,12 @@ const Calculos = (() => {
     puntoEnPoligono,
     distanciaAPoligonoM,
     distanciaAGeometriaM,
+    distanciaALineaM,
+    distanciaAGeometriaLineaM,
+    clasificarCauce,
+    evaluarCauces,
+    resumirCercanos,
+    resumirSismos,
     areaAnilloM2,
     areaPoligonoM2,
     areaGeometriaM2,

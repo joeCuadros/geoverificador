@@ -16,6 +16,7 @@
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
+  <a class="saltar" href="#contenido">Saltar a la consulta</a>
   
   <!-- Iconos: un solo trazo (1,75 px, extremos redondeados). Se usan con <use href="#i-...">. -->
   <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
@@ -39,6 +40,14 @@
       <symbol id="i-cerrar" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
       <symbol id="i-capas" viewBox="0 0 24 24"><path d="M12 3L2.8 8 12 13l9.2-5z"/><path d="M2.8 12.2L12 17.2l9.2-5M2.8 16.2L12 21.2l9.2-5"/></symbol>
       <symbol id="i-chat" viewBox="0 0 24 24"><path d="M4 5.5h16v11H10l-4.5 3.5v-3.5H4z"/><path d="M8 10h8M8 13h5"/></symbol>
+      <symbol id="i-comparar" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M3.5 9.5h17M9.2 9.5v10M14.8 9.5v10"/></symbol>
+      <symbol id="i-ayuda" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.6a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1.1.9-1.1 1.7"/><path d="M12 16.9v.1"/></symbol>
+      <symbol id="i-guardar" viewBox="0 0 24 24"><path d="M6.5 3.5h11a1 1 0 0 1 1 1V21l-6.5-4.5L5.500 21V4.500a1 1 0 0 1 1-1z"/></symbol>
+      <symbol id="i-ajustes" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></symbol>
+      <symbol id="i-escudo" viewBox="0 0 24 24"><path d="M12 3l7.500 2.800v5.700c0 4.600-3.100 8.200-7.500 9.700-4.400-1.500-7.500-5.100-7.500-9.700V5.800z"/><path d="M8.800 12.200l2.300 2.300 4.200-4.500"/></symbol>
+      <symbol id="i-quebrada" viewBox="0 0 24 24"><path d="M3 8c2.500-2 4.500-2 7 0s4.500 2 7 0 3-1.500 4-1"/><path d="M3 13c2.500-2 4.500-2 7 0s4.500 2 7 0 3-1.500 4-1"/><path d="M3 18c2.500-2 4.500-2 7 0s4.500 2 7 0 3-1.500 4-1"/></symbol>
+      <symbol id="i-sismo" viewBox="0 0 24 24"><path d="M2.500 12h4l2-6 3.500 12 3-9 1.500 3h5"/></symbol>
+      <symbol id="i-estrella" viewBox="0 0 24 24"><path d="M12 3.500l2.600 5.400 5.900.8-4.300 4.100 1 5.800L12 16.800l-5.200 2.800 1-5.800-4.300-4.100 5.900-.8z"/></symbol>
     </defs>
   </svg>
 
@@ -61,15 +70,26 @@
         </ol>
       </nav>
 
-      <button id="asistente-btn" type="button" class="btn-asistente" aria-expanded="false" aria-controls="asistente">
-        <svg class="ico" aria-hidden="true"><use href="#i-chat"/></svg>
-        <span>Asistente</span>
-      </button>
-      <button id="ayuda-btn" type="button" class="enlace-ayuda" aria-haspopup="dialog">¿Cómo funciona?</button>
+      <div class="barra-acciones">
+        <button id="comparar-btn" type="button" class="btn-barra" aria-haspopup="dialog">
+          <svg class="ico" aria-hidden="true"><use href="#i-comparar"/></svg>
+          <span class="btn-barra-texto">Comparar</span>
+          <span class="contador" id="comparar-contador" aria-hidden="true" hidden>0</span>
+          <span class="sr-only" id="comparar-contador-sr"></span>
+        </button>
+        <button id="asistente-btn" type="button" class="btn-barra" aria-expanded="false" aria-controls="asistente">
+          <svg class="ico" aria-hidden="true"><use href="#i-chat"/></svg>
+          <span class="btn-barra-texto">Asistente</span>
+        </button>
+        <button id="ayuda-btn" type="button" class="btn-barra" aria-haspopup="dialog">
+          <svg class="ico" aria-hidden="true"><use href="#i-ayuda"/></svg>
+          <span class="btn-barra-texto">¿Cómo funciona?</span>
+        </button>
+      </div>
     </header>
 
     <!-- ============================================================ Panel -->
-    <aside class="panel" id="contenido" aria-label="Consulta de un predio">
+    <aside class="panel" id="contenido" tabindex="-1" aria-label="Consulta de un predio">
 
       <!-- Paso 1: Ubica tu predio -->
       <section id="paso-ubicar" class="paso" aria-labelledby="ubicar-h">
@@ -150,6 +170,12 @@
               <p id="point-info" class="direccion-coord"></p>
             </div>
             <button id="btn-cambiar" type="button" class="secondary compacto">Cambiar</button>
+            <div class="direccion-acciones">
+              <button id="btn-guardar" type="button" class="secondary compacto" disabled>
+                <svg class="ico" aria-hidden="true"><use href="#i-guardar"/></svg><span id="btn-guardar-texto">Guardar para comparar</span>
+              </button>
+              <p id="guardar-estado" class="small muted" role="status"></p>
+            </div>
           </section>
 
           <div class="aviso-referencial" role="note">
@@ -159,7 +185,7 @@
 
           <div id="consejo" class="consejo" role="note" hidden>
             <svg class="ico ico-lg" aria-hidden="true"><use href="#i-info"/></svg>
-            <p>Cada tarjeta dice si el servicio <strong>cumple</strong> o <strong>no cumple</strong> la distancia de referencia, a cuántos metros está y de dónde sale el dato. <strong>Sin dato</strong> quiere decir que no figura en nuestros datos, no que no exista.</p>
+            <p>Cada tarjeta dice si el servicio <strong>cumple</strong> o <strong>no cumple</strong> la distancia de referencia y a cuántos metros está. Tócala para ver la fuente, la fecha y lo que el dato no cubre. <strong>Sin dato</strong> quiere decir que no figura en nuestros datos, no que no exista.</p>
             <button id="consejo-ok" type="button" class="secondary compacto">Entendido</button>
           </div>
 
@@ -183,11 +209,45 @@
 
           <!-- Servicios cerca (V2 a V5) -->
           <section class="servicios" aria-labelledby="serv-h" id="servicios">
-            <h3 id="serv-h">Servicios cerca del punto</h3>
+            <div class="servicios-cab">
+              <h3 id="serv-h">Servicios y entorno cerca del punto</h3>
+              <button id="entorno-toggle" type="button" class="link" aria-controls="entorno" hidden>Abrir todas</button>
+            </div>
             <div id="entorno" class="entorno" aria-busy="true">
               <p class="zon-msg loading"><span class="spinner"></span>Buscando los servicios más cercanos…</p>
             </div>
             <p id="entorno-fuente" class="fuente-linea"></p>
+          </section>
+
+          <!-- Contexto de riesgo: peligros geológicos (INGEMMET) y sismos reportados (IGP). Informativo, no es una evaluación. -->
+          <section class="card contexto" aria-labelledby="ctx-h" id="contexto">
+            <details class="disclosure" id="contexto-detalle">
+              <summary>
+                <span class="disclosure-titulo"><svg class="ico" aria-hidden="true"><use href="#i-aviso"/></svg><span id="ctx-h">Contexto de riesgo (informativo)</span></span>
+              </summary>
+              <p class="small muted ctx-intro">Datos de contexto, no una evaluación de peligro: no hay umbral que diga si un lugar es seguro. Que algo no aparezca aquí no significa que el lugar esté libre de riesgo.</p>
+              <div id="contexto-cuerpo" class="entorno" aria-busy="true"></div>
+              <p id="contexto-fuente" class="fuente-linea"></p>
+            </details>
+          </section>
+
+          <!-- Verificaciones recomendadas antes de comprar: contenido estático en js/verificaciones.js -->
+          <section class="card verificaciones" aria-labelledby="verif-h" id="verificaciones">
+            <details class="disclosure" id="verif-detalle">
+              <summary>
+                <span class="disclosure-titulo"><svg class="ico" aria-hidden="true"><use href="#i-escudo"/></svg><span id="verif-h">Verificaciones recomendadas antes de comprar</span></span>
+              </summary>
+              <p class="small muted verif-intro">La ficha es un primer filtro. Lo que sigue separa lo que la herramienta ya calculó de lo que tú debes comprobar antes de pagar o firmar.</p>
+              <div class="verif-grupo verif-calculado">
+                <h4>Lo que GeoVerificador ya calculó <span class="verif-etiqueta">Referencial</span></h4>
+                <ul id="verif-calculado" class="verif-calculado-lista"></ul>
+              </div>
+              <div class="verif-grupo verif-comprobar">
+                <h4>Lo que debes comprobar tú <span class="verif-etiqueta verif-etiqueta-fuerte">Fuera de esta herramienta</span></h4>
+                <ul id="verif-lista" class="verif-lista"></ul>
+              </div>
+              <p id="verif-aviso" class="small muted"></p>
+            </details>
           </section>
 
           <!-- Módulos fuera de alcance: solo se muestran con CONFIG.modulos o ?modulos=todos -->
@@ -363,11 +423,73 @@
   <aside id="asistente" class="asistente" aria-labelledby="asistente-h" hidden>
     <header class="asistente-cab">
       <h2 id="asistente-h" tabindex="-1">Asistente</h2>
+      <span id="asistente-modo" class="asistente-modo" data-modo="reglas" title="El asistente entiende tu frase con reglas fijas. Los datos son los mismos de la ficha.">Modo: reglas</span>
       <button type="button" id="asistente-cerrar" class="icon-btn" aria-label="Cerrar el asistente">
         <svg class="ico" aria-hidden="true"><use href="#i-cerrar"/></svg>
       </button>
     </header>
     <div id="asistente-log" class="asistente-log" role="log" aria-live="polite" aria-relevant="additions" aria-label="Conversación con el asistente" tabindex="0"></div>
+
+    <!-- Armar una búsqueda sin escribir: genera la misma consulta que el intérprete saca de una frase (Asistente.construirConsulta) -->
+    <details id="constructor" class="constructor">
+      <summary><svg class="ico" aria-hidden="true"><use href="#i-ajustes"/></svg><span>Armar una búsqueda sin escribir</span></summary>
+      <form id="constructor-form" class="constructor-form" novalidate>
+        <div class="presets" role="group" aria-label="Búsquedas rápidas">
+          <span class="campo-etiqueta" id="presets-l">Búsquedas rápidas</span>
+          <div id="presets" class="presets-lista"></div>
+        </div>
+
+        <div class="campo">
+          <span class="campo-etiqueta" id="cons-que-l">Qué quieres tener cerca</span>
+          <details class="multi" id="cons-que">
+            <summary aria-labelledby="cons-que-l cons-que-n"><span id="cons-que-n" class="multi-valor">Elige uno o más</span></summary>
+            <div class="multi-panel">
+              <fieldset class="multi-grupo">
+                <legend>Servicios</legend>
+                <div id="cons-servicios"></div>
+              </fieldset>
+              <fieldset class="multi-grupo">
+                <legend>Tipo de zona</legend>
+                <div id="cons-zonas"></div>
+              </fieldset>
+            </div>
+          </details>
+        </div>
+
+        <div class="campo-fila">
+          <label class="campo" id="cons-nivel-campo" hidden>
+            <span class="campo-etiqueta">Nivel educativo</span>
+            <select id="cons-nivel"></select>
+          </label>
+          <label class="campo">
+            <span class="campo-etiqueta">Lo más importante</span>
+            <select id="cons-prio"></select>
+          </label>
+          <label class="campo">
+            <span class="campo-etiqueta" id="cons-radio-l">Distancia máxima</span>
+            <select id="cons-radio"></select>
+          </label>
+        </div>
+
+        <label class="campo">
+          <span class="campo-etiqueta">Lejos de quebradas y ríos</span>
+          <select id="cons-cauce" aria-describedby="cons-cauce-ayuda"></select>
+          <small id="cons-cauce-ayuda" class="campo-ayuda">Tú eliges la distancia mínima: no existe una distancia oficial. Usa la red de la ANA, que no incluye todas las quebradas urbanas.</small>
+        </label>
+
+        <div class="campo">
+          <label class="check"><input id="cons-punto" type="checkbox" aria-describedby="cons-punto-ayuda"><span id="cons-punto-t">Solo cerca de mi punto</span></label>
+          <small id="cons-punto-ayuda" class="campo-ayuda"></small>
+        </div>
+        <label class="check"><input id="cons-cond" type="checkbox"><span>Incluir zonas condicionales</span></label>
+        <p id="cons-error" class="texto-error small" role="alert" hidden></p>
+        <div class="constructor-acciones">
+          <button type="submit" class="primary" id="cons-buscar">Buscar zonas</button>
+          <button type="button" class="secondary" id="cons-limpiar">Limpiar</button>
+        </div>
+      </form>
+    </details>
+
     <form id="asistente-form" class="asistente-form" autocomplete="off">
       <label for="asistente-texto" class="sr-only">Escribe tu pregunta</label>
       <input id="asistente-texto" type="text" maxlength="300" placeholder="Ej.: busco cerca de un colegio y un parque" enterkeyhint="send">
@@ -376,20 +498,56 @@
     <p class="asistente-pie">Respondo solo con los datos de la ficha, sin inventar. Es referencial: no reemplaza el certificado municipal.</p>
   </aside>
 
-  <!-- Ayuda: se abre solo si la persona la pide -->
-  <dialog id="ayuda" class="ayuda" aria-labelledby="ayuda-h">
-    <div class="ayuda-cab">
-      <h2 id="ayuda-h">¿Cómo funciona?</h2>
-      <button id="ayuda-cerrar" type="button" class="icon-btn" aria-label="Cerrar la ayuda"><svg class="ico" aria-hidden="true"><use href="#i-cerrar"/></svg></button>
+  <!-- Recorrido guiado: se abre solo la primera vez y con «¿Cómo funciona?». Contenido en js/tour.js -->
+  <dialog id="tour" class="dialogo tour" aria-labelledby="tour-h">
+    <div class="dialogo-cab">
+      <div class="tour-titulos">
+        <p class="tour-progreso" id="tour-progreso"></p>
+        <h2 id="tour-h" tabindex="-1"></h2>
+      </div>
+      <button id="tour-cerrar" type="button" class="icon-btn" aria-label="Omitir el recorrido"><svg class="ico" aria-hidden="true"><use href="#i-cerrar"/></svg></button>
     </div>
-    <ol class="ayuda-pasos">
-      <li><strong>Ubica tu predio.</strong> Escribe una dirección, usa tu ubicación o toca el mapa.</li>
-      <li><strong>Confirma el punto.</strong> Revisa que el marcador esté sobre tu predio. Puedes tocar otro lugar o moverlo con las flechas.</li>
-      <li><strong>Lee tu reporte.</strong> Verás la zonificación del plano y si hay cerca un establecimiento de salud, un colegio por nivel, un paradero y un área verde. Cada dato dice su fuente, su fecha y cómo se midió.</li>
-    </ol>
-    <p>Las distancias son en línea recta, no recorrido a pie. <strong>Sin dato</strong> significa que el servicio no figura en nuestros datos (OpenStreetMap), no que no exista.</p>
-    <p>Es una consulta referencial: no reemplaza el certificado municipal de zonificación ni es una recomendación de compra.</p>
-    <button id="ayuda-ok" type="button" class="primary">Entendido</button>
+    <ol class="tour-puntos" id="tour-puntos" aria-hidden="true"></ol>
+    <div id="tour-cuerpo" class="tour-cuerpo" role="group" aria-labelledby="tour-h"></div>
+    <div class="dialogo-pie tour-pie">
+      <button id="tour-omitir" type="button" class="link">Omitir recorrido</button>
+      <div class="tour-nav">
+        <button id="tour-anterior" type="button" class="secondary">Anterior</button>
+        <button id="tour-siguiente" type="button" class="primary">Siguiente</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Comparar puntos: hasta 3 candidatos, 5 variables lado a lado, sin puntaje global -->
+  <dialog id="comparar" class="dialogo comparar" aria-labelledby="comparar-h">
+    <div class="dialogo-cab">
+      <h2 id="comparar-h" tabindex="-1">Comparar puntos</h2>
+      <button id="comparar-cerrar" type="button" class="icon-btn" aria-label="Cerrar la comparación"><svg class="ico" aria-hidden="true"><use href="#i-cerrar"/></svg></button>
+    </div>
+    <p class="comparar-intro">Guarda hasta 3 puntos y mira sus variables lado a lado, con un contexto de riesgo informativo. No hay puntaje global: tú marcas lo que te importa.</p>
+
+    <fieldset class="prioridades" id="prioridades">
+      <legend>Mis prioridades</legend>
+      <p class="small muted">Marca las variables que tu predio debe cumplir. Se guardan solo en este navegador.</p>
+      <div id="prioridades-lista" class="prioridades-lista"></div>
+    </fieldset>
+
+    <p id="comparar-resumen" class="comparar-resumen" role="status" aria-live="polite"></p>
+    <div id="comparar-dominancia" class="comparar-dominancia" hidden></div>
+
+    <div id="comparar-vacio" class="comparar-vacio" hidden>
+      <p><strong>Todavía no guardaste ningún punto.</strong></p>
+      <p>Consulta un punto y, en el reporte, pulsa «Guardar para comparar».</p>
+    </div>
+    <p id="comparar-pista" class="tabla-pista small muted" hidden>Desliza la tabla hacia los lados para ver todos los puntos.</p>
+    <div id="comparar-cartas" class="comparar-cartas" aria-label="Comparación de puntos por variable" role="region" hidden></div>
+    <div id="comparar-tabla-wrap" class="tabla-wrap" tabindex="0" role="region" aria-label="Tabla de comparación de puntos" hidden></div>
+    <p id="comparar-fuente" class="fuente-linea"></p>
+
+    <div class="dialogo-pie">
+      <button id="comparar-limpiar" type="button" class="secondary" hidden>Quitar todos</button>
+      <button id="comparar-ok" type="button" class="primary">Cerrar</button>
+    </div>
   </dialog>
 
   <!-- Anuncios para lectores de pantalla -->
@@ -403,17 +561,25 @@
   <script src="js/config.js"></script>
   <script src="js/calculos.js"></script>
   <script src="js/onboarding.js"></script>
+  <script src="js/umbrales.js"></script>
+  <script src="js/tour.js"></script>
+  <script src="js/comparar.js"></script>
+  <script src="js/verificaciones.js"></script>
   <script src="js/geo.js"></script>
   <script src="js/services.js"></script>
   <script src="js/zonificacion.js"></script>
   <script src="js/equipamiento.js"></script>
   <script src="js/peligros.js"></script>
+  <script src="js/contexto.js"></script>
   <script src="js/distritos.js"></script>
   <script src="js/riesgos.js"></script>
   <script src="js/reporte.js"></script>
   <script src="js/delitos.js"></script>
   <script src="js/asistente.js"></script>
+  <script src="js/asistente-llm.js"></script>
   <script src="js/asistente-ui.js"></script>
+  <script src="js/comparar-ui.js"></script>
+  <script src="js/tour-ui.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
