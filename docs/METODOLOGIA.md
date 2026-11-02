@@ -317,3 +317,55 @@ Las fuentes públicas cambian: al volver a descargar, las cifras de este documen
 - No incluye el entorno (servicios, transporte, áreas verdes): no hay una base para decir desde cuántos elementos la falta de servicios es un «riesgo».
 - No reemplaza la evaluación de riesgo del CENEPRED, el estudio de suelos ni los certificados municipales: los propone como tratamiento.
 - La evaluación se guarda solo en el navegador del usuario. Si borra los datos del sitio, se pierde; por eso se puede descargar.
+
+## 11. Asistente de chat
+
+**Qué es.** Un chat (`public/js/asistente.js` para la lógica y `public/js/asistente-ui.js` para la vista) que responde sobre el punto ya consultado y busca zonas de Arequipa según lo que la persona pide. Usa los mismos archivos, umbrales y cálculos de las cinco variables; no agrega fuentes de datos.
+
+**Por qué no usa un modelo de lenguaje.** El proyecto se publica como sitio estático (sin servidor ni claves) y su regla es no inventar datos. Un modelo de lenguaje podría responder con cifras que no están en ninguna fuente. El asistente entiende el texto con reglas explícitas (palabras clave sin tildes ni mayúsculas) y responde únicamente con lo que calculan `Calculos`, `Zonificacion` y `Equipamiento`. Si no entiende, lo dice y da ejemplos. Nada de lo que se escribe sale del navegador ni se guarda.
+
+**Qué entiende.**
+
+| Tipo | Ejemplos | Respuesta |
+|---|---|---|
+| Sobre el punto | «¿qué zona es?», «resumen», «¿hay un colegio cerca de mi punto?» | Los mismos resultados de la ficha, con su distancia y su referencia |
+| Construir | «¿cuánto puedo construir en un lote de 200 m²?» | `Zonificacion.potencial`, el mismo cálculo de la ficha; no calcula en zonas condicionadas ni no construibles |
+| PDM nuevo | «¿cambiará la zonificación?» | El aviso de `CONFIG.estadoPDM` con su fuente y fecha, y aclara que no hay mapa |
+| Fuentes | «¿de dónde salen los datos?» | Fuentes y umbrales |
+| Buscar zonas | «busco cerca de un colegio y un parque, lo más importante es el parque» | Ranking por distrito (ver abajo) |
+| Sin datos | «¿es seguro?», «algo barato» | Dice que no tiene seguridad ni precios; no responde a medias |
+
+**Criterios de búsqueda y sus umbrales.**
+
+| Criterio | Cómo se mide | Umbral por defecto | Origen |
+|---|---|---|---|
+| Salud, transporte, área verde | Igual que V2, V4 y V5 | `CONFIG.umbrales` | Los de la ficha |
+| Colegio sin nivel | Cumple si hay uno de **inicial o primaria** dentro de su umbral | 500 m / 1500 m | MINEDU. Secundaria no entra: con 3000 m casi toda la ciudad cumple y «cerca de un colegio» dejaría de distinguir zonas. Quien la quiere dice «secundaria» |
+| Inicial, primaria, secundaria | Igual que V3 | 500 / 1500 / 3000 m | MINEDU |
+| Campiña | Distancia al polígono más cercano de `ZA` o `ZRE-PA` | 500 m | Convención del proyecto |
+| Zona residencial | La celda está dentro de una zona del grupo `residencial` | dentro | Plano |
+| Tranquilo | La celda está en `RDB` o `RDM-1` | dentro | **Aproximación**: no hay datos de ruido |
+| Comercial («mall») | Distancia a una zona del grupo `comercial` | 600 m | **Aproximación**: no hay datos de centros comerciales |
+| Centro histórico («barrio tradicional») | Distancia a `ZRE-CH` | 800 m | **Aproximación**: no hay datos de barrios tradicionales |
+
+Los umbrales de campiña, comercial y centro histórico son convenciones del proyecto (`CONFIG.asistente.umbralesZona`); ninguna norma los fija.
+
+**Distancias.** Una sola distancia en el mensaje («en un radio de 1 km») vale para todos los criterios; varias («colegio a 500 m y parque a 300 m») se asignan a su criterio. Con «cerca de mi punto» la distancia limita el área de búsqueda alrededor del punto elegido.
+
+**Cómo se busca.**
+
+1. Se arma una cuadrícula de celdas de 250 m (`CONFIG.asistente.pasoCeldaM`) cuyo centro cae en una zona **construible** del plano (o también condicionada, si se pide). Si dos zonas se superponen gana la última, como en el plano.
+2. En cada celda se evalúa cada criterio con las funciones de `Calculos` (haversine y área geodésica) sobre el OpenStreetMap congelado.
+3. Se agrupa por distrito (`Distritos.nombreDe`). Un distrito con menos de 8 celdas no se lista: la cifra sería engañosa.
+4. Por distrito se informa el **porcentaje de celdas que cumple todo** y la **coincidencia ponderada**, el promedio de la fracción de criterios cumplidos con peso 2 para los prioritarios y 1 para el resto. El doble peso es una **convención del asistente**: no hay base para otro valor.
+5. Cada distrito trae su mejor celda (más puntaje y, a igual puntaje, la que cumple con más holgura) para verla en el mapa o consultarla con la ficha completa.
+
+**Qué NO es.** No es una probabilidad ni una recomendación: es la parte del suelo habitable de un distrito que cumple lo que se pidió. La resolución es de 250 m. Hereda todos los límites de la ficha (distancia en línea recta, OpenStreetMap incompleto, plano 2016-2025). La palabra «probabilidad» no aparece en ninguna cifra y el texto aclara que no lo es.
+
+**Ajustes sobre la búsqueda anterior.** «agrega transporte», «quita el parque», «prioriza el colegio», «incluye zonas condicionales». La cuadrícula se reutiliza entre ajustes porque no depende de los criterios.
+
+**Verificación.**
+
+- `test/asistente.spec.ts`: 63 pruebas de la lógica (interpretación, evaluación de celdas, búsqueda, respuestas y textos).
+- `scripts/verificar-datos.mjs`, sección C, con los datos reales: la zona de 300 celdas al azar coincide con `Zonificacion.lookup`; las distancias y veredictos de salud, transporte e inicial en 120 celdas coinciden con una fuerza bruta con la ley esférica de los cosenos; las áreas vienen ordenadas, con porcentajes entre 0 y 100, y la mejor celda de cada una cae en su distrito; y los tiempos (con los datos reales, la primera búsqueda tarda unos 0,7 s y un ajuste con la cuadrícula ya calculada, unos 0,3 s).
+- **Lo que no se verificó:** que el ranking refleje lo que una persona consideraría mejor; no hay una prueba con usuarios del chat. Tampoco se validó la comprensión del lenguaje más allá de los casos de prueba: una frase fuera de las reglas se reconoce como «no entendí».
