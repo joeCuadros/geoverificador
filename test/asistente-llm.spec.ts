@@ -289,3 +289,32 @@ describe('AsistenteLLM: elección entre Gemini y reglas', () => {
     });
   });
 });
+
+describe('AsistenteLLM.elegirIntencion', () => {
+  const reglas = (texto: string) => () => Asistente.interpretar(texto, { hayPunto: true, ultimaBusqueda: null });
+
+  it('usa la consulta del modelo cuando el servidor respondió en modo Gemini', () => {
+    const r = { modo: 'gemini', spec: valido({ intencion: 'construir', loteM2: 200 }), disponible: true };
+    const e = LLM.elegirIntencion(r, { reglas: reglas('hola'), ultimaBusqueda: null });
+    expect(e.origen).toBe('gemini');
+    expect(e.intencion.tipo).toBe('construir');
+    expect(e.intencion.lote).toBe(200);
+  });
+
+  it('vuelve al intérprete de reglas ante cualquier fallo del servidor', () => {
+    for (const r of [{ modo: 'reglas', motivo: 'sin_clave', disponible: false }, { modo: 'reglas', motivo: 'tiempo', disponible: null }, null]) {
+      const e = LLM.elegirIntencion(r, { reglas: reglas('¿qué zona es?'), ultimaBusqueda: null });
+      expect(e.origen).toBe('reglas');
+      expect(e.intencion.tipo).toBe('zona');
+    }
+  });
+
+  it('la búsqueda del modelo produce la misma intención que la frase equivalente en reglas', () => {
+    const r = { modo: 'gemini', spec: valido({ intencion: 'buscar', criterios: ['colegio', 'areaVerde'], prioridades: ['areaVerde'], radioM: 1000 }) };
+    const e = LLM.elegirIntencion(r, { reglas: reglas('x'), ultimaBusqueda: null });
+    const viaReglas = Asistente.interpretar('busco cerca de un colegio y un parque, lo más importante es el parque, en un radio de 1 km', { hayPunto: false, ultimaBusqueda: null });
+    expect(e.intencion.tipo).toBe('buscar');
+    expect(e.intencion.criterios.map((c: { id: string }) => c.id).sort()).toEqual(viaReglas.criterios.map((c: { id: string }) => c.id).sort());
+    expect(e.intencion.radioGlobalM).toBe(viaReglas.radioGlobalM);
+  });
+});

@@ -244,6 +244,21 @@ const AsistenteLLM = (() => {
     return { ...vacia, tipo: TIPO_DE_INTENCION[spec.intencion] || 'desconocido', lote: spec.intencion === 'construir' ? spec.loteM2 : null };
   }
 
+  /**
+   * Picks the intent the deterministic engine will run: the model's validated query when the server answered in Gemini
+   * mode, otherwise the local rule-based parser (`reglas`, called lazily). Never throws.
+   */
+  function elegirIntencion(respuesta, { reglas, ultimaBusqueda = null }) {
+    if (respuesta && respuesta.modo === 'gemini' && esObjeto(respuesta.spec)) {
+      try {
+        return { origen: 'gemini', intencion: aIntencion(respuesta.spec, { ultimaBusqueda }) };
+      } catch {
+        // A query that cannot be mapped falls back to the rules below.
+      }
+    }
+    return { origen: 'reglas', intencion: reglas() };
+  }
+
   // ------------------------------------------------------- Verificación del texto
 
   const quitarTildes = (s) => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
@@ -413,7 +428,7 @@ const AsistenteLLM = (() => {
 
   return {
     HERRAMIENTA, INTENCIONES, CRITERIOS, MODOS, TEMAS, RANGOS, MAX_MENSAJE, MAX_TURNOS, MAX_TEXTO,
-    validarSpec, sanitizarEstado, sanitizarHistorial, aIntencion, verificarTexto, limpiarTexto,
+    validarSpec, sanitizarEstado, sanitizarHistorial, aIntencion, elegirIntencion, verificarTexto, limpiarTexto,
     clasificarRespuesta, interpretar, redactar, disponible,
   };
 })();

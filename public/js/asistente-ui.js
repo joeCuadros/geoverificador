@@ -20,6 +20,25 @@ const AsistenteUI = (() => {
   let cacheContexto = null; // { clave, ctx } del último punto consultado
   let ocupado = false;
   let saludado = false;
+  // Language model: null = not checked yet, true = /api/chat has Gemini, false = rules only (no key or static site).
+  let llmDisponible = null;
+  const historial = []; // last turns sent to the model as context: { rol: 'usuario' | 'asistente', texto }
+
+  const hayLLM = () => typeof AsistenteLLM !== 'undefined';
+  function mostrarModo(origen) {
+    const el = $('asistente-modo');
+    if (!el) return;
+    const gemini = origen === 'gemini';
+    el.textContent = gemini ? 'Modo: Gemini' : 'Modo: reglas';
+    el.dataset.modo = gemini ? 'gemini' : 'reglas';
+    el.title = gemini
+      ? 'Gemini interpreta tu frase y redacta la respuesta; los datos, distancias y estados los calcula siempre el motor de la ficha.'
+      : 'El asistente entiende tu frase con reglas fijas. Los datos son los mismos de la ficha.';
+  }
+  function recordar(rol, texto) {
+    historial.push({ rol, texto: String(texto).slice(0, 300) });
+    while (historial.length > 6) historial.shift();
+  }
 
   const cacheCeldas = new Map(); // la cuadrícula no depende de los criterios: se arma una vez por tipo de zona
   const celdasDe = (zonas, condicional) => {
@@ -219,11 +238,39 @@ const AsistenteUI = (() => {
     ocupar(true);
     mensaje('usuario', { texto: limpio });
     try {
-      const intencion = Asistente.interpretar(limpio, { hayPunto: Boolean(api.obtenerPunto()), ultimaBusqueda });
+      const hayPunto = Boolean(api.obtenerPunto());
+      const reglas = () => Asistente.interpretar(limpio, { hayPunto, ultimaBusqueda });
+      let eleccion = { origen: 'reglas', intencion: null };
+      if (hayLLM() && llmDisponible !== false) {
+        const espera = mensaje('asistente', { texto: 'Pensando…', espera: true });
+        const r = await AsistenteLLM.interpretar({
+          mensaje: limpio, historial,
+          estado: { hayPunto, criteriosPrevios: ultimaBusqueda ? ultimaBusqueda.criterios.map((c) => c.id) : [] },
+        });
+        espera.remove();
+        if (r.disponible === false) llmDisponible = false;
+        else if (r.disponible === true) llmDisponible = true;
+        eleccion = AsistenteLLM.elegirIntencion(r, { reglas, ultimaBusqueda });
+      } else {
+        eleccion.intencion = reglas();
+      }
+      mostrarModo(eleccion.origen);
+      recordar('usuario', limpio);
+      const intencion = eleccion.intencion;
       if (intencion.tipo === 'buscar') await ejecutarBusqueda(intencion);
       else {
         const ctx = ['ficha', 'servicio', 'zona', 'construir', 'quebrada', 'sismos', 'peligros'].includes(intencion.tipo) ? await contexto() : { estadoPDM: CONFIG.estadoPDM, potencial: Zonificacion.potencial, punto: api.obtenerPunto() };
-        mensaje('asistente', { ...Asistente.responder(intencion, ctx), explicacion: Asistente.explicar(intencion.tipo) });
+        const resp = Asistente.responder(intencion, ctx);
+        let texto = resp.texto;
+        // Gemini only rewords the deterministic answer; the text is verified (numbers, names, caveat) or discarded.
+        if (eleccion.origen === 'gemini' && texto) {
+          const espera = mensaje('asistente', { texto: 'Redactando…', espera: true });
+          const red = await AsistenteLLM.redactar({ pregunta: limpio, tipo: intencion.tipo, hechos: { texto } });
+          espera.remove();
+          if (red.modo === 'gemini' && red.texto) texto = red.texto;
+        }
+        recordar('asistente', texto);
+        mensaje('asistente', { ...resp, texto, explicacion: Asistente.explicar(intencion.tipo) });
       }
     } catch (err) {
       console.error('[Asistente]', err);
@@ -400,6 +447,9 @@ const AsistenteUI = (() => {
       mensaje('asistente', { ...Asistente.responder({ tipo: 'saludo', criterios: [] }, {}), explicacion: Asistente.explicar('saludo') }); // trae sus sugerencias
     }
     actualizarPunto(); // el punto pudo cambiar desde la última vez
+    if (hayLLM() && llmDisponible === null) {
+      AsistenteLLM.disponible().then((si) => { if (llmDisponible === null) llmDisponible = si; mostrarModo(si ? 'gemini' : 'reglas'); });
+    }
     $('asistente-texto').focus();
   }
 

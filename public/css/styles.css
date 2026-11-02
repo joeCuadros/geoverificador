@@ -725,6 +725,8 @@ body.vista-reporte .reporte { display: block; max-width: 800px; margin: 20px aut
 .asistente-cab { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 8px 4px 16px; background: var(--band); color: var(--on-band); }
 .asistente-cab h2 { font: 600 1.125rem/1.2 var(--font-display); }
 .asistente-cab .icon-btn { color: var(--on-band); }
+.asistente-modo { margin-left: auto; padding: 2px 8px; border: 1px solid currentColor; border-radius: 999px; font-size: 0.75rem; line-height: 1.4; white-space: nowrap; opacity: 0.85; }
+.asistente-modo[data-modo="gemini"] { opacity: 1; font-weight: 600; }
 .asistente-cab .icon-btn:hover { background: rgba(255, 255, 255, .14); }
 .asistente-cab :focus-visible { outline-color: var(--on-band); }
 .asistente-log { flex: 1 1 auto; overflow-y: auto; padding: 14px 14px 8px; display: flex; flex-direction: column; gap: 14px; }
