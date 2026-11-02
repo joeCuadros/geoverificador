@@ -10,8 +10,10 @@ Ficha de un predio en Arequipa metropolitana, con datos públicos. Se elige un p
 | V3 Educación | Colegio más cercano por nivel: inicial, primaria y secundaria | 500 / 1500 / 3000 m (MINEDU, Cuadro N.° 1 del Instructivo FTE; RVM 104-2019 y 208-2019-MINEDU) | OpenStreetMap |
 | V4 Transporte | Paradero más cercano | 400 m (convención del proyecto) | OpenStreetMap |
 | V5 Área verde | Área verde de al menos 5000 m² a 300 m o menos (y, como sensibilidad, de al menos 1 ha) | 300 m / 5000 m² (OMS Europa, 2016) | OpenStreetMap |
+| N1 Quebradas y cauces | Cauce más cercano de la red hidrográfica y su distancia. **Estado `INFORMATIVO`**: no hay umbral normativo, así que no dice cumple ni no cumple, salvo con el umbral que fije la persona en «Mis umbrales» («según tu umbral») | Ninguno (parámetro del usuario) | ANA (red de 2018, escala nacional; no incluye todas las quebradas urbanas) |
+| Contexto de riesgo | Peligros geológicos registrados a 500 m y sismos reportados a 100 km. **Siempre `INFORMATIVO`**: contexto, no una evaluación de peligro | — | INGEMMET (inventario) e IGP (sismos reportados desde el 2026-01-01) |
 
-Cada resultado tiene la forma `{ estado: 'CUMPLE' | 'NO CUMPLE' | 'SIN DATO', nombre, distanciaM, umbralM, fuente, fecha, metodo }`. Las distancias son **en línea recta** (haversine, R = 6 371 008,8 m), no recorrido a pie. Los cálculos están en `public/js/calculos.js`, como funciones puras con pruebas en `test/calculos.spec.ts`.
+Cada resultado tiene la forma `{ estado: 'CUMPLE' | 'NO CUMPLE' | 'SIN DATO' (o 'INFORMATIVO' en quebradas y contexto), nombre, distanciaM, umbralM, fuente, fecha, metodo }`. Las distancias son **en línea recta** (haversine, R = 6 371 008,8 m), no recorrido a pie. Los cálculos están en `public/js/calculos.js`, como funciones puras con pruebas en `test/calculos.spec.ts`.
 
 La aplicación **no recomienda** dónde comprar ni construir y **no da un puntaje global**: no hay base para decidir cuánto pesa cada variable. Cada dato indica qué no cubre.
 
@@ -25,10 +27,19 @@ El botón **Asistente** de la barra superior abre un chat que usa los mismos dat
 
 - **Sobre tu punto:** «¿qué zona es?», «¿hay un colegio cerca de mi punto?», «¿cuánto puedo construir en un lote de 200 m²?», «¿cambiará la zonificación?», «dame un resumen».
 - **Buscar zonas:** «busco cerca de un colegio y un parque, lo más importante es el parque, en un radio de 1 km». Revisa una cuadrícula de 250 m sobre las zonas construibles del plano y las agrupa por distrito. Informa el **porcentaje del suelo habitable** que cumple lo pedido (no una probabilidad). Se ajusta con «agrega transporte», «quita el parque», «prioriza el colegio» o «incluye zonas condicionales». Cada distrito trae botones para verlo en el mapa y consultar su mejor punto con la ficha completa.
+- **Sin escribir:** «Armar una búsqueda sin escribir» abre menús desplegables: qué quieres tener cerca (servicios y tipo de zona, con selección múltiple), nivel educativo, lo más importante, distancia máxima y «Incluir zonas condicionales», más búsquedas rápidas con un toque. Los menús generan la misma consulta que el chat saca de una frase (`Asistente.construirConsulta`), así que hay un solo motor de decisión. Cada distrito del resultado se abre y cierra, y cada respuesta trae un apartado «Por qué, fuente y límites».
+- **Quebradas, sismos y peligros:** «¿hay una quebrada cerca de mi punto?», «¿cuántos sismos hubo?», «¿hay peligros geológicos cerca?» se responden sobre el punto con su fuente y sus límites, como contexto informativo. También se puede pedir «lejos de quebradas a más de 200 m» (o elegirlo en el menú «Lejos de quebradas y ríos»): la distancia la fija la persona, porque no existe una oficial; si falta, el asistente la pide.
 - **Qué entiende:** salud, colegio (inicial, primaria o secundaria), transporte, área verde, campiña (zona agrícola), zona residencial, tranquilo, comercial y centro histórico. «Tranquilo», «mall» y «barrio tradicional» son aproximaciones con la zonificación y el chat lo avisa.
 - **Qué no sabe:** seguridad, precios y ruido. Lo dice en vez de responder a medias.
 
 Las reglas y sus límites están en [`docs/METODOLOGIA.md`](docs/METODOLOGIA.md), §11.
+
+## Ayudas para decidir
+
+- **Recorrido guiado.** La primera visita abre un recorrido de 6 pasos (qué hace y qué no hace la herramienta, cómo elegir un punto, cómo leer una tarjeta, el asistente, comparar puntos y las verificaciones antes de comprar). Se puede omitir y se vuelve a abrir con «¿Cómo funciona?». Con `?tour=no` en la URL no se abre solo. Contenido en `public/js/tour.js`.
+- **Tarjetas desplegables.** Cada servicio muestra su estado y su distancia frente al umbral; al abrirla trae el método, la fuente, la fecha y lo que el dato no cubre.
+- **Comparar puntos.** En el reporte, «Guardar para comparar» guarda hasta 3 puntos; «Comparar» (barra superior) los muestra lado a lado con las 5 variables (estado, distancia en línea recta y umbral). **No hay puntaje global.** La persona marca qué variables son su prioridad (se guardan solo en su navegador) y la tabla resalta qué punto las cumple y qué pares de puntos se dominan; nunca declara un ganador. Lógica pura en `public/js/comparar.js`.
+- **Verificaciones recomendadas antes de comprar.** Panel plegable del reporte que separa lo que la herramienta calculó de lo que la persona debe comprobar (certificados municipales, SUNARP, saneamiento, licencias, servicios básicos, peligros). Es contenido estático en `public/js/verificaciones.js`: para agregar una verificación se suma un objeto a `ITEMS`. Solo lleva enlaces comprobados.
 
 ## Límites
 
@@ -80,7 +91,9 @@ El frontend es JavaScript sin dependencias de compilación (Leaflet se carga des
 | `pnpm datos:extraer` | Descarga el equipamiento de OpenStreetMap a `public/data/equipamiento` | Sí (Overpass) |
 | `pnpm datos:validar-osm` | Contrasta la zonificación con lugares de OpenStreetMap (usa la referencia guardada en `docs/validacion/`) | No |
 | `pnpm datos:validar-plano` | Contrasta la zonificación con el PDF oficial del plano (la ruta del PDF se pasa como argumento) | No |
-| `node scripts/descargar-peligros.mjs` | Genera `public/data/peligros_aqp.geojson` | Sí |
+| `node --use-system-ca scripts/descargar-peligros.mjs` | Regenera `public/data/peligros_aqp.geojson` desde el servicio público de INGEMMET (solo trae los movimientos en masa: no sobrescribe el archivo congelado, que tiene más registros, sin `--forzar`) | Sí |
+| `node scripts/descargar-quebradas.mjs` | Genera `public/data/quebradas_aqp.geojson` (red hidrográfica de la ANA) | Sí |
+| `node scripts/descargar-sismos.mjs` | Genera `public/data/sismos_igp.geojson` (sismos reportados por el IGP; cubre desde 2026-01-01, no es el catálogo histórico) | Sí |
 | `node scripts/descargar-delitos.mjs` | Genera `public/data/delitos_aqp.geojson` | Sí |
 | `node scripts/descargar-distritos.mjs` | Genera `public/data/distritos_aqp.geojson` (zona sísmica E.030) | Sí |
 
