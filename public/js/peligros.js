@@ -62,6 +62,7 @@ const Peligros = (() => {
           registros: lista.length,
           anioDesde: fc.metadata.anioDesde,
           anioHasta: fc.metadata.anioHasta,
+          descargado: fc.metadata.descargado || null,
         };
         return meta;
       })().catch((err) => {
