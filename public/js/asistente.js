@@ -44,10 +44,14 @@ const Asistente = (() => {
     campina: { etiqueta: 'Campiña (zona agrícola)', tipo: 'zona', codigos: ['ZA', 'ZRE-PA'], umbralClave: 'campina' },
     comercial: { etiqueta: 'Zona comercial', tipo: 'zona', grupos: ['comercial'], umbralClave: 'comercial', aproximado: true },
     historico: { etiqueta: 'Centro histórico', tipo: 'zona', codigos: ['ZRE-CH'], umbralClave: 'historico', aproximado: true },
+    // «Lejos de quebradas y ríos»: se cumple a una distancia MÍNIMA que fija la persona. No hay umbral por defecto porque
+    // ninguna norma lo fija; sin esa distancia la búsqueda se la pide (ver criteriosSinUmbral).
+    lejosQuebrada: { etiqueta: 'Lejos de quebradas y ríos', tipo: 'cauce' },
   };
 
   // Cómo se reconoce cada criterio en el texto ya normalizado (sin tildes, en minúsculas). El orden importa.
   const PATRONES = [
+    ['lejosQuebrada', /\b(?:lejos|alejad\w*|evit\w*|sin|libre)\s+(?:de\s+)?(?:(?:las|los|el|la|un|una)\s+)?(?:quebradas?|torrenteras?|cauces?|rios?|huaycos?|huaicos?)\b/g],
     ['inicial', /\b(inicial(?:es)?|jardin(?:es)? de (?:ninos|infantes|infancia)|nido|cuna|kinder|parvulos?)\b/g],
     ['primaria', /\bprimaria\b/g],
     ['secundaria', /\bsecundaria\b/g],
@@ -57,13 +61,13 @@ const Asistente = (() => {
     ['areaVerde', /\b(areas? verdes?|parques?|espacios? verdes?|zonas? verdes?|jardin(?:es)?|verde)\b/g],
     ['campina', /\b(campina|campo|agricol\w*|chacras?|rural|sembrios?|cultivos?)\b/g],
     ['tranquilo', /\b(tranquil\w*|silenci\w*|calma|calmad\w*|sin ruido|poco ruido|paz)\b/g],
-    ['comercial', /\b(malls?|centros? comerciales?|supermercados?|comercios?|tiendas|shopping|compras)\b/g],
+    ['comercial', /\b(malls?|centros? comercial(?:es)?|supermercados?|comercios?|tiendas|shopping|compras)\b/g],
     ['historico', /\b(tradicional(?:es)?|historic\w*|casco|barrios? antiguos?|sillar)\b/g],
     ['residencial', /\b(residencial(?:es)?|viviendas?|casas?)\b/g],
   ];
 
   const TEMAS_SIN_DATOS = [
-    ['seguridad', /\b(segur\w*|inseguridad|delincuen\w*|robos?|crimen|asalt\w*|peligros\w*)\b/],
+    ['seguridad', /\b(segur\w*|inseguridad|delincuen\w*|robos?|crimen|asalt\w*|peligros[oa]s?)\b/],
     ['precio', /\b(precios?|caro|cara|baratos?|baratas?|barato|costos?|cuanto cuesta|alquiler|presupuesto)\b/],
   ];
 
@@ -82,6 +86,10 @@ const Asistente = (() => {
     agregar: /^(y |tambien |ademas )|\b(agrega\w*|anade\w*|suma\w*|incorpora\w*)\b/,
     quitar: /\b(quita\w*|elimina\w*|saca\w*|ya no|olvida\w*)\b/,
     condicional: /condicional/,
+    // Preguntas sobre el punto (contexto de riesgo, siempre informativo; no son una evaluación de peligro).
+    quebrada: /\b(quebradas?|torrenteras?|cauces?|huaycos?|huaicos?|aluvion\w*|rios?|rio chili)\b/,
+    sismos: /\b(sismos?|sismic\w*|temblor\w*|terremoto\w*)\b/,
+    peligros: /\b(peligros?|riesgos?|derrumbes?|deslizamientos?|caida de rocas|geologic\w*)\b/,
   };
 
   /** Texto en minúsculas, sin tildes ni signos de pregunta, para comparar sin depender de cómo se escribió. */
@@ -125,7 +133,7 @@ const Asistente = (() => {
   /**
    * Convierte lo escrito en una intención.
    *   ctx: { hayPunto?: boolean, ultimaBusqueda?: { criterios } }
-   * tipo: saludo | ayuda | fuentes | pdm | construir | zona | ficha | servicio | buscar | no_soportado | desconocido
+   * tipo: saludo | ayuda | fuentes | pdm | construir | zona | ficha | servicio | quebrada | sismos | peligros | buscar | no_soportado | desconocido
    * modo (solo en buscar): nuevo | agregar | quitar | priorizar
    */
   function interpretar(texto, ctx = {}) {
@@ -156,8 +164,11 @@ const Asistente = (() => {
     frases.forEach((f) => {
       const ids = criteriosEn(f);
       const prio = RE.prioridad.test(f) ? 2 : 1;
-      ids.forEach((id) => { porId.set(id, { id, umbralM: null, prioridad: Math.max(prio, porId.get(id)?.prioridad ?? 1) }); });
-      distanciasEn(f).forEach((m) => distancias.push({ m, ids }));
+      ids.forEach((id) => { porId.set(id, { id, umbralM: porId.get(id)?.umbralM ?? null, prioridad: Math.max(prio, porId.get(id)?.prioridad ?? 1) }); });
+      const dist = distanciasEn(f);
+      // «Lejos de quebradas a más de 200 m»: esa distancia es el mínimo de ESE criterio, no el radio global de la búsqueda.
+      if (ids.includes('lejosQuebrada') && dist.length > 0) porId.get('lejosQuebrada').umbralM = dist[0];
+      else dist.forEach((m) => distancias.push({ m, ids }));
     });
 
     // Una sola distancia en el mensaje vale para todos los criterios («en un radio de 1 km»); varias, cada una para
@@ -191,6 +202,9 @@ const Asistente = (() => {
     if (!hayCriterios) {
       if (RE.fuentes.test(t)) return { ...intencion, tipo: 'fuentes' };
       if (RE.pdm.test(t)) return { ...intencion, tipo: 'pdm' };
+      if (RE.quebrada.test(t)) return { ...intencion, tipo: 'quebrada' };
+      if (RE.sismos.test(t)) return { ...intencion, tipo: 'sismos' };
+      if (RE.peligros.test(t)) return { ...intencion, tipo: 'peligros' };
       if (intencion.lote !== null || RE.construir.test(t)) return { ...intencion, tipo: 'construir' };
       if (RE.zona.test(t)) return { ...intencion, tipo: 'zona' };
       if (RE.ficha.test(t)) return { ...intencion, tipo: 'ficha' };
@@ -200,6 +214,8 @@ const Asistente = (() => {
 
     if (RE.ficha.test(t) && !RE.busqueda.test(t)) return { ...intencion, tipo: 'ficha' };
     const sobrePunto = !RE.busqueda.test(t) && (punto || (ctx.hayPunto && RE.preguntaPunto.test(t)));
+    // «¿Estoy lejos de una quebrada?» sobre el punto es una pregunta, no una búsqueda.
+    if (sobrePunto && intencion.criterios.every((c) => c.id === 'lejosQuebrada')) return { ...intencion, tipo: 'quebrada' };
     return { ...intencion, tipo: sobrePunto ? 'servicio' : 'buscar' };
   }
 
@@ -246,8 +262,19 @@ const Asistente = (() => {
   /**
    * Ordena los datos de OpenStreetMap y de zonificación para evaluarlos rápido.
    *   entrada: { salud, educacion, transporte, areasVerdes } (listas de Feature, como los archivos congelados)
+   *            + cauces?: [{ nombre, geometry }] (líneas de la red hidrográfica de la ANA; solo para «lejos de quebradas»)
    *   zonas:   [{ codigo, bbox, polys, regla }] (Zonificacion.zonas)
    */
+  const bboxDeLineas = (g) => {
+    const b = [Infinity, Infinity, -Infinity, -Infinity];
+    const lineas = g.type === 'LineString' ? [g.coordinates] : g.type === 'MultiLineString' ? g.coordinates : [];
+    lineas.forEach((l) => {
+      const t = bboxDeAnillo(l);
+      b[0] = Math.min(b[0], t[0]); b[1] = Math.min(b[1], t[1]); b[2] = Math.max(b[2], t[2]); b[3] = Math.max(b[3], t[3]);
+    });
+    return b;
+  };
+
   function prepararDatos(entrada, zonas, umbrales) {
     const e = entrada || {};
     const areaMin = umbrales.areaVerde.areaMinM2;
@@ -270,6 +297,9 @@ const Asistente = (() => {
       colegios,
       transporte: (e.transporte || []).filter(esPunto).map(puntoDe),
       verdes,
+      cauces: (e.cauces || [])
+        .filter((c) => c && c.geometry && /LineString/.test(c.geometry.type))
+        .map((c) => ({ nombre: c.nombre || null, geometry: c.geometry, bbox: bboxDeLineas(c.geometry) })),
       zonasPorCriterio,
     };
   }
@@ -333,8 +363,25 @@ const Asistente = (() => {
     return { item: mejor, d: mejorD };
   }
 
+  /** Como distanciaMinima, pero para líneas (cauces). */
+  function distanciaMinimaLinea(lista, lat, lon, limiteM) {
+    const margenLat = limiteM / M_POR_GRADO;
+    const margenLon = margenLat / Math.max(0.01, Math.cos(rad(lat)));
+    let mejor = null;
+    let mejorD = Infinity;
+    for (const g of lista) {
+      const b = g.bbox;
+      if (lon < b[0] - margenLon || lon > b[2] + margenLon || lat < b[1] - margenLat || lat > b[3] + margenLat) continue;
+      const d = C.distanciaAGeometriaLineaM(lat, lon, g.geometry);
+      if (d < mejorD) { mejor = g; mejorD = d; }
+    }
+    return { item: mejor, d: mejorD };
+  }
+
   /** Umbral con el que se evalúa un criterio: el propio, o el radio global, o el de CONFIG. */
   function umbralDe(req, umbrales, radioGlobalM, nivel) {
+    // «Lejos de quebradas» solo vale con la distancia que dio la persona: el radio global (un máximo) no aplica a un mínimo.
+    if (CRITERIOS[req.id].tipo === 'cauce') return esNumero(req.umbralM) && req.umbralM > 0 ? req.umbralM : null;
     if (esNumero(req.umbralM)) return req.umbralM;
     const def = CRITERIOS[req.id];
     if (def.tipo === 'zona') {
@@ -380,13 +427,30 @@ const Asistente = (() => {
     return { cumple: r.item !== null && r.d <= u, distanciaM: r.item ? r.d : null, nombre: null, umbralM: u };
   }
 
+  /**
+   * «Lejos de quebradas y ríos»: cumple si ningún cauce de la red de la ANA está a menos de la distancia mínima que fijó la
+   * persona. Sin cauces cargados NO cumple (`sinDato`): la ausencia de datos nunca se cuenta como «estás lejos».
+   */
+  function evaluarCauce(req, celda, datos) {
+    const u = umbralDe(req, null, null);
+    if (!datos.cauces || datos.cauces.length === 0 || u === null) return { cumple: false, distanciaM: null, nombre: null, umbralM: u, sinDato: true };
+    const r = distanciaMinimaLinea(datos.cauces, celda.lat, celda.lon, u);
+    return { cumple: !(r.item && r.d < u), distanciaM: r.item ? r.d : null, nombre: r.item ? r.item.nombre : null, umbralM: u };
+  }
+
+  /** Criterios que necesitan una distancia de la persona y no la traen (hoy, «lejos de quebradas»). */
+  function criteriosSinUmbral(criterios) {
+    return (criterios || []).filter((c) => CRITERIOS[c.id] && CRITERIOS[c.id].tipo === 'cauce' && !(esNumero(c.umbralM) && c.umbralM > 0)).map((c) => c.id);
+  }
+
   /** Evalúa cada criterio en una celda. Devuelve { [id]: { cumple, distanciaM, nombre, umbralM } }. */
   function evaluarCelda(celda, datos, criterios, umbrales, radioGlobalM = null) {
     const out = {};
     criterios.forEach((req) => {
-      out[req.id] = CRITERIOS[req.id].tipo === 'zona'
+      const tipo = CRITERIOS[req.id].tipo;
+      out[req.id] = tipo === 'zona'
         ? evaluarZona(req, celda, datos, umbrales, radioGlobalM)
-        : evaluarServicio(req, celda, datos, umbrales, radioGlobalM);
+        : tipo === 'cauce' ? evaluarCauce(req, celda, datos) : evaluarServicio(req, celda, datos, umbrales, radioGlobalM);
     });
     return out;
   }
@@ -406,6 +470,7 @@ const Asistente = (() => {
       incluirCondicional = false, radioGlobalM = null, maxPuntos = 5, separacionM = 600, celdas: celdasDadas = null,
     } = opciones;
     if (!criterios || criterios.length === 0) throw new Error('Falta al menos un criterio para buscar.');
+    if (criteriosSinUmbral(criterios).length > 0) throw new Error('Falta la distancia mínima a las quebradas: dime, por ejemplo, «lejos de quebradas a más de 200 m».');
     const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
     // La cuadrícula no depende de los criterios: quien llama puede pasar la ya calculada (generarCeldas con los mismos
     // `pasoM` e `incluirCondicional`) y así «agrega…», «quita…» o «prioriza…» no la rehacen. El radio se aplica aquí.
@@ -413,7 +478,12 @@ const Asistente = (() => {
     const celdas = centro && radioM !== null ? base.filter((c) => distanciaM(centro, c) <= radioM) : base;
     const pesoTotal = criterios.reduce((s, c) => s + (c.prioridad || 1), 0);
     // Qué tan holgado cumple una celda: suma de distancia/umbral (sin dato pesa 2). Menos es mejor; desempata el puntaje.
-    const holgura = (e) => criterios.reduce((s, c) => s + (e.ev[c.id].distanciaM === null ? 2 : e.ev[c.id].distanciaM / (e.ev[c.id].umbralM || 1)), 0);
+    // Para «lejos de quebradas» (un mínimo) la holgura es al revés: más lejos del cauce es más holgado.
+    const holgura = (e) => criterios.reduce((s, c) => {
+      const v = e.ev[c.id];
+      if (CRITERIOS[c.id].tipo === 'cauce') return s + (v.distanciaM === null ? 0 : (v.umbralM || 1) / Math.max(v.distanciaM, 1));
+      return s + (v.distanciaM === null ? 2 : v.distanciaM / (v.umbralM || 1));
+    }, 0);
     const porArea = new Map();
     const evaluadas = [];
 
@@ -479,6 +549,10 @@ const Asistente = (() => {
   function describirCriterio(c, umbrales, radioGlobalM) {
     const def = CRITERIOS[c.id];
     const prio = c.prioridad > 1 ? ' (prioridad)' : '';
+    if (def.tipo === 'cauce') {
+      const u = umbralDe(c, umbrales, radioGlobalM);
+      return `${def.etiqueta}${u ? ` a más de ${fmtUmbral(u)}` : ''}${prio}`;
+    }
     if (def.tipo === 'zona') {
       const u = umbralDe(c, umbrales, radioGlobalM);
       return `${def.etiqueta}${u > 0 ? ` a ${fmtUmbral(u)} o menos` : ''}${prio}`;
@@ -532,6 +606,40 @@ const Asistente = (() => {
       .filter(Boolean).join('\n');
   }
 
+  const fmtM = (m) => (m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(1).replace('.', ',')} km`);
+  const AVISO_RIESGO = 'Es contexto informativo, no una evaluación de peligro: para decidir, consulta SIGRID (CENEPRED) y al IMPLA.';
+
+  function textoQuebrada(c) {
+    const q = c.cauce;
+    if (!q) return 'Todavía estoy calculando las quebradas cercanas a tu punto; vuelve a preguntar en unos segundos.';
+    if (q.estado === 'SIN DATO' || q.distanciaM === null) return `No tengo el dato de quebradas y cauces para tu punto (${q.error || 'archivo no disponible'}), así que no lo afirmo. Consulta SIGRID (CENEPRED) y al IMPLA.`;
+    const lineas = [`El cauce más cercano en la red hidrográfica de la ANA es ${q.nombre}${q.tipo ? ` (${q.tipo.toLowerCase()})` : ''}, a ${fmtM(q.distanciaM)} en línea recta de tu punto.`];
+    if (q.segunUmbralUsuario) lineas.push(`Según tu umbral (al menos ${fmtUmbral(q.umbralM)} de un cauce): ${q.estado === 'CUMPLE' ? 'cumple' : 'no cumple'}.`);
+    else lineas.push('No existe una distancia normativa a una quebrada, así que no digo si es «cerca» o «lejos». Si quieres un criterio propio, fija tu distancia mínima en «Mis umbrales».');
+    lineas.push('Límites: la red de la ANA no incluye todas las quebradas urbanas, no es un mapa de peligro y no delimita la faja marginal.', AVISO_RIESGO);
+    return lineas.join('\n');
+  }
+
+  function textoSismos(c) {
+    const s = c.sismos;
+    if (!s) return 'Todavía estoy calculando la actividad sísmica reportada cerca de tu punto; vuelve a preguntar en unos segundos.';
+    if (s.estado === 'SIN DATO' || s.total === null) return `No tengo el archivo de sismos reportados del IGP (${s.error || 'no disponible'}), así que no lo afirmo.`;
+    const lineas = [`Entre el ${s.desde} y el ${s.hasta}, el IGP reportó ${s.total} sismo${s.total === 1 ? '' : 's'} con epicentro a ${s.radioM / 1000} km o menos de tu punto${s.magnitudMaxima !== null ? `; la magnitud máxima fue ${String(s.magnitudMaxima).replace('.', ',')}` : ''}.`];
+    lineas.push('Es actividad reciente reportada: no predice sismos ni mide el peligro. Para construir, la referencia normativa es la zona sísmica de la Norma E.030, que depende del distrito y del suelo.');
+    return lineas.join('\n');
+  }
+
+  function textoPeligros(c) {
+    const p = c.peligros;
+    if (!p) return 'Todavía estoy calculando los peligros registrados cerca de tu punto; vuelve a preguntar en unos segundos.';
+    if (p.estado === 'SIN DATO' || p.total === null) return `No tengo el inventario de peligros geológicos (${p.error || 'no disponible'}), así que no lo afirmo. Consulta SIGRID (CENEPRED).`;
+    const tipo = p.masCercano ? p.masCercano.subtipo || p.masCercano.tipo : null;
+    const lineas = [`El inventario de INGEMMET tiene ${p.total} peligro${p.total === 1 ? '' : 's'} geológico${p.total === 1 ? '' : 's'} registrado${p.total === 1 ? '' : 's'} a ${p.radioM} m o menos de tu punto.`];
+    if (p.masCercano) lineas.push(`El más cercano${tipo ? ` (${tipo.toLowerCase()})` : ''} está a ${fmtM(p.distanciaM)} en línea recta.`);
+    lineas.push('Es un inventario de eventos documentados, no un mapa de susceptibilidad: que no haya registros cerca no significa que el lugar sea seguro.', AVISO_RIESGO);
+    return lineas.join('\n');
+  }
+
   function textoPDM(estado) {
     const aviso = C.avisoPDMProyectado(estado);
     if (!aviso) return 'No tengo un aviso con fuente y fecha sobre el PDM nuevo, así que no lo afirmo. Consulta al IMPLA.';
@@ -559,6 +667,8 @@ const Asistente = (() => {
     comercial: 'no hay datos de centros comerciales',
     historico: 'no hay datos de barrios tradicionales',
   };
+
+  const TEXTO_LIMITE_CAUCES = 'Ojo: «lejos de quebradas y ríos» usa la red hidrográfica de la ANA, que no incluye todas las quebradas urbanas, no es un mapa de peligro y no delimita la faja marginal. Cumplirlo no garantiza que el lugar esté libre de huaicos.';
 
   const TEMAS = {
     seguridad: 'No evalúo seguridad ciudadana: el proyecto la dejó fuera de alcance, aunque los estudios muestran que pesa en la decisión de compra. No te doy una respuesta a medias.',
@@ -604,6 +714,10 @@ const Asistente = (() => {
       return fin(lineas.join('\n'));
     }
 
+    if (tipo === 'quebrada') return fin(textoQuebrada(c));
+    if (tipo === 'sismos') return fin(textoSismos(c));
+    if (tipo === 'peligros') return fin(textoPeligros(c));
+
     if (tipo === 'servicio' || tipo === 'ficha') {
       if (!c.entorno) return fin('Todavía estoy calculando los servicios cercanos a tu punto; vuelve a preguntar en unos segundos.');
       if (tipo === 'servicio') {
@@ -638,14 +752,17 @@ const Asistente = (() => {
    */
   function formatearBusqueda(resultado, meta = {}) {
     const lineas = [];
+    const esDetalle = []; // paralela a `lineas`: true si la línea va en el apartado desplegable de la vista
+    const agregarLinea = (texto, detalle = false) => { lineas.push(texto); esDetalle.push(detalle); };
     const q = resultado.criterios.map((c) => {
       const def = CRITERIOS[c.id];
       const u = c.umbralEfectivoM;
+      if (def.tipo === 'cauce') return `${def.etiqueta}${u ? ` a más de ${fmtUmbral(u)}` : ''}${c.prioridad > 1 ? ' (prioridad)' : ''}`;
       return `${def.etiqueta}${u ? ` a ${fmtUmbral(u)} o menos` : ''}${c.prioridad > 1 ? ' (prioridad)' : ''}`;
     });
-    lineas.push(`Busqué zonas con: ${q.join('; ')}.`);
-    if (hay(meta.radioGlobalM)) lineas.push(`Usé ${fmtUmbral(meta.radioGlobalM)} como distancia para todos los criterios (si quieres otra para uno solo, dime por ejemplo «colegio a 500 m»).`);
-    lineas.push(`Revisé ${fmtNum(resultado.totalCeldas)} celdas de ${resultado.pasoM} m dentro de las zonas construibles del plano 2016-2025 y las agrupé por distrito.`);
+    agregarLinea(`Busqué zonas con: ${q.join('; ')}.`);
+    if (hay(meta.radioGlobalM)) agregarLinea(`Usé ${fmtUmbral(meta.radioGlobalM)} como distancia para todos los criterios (si quieres otra para uno solo, dime por ejemplo «colegio a 500 m»).`, true);
+    agregarLinea(`Revisé ${fmtNum(resultado.totalCeldas)} celdas de ${resultado.pasoM} m dentro de las zonas construibles del plano 2016-2025 y las agrupé por distrito.`, true);
 
     const sugerencias = [];
     const filas = resultado.areas.slice(0, 6).map((a, i) => {
@@ -656,24 +773,33 @@ const Asistente = (() => {
         orden: i + 1,
         detalle: `${pct(a.pctCumpleTodo)} del suelo habitable cumple todo · coincidencia ponderada ${pct(a.puntajePct)}`,
         nota: por,
+        pctCumpleTodo: a.pctCumpleTodo, // para resumir la fila en la vista; la cifra es la misma de `detalle`
+        puntajePct: a.puntajePct,
       };
     });
     if (resultado.areas.length === 0) {
-      lineas.push('No encontré ninguna zona con suficientes celdas que cumpla; los criterios juntos pueden ser demasiado exigentes.');
+      agregarLinea('No encontré ninguna zona con suficientes celdas que cumpla; los criterios juntos pueden ser demasiado exigentes.');
       sugerencias.push('Quita un criterio', 'Busca con un radio de 1,5 km', 'Incluye zonas condicionales');
     } else {
-      lineas.push('Los porcentajes son la parte del suelo habitable de cada distrito que cumple lo que pediste. No son una probabilidad ni una recomendación.');
+      agregarLinea('Los porcentajes son la parte del suelo habitable de cada distrito que cumple lo que pediste. No son una probabilidad ni una recomendación.');
       sugerencias.push('Agrega transporte', 'Prioriza el área verde', 'Incluye zonas condicionales');
     }
     if (meta.aproximados && meta.aproximados.length) {
       const nombres = meta.aproximados.map((id) => CRITERIOS[id].etiqueta.split(' (')[0].toLowerCase());
       const varios = nombres.length > 1;
       const motivos = meta.aproximados.map((id) => MOTIVO_APROXIMADO[id]);
-      lineas.push(`Ojo: ${nombres.join(' y ')} ${varios ? 'son aproximaciones' : 'es una aproximación'} con la zonificación (${motivos.join('; ')}), no ${varios ? 'datos medidos' : 'un dato medido'}.`);
+      agregarLinea(`Ojo: ${nombres.join(' y ')} ${varios ? 'son aproximaciones' : 'es una aproximación'} con la zonificación (${motivos.join('; ')}), no ${varios ? 'datos medidos' : 'un dato medido'}.`);
     }
-    if (meta.temaNoSoportado) lineas.push(`${TEMAS[meta.temaNoSoportado]}`);
-    lineas.push(AVISO_REFERENCIAL.replace('Es una consulta referencial: no', 'Resultado referencial: no'));
-    return { texto: lineas.join('\n'), filas, sugerencias };
+    if (resultado.criterios.some((c) => CRITERIOS[c.id].tipo === 'cauce')) agregarLinea(TEXTO_LIMITE_CAUCES);
+    if (meta.temaNoSoportado) agregarLinea(`${TEMAS[meta.temaNoSoportado]}`);
+    agregarLinea(AVISO_REFERENCIAL.replace('Es una consulta referencial: no', 'Resultado referencial: no'), true);
+    return {
+      texto: lineas.join('\n'),
+      // La vista muestra `principal` y deja `detalle` dentro del apartado «Por qué, fuente y límites». Juntas son `texto`.
+      lineas: { principal: lineas.filter((_, i) => !esDetalle[i]), detalle: lineas.filter((_, i) => esDetalle[i]) },
+      filas,
+      sugerencias,
+    };
   }
 
   /** Une la búsqueda anterior con un ajuste («agrega…», «quita…», «prioriza…»). */
@@ -694,9 +820,208 @@ const Asistente = (() => {
     return intencion.criterios;
   }
 
+  // ------------------------------------------------ Búsqueda armada con menús
+
+  /**
+   * Lo que ofrecen los menús desplegables de la vista. Son los mismos criterios de CRITERIOS: los menús no agregan
+   * nada que el chat no entienda. «Colegio» con su nivel se resuelve en construirConsulta.
+   */
+  const OPCIONES = {
+    servicios: [
+      { id: 'salud', etiqueta: 'Salud (posta, hospital, clínica)' },
+      { id: 'colegio', etiqueta: 'Colegio' },
+      { id: 'transporte', etiqueta: 'Transporte (paradero)' },
+      { id: 'areaVerde', etiqueta: 'Área verde (parque)' },
+    ],
+    zonas: [
+      { id: 'residencial', etiqueta: 'Zona residencial' },
+      { id: 'tranquilo', etiqueta: 'Zona tranquila (aproximada)' },
+      { id: 'campina', etiqueta: 'Campiña (zona agrícola)' },
+      { id: 'comercial', etiqueta: 'Zona comercial (aproximada)' },
+      { id: 'historico', etiqueta: 'Centro histórico (aproximado)' },
+    ],
+    niveles: [
+      { id: 'colegio', etiqueta: 'Inicial o primaria' },
+      { id: 'inicial', etiqueta: 'Inicial' },
+      { id: 'primaria', etiqueta: 'Primaria' },
+      { id: 'secundaria', etiqueta: 'Secundaria' },
+    ],
+    radios: [null, 500, 1000, 1500, 2000, 3000], // null = el umbral de cada criterio en la ficha
+    // Distancia MÍNIMA a quebradas y ríos para «lejos de quebradas». Son opciones para elegir, no umbrales recomendados:
+    // ninguna norma fija esa distancia. null = no importa.
+    cauces: [null, 100, 200, 300, 500, 1000],
+  };
+
+  const NIVELES_MENU = OPCIONES.niveles.map((n) => n.id);
+
+  /**
+   * La estructura que produce `interpretar` para una búsqueda nueva, armada desde los menús en vez de desde un texto.
+   *   entrada: { criterios: [id…], prioridades: [id…], nivel, radioM, incluirCondicional, lejosQuebradaM }
+   *   lejosQuebradaM (metros, opcional) agrega «lejos de quebradas y ríos» con esa distancia mínima.
+   * «colegio» se reemplaza por el nivel elegido (inicial, primaria o secundaria); sin nivel válido queda «colegio»
+   * (inicial o primaria). Una prioridad pesa 2 y el resto 1, igual que «lo más importante es…». Sin criterios válidos
+   * devuelve la misma intención «desconocido» que el intérprete con un texto vacío.
+   */
+  function construirConsulta(entrada = {}) {
+    const { criterios = [], prioridades = [], nivel = 'colegio', radioM = null, incluirCondicional = false, lejosQuebradaM = null } = entrada || {};
+    const aId = (id) => (id === 'colegio' && NIVELES_MENU.includes(nivel) ? nivel : id);
+    const elegidos = [];
+    (Array.isArray(criterios) ? criterios : []).forEach((id) => {
+      const real = typeof id === 'string' && CRITERIOS[id] ? aId(id) : null;
+      if (real && !elegidos.includes(real)) elegidos.push(real);
+    });
+    const minCauce = esNumero(lejosQuebradaM) && lejosQuebradaM > 0 ? lejosQuebradaM : null;
+    if (minCauce !== null && !elegidos.includes('lejosQuebrada')) elegidos.push('lejosQuebrada');
+    const prioritarios = new Set((Array.isArray(prioridades) ? prioridades : []).map((id) => aId(id)));
+    const q = interpretar('');
+    if (elegidos.length === 0) return q;
+    q.tipo = 'buscar';
+    q.modo = 'nuevo';
+    q.criterios = elegidos.map((id) => ({ id, umbralM: id === 'lejosQuebrada' ? minCauce : null, prioridad: prioritarios.has(id) ? 2 : 1 }));
+    q.aproximados = q.criterios.filter((c) => CRITERIOS[c.id].aproximado).map((c) => c.id);
+    q.radioGlobalM = esNumero(radioM) && radioM > 0 ? radioM : null;
+    q.incluirCondicional = Boolean(incluirCondicional);
+    return q;
+  }
+
+  // Cómo se dice cada criterio en una frase que el intérprete entiende (se comprueba en las pruebas).
+  const EN_FRASE = {
+    salud: 'posta', colegio: 'colegio', inicial: 'colegio inicial', primaria: 'colegio de primaria', secundaria: 'colegio de secundaria',
+    transporte: 'paradero', areaVerde: 'parque', residencial: 'zona residencial', tranquilo: 'zona tranquila',
+    campina: 'campiña', comercial: 'centro comercial', historico: 'centro histórico', lejosQuebrada: 'lejos de quebradas',
+  };
+  // En la lista, «lejos de quebradas» lleva su distancia mínima («a más de 200 m»); en «lo más importante es…» va sin ella.
+  const enFrase = (c) => (c.id === 'lejosQuebrada' && esNumero(c.umbralM) ? `lejos de quebradas a más de ${fmtRadioFrase(c.umbralM)}` : EN_FRASE[c.id]);
+  const fmtRadioFrase = (m) => (m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toString().replace('.', ',')} km`);
+
+  /**
+   * La frase que equivale a una consulta armada con menús. Se muestra en el chat como lo que «dijo» la persona y, al
+   * pasarla por `interpretar`, da los mismos criterios, prioridades, radio y zonas condicionales (lo comprueban las pruebas).
+   */
+  function textoDeConsulta(q) {
+    if (!q || !q.criterios || q.criterios.length === 0) return '';
+    const partes = [`Busco una zona con ${listaEs(q.criterios.map(enFrase))}`];
+    q.criterios.filter((c) => c.prioridad > 1).forEach((c) => partes.push(`lo más importante es ${EN_FRASE[c.id]}`));
+    if (esNumero(q.radioGlobalM)) partes.push(`en un radio de ${fmtRadioFrase(q.radioGlobalM)}`);
+    if (q.incluirCondicional) partes.push('incluye zonas condicionales');
+    return `${partes.join(', ')}.`;
+  }
+
+  function listaEs(items) {
+    if (items.length <= 1) return items.join('');
+    return `${items.slice(0, -1).join(', ')} y ${items[items.length - 1]}`;
+  }
+
+  /** Combinaciones frecuentes para empezar con un toque. Son consultas del mismo formato que arma el menú. */
+  const PRESETS = [
+    { id: 'colegio-posta-parque', etiqueta: 'Colegio, posta y área verde', consulta: { criterios: ['colegio', 'salud', 'areaVerde'] } },
+    { id: 'transporte-posta', etiqueta: 'Transporte y posta cerca', consulta: { criterios: ['transporte', 'salud'], radioM: 1000 } },
+    { id: 'tranquilo-parque', etiqueta: 'Zona tranquila con parque', consulta: { criterios: ['tranquilo', 'areaVerde'], prioridades: ['areaVerde'] } },
+    { id: 'campina-transporte', etiqueta: 'Campiña con transporte', consulta: { criterios: ['campina', 'transporte'] } },
+  ];
+
+  // ------------------------------------------------ Por qué, fuente y límites
+
+  const FUENTE_PLANO = 'Plano y Reglamento del PDM Arequipa 2016-2025 (O.M. 961-MPA; zonificación restituida por la 975-MPA).';
+  const FUENTE_OSM = 'OpenStreetMap (ODbL), copia congelada con su fecha de extracción.';
+  const FUENTE_UMBRALES = 'Umbrales: colegios 500 m inicial, 1500 m primaria y 3000 m secundaria (MINEDU); área verde de al menos 5000 m² a 300 m (OMS Europa, 2016); salud 1000 m y paradero 400 m son convenciones del proyecto.';
+  const LIM_REFERENCIAL = 'Es referencial: no reemplaza el Certificado de Zonificación y Vías ni el de Parámetros Urbanísticos y Edificatorios.';
+  const LIM_RECTA = 'Las distancias son en línea recta, no recorrido a pie.';
+  const LIM_OSM = 'OpenStreetMap es colaborativo: lo que no figura puede existir. «Sin dato» no significa que no exista.';
+  const LIM_PLANO = 'El plano se extrajo de un PDF y cerca del borde entre dos zonas el resultado puede no ser exacto. La vigencia del PDM 2016-2025 es incierta y hay un PDM nuevo en trámite.';
+  const FUENTE_ANA = 'Red hidrográfica (capa «Cuerpos de Agua») de la Autoridad Nacional del Agua (ANA), elaborada en 2018, congelada con su fecha de extracción.';
+  const FUENTE_IGP = 'Sismos reportados, Instituto Geofísico del Perú (IGP), congelados con su fecha de extracción.';
+  const FUENTE_INGEMMET = 'Inventario de peligros geológicos, GEOCATMIN (INGEMMET), congelado con su fecha de extracción.';
+  const LIM_CAUCES = 'La red de la ANA es de escala nacional: no incluye todas las quebradas urbanas ni las torrenteras menores, no es un mapa de peligro de huaicos o inundación y no delimita la faja marginal.';
+  const LIM_INVENTARIO = 'Es un inventario de eventos documentados, no un mapa de susceptibilidad: que no haya registros cerca no significa que el lugar sea seguro.';
+  const GENERICO = {
+    porque: ['El asistente entiende frases con reglas explícitas, no con un modelo de lenguaje: por eso no puede inventar un dato.'],
+    fuente: ['Responde solo con los datos de la ficha: el plano de zonificación y OpenStreetMap.'],
+    limites: ['No tiene datos de seguridad, precios ni ruido, y lo dice cuando se lo preguntan.', LIM_REFERENCIAL],
+  };
+  const SERVICIOS = {
+    porque: ['Se mide la distancia en línea recta desde tu punto hasta el elemento más cercano de cada tipo y se compara con la distancia de referencia (umbral).'],
+    fuente: [FUENTE_OSM, FUENTE_UMBRALES],
+    limites: [LIM_RECTA, LIM_OSM, LIM_REFERENCIAL],
+  };
+  const EXPLICACIONES = {
+    saludo: GENERICO,
+    ayuda: GENERICO,
+    desconocido: GENERICO,
+    no_soportado: GENERICO,
+    fuentes: {
+      porque: ['Resume de dónde sale cada dato de la ficha y qué umbral se usa.'],
+      fuente: [FUENTE_PLANO, FUENTE_OSM, FUENTE_UMBRALES],
+      limites: [LIM_RECTA, LIM_OSM, LIM_REFERENCIAL],
+    },
+    pdm: {
+      porque: ['Muestra el aviso sobre el estado del PDM nuevo que registra la herramienta, con su fuente y su fecha. No lo interpreta.'],
+      fuente: ['Una nota de prensa, no un documento oficial. Si no hay fuente y fecha registradas, el asistente no afirma nada.'],
+      limites: ['No hay mapa de la zonificación proyectada: el plano del PDM nuevo no es público hasta que se apruebe.', LIM_REFERENCIAL],
+    },
+    zona: {
+      porque: ['Se ubica tu punto dentro de los polígonos del plano de zonificación y se buscan las reglas de esa zona en la tabla del reglamento.'],
+      fuente: [FUENTE_PLANO],
+      limites: [LIM_PLANO, LIM_REFERENCIAL],
+    },
+    construir: {
+      porque: ['Se multiplica el área del lote por el coeficiente de edificación de la zona: el mismo cálculo de la ficha.'],
+      fuente: [FUENTE_PLANO],
+      limites: ['Es un máximo teórico: no considera retiros, estacionamientos ni la forma del lote.', 'En zonas condicionadas o no construibles no se calcula.', LIM_REFERENCIAL],
+    },
+    quebrada: {
+      porque: ['Se mide la distancia en línea recta desde tu punto hasta el tramo más cercano de la red hidrográfica de la ANA. Si fijaste tu distancia mínima en «Mis umbrales», se compara con ella; si no, solo se informa.'],
+      fuente: [FUENTE_ANA],
+      limites: [LIM_CAUCES, 'No existe una distancia normativa a una quebrada: la faja marginal solo está delimitada donde la ANA la fijó.', LIM_RECTA, LIM_REFERENCIAL],
+    },
+    sismos: {
+      porque: ['Se cuentan los sismos reportados por el IGP cuyo epicentro está a 100 km o menos de tu punto, dentro del periodo que cubre el archivo. El radio es una convención del proyecto para dar contexto.'],
+      fuente: [FUENTE_IGP],
+      limites: ['Es actividad reciente reportada, no una predicción ni un nivel de peligro. Solo cubre el periodo indicado, no el catálogo histórico.', 'La referencia normativa para construir es la zona sísmica de la Norma E.030, que depende del distrito y del suelo, no de este conteo.', LIM_RECTA],
+    },
+    peligros: {
+      porque: ['Se cuentan los eventos del inventario de peligros geológicos de INGEMMET a 500 m o menos de tu punto y se mide la distancia al más cercano.'],
+      fuente: [FUENTE_INGEMMET],
+      limites: [LIM_INVENTARIO, LIM_RECTA, LIM_REFERENCIAL],
+    },
+    servicio: SERVICIOS,
+    ficha: {
+      porque: ['Junta lo que la ficha ya calculó para tu punto: la zona del plano y la distancia al servicio más cercano de cada tipo.'],
+      fuente: [FUENTE_PLANO, FUENTE_OSM, FUENTE_UMBRALES],
+      limites: [LIM_PLANO, LIM_RECTA, LIM_OSM, LIM_REFERENCIAL],
+    },
+  };
+
+  /**
+   * El apartado «Por qué, fuente y límites» de una respuesta. Es texto fijo según el tipo de respuesta (más la fecha
+   * de los datos y las aproximaciones de una búsqueda): nunca lleva cifras inventadas. Un tipo desconocido devuelve listas vacías.
+   *   meta (solo `buscar`): { fecha?, aproximados?: [id…] }
+   */
+  function explicar(tipo, meta = {}) {
+    if (tipo === 'buscar') {
+      const aprox = (meta.aproximados || []).map((id) => `${CRITERIOS[id].etiqueta.split(' (')[0]} es una aproximación con la zonificación (${MOTIVO_APROXIMADO[id]}), no un dato medido.`);
+      return {
+        porque: [
+          'Se arma una cuadrícula de celdas de 250 m sobre las zonas construibles del plano y se evalúa cada criterio en cada celda con los mismos cálculos de la ficha. Luego se agrupa por distrito.',
+          'El porcentaje es la parte del suelo habitable del distrito que cumple lo pedido. La coincidencia ponderada da peso 2 a lo que marcaste como prioridad y 1 al resto: es una convención del asistente, no una norma.',
+        ],
+        fuente: [meta.fecha ? `OpenStreetMap (ODbL), extraído el ${meta.fecha}.` : FUENTE_OSM, FUENTE_PLANO, FUENTE_UMBRALES],
+        limites: ['No es una probabilidad ni una recomendación.', LIM_RECTA, 'La resolución es de 250 m: no distingue cuadras.', LIM_OSM, ...aprox, ...(meta.cauce ? [LIM_CAUCES] : []), LIM_REFERENCIAL],
+      };
+    }
+    const e = EXPLICACIONES[tipo];
+    return e ? { porque: [...e.porque], fuente: [...e.fuente], limites: [...e.limites] } : { porque: [], fuente: [], limites: [] };
+  }
+
   return {
     CRITERIOS,
+    OPCIONES,
+    PRESETS,
     SUGERENCIAS_BASE,
+    construirConsulta,
+    criteriosSinUmbral,
+    textoDeConsulta,
+    explicar,
     normalizar,
     interpretar,
     responder,
