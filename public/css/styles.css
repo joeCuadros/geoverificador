@@ -1074,3 +1074,21 @@ summary { -webkit-tap-highlight-color: transparent; }
   .tabla-wrap, .tabla-pista { display: none !important; }
   .comparar-cartas:not([hidden]) { display: block; }
 }
+
+/* Barra superior en una sola fila hasta 320 px: la marca cede espacio (se recorta) y los botones nunca saltan de línea. */
+@media (max-width: 420px) {
+  .brand { flex: 1 1 0; min-width: 0; }
+  .brand-text { min-width: 0; }
+  .brand-text h1, .brand-text span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .barra-acciones { flex: none; }
+}
+@media (max-width: 359.98px) {
+  .topbar { padding: 8px 10px; gap: 6px; }
+  .brand { gap: 6px; }
+  .brand-logo { width: 28px; height: 28px; }
+  .brand-text h1 { font-size: 1rem; }
+  .brand-text span { font-size: .75rem; }
+  .barra-acciones { gap: 2px; }
+  .btn-barra { min-width: 40px; min-height: 40px; }
+  .contador { top: -7px; right: -5px; }
+}
