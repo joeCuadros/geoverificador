@@ -673,6 +673,7 @@ const Asistente = (() => {
   const TEMAS = {
     seguridad: 'No evalúo seguridad ciudadana: el proyecto la dejó fuera de alcance, aunque los estudios muestran que pesa en la decisión de compra. No te doy una respuesta a medias.',
     precio: 'No tengo datos de precios ni de alquileres, así que no puedo decirte qué zona es más barata.',
+    ruido: 'No tengo datos de ruido. «Zona tranquila» es solo una aproximación con la zonificación (residencial de densidad baja o media 1), no una medición.',
   };
 
   /**
