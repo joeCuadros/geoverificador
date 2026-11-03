@@ -21,7 +21,7 @@ const AsistenteLLM = (() => {
   // ------------------------------------------------------------------ Esquema
 
   const INTENCIONES = [
-    'buscar', 'zona', 'construir', 'cambio_zonificacion', 'resumen', 'quebradas', 'sismos', 'peligros', 'servicio_cercano',
+    'buscar', 'zona', 'construir', 'cambio_zonificacion', 'resumen', 'quebradas', 'sismos', 'peligros', 'servicio_cercano', 'rutas',
     'fuentes', 'ayuda', 'saludo', 'fuera_de_alcance', 'desconocido', 'contar_en_distrito', 'perfil_distrito', 'mejor_zona',
   ];
   const CRITERIOS = ['salud', 'colegio', 'inicial', 'primaria', 'secundaria', 'transporte', 'areaVerde', 'campina', 'residencial', 'tranquilo', 'comercial', 'historico', 'lejosQuebrada'];
@@ -47,7 +47,7 @@ const AsistenteLLM = (() => {
         intencion: {
           type: 'string',
           enum: INTENCIONES,
-          description: 'buscar = encontrar zonas de la ciudad por lo que importa a la persona; zona = qué zona es su punto; construir = cuánto se puede construir en su punto; cambio_zonificacion = si el plan nuevo cambiará la zonificación; resumen = resumen/ficha del punto; quebradas, sismos, peligros = contexto de riesgo del punto; servicio_cercano = si hay un servicio cerca de su punto; fuentes = de dónde salen los datos; ayuda; saludo; fuera_de_alcance = solo seguridad, precios o ruido; contar_en_distrito = cuántos colegios, postas, paraderos o parques hay en un distrito (criterios = lo que se cuenta, distrito = el distrito); perfil_distrito = la persona habla de un distrito sin pedir algo concreto («quiero vivir en Paucarpata», «cómo es Cayma»); mejor_zona = pide la mejor zona o dónde vivir sin nombrar un distrito ni decir qué le importa; desconocido = no se entiende o no tiene relación.',
+          description: 'buscar = encontrar zonas de la ciudad por lo que importa a la persona; zona = qué zona es su punto; construir = cuánto se puede construir en su punto; cambio_zonificacion = si el plan nuevo cambiará la zonificación; resumen = resumen/ficha del punto; quebradas, sismos, peligros = contexto de riesgo del punto; servicio_cercano = si hay un servicio cerca de su punto; rutas = qué líneas de bus o combi pasan cerca de su punto o por un distrito (distrito = el distrito; vacío si pregunta por su punto); fuentes = de dónde salen los datos; ayuda; saludo; fuera_de_alcance = solo seguridad, precios o ruido; contar_en_distrito = cuántos colegios, postas, paraderos o parques hay en un distrito (criterios = lo que se cuenta, distrito = el distrito); perfil_distrito = la persona habla de un distrito sin pedir algo concreto («quiero vivir en Paucarpata», «cómo es Cayma»); mejor_zona = pide la mejor zona o dónde vivir sin nombrar un distrito ni decir qué le importa; desconocido = no se entiende o no tiene relación.',
         },
         criterios: {
           type: 'array',
@@ -83,7 +83,7 @@ const AsistenteLLM = (() => {
         loteM2: { type: 'number', description: 'Área del lote en m² cuando la persona la menciona (intencion construir).' },
         distrito: {
           type: 'string',
-          description: 'Nombre del distrito de la provincia de Arequipa que la persona nombra, tal como lo escribió (con sus errores de tipeo): nunca lo corrijas ni inventes uno. Obligatorio en contar_en_distrito y perfil_distrito; en buscar solo si pide buscar dentro de un distrito.',
+          description: 'Nombre del distrito de la provincia de Arequipa que la persona nombra, tal como lo escribió (con sus errores de tipeo): nunca lo corrijas ni inventes uno. Obligatorio en contar_en_distrito y perfil_distrito; en rutas solo si pregunta por un distrito (vacío si habla de su punto: «por aquí», «cerca de mí»); en buscar solo si pide buscar dentro de un distrito.',
         },
         tema: {
           type: 'string',
@@ -195,6 +195,7 @@ const AsistenteLLM = (() => {
 
     // Las demás intenciones no usan los campos de búsqueda: se vacían para que no se cuelen.
     const limpio = { ...spec, criterios: [], prioridades: [], distancias: [], radioM: null, lejosQuebradaM: null, incluirCondicional: false, cercaDeMiPunto: false, modo: 'nuevo', distrito: null };
+    if (spec.intencion === 'rutas') limpio.distrito = spec.distrito;
     if (spec.intencion === 'contar_en_distrito' || spec.intencion === 'perfil_distrito') {
       if (spec.distrito === null) return rechazo('distrito_ausente');
       limpio.distrito = spec.distrito;
@@ -254,7 +255,7 @@ const AsistenteLLM = (() => {
     const vacia = A.interpretar('');
     if (spec.intencion === 'desconocido') return vacia;
     if (spec.intencion === 'mejor_zona') return { ...vacia, tipo: 'mejor_zona' };
-    const conDistrito = ['contar_en_distrito', 'perfil_distrito'].includes(spec.intencion) || (spec.intencion === 'buscar' && spec.distrito);
+    const conDistrito = ['contar_en_distrito', 'perfil_distrito'].includes(spec.intencion) || (spec.intencion === 'rutas' && spec.distrito) || (spec.intencion === 'buscar' && spec.distrito);
     const dis = conDistrito ? resolverDistrito(spec.distrito) : null;
     if (conDistrito && !dis) return { ...vacia, tipo: 'distrito_desconocido', distritoTexto: spec.distrito };
     if (spec.intencion === 'perfil_distrito') return { ...vacia, tipo: 'perfil', ...dis };
@@ -262,6 +263,7 @@ const AsistenteLLM = (() => {
       return { ...vacia, tipo: 'contar', criterios: spec.criterios.map((id) => ({ id, umbralM: null, prioridad: 1 })), ...dis };
     }
     if (spec.intencion === 'fuera_de_alcance') return { ...vacia, tipo: 'no_soportado', temaNoSoportado: spec.tema };
+    if (spec.intencion === 'rutas') return { ...vacia, tipo: 'rutas', ...(dis || {}) };
     if (spec.intencion === 'servicio_cercano') {
       return { ...vacia, tipo: 'servicio', criterios: spec.criterios.map((id) => ({ id, umbralM: null, prioridad: 1 })) };
     }

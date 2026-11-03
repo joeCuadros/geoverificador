@@ -137,4 +137,14 @@ const CONFIG = {
     fuente: 'OpenStreetMap (ODbL)',
     respaldoRadioM: 5000,
   },
+
+  // Líneas de transporte público (recorridos y paradas de SmartBus), congeladas con scripts/descargar-rutas-smartbus.mjs. Se usan con
+  // autorización verbal de SmartBus; la confirmación escrita está pendiente. La distancia para decir que una línea «pasa cerca» es
+  // la misma de `umbrales.transporte` (convención del proyecto, no una norma).
+  rutas: {
+    geojsonUrl: 'data/rutas_smartbus.geojson',
+    fuente: 'SmartBus (smartbus.app)',
+    atribucion: 'Rutas: SmartBus (smartbus.app)',
+    permiso: 'autorización verbal de SmartBus; confirmación escrita pendiente',
+  },
 };

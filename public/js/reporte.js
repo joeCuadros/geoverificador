@@ -15,6 +15,7 @@
  * sección son puras (no tocan el DOM) y se prueban en test/reporte.spec.ts; solo `imprimir` usa document y window.
  */
 const Reporte = (() => {
+  const RT = typeof Rutas !== 'undefined' ? Rutas : require('./rutas.js'); // eslint-disable-line no-undef
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const num = (n) => Math.round(n).toLocaleString('es-PE');
   const dist = (m) => (m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(2).replace('.', ',')} km`);
@@ -107,10 +108,28 @@ const Reporte = (() => {
       <p class="rp-nota">Umbrales: ${esc(d.fuentesUmbral.educacion)}. OpenStreetMap casi no etiqueta el nivel de los colegios: uno sin nivel se toma como candidato a primaria y secundaria; los jardines (amenity=kindergarten) cuentan como inicial.</p>`;
   }
 
+  // Líneas de SmartBus que pasan cerca del punto: fuente distinta del paradero de OpenStreetMap, con su permiso y sus límites.
+  function lineasTransporte(t, d) {
+    const r = t.rutas;
+    if (!r) return '';
+    if (r.error) return `<p class="rp-muted">No se pudieron cargar las líneas de transporte: ${esc(r.error)}</p>`;
+    const ref = `${dist(r.distanciaM)} (${esc(d.fuentesUmbral.transporte)})`;
+    const filas = r.lineas.length
+      ? r.lineas.map((l) => {
+        const ramales = [...new Set(l.ramales.map((x) => x.ramal))];
+        const parada = l.parada ? ` · parada más cercana «${esc(l.parada.nombre)}» a ${dist(l.parada.distanciaM)}` : '';
+        return fila(RT.etiquetaLinea(l), `trazado a ${dist(l.distanciaM)}${parada} · ${esc(ramales.slice(0, 4).join(', '))}${ramales.length > 4 ? ` y ${ramales.length - 4} más` : ''}`);
+      })
+      : [fila('Líneas', `Ninguna línea publicada por SmartBus pasa a ${dist(r.distanciaM)} o menos`)];
+    return `<p class="rp-destacado"><strong>Líneas que pasan a ${dist(r.distanciaM)} o menos</strong> ${r.lineas.length ? esc(RT.listaTexto(r.lineas)) : '(ninguna)'}</p>
+      <table class="rp-tabla">${filas.join('')}</table>
+      <p class="rp-nota">Fuente: ${esc(r.fuente)}, recorridos descargados el ${esc(r.fecha || 'sin fecha')}, usados con ${esc(r.permiso || '')}. Distancia en línea recta del punto al trazado de cada recorrido; referencia de ${ref}. Son los recorridos publicados, no un servicio garantizado: sin frecuencias ni horarios, y un cambio de ruta por tramos puede no estar reflejado.</p>`;
+  }
+
   function transporte(d) {
     const r = d.variables && d.variables.transporte;
     if (!r) return sinResultado;
-    return `<table class="rp-tabla">${filasDe(r, d.fuentesUmbral.transporte).join('')}</table><p class="rp-nota">${esc(r.metodo)}</p>`;
+    return `<table class="rp-tabla">${filasDe(r, d.fuentesUmbral.transporte).join('')}</table><p class="rp-nota">${esc(r.metodo)}</p>${lineasTransporte(r, d)}`;
   }
 
   function areaVerde(d) {
@@ -246,7 +265,7 @@ const Reporte = (() => {
       ['Zonificación vigente y proyectada', '#4f46e5', zonificacion(d), d.fuentes.zonificacion],
       ['Salud', '#c2410c', salud(d), d.variables ? fuenteDe(d.variables.salud) : ''],
       ['Educación por nivel', '#7c3aed', educacion(d), d.variables ? fuenteDe(d.variables.educacion.inicial) : ''],
-      ['Transporte', '#1d4ed8', transporte(d), d.variables ? fuenteDe(d.variables.transporte) : ''],
+      ['Transporte', '#1d4ed8', transporte(d), d.variables ? [fuenteDe(d.variables.transporte), d.variables.transporte.rutas && !d.variables.transporte.rutas.error ? `${d.variables.transporte.rutas.atribucion || 'Rutas: SmartBus (smartbus.app)'}` : ''].filter(Boolean).join('; ') : ''],
       ['Área verde', '#15803d', areaVerde(d), d.variables ? fuenteDe(d.variables.areaVerde) : ''],
       ['Quebradas y cauces', '#0369a1', seccionQuebradas(d), fuenteCauce(d.cauce)],
       ['Contexto de riesgo (informativo)', '#64748b', seccionContexto(d), fuenteContexto(d.contextoRiesgo)],
@@ -265,6 +284,7 @@ const Reporte = (() => {
       'La zonificación vigente es la del PDM 2016-2025, cuya vigencia de 10 años se cumplió; hay un PDM nuevo en trámite y una sentencia (183-2019) que suspendió ciertos actos para predios antes agrícolas o de reserva paisajista. La zonificación proyectada no se muestra: solo se advierte su estado, con la fuente indicada.',
       'Los polígonos de la zonificación se extrajeron de un PDF: cerca del borde entre dos zonas el resultado puede no ser exacto (por eso se avisa cuando otra zona queda a 20 m o menos).',
       'Salud, educación, transporte y área verde salen de OpenStreetMap, un mapa colaborativo: algo ausente puede existir. Los datos se extrajeron una vez (fecha indicada en cada sección) y no se actualizan solos.',
+      'Las líneas de transporte son los recorridos que SmartBus (smartbus.app) publicó en la fecha indicada, usados con su autorización verbal (confirmación escrita pendiente): no traen frecuencias ni horarios, y un cambio de ruta por tramos puede no estar reflejado.',
       'Todas las distancias son en línea recta, no recorrido a pie. Los umbrales de salud (1000 m), transporte (400 m) y borde de zona (20 m) son convenciones del proyecto; los de educación vienen del Instructivo FTE del MEF/MINEDU y el de área verde, de la OMS Europa (2016).',
       'OpenStreetMap casi no etiqueta el nivel de los colegios: un colegio sin nivel se toma como candidato a primaria y secundaria, lo que puede sobrestimar la oferta de un nivel.',
       'Quebradas y cauces: no existe una distancia normativa a una quebrada, así que el estado es INFORMATIVO salvo que la persona fije su propio umbral («según tu umbral»). La red de la ANA es de escala nacional: no incluye todas las quebradas urbanas, no es un mapa de peligro y no delimita la faja marginal.',

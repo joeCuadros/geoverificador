@@ -242,7 +242,13 @@ const Distritos = (() => {
     index = indexar(fc);
   }
 
-  return { load, lookup, nombreDe, lista, poligonos, feature, contiene, buscarNombre, titulo, cargarParaPruebas, SIN_DATOS };
+  /** Polígonos de un distrito por su nombre exacto (MultiPolygon GeoJSON), o null si no existe. */
+  function geometriaDe(nombre) {
+    const polys = index.filter((d) => d.props.distrito === nombre).flatMap((d) => d.polys);
+    return polys.length ? { type: 'MultiPolygon', coordinates: polys } : null;
+  }
+
+  return { load, lookup, nombreDe, lista, poligonos, feature, contiene, geometriaDe, buscarNombre, titulo, cargarParaPruebas, SIN_DATOS };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = Distritos;

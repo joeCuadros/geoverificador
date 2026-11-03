@@ -15,6 +15,7 @@
  */
 const Comparar = (() => {
   const C = typeof Calculos !== 'undefined' ? Calculos : require('./calculos.js'); // eslint-disable-line no-undef
+  const RT = typeof Rutas !== 'undefined' ? Rutas : require('./rutas.js'); // eslint-disable-line no-undef
 
   const MAX_CANDIDATOS = 3;
   const CLAVE_PRIORIDADES = 'geoverificador.prioridades';
@@ -67,6 +68,13 @@ const Comparar = (() => {
     umbralM: r && esNumero(r.umbralM) ? r.umbralM : null,
     nombre: r && esTexto(r.nombre) ? r.nombre : null,
   });
+
+  /** Líneas de SmartBus del punto, solo lo que se muestra (null si no se calcularon o fallaron: nunca se inventan). */
+  function lineasDe(transporte) {
+    const r = transporte && transporte.rutas;
+    if (!r || r.error || !Array.isArray(r.lineas) || !esNumero(r.distanciaM)) return null;
+    return { distanciaM: r.distanciaM, lineas: r.lineas.map((l) => ({ linea: l.linea, empresas: l.empresas })), fecha: esTexto(r.fecha) ? r.fecha : null };
+  }
 
   function variableZonificacion(zona) {
     if (!zona) return { estado: 'SIN DATO', texto: 'Fuera del área zonificada', codigo: null, nombre: null, bordeM: null };
@@ -133,7 +141,7 @@ const Comparar = (() => {
         zonificacion: variableZonificacion(zona),
         salud: servicio(entorno.salud),
         educacion: { estado: estadoEducacion(niveles), niveles },
-        transporte: servicio(entorno.transporte),
+        transporte: { ...servicio(entorno.transporte), rutas: lineasDe(entorno.transporte) },
         areaVerde: servicio(entorno.areaVerde),
         quebradas: variableQuebradas(cauce),
       },
@@ -268,7 +276,11 @@ const Comparar = (() => {
         partes: NIVELES.map((n) => ({ etiqueta: n.charAt(0).toUpperCase() + n.slice(1), estado: v.niveles[n].estado, texto: linea(v.niveles[n]) })),
       };
     }
-    return { estado: v.estado, partes: [{ texto: linea(v) }] };
+    const partes = [{ texto: linea(v) }];
+    if (id === 'transporte' && v.rutas) {
+      partes.push({ texto: v.rutas.lineas.length ? `Líneas a ${fmtRef(v.rutas.distanciaM)} o menos: ${RT.listaTexto(v.rutas.lineas, 6)}` : `Ninguna línea de SmartBus a ${fmtRef(v.rutas.distanciaM)} o menos` });
+    }
+    return { estado: v.estado, partes };
   }
 
   /** Filas de contexto (peligros y sismos): estado INFORMATIVO o SIN DATO y líneas de texto. Nunca son prioridad. */

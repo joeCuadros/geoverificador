@@ -1085,7 +1085,8 @@
   const QUE_NO_CUBRE = {
     salud: 'Solo cuenta lo mapeado en OpenStreetMap con etiquetas de salud. No dice si atiende emergencias, su horario ni su categoría, y la distancia es en línea recta, no recorrido a pie.',
     educacion: 'OpenStreetMap casi no etiqueta el nivel: un colegio sin nivel se toma como candidato a primaria y secundaria, y los jardines cuentan como inicial. No dice si es público o privado, ni si hay vacantes.',
-    transporte: 'Un paradero no es un servicio: no hay rutas, horarios ni frecuencias, y las paradas informales (combis, micros) rara vez están completas.',
+    transporte: 'Un paradero no es un servicio: el de OpenStreetMap no dice qué líneas lo usan, su horario ni su frecuencia, y las paradas informales (combis, micros) rara vez están completas.',
+    rutas: 'Son los recorridos que SmartBus publicó en la fecha indicada, no un servicio garantizado: no traen frecuencias ni horarios, y un cambio de ruta por tramos puede no estar reflejado. La distancia es al trazado, no a donde se puede subir. Una línea de otra empresa que SmartBus no publica no aparece.',
     areaVerde: `Solo cuenta polígonos cerrados en OpenStreetMap de al menos ${fmtNum(CONFIG.umbrales.areaVerde.areaMinM2)} m²; una plaza mapeada de otra forma no cuenta. No dice si el acceso es público ni cómo está mantenida.`,
   };
 
@@ -1096,6 +1097,32 @@
       <div><dt>Fecha de los datos</dt><dd>${esc(fmtFechaDato(r.fecha))}</dd></div>
       ${metodo ? `<div><dt>Método</dt><dd>${esc(r.metodo)}</dd></div>` : ''}
       <div><dt>Qué no cubre</dt><dd>${esc(noCubre)}</dd></div>
+    </dl>`;
+  }
+
+  // Líneas de SmartBus que pasan cerca del punto (Rutas.cerca): otra fuente distinta del paradero de OpenStreetMap.
+  function bloqueRutas(t) {
+    const r = t && t.rutas;
+    if (!r) return '';
+    if (r.error) return `<div class="var-rutas"><p class="zon-msg error"><strong>No se pudieron cargar las líneas.</strong> ${esc(r.error)}</p></div>`;
+    const ref = fmtUmbral(r.distanciaM);
+    const nota = `<p class="var-meta">Fuente: ${esc(r.fuente)}, recorridos del ${esc(fmtFechaDato(r.fecha))}. Distancia de referencia de ${ref}: ${esc(CONFIG.fuentesUmbral.transporte.toLowerCase())}.</p>`;
+    if (!r.lineas.length) return `<div class="var-rutas"><p class="var-rutas-t"><strong>Líneas que pasan a ≤${ref}:</strong> ninguna en los recorridos publicados por SmartBus.</p>${nota}</div>`;
+    const items = r.lineas.map((l) => {
+      const ramales = [...new Set(l.ramales.map((x) => x.ramal))];
+      const parada = l.parada ? ` · parada más cercana «${esc(l.parada.nombre)}» a ${fmtDist(l.parada.distanciaM)}` : '';
+      return `<li><strong>${esc(Rutas.etiquetaLinea(l))}</strong><span class="var-meta">trazado a ${fmtDist(l.distanciaM)}${parada} · ${esc(ramales.slice(0, 4).join(', '))}${ramales.length > 4 ? ` y ${ramales.length - 4} más` : ''}</span></li>`;
+    }).join('');
+    return `<div class="var-rutas"><p class="var-rutas-t"><strong>Líneas que pasan a ≤${ref}:</strong> ${esc(Rutas.listaTexto(r.lineas))}</p><ul class="var-rutas-lista">${items}</ul>${nota}</div>`;
+  }
+
+  function detalleRutas(r) {
+    if (!r || r.error) return '';
+    return `<dl class="var-detalle">
+      <div><dt>Fuente de las líneas</dt><dd>${esc(r.fuente)}. Datos usados con ${esc(r.permiso || CONFIG.rutas.permiso)}.</dd></div>
+      <div><dt>Fecha de los datos</dt><dd>${esc(fmtFechaDato(r.fecha))} (descarga)</dd></div>
+      <div><dt>Método</dt><dd>Distancia en línea recta del punto al trazado de cada recorrido (plano local, como el resto de distancias). Se agrupan los recorridos de ida y vuelta por línea. Referencia: ${fmtUmbral(r.distanciaM)}.</dd></div>
+      <div><dt>Qué no cubre</dt><dd>${esc(QUE_NO_CUBRE.rutas)}</dd></div>
     </dl>`;
   }
 
@@ -1145,8 +1172,10 @@
     const educacion = tarjetaVariable(VARIABLES.educacion, estadoEdu, resumenEdu,
       `<div class="var-niveles">${niveles}</div>${detalleDato(e.educacion.inicial, QUE_NO_CUBRE.educacion, { metodo: false })}`, textoEdu);
 
-    const transporte = tarjetaVariable(VARIABLES.transporte, e.transporte.estado, lineaResumen(e.transporte),
-      datoPrincipal(e.transporte) + explicacion(e.transporte, 'paraderos') + etiq(e.transporte) + detalleDato(e.transporte, QUE_NO_CUBRE.transporte));
+    const rutas = e.transporte.rutas;
+    const resumenTransporte = lineaResumen(e.transporte) + (rutas && !rutas.error ? ` · ${rutas.lineas.length} ${rutas.lineas.length === 1 ? 'línea' : 'líneas'} a ≤${fmtUmbral(rutas.distanciaM)}` : '');
+    const transporte = tarjetaVariable(VARIABLES.transporte, e.transporte.estado, resumenTransporte,
+      datoPrincipal(e.transporte) + explicacion(e.transporte, 'paraderos') + etiq(e.transporte) + bloqueRutas(e.transporte) + detalleDato(e.transporte, QUE_NO_CUBRE.transporte) + detalleRutas(rutas));
 
     const v = e.areaVerde;
     const u = CONFIG.umbrales.areaVerde;
@@ -1161,7 +1190,7 @@
     $('entorno').setAttribute('aria-busy', 'false');
     $('entorno-toggle').hidden = false;
     actualizarToggleTarjetas();
-    $('entorno-fuente').textContent = 'Distancias en línea recta, no recorrido a pie. OpenStreetMap es colaborativo: algo ausente puede existir. Las distancias de referencia de salud, paradero y borde de zona son convenciones del proyecto.';
+    $('entorno-fuente').textContent = 'Distancias en línea recta, no recorrido a pie. OpenStreetMap es colaborativo: algo ausente puede existir. Las distancias de referencia de salud, paradero y borde de zona son convenciones del proyecto. Las líneas de transporte son recorridos publicados por SmartBus, sin frecuencias ni horarios.';
   }
 
   // ------------------------------------------------------ Quebradas y cauces (ANA)
@@ -1428,6 +1457,7 @@
       resumen.push(['Salud', linea(e.salud)]);
       Equipamiento.NIVELES.forEach((n) => resumen.push([`Educación ${n}`, linea(e.educacion[n])]));
       resumen.push(['Transporte', linea(e.transporte)]);
+      if (e.transporte.rutas && !e.transporte.rutas.error) resumen.push(['Líneas de transporte', Rutas.resumen(e.transporte.rutas, 12)]);
       resumen.push(['Área verde', linea(e.areaVerde)]);
     }
     const modulos = {};

@@ -61,6 +61,7 @@ const PROMPT_INTERPRETAR = [
   '- intencion=mejor_zona when the person asks for the best zone or where to live WITHOUT naming a district and WITHOUT saying what matters to them. Never pick a zone yourself.',
   '- distrito: copy the district name as the person wrote it, typos included. Never correct it, never invent one, never fill it with a city or neighborhood that was not named. Leave it empty when no district is named.',
   '- Questions about the selected point: zona (which zone), construir (how much can be built; set loteM2 if a lot area is given), cambio_zonificacion (will the zoning change / new PDM), resumen (summary of the point), quebradas, sismos, peligros, servicio_cercano (is there a school/health post/stop/park near my point; criterios = those services).',
+  '- intencion=rutas when the person asks which bus/combi lines or routes pass near their point or through a district ("qué buses pasan por aquí", "qué líneas pasan por Paucarpata"). Set distrito only if they name a district, exactly as written; leave it empty for their point. Do not use buscar or servicio_cercano for this.',
   '- fuentes = where the data comes from; ayuda = what can you do; saludo = greeting.',
   '- Security/crime, prices/rent/cost and noise are NOT available. If the whole message is about that, intencion=fuera_de_alcance with tema. If it is a search that also mentions it, keep intencion=buscar and set tema as well. "tranquilo" (quiet) as a wish is the criterio tranquilo.',
   '- If you cannot map the message, use intencion=desconocido.',

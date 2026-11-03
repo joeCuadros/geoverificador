@@ -149,6 +149,17 @@ const AsistenteUI = (() => {
     return ctx;
   }
 
+  /** Líneas de SmartBus que cruzan un distrito ya reconocido (nombre exacto de Distritos): { distrito, res } o { distrito, error }. */
+  async function rutasDeDistrito(distrito) {
+    try {
+      const [indice] = await Promise.all([Equipamiento.indiceRutas(), Distritos.load()]);
+      return { distrito, res: Rutas.cruzan(indice, Distritos.geometriaDe(distrito)) };
+    } catch (err) {
+      console.error('[Asistente] rutas por distrito', err);
+      return { distrito, error: err.message };
+    }
+  }
+
   // -------------------------------------------------------------------- Búsqueda
 
   /** Ordena los archivos congelados y el plano una sola vez; si falta equipamiento, no se puede buscar. */
@@ -180,6 +191,7 @@ const AsistenteUI = (() => {
     const base = { estadoPDM: CONFIG.estadoPDM, potencial: Zonificacion.potencial, punto: api.obtenerPunto(), distritoTitulo: Distritos.titulo(intencion.distrito) };
     if (intencion.distritoFuera) return base;
     await Distritos.load();
+    if (intencion.tipo === 'rutas') return { ...base, rutasDistrito: await rutasDeDistrito(intencion.distrito) };
     const { zonas, datos, fecha, cauces } = await preparar();
     const polys = Distritos.poligonos(intencion.distrito);
     const opciones = { areaMinM2: CONFIG.umbrales.areaVerde.areaMinM2 };
@@ -302,8 +314,8 @@ const AsistenteUI = (() => {
       const intencion = eleccion.intencion;
       if (intencion.tipo === 'buscar') await ejecutarBusqueda(intencion);
       else {
-        const esDistrito = ['contar', 'perfil'].includes(intencion.tipo) && intencion.distrito;
-        const conPunto = ['ficha', 'servicio', 'zona', 'construir', 'quebrada', 'sismos', 'peligros'].includes(intencion.tipo);
+        const esDistrito = ['contar', 'perfil', 'rutas'].includes(intencion.tipo) && intencion.distrito;
+        const conPunto = ['ficha', 'servicio', 'zona', 'construir', 'quebrada', 'sismos', 'peligros', 'rutas'].includes(intencion.tipo);
         const ctx = esDistrito ? await contextoDistrito(intencion) : conPunto ? await contexto() : { estadoPDM: CONFIG.estadoPDM, potencial: Zonificacion.potencial, punto: api.obtenerPunto() };
         const resp = Asistente.responder(intencion, ctx);
         let texto = resp.texto;
