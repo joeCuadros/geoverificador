@@ -31,6 +31,9 @@ const Cenepred = (() => {
   /** Una explicación corta de «movimientos en masa» para quien no conoce el término. */
   const EXPLICA_MM = 'deslizamientos, huaicos y derrumbes';
 
+  /** Qué quiere decir «mayor susceptibilidad» (el estudio la define como la predisposición de una zona a ser afectada por el evento). */
+  const SUSCEPTIBILIDAD = 'Una zona de mayor susceptibilidad es donde el terreno es más propenso a que ocurra el fenómeno.';
+
   /** Texto estándar de lo que no cubre. */
   const QUE_NO_CUBRE = 'Es una estimación por distrito para un escenario de lluvias como las de El Niño de 1983, 1998, 2017 y 2023, no una predicción ni una evaluación de tu predio: dentro de un mismo distrito el riesgo cambia mucho de una calle a otra. Para decidir, pide la evaluación de riesgos de la municipalidad y consulta el SIGRID del CENEPRED.';
 
@@ -191,7 +194,7 @@ const Cenepred = (() => {
     return ready;
   }
 
-  return { NIVELES, FENOMENOS, IDS, EXPLICA_MM, QUE_NO_CUBRE, METODO, buscar, frase, niveles, lineas, porNivel, distritosPorFenomeno, fechaLarga, load };
+  return { NIVELES, FENOMENOS, IDS, EXPLICA_MM, SUSCEPTIBILIDAD, QUE_NO_CUBRE, METODO, buscar, frase, niveles, lineas, porNivel, distritosPorFenomeno, fechaLarga, load };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = Cenepred;

@@ -260,6 +260,76 @@ describe('Capas.construir: solo el distrito (perfil)', () => {
   });
 });
 
+describe('Capas.construir: riesgo de los distritos ante El Niño (CENEPRED)', () => {
+  const Distritos = require('../public/js/distritos.js');
+  const Cenepred = require('../public/js/cenepred.js');
+  const poligono = (x: number, y: number, g: number) => ({ type: 'Polygon', coordinates: [[[x, y], [x + g, y], [x + g, y + g], [x, y + g], [x, y]]] });
+  const distrito = (ubigeo: string, nombre: string, x: number) => ({ type: 'Feature', properties: { ubigeo, distrito: nombre, provincia: 'AREQUIPA', departamento: 'AREQUIPA' }, geometry: poligono(x, -16.5, 0.05) });
+  const bloque = (nivel: string, v = 100) => ({ nivel, viviendas: v, instituciones_educativas: 2, establecimientos_salud: 1 });
+  const DATOS = {
+    fecha_descarga: '2026-11-03',
+    distritos: {
+      '040117': { distrito: 'SACHACA', inundacion: bloque('Muy alto', 7926), movimientos_masa: bloque('Alto') },
+      '040112': { distrito: 'PAUCARPATA', inundacion: bloque('Alto'), movimientos_masa: bloque('Medio') },
+      '040104': { distrito: 'CERRO COLORADO', inundacion: bloque('Muy alto'), movimientos_masa: bloque('Medio') },
+    },
+  };
+  beforeAll(() => {
+    Distritos.cargarParaPruebas({ type: 'FeatureCollection', features: [distrito('040117', 'SACHACA', -71.6), distrito('040112', 'PAUCARPATA', -71.5), distrito('040104', 'CERRO COLORADO', -71.7)] });
+  });
+
+  it('colorea los distritos por nivel, del más bajo al más alto (el más alto encima)', () => {
+    const r = Capas.construir({ ...base, cenepred: DATOS, capas: [{ id: 'cenepred_inundacion' }], area: null });
+    expect(r.riesgoDistritos.map((z: { distrito: string; nivel: string }) => `${z.distrito}:${z.nivel}`)).toEqual(['PAUCARPATA:Alto', 'SACHACA:Muy alto', 'CERRO COLORADO:Muy alto']);
+    expect(r.riesgoDistritos[0].geometry.type).toBe('Polygon');
+  });
+
+  it('una línea de leyenda por nivel, del más alto al más bajo, con los nombres y el número de distritos', () => {
+    const r = Capas.construir({ ...base, cenepred: DATOS, capas: [{ id: 'cenepred_inundacion' }], area: null });
+    const ley = r.leyenda.filter((l: { capa: string }) => l.capa === 'cenepred_inundacion');
+    expect(ley.map((l: { texto: string }) => l.texto)).toEqual([
+      'Riesgo muy alto ante inundaciones: 2 distritos (Sachaca, Cerro Colorado)', 'Riesgo alto ante inundaciones: 1 distrito (Paucarpata)',
+    ]);
+    expect(ley.map((l: { nivel: string }) => l.nivel)).toEqual(['Muy alto', 'Alto']);
+    expect(r.resumen).toBe('Muestro 3 distritos coloreados por su riesgo ante inundaciones.');
+  });
+
+  it('los movimientos en masa usan su propia capa y sus propios niveles', () => {
+    const r = Capas.construir({ ...base, cenepred: DATOS, capas: [{ id: 'cenepred_mm' }], area: null });
+    expect(r.leyenda.map((l: { texto: string }) => l.texto)).toEqual([
+      'Riesgo alto ante movimientos en masa: 1 distrito (Sachaca)', 'Riesgo medio ante movimientos en masa: 2 distritos (Paucarpata, Cerro Colorado)',
+    ]);
+  });
+
+  it('cada distrito dice su nivel, los conteos y que es del distrito y no del predio', () => {
+    const z = Capas.construir({ ...base, cenepred: DATOS, capas: [{ id: 'cenepred_inundacion' }], area: null }).riesgoDistritos.find((x: { distrito: string }) => x.distrito === 'SACHACA');
+    expect(z.titulo).toBe('Sachaca: riesgo muy alto ante inundaciones');
+    expect(z.detalle).toMatch(/7 926 viviendas/);
+    expect(z.detalle).toMatch(/no es del predio/);
+    expect(JSON.stringify(z)).not.toMatch(/NO CUMPLE|puntaje/);
+  });
+
+  it('se dibuja un fenómeno a la vez y, con un distrito, se acerca a él sin quitar los demás', () => {
+    const dos = Capas.construir({ ...base, cenepred: DATOS, capas: [{ id: 'cenepred_inundacion' }, { id: 'cenepred_mm' }], area: null });
+    expect(new Set(dos.riesgoDistritos.map((z: { capa: string }) => z.capa))).toEqual(new Set(['cenepred_inundacion']));
+    const conArea = Capas.construir({ ...base, cenepred: DATOS, capas: [{ id: 'cenepred_inundacion' }], area: { polys: [poligono(-71.5, -16.5, 0.05).coordinates] } });
+    expect(conArea.riesgoDistritos).toHaveLength(3);
+    expect(conArea.limites).toEqual([-71.5, -16.5, -71.45, -16.45]);
+  });
+
+  it('sin el archivo o sin los límites de los distritos no inventa nada y lo dice', () => {
+    expect(Capas.construir({ ...base, cenepred: null, capas: [{ id: 'cenepred_inundacion' }], area: null }).sinDatos).toEqual(['cenepred']);
+    const sinLimites = { distritos: { '999999': { distrito: 'NO EXISTE', inundacion: bloque('Alto'), movimientos_masa: bloque('Alto') } } };
+    expect(Capas.construir({ ...base, cenepred: sinLimites, capas: [{ id: 'cenepred_inundacion' }], area: null }).sinDatos).toEqual(['cenepred']);
+  });
+
+  it('las dos capas se ofrecen entre las de riesgo', () => {
+    expect(Capas.CAPAS.find((c: { id: string }) => c.id === 'cenepred_inundacion')).toMatchObject({ etiqueta: 'Riesgo de inundación por distrito (CENEPRED)', grupo: 'riesgo' });
+    expect(Capas.CAPAS.find((c: { id: string }) => c.id === 'cenepred_mm')).toMatchObject({ grupo: 'riesgo' });
+    expect(Cenepred.IDS).toEqual(['inundacion', 'movimientos_masa']);
+  });
+});
+
 describe('Capas.construir: peligro volcánico del Misti', () => {
   const Volcan = require('../public/js/volcan.js');
   const zona = (tipo: string, nivel: string, lat: number, lon: number, g: number) => ({

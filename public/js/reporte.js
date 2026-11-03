@@ -218,7 +218,7 @@ const Reporte = (() => {
     const filas = [fila('Riesgo del distrito ante El Niño (CENEPRED)', `${estado('INFORMATIVO')} ${esc(c.frase)}`)];
     (c.lineas || []).forEach((l) => filas.push(fila('Detalle', esc(l.texto))));
     return `<table class="rp-tabla">${filas.join('')}</table>
-      <p class="rp-nota">Escenario del CENEPRED para el distrito de ${esc(c.titulo)}, ante lluvias como las de El Niño de 1983, 1998, 2017 y 2023: es una estimación por distrito, no una predicción ni una evaluación de este predio, y dentro del distrito el riesgo cambia mucho de una calle a otra. Los movimientos en masa son, por ejemplo, deslizamientos, huaicos y derrumbes. Datos congelados el ${esc(c.fecha || 'sin fecha')}. Para decidir, pide la evaluación de riesgos de la municipalidad y consulta el SIGRID del CENEPRED (${esc(c.urlVisor || 'sigrid.cenepred.gob.pe')}).</p>`;
+      <p class="rp-nota">Escenario del CENEPRED para el distrito de ${esc(c.titulo)}, ante lluvias como las de El Niño de 1983, 1998, 2017 y 2023: es una estimación por distrito, no una predicción ni una evaluación de este predio, y dentro del distrito el riesgo cambia mucho de una calle a otra. Los movimientos en masa son, por ejemplo, deslizamientos, huaicos y derrumbes. Una zona de mayor susceptibilidad es donde el terreno es más propenso a que ocurra el fenómeno. Datos congelados el ${esc(c.fecha || 'sin fecha')}. Para decidir, pide la evaluación de riesgos de la municipalidad y consulta el SIGRID del CENEPRED (${esc(c.urlVisor || 'sigrid.cenepred.gob.pe')}).</p>`;
   }
 
   function seccionContexto(d) {

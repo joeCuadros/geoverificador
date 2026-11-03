@@ -1368,7 +1368,7 @@
         <p class="var-nombre">${esc(c.frase)}</p>
       </div>
       ${lineas.length ? `<ul class="pel-tipos">${lineas.map((l) => `<li>${esc(l.texto)}</li>`).join('')}</ul>` : ''}
-      <p class="var-explica"><strong>Informativo.</strong> Es una estimación para todo el distrito en un escenario de lluvias como las de El Niño, no una evaluación de tu predio. Los movimientos en masa son, por ejemplo, ${esc(Cenepred.EXPLICA_MM)}.</p>
+      <p class="var-explica"><strong>Informativo.</strong> Es una estimación para todo el distrito en un escenario de lluvias como las de El Niño, no una evaluación de tu predio. Los movimientos en masa son, por ejemplo, ${esc(Cenepred.EXPLICA_MM)}. ${esc(Cenepred.SUSCEPTIBILIDAD)}</p>
       <dl class="var-detalle">
         <div><dt>Fuente</dt><dd>${esc(c.fuente)}. Metodología: ${esc(c.estudio ? `${c.estudio.titulo} (${c.estudio.autor}, ${c.estudio.fecha})` : 'estudio del CENEPRED')}</dd></div>
         <div><dt>Fecha de los datos</dt><dd>Escenario de ${esc(c.estudio ? c.estudio.fecha : 'sin fecha')}, actualizado por el CENEPRED en 2026. Datos congelados el ${esc(fmtFechaDato(c.fecha))}</dd></div>

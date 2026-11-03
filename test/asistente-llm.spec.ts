@@ -88,7 +88,7 @@ describe('AsistenteLLM.validarSpec', () => {
 
   it('la herramienta ofrece exactamente los campos que valida y criterios que el motor conoce', () => {
     expect(Object.keys(LLM.HERRAMIENTA.parameters.properties).sort()).toEqual(
-      ['criterios', 'cercaDeMiPunto', 'distancias', 'distrito', 'fenomeno', 'incluirCondicional', 'intencion', 'lejosQuebradaM', 'loteM2', 'modo', 'prioridades', 'radioM', 'tema'].sort(),
+      ['criterios', 'cercaDeMiPunto', 'distancias', 'distrito', 'fenomeno', 'fenomenoRiesgo', 'incluirCondicional', 'intencion', 'lejosQuebradaM', 'loteM2', 'modo', 'prioridades', 'radioM', 'tema', 'verEnMapa'].sort(),
     );
     LLM.CRITERIOS.forEach((id: string) => expect(Asistente.CRITERIOS[id]).toBeDefined());
   });

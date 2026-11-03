@@ -144,7 +144,7 @@ const AsistenteUI = (() => {
       Distritos.lookup(p.lat, p.lon).catch(() => null),
       Contexto.evaluar(p.lat, p.lon, umbral), // quebradas, peligros y sismos: contexto informativo
     ]);
-    const ctx = { ...base, punto: { lat: p.lat, lon: p.lon }, distrito: dis ? dis.distrito : null, zona, entorno, cauce: riesgo.quebradas, sismos: riesgo.sismos, peligros: riesgo.peligros, volcan: riesgo.volcan };
+    const ctx = { ...base, punto: { lat: p.lat, lon: p.lon }, distrito: dis ? dis.distrito : null, zona, entorno, cauce: riesgo.quebradas, sismos: riesgo.sismos, peligros: riesgo.peligros, volcan: riesgo.volcan, cenepred: riesgo.cenepred };
     cacheContexto = { clave, ctx };
     return ctx;
   }
@@ -200,7 +200,7 @@ const AsistenteUI = (() => {
   }
 
   /** Los datos ya ordenados para dibujar entidades en el mapa (capas-ui.js). Los sismos son opcionales: sin archivo, la capa lo dice. */
-  async function datosParaMapa({ rutas = false, volcan = false } = {}) {
+  async function datosParaMapa({ rutas = false, volcan = false, cenepred = false } = {}) {
     const { zonas, datos, fecha, cauces } = await preparar();
     let sismos = null;
     try { sismos = Capas.sismosDeFeatures(await Contexto.sismosCrudos()); } catch (_) { sismos = null; }
@@ -210,7 +210,10 @@ const AsistenteUI = (() => {
     // Las zonas de peligro volcánico (~0,5 MB) solo se bajan cuando se van a dibujar. Si fallan, la capa lo dice.
     let zonasVolcan = null;
     if (volcan) { try { zonasVolcan = (await Contexto.volcanCrudo()).zonas; } catch (_) { zonasVolcan = null; } }
-    return { datos, zonas, cauces, sismos, volcan: zonasVolcan, rutas: indiceRutas, umbrales: umbrales(), fecha };
+    // El escenario del CENEPRED es un archivo pequeño (25 distritos) y sus límites; solo se leen cuando se va a colorear. Si fallan, la capa lo dice.
+    let datosCenepred = null;
+    if (cenepred) { try { const [cen] = await Promise.all([Cenepred.load(), Distritos.load()]); datosCenepred = cen; } catch (_) { datosCenepred = null; } }
+    return { datos, zonas, cauces, sismos, volcan: zonasVolcan, cenepred: datosCenepred, rutas: indiceRutas, umbrales: umbrales(), fecha };
   }
 
   /** Lo que el chat necesita para hablar de un distrito: sus polígonos, el conteo o el perfil y la fecha de los datos. */
@@ -220,13 +223,14 @@ const AsistenteUI = (() => {
     await Distritos.load();
     if (intencion.tipo === 'rutas') return { ...base, rutasDistrito: await rutasDeDistrito(intencion.distrito) };
     if (intencion.tipo === 'volcan') return { ...base, volcanDistrito: await volcanDeDistrito(intencion.distrito) };
+    if (intencion.tipo === 'cenepred') return { ...base, cenepredDatos: await Cenepred.load().catch(() => null) }; // sin archivo, el asistente lo dice
     const { zonas, datos, fecha, cauces } = await preparar();
     const polys = Distritos.poligonos(intencion.distrito);
     const opciones = { areaMinM2: CONFIG.umbrales.areaVerde.areaMinM2 };
     if (intencion.tipo === 'contar') return { ...base, fecha, conteo: Entidades.contar(datos, polys, opciones) };
     // El perfil suma lo que ya existe en el resto de las fuentes: líneas de SmartBus que lo cruzan y precio de oferta (solo 3 distritos).
-    const [rutasDistrito, precios] = await Promise.all([rutasDeDistrito(intencion.distrito), Precios.load().catch(() => null)]);
-    return { ...base, fecha, perfil: Entidades.perfil(datos, zonas, cauces, polys, { ...opciones, pasoM: 300 }), rutasDistrito, precios };
+    const [rutasDistrito, precios, cenepredDatos] = await Promise.all([rutasDeDistrito(intencion.distrito), Precios.load().catch(() => null), Cenepred.load().catch(() => null)]);
+    return { ...base, fecha, perfil: Entidades.perfil(datos, zonas, cauces, polys, { ...opciones, pasoM: 300 }), rutasDistrito, precios, cenepredDatos };
   }
 
   /** Distancia mínima a quebradas que dio la persona (menú o frase), o null: solo con ella existe el criterio «lejos de quebradas». */
@@ -344,9 +348,9 @@ const AsistenteUI = (() => {
       const intencion = eleccion.intencion;
       if (intencion.tipo === 'buscar') await ejecutarBusqueda(intencion);
       else {
-        const esDistrito = ['contar', 'perfil', 'rutas', 'volcan'].includes(intencion.tipo) && intencion.distrito;
-        const conPunto = ['ficha', 'servicio', 'zona', 'construir', 'quebrada', 'sismos', 'peligros', 'rutas', 'volcan'].includes(intencion.tipo);
-        const ctx = intencion.tipo === 'precio' ? await contextoPrecio() : esDistrito ? await contextoDistrito(intencion) : conPunto ? await contexto() : { estadoPDM: CONFIG.estadoPDM, potencial: Zonificacion.potencial, punto: api.obtenerPunto() };
+        const esDistrito = ['contar', 'perfil', 'rutas', 'volcan', 'cenepred'].includes(intencion.tipo) && intencion.distrito;
+        const conPunto = ['ficha', 'servicio', 'zona', 'construir', 'quebrada', 'sismos', 'peligros', 'rutas', 'volcan', 'cenepred'].includes(intencion.tipo);
+        const ctx = intencion.tipo === 'precio' ? await contextoPrecio() : esDistrito ? await contextoDistrito(intencion) : intencion.tipo === 'cenepred' ? { ...(await contexto()), cenepredDatos: await Cenepred.load().catch(() => null) } : conPunto ? await contexto() : { estadoPDM: CONFIG.estadoPDM, potencial: Zonificacion.potencial, punto: api.obtenerPunto() };
         const resp = Asistente.responder(intencion, ctx);
         let texto = resp.texto;
         // Gemini only rewords the deterministic answer; the text is verified (numbers, names, caveat) or discarded.
@@ -365,6 +369,7 @@ const AsistenteUI = (() => {
           const capas = Capas.deCriterios(resp.mapa.capas.map((id) => ({ id }))).map((c) => (c.id === 'colegios' && !nivelPedido ? { id: 'colegios' } : c)); // «colegios» a secas son todos los niveles
           if (resp.mapa.lineas) capas.push({ id: 'lineas', ...resp.mapa.lineas }); // líneas de bus: nombres de las líneas y, si hay, el punto
           if (resp.mapa.volcan) capas.push({ id: 'volcan', ...resp.mapa.volcan }); // peligro volcánico: los fenómenos que se dibujan
+          if (resp.mapa.cenepred) capas.push({ id: resp.mapa.cenepred.fenomeno === 'movimientos_masa' ? 'cenepred_mm' : 'cenepred_inundacion' }); // riesgo de los distritos ante El Niño (CENEPRED)
           api.alBuscar({ capas, distrito: resp.mapa.distrito, sectores: [] });
         }
       }
