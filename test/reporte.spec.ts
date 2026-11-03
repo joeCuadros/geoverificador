@@ -12,7 +12,8 @@ const Verificaciones = require('../public/js/verificaciones.js');
 
 const cauce = (extra = {}) => ({
   estado: 'INFORMATIVO', nombre: 'Río Chili', tipo: 'Río', distanciaM: 568, umbralM: null, segunUmbralUsuario: false,
-  fuente: 'Red hidrográfica (capa «Cuerpos de Agua»), Autoridad Nacional del Agua (ANA)', fecha: '2026-11-02',
+  fuente: 'Red hidrográfica (capa «Cuerpos de Agua»), Autoridad Nacional del Agua (ANA)', fecha: '2026-11-02', fuenteId: 'ANA', fuenteCorta: 'ANA', alias: [],
+  fuentes: [{ id: 'ANA', registros: 14 }, { id: 'IGP', registros: 231 }, { id: 'OSM', registros: 20 }], ausentes: [{ nombre: 'Cabreria', registros: 10 }],
   metodo: 'Distancia en línea recta hasta el tramo más cercano.', nombres: ['Río Chili', 'Quebrada El Cuico'], tramos: 14, elaboracion: 'Enero de 2018', ...extra,
 });
 const peligros = (extra = {}) => ({
@@ -60,17 +61,21 @@ describe('Reporte.seccionQuebradas', () => {
     expect(Reporte.seccionQuebradas(base({ cauce: cauce({ estado: 'CUMPLE', umbralM: 300, segunUmbralUsuario: true }) }))).toContain('CUMPLE');
   });
 
-  it('dice lo que no cubre: no es un mapa de peligro, la faja marginal y que la red no incluye todas las quebradas urbanas', () => {
+  it('dice lo que no cubre: no es un mapa de peligro, la faja marginal y que ninguna fuente es completa', () => {
     const h = Reporte.seccionQuebradas(base());
-    expect(h).toMatch(/no es un mapa de peligro/);
+    expect(h).toMatch(/mapa de peligro/);
     expect(h).toMatch(/faja marginal/);
-    expect(h).toMatch(/no incluye todas las quebradas urbanas/);
-    expect(h).toContain('Enero de 2018');
+    expect(h).toMatch(/ninguna fuente es completa/);
+    expect(h).toContain('ANA (14 tramos), IGP (231 tramos) y OpenStreetMap (20 tramos)');
   });
 
-  it('menciona la ausencia de Añashuayco o San Lázaro solo si de verdad no figuran en el archivo', () => {
-    expect(Reporte.seccionQuebradas(base())).toMatch(/no figuran Añashuayco ni San Lázaro/);
-    expect(Reporte.seccionQuebradas(base({ cauce: cauce({ nombres: ['Quebrada Añashuayco', 'Río Chili'] }) }))).toMatch(/no figura San Lázaro/);
+  it('nombra la fuente del cauce más cercano', () => {
+    expect(Reporte.seccionQuebradas(base({ cauce: cauce({ fuenteCorta: 'OpenStreetMap' }) }))).toContain('fuente: OpenStreetMap');
+  });
+
+  it('las quebradas que aún no figuran salen de los datos (ausentes), no de una lista fija', () => {
+    expect(Reporte.seccionQuebradas(base())).toContain('aún no figuran: Cabreria (10 registros de INGEMMET)');
+    expect(Reporte.seccionQuebradas(base({ cauce: cauce({ ausentes: [] }) }))).not.toContain('aún no figuran');
   });
 
   it('sin dato no inventa nada y muestra la causa', () => {
@@ -270,7 +275,7 @@ describe('Reporte.construirSecciones', () => {
 describe('Reporte.limites', () => {
   it('menciona las quebradas, el contexto y que toda distancia es en línea recta', () => {
     const t = Reporte.limites(base()).join(' ');
-    expect(t).toMatch(/quebradas urbanas/);
+    expect(t).toMatch(/ninguna fuente es completa/);
     expect(t).toMatch(/INFORMATIVO/);
     expect(t).toMatch(/sismos/i);
     expect(t).toMatch(/línea recta/);

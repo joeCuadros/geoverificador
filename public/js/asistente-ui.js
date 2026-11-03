@@ -254,7 +254,7 @@ const AsistenteUI = (() => {
       const { zonas, datos, fecha, hayCauces } = await preparar();
       if (!hayCauces && criterios.some((c) => c.id === 'lejosQuebrada')) {
         espera.remove();
-        mensaje('asistente', { texto: 'No pude leer el archivo de quebradas de la ANA, así que no puedo buscar «lejos de quebradas» sin inventar datos. Prueba con los demás criterios.', explicacion: Asistente.explicar('quebrada') });
+        mensaje('asistente', { texto: 'No pude leer el archivo de quebradas, así que no puedo buscar «lejos de quebradas» sin inventar datos. Prueba con los demás criterios.', explicacion: Asistente.explicar('quebrada') });
         return;
       }
       await pausa(30); // deja pintar el aviso antes del cálculo

@@ -173,7 +173,7 @@ const CapasUI = (() => {
     const fuentes = [];
     if (r.leyenda.some((l) => ['colegios', 'salud', 'paraderos', 'parques'].includes(l.capa))) fuentes.push(`Colegios, salud, paraderos y parques: OpenStreetMap (ODbL), ${fecha || 'sin fecha'}. Puede faltar alguno.`);
     if (r.leyenda.some((l) => ['residencial', 'tranquilo', 'campina', 'comercial', 'historico'].includes(l.capa))) fuentes.push('Zonas: plano del PDM Arequipa 2016-2025 (referencial).');
-    if (r.leyenda.some((l) => l.capa === 'quebradas')) fuentes.push('Quebradas y ríos: red hidrográfica de la ANA; no incluye todas las quebradas urbanas ni es un mapa de peligro.');
+    if (r.leyenda.some((l) => l.capa === 'quebradas')) fuentes.push('Quebradas y ríos: cauces de la ANA (red de 2018), el IGP y OpenStreetMap (ODbL); cada tramo dice su fuente al tocarlo. Ninguna fuente es completa ni es un mapa de peligro.');
     if (r.leyenda.some((l) => l.capa === 'lineas')) fuentes.push('Líneas de bus: Rutas: SmartBus (smartbus.app), recorridos publicados usados con autorización verbal; sin frecuencias ni horarios.' + (r.paradasBus.length ? ' La parada es la más cercana en línea recta.' : ''));
     if (r.leyenda.some((l) => l.capa === 'sismos')) fuentes.push('Sismos: Instituto Geofísico del Perú; actividad reciente reportada, no una predicción.');
     $('leyenda-filas').innerHTML = fuentes.map((f) => `<li><small>${esc(f)}</small></li>`).join('');

@@ -153,6 +153,17 @@ describe('Capas.construir: quebradas y sismos', () => {
     expect(grande.radioPx).toBeLessThanOrEqual(16);
     expect(r.leyenda.find((l: { capa: string }) => l.capa === 'sismos').texto).toMatch(/magnitud/i);
   });
+  it('cada tramo de quebrada dice su fuente y la leyenda cuenta los tramos por fuente', () => {
+    const conFuente = [{ ...cauces[0], fuente: 'IGP' }, { ...cauces[1], fuente: 'OSM' }];
+    const r = Capas.construir({ ...base, cauces: conFuente, capas: [{ id: 'quebradas' }], area: null });
+    expect(r.lineas[0].detalle).toContain('Fuente: IGP');
+    expect(r.lineas[0].fuente).toBe('IGP');
+    expect(r.leyenda.find((l: { capa: string }) => l.capa === 'quebradas').texto).toContain('IGP 1');
+  });
+  it('un cauce sin fuente (archivo antiguo) se rotula como ANA', () => {
+    const r = Capas.construir({ ...base, capas: [{ id: 'quebradas' }], area: null });
+    expect(r.lineas[0].detalle).toContain('Fuente: ANA');
+  });
   it('sin archivo de quebradas o de sismos no inventa nada y lo dice', () => {
     const r = Capas.construir({ ...base, cauces: null, sismos: null, capas: [{ id: 'quebradas' }, { id: 'sismos' }], area: null });
     expect(r.lineas).toEqual([]);

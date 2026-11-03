@@ -1197,14 +1197,12 @@
     $('entorno-fuente').textContent = 'Distancias en línea recta, no recorrido a pie. OpenStreetMap es colaborativo: algo ausente puede existir. Las distancias de referencia de salud, paradero y borde de zona son convenciones del proyecto. Las líneas de transporte son recorridos publicados por SmartBus, sin frecuencias ni horarios.';
   }
 
-  // ------------------------------------------------------ Quebradas y cauces (ANA)
+  // ------------------------------------------------------ Quebradas y cauces (ANA, IGP y OpenStreetMap)
   // Sin umbral normativo: INFORMATIVO. Si la persona fija el suyo en «Mis umbrales», CUMPLE / NO CUMPLE «según tu umbral».
-  const NORMALIZA = (s) => String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-  const QUEBRADAS_CITADAS = ['Añashuayco', 'San Lázaro']; // quebradas de Arequipa que citan los informes de INGEMMET (docs/INVESTIGACION-VARIABLES.md)
 
   function resumenQuebradas(q) {
     if (q.estado === 'SIN DATO') return 'Sin dato: no se pudo leer la red de cauces';
-    const base = `${q.nombre} · ${fmtDist(q.distanciaM)} en línea recta`;
+    const base = `${q.nombre} · ${fmtDist(q.distanciaM)} en línea recta${q.fuenteCorta ? ` · ${q.fuenteCorta}` : ''}`;
     return q.segunUmbralUsuario ? `${base} · según tu umbral de ${fmtUmbral(q.umbralM)}` : `${base} · sin umbral normativo`;
   }
 
@@ -1227,14 +1225,14 @@
     if (q.estado === 'SIN DATO') {
       return `<p class="zon-msg error"><strong>No se pudo obtener el dato.</strong> ${esc(q.error || 'El archivo de quebradas no está disponible.')}</p>${umbralFormHtml(q)}`;
     }
-    const ausentes = QUEBRADAS_CITADAS.filter((n) => !(q.nombres || []).some((x) => NORMALIZA(x).includes(NORMALIZA(n))));
-    const cubre = `La red hidrográfica de la ANA es de escala nacional: en este archivo figuran ${q.tramos} tramos de ${(q.nombres || []).length} cursos (${esc((q.nombres || []).join(', '))}). No incluye todas las quebradas urbanas${ausentes.length ? ` (por ejemplo, no figura${ausentes.length > 1 ? 'n' : ''} ${ausentes.join(' ni ')}, que citan los informes de INGEMMET)` : ''}. No es un mapa de peligro de huaicos ni de inundación, y la faja marginal no está delimitada aquí.`;
+    const faltan = Calculos.textoQuebradasAusentes(q.ausentes);
+    const cubre = `Los cauces vienen de ${esc(Calculos.textoFuentesCauces(q.fuentes))}; ninguna fuente es completa (la ANA es una red nacional de 2018). Hay ${(q.nombres || []).length} cursos con nombre: ${esc((q.nombres || []).join(', '))}.${faltan ? ` Quebradas conocidas que aún no figuran: ${esc(faltan)}.` : ''} No es un mapa de peligro de huaicos ni de inundación, y la faja marginal no está delimitada aquí.`;
     const explica = q.segunUmbralUsuario
       ? `<p class="var-explica"><strong>Según tu umbral</strong> (al menos ${fmtUmbral(q.umbralM)} de un cauce): ${q.estado === 'CUMPLE' ? 'cumple' : 'no cumple'}. Es tu criterio, no una norma.</p>`
       : '<p class="var-explica"><strong>Informativo.</strong> No existe una distancia normativa a una quebrada, así que no decimos si es cerca o lejos. Si quieres un criterio propio, fija tu distancia mínima abajo.</p>';
     return `<div class="var-dato">
         <p class="var-dist">${fmtDist(q.distanciaM)} <small>en línea recta</small></p>
-        <p class="var-nombre">${esc(q.nombre)}${q.tipo ? ` (${esc(q.tipo.toLowerCase())})` : ''}</p>
+        <p class="var-nombre">${esc(q.nombre)}${q.tipo ? ` (${esc(q.tipo.toLowerCase())})` : ''} ${q.fuenteCorta ? `<small>· fuente: ${esc(q.fuenteCorta)}</small>` : ''}</p>${(q.alias || []).length ? `<p class="small muted">También figura como: ${esc(q.alias.map((a) => `${a.nombre} (${a.fuente === 'OSM' ? 'OpenStreetMap' : a.fuente})`).join(', '))}.</p>` : ''}
       </div>
       ${explica}
       ${umbralFormHtml(q)}

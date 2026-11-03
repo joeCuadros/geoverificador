@@ -22,6 +22,7 @@ const Reporte = (() => {
   const coma = (n) => String(n).replace('.', ',');
   const fila = (k, v) => `<tr><th>${esc(k)}</th><td>${v}</td></tr>`;
   const P = typeof Precios !== 'undefined' ? Precios : require('./precios.js'); // eslint-disable-line no-undef
+  const CALC = typeof Calculos !== 'undefined' ? Calculos : require('./calculos.js'); // eslint-disable-line no-undef
   const NIVELES = ['inicial', 'primaria', 'secundaria'];
   const nombreNivel = (n) => n[0].toUpperCase() + n.slice(1);
 
@@ -145,9 +146,7 @@ const Reporte = (() => {
     return `<table class="rp-tabla">${filas.join('')}</table><p class="rp-nota">Criterio: un área verde de al menos ${num(u.areaMinM2)} m² a ${u.distanciaM} m o menos. ${esc(r.metodo)}</p>`;
   }
 
-  // ------------------------------------------------ Quebradas y cauces (ANA)
-  const QUEBRADAS_CITADAS = ['Añashuayco', 'San Lázaro']; // las que citan los informes de INGEMMET (docs/INVESTIGACION-VARIABLES.md)
-  const sinTildes = (s) => String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  // ------------------------------------------------ Quebradas y cauces (ANA, IGP y OpenStreetMap)
 
   function seccionQuebradas(d) {
     const q = d.cauce;
@@ -156,15 +155,14 @@ const Reporte = (() => {
       return `<table class="rp-tabla">${fila('Estado', estado('SIN DATO'))}${fila('Resultado', `No se pudo obtener el dato${q.error ? `: ${esc(q.error)}` : ''}`)}</table>
         <p class="rp-nota">Que no haya dato no significa que no haya una quebrada cerca: consulta SIGRID (CENEPRED) y al IMPLA.</p>`;
     }
-    const nombres = q.nombres || [];
-    const ausentes = QUEBRADAS_CITADAS.filter((n) => !nombres.some((x) => sinTildes(x).includes(sinTildes(n))));
+    const faltan = CALC.textoQuebradasAusentes(q.ausentes);
     const filas = [
       fila('Estado', estado(q.estado) + (q.segunUmbralUsuario ? ' <span class="rp-muted">según tu umbral</span>' : '')),
-      fila('Cauce más cercano', `${esc(q.nombre)}${q.tipo ? ` (${esc(String(q.tipo).toLowerCase())})` : ''}`),
+      fila('Cauce más cercano', `${esc(q.nombre)}${q.tipo ? ` (${esc(String(q.tipo).toLowerCase())})` : ''}${q.fuenteCorta ? ` · fuente: ${esc(q.fuenteCorta)}` : ''}${(q.alias || []).length ? `. También figura como ${esc(q.alias.map((a) => a.nombre).join(', '))}` : ''}`),
       fila('Distancia', `${dist(q.distanciaM)} en línea recta`),
       fila('Umbral', q.segunUmbralUsuario ? `Según tu umbral: al menos ${dist(q.umbralM)} de un cauce (es tu criterio, no una norma)` : 'Sin umbral normativo: no existe una distancia oficial a una quebrada, así que el dato es solo informativo'),
     ];
-    const cubre = `La red hidrográfica de la ANA es de escala nacional${q.elaboracion ? ` (elaboración: ${esc(q.elaboracion)})` : ''}: no incluye todas las quebradas urbanas${ausentes.length ? ` (en el archivo no figura${ausentes.length > 1 ? 'n' : ''} ${ausentes.join(' ni ')}, que citan los informes de INGEMMET)` : ''}. La red no es un mapa de peligro de huaicos ni de inundación y no delimita la faja marginal. La distancia es a la línea del mapa, no al cauce real.`;
+    const cubre = `Los cauces vienen de ${esc(CALC.textoFuentesCauces(q.fuentes))}; ninguna fuente es completa (la de la ANA es una red nacional de 2018).${faltan ? ` Quebradas conocidas que aún no figuran: ${esc(faltan)}.` : ''} Ninguna es un mapa de peligro de huaicos ni de inundación ni delimita la faja marginal. La distancia es a la línea del mapa, no al cauce real.`;
     return `<table class="rp-tabla">${filas.join('')}</table><p class="rp-nota">${cubre}</p>${q.metodo ? `<p class="rp-nota">${esc(q.metodo)}</p>` : ''}`;
   }
 
@@ -261,7 +259,7 @@ const Reporte = (() => {
       let v;
       if (q.estado === 'SIN DATO') v = 'SIN DATO';
       else {
-        v = `${q.estado} · ${q.nombre} a ${dist(q.distanciaM)} en línea recta`;
+        v = `${q.estado} · ${q.nombre} a ${dist(q.distanciaM)} en línea recta${q.fuenteCorta ? ` (fuente: ${q.fuenteCorta})` : ''}`;
         v += q.segunUmbralUsuario ? ` (según tu umbral de ${dist(q.umbralM)})` : ' (sin umbral normativo)';
       }
       out.push(['Quebradas y cauces', v]);
@@ -278,7 +276,7 @@ const Reporte = (() => {
     return out;
   }
 
-  const fuenteCauce = (q) => (q ? `${q.fuente}${q.fecha ? `, datos extraídos el ${q.fecha}` : ''}` : '');
+  const fuenteCauce = (q) => (q ? `${q.fuente}${q.fecha ? `, datos extraídos el ${q.fecha}` : ''}${q.fuentes && q.fuentes.length > 1 ? `. Cauces del archivo: ${CALC.textoFuentesCauces(q.fuentes)}` : ''}` : '');
   const fuenteContexto = (c) => (c ? [c.peligros && c.peligros.fuente, c.sismos && c.sismos.fuente].filter(Boolean).join('; ') : '');
 
   const fuentePrecio = (p) => (p && p.estado === 'INFORMATIVO' ? `${p.atribucion} — ${p.fuente}, licencia ${p.licencia}, descargado el ${p.fechaDescarga}` : '');
@@ -313,7 +311,7 @@ const Reporte = (() => {
       'Las líneas de transporte son los recorridos que SmartBus (smartbus.app) publicó en la fecha indicada, usados con su autorización verbal (confirmación escrita pendiente): no traen frecuencias ni horarios, y un cambio de ruta por tramos puede no estar reflejado.',
       'Todas las distancias son en línea recta, no recorrido a pie. Los umbrales de salud (1000 m), transporte (400 m) y borde de zona (20 m) son convenciones del proyecto; los de educación vienen del Instructivo FTE del MEF/MINEDU y el de área verde, de la OMS Europa (2016).',
       'OpenStreetMap casi no etiqueta el nivel de los colegios: un colegio sin nivel se toma como candidato a primaria y secundaria, lo que puede sobrestimar la oferta de un nivel.',
-      'Quebradas y cauces: no existe una distancia normativa a una quebrada, así que el estado es INFORMATIVO salvo que la persona fije su propio umbral («según tu umbral»). La red de la ANA es de escala nacional: no incluye todas las quebradas urbanas, no es un mapa de peligro y no delimita la faja marginal.',
+      'Quebradas y cauces: no existe una distancia normativa a una quebrada, así que el estado es INFORMATIVO salvo que la persona fije su propio umbral («según tu umbral»). Los cauces vienen de la ANA, el IGP y OpenStreetMap; ninguna fuente es completa, no son un mapa de peligro y no delimitan la faja marginal.',
       'El contexto de riesgo (peligros geológicos de INGEMMET y sismos reportados por el IGP en el periodo indicado) es informativo: no es una evaluación, no predice sismos y que no haya registros no significa que el lugar sea seguro.',
       'El precio de oferta por m² del distrito (Aptología, CC BY 4.0) es informativo: son precios pedidos en avisos, no de cierre, y es la mediana del distrito, no el precio de este inmueble. Solo hay cifra en los distritos con al menos 30 avisos.',
     ];
@@ -404,7 +402,7 @@ const Reporte = (() => {
     const secciones = construirSecciones(d);
     const resumen = [...d.resumen, ...filasResumenExtra(d)];
 
-    const datos = ['MPA/IMPLA (zonificación)', '© colaboradores de OpenStreetMap (ODbL)', 'ANA (red hidrográfica)', 'INGEMMET (peligros geológicos)', 'IGP (sismos reportados)', 'Datos: Aptologia (precio de oferta, CC BY 4.0)'];
+    const datos = ['MPA/IMPLA (zonificación)', '© colaboradores de OpenStreetMap (ODbL)', 'ANA, IGP y OpenStreetMap (cauces)', 'INGEMMET (peligros geológicos)', 'IGP (sismos reportados)', 'Datos: Aptologia (precio de oferta, CC BY 4.0)'];
     if (m.desastre) datos.push('INGEMMET (GEOCATMIN), INEI, MVCS (E.030)');
     if (m.seguridad) datos.push('MININTER (SIDPOL)');
 

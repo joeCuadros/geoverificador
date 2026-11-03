@@ -187,6 +187,12 @@ describe('Entidades.caucesEnDistrito', () => {
     expect(r.total).toBe(3); // el sin nombre también cruza
   });
 
+  it('dice de qué fuentes son los cauces que lo cruzan (sin fuente cuenta como ANA)', () => {
+    const r = Entidades.caucesEnDistrito([{ ...cauces[0], fuente: 'OSM' }, { ...cauces[1], fuente: 'IGP' }, cauces[3]], DISTRITO);
+    expect(r.fuentes).toEqual([{ id: 'ANA' }, { id: 'IGP' }, { id: 'OSM' }]);
+    expect(Entidades.caucesEnDistrito([cauces[2]], DISTRITO).fuentes).toEqual([]);
+  });
+
   it('sin cauces cargados dice que no hay dato', () => {
     expect(Entidades.caucesEnDistrito(null, DISTRITO)).toEqual({ nombres: [], total: 0, sinDato: true });
   });

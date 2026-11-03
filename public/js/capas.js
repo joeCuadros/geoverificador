@@ -7,7 +7,7 @@
  *   paraderos   → los paraderos (círculo de 400 m si son pocos)
  *   parques     → los parques, como polígonos rellenos
  *   residencial, tranquilo, campina, comercial, historico → solo los polígonos de esas zonas del plano
- *   quebradas   → líneas (red hidrográfica de la ANA)
+ *   quebradas   → líneas (cauces de la ANA, el IGP y OpenStreetMap; cada tramo dice su fuente)
  *   sismos      → círculos pequeños, más grandes cuanto mayor la magnitud
  *   lineas      → recorridos de bus de SmartBus (un color por línea) y, con un punto, la parada más cercana de cada una
  * Con una búsqueda se dibujan las entidades que hacen que cada sector cumpla, y UNA región resaltada: los sectores donde se
@@ -227,8 +227,10 @@ const Capas = (() => {
       } else if (id === 'quebradas') {
         if (!Array.isArray(cauces) || cauces.length === 0) { sinDatos.push('quebradas'); return; }
         const elegidos = cauces.filter((q) => coordsDe(q.geometry).some(([x, y]) => enArea(y, x)));
-        elegidos.forEach((q) => lineas.push({ capa: 'quebradas', geometry: q.geometry, nombre: q.nombre, tipo: q.tipo, titulo: q.nombre || 'Cauce sin nombre', detalle: q.tipo || 'Red hidrográfica de la ANA' }));
-        cuenta('quebradas', elegidos.length, `Quebradas y ríos (red de la ANA): ${elegidos.length} ${elegidos.length === 1 ? 'tramo' : 'tramos'}`);
+        const fuenteDe = (q) => C.nombreFuenteCauce(q.fuente || 'ANA');
+        elegidos.forEach((q) => lineas.push({ capa: 'quebradas', geometry: q.geometry, nombre: q.nombre, tipo: q.tipo, fuente: q.fuente || 'ANA', titulo: q.nombre || 'Cauce sin nombre', detalle: `${q.tipo ? `${q.tipo} · ` : ''}Fuente: ${fuenteDe(q)}` }));
+        const porFuente = ['ANA', 'IGP', 'OSM'].map((id) => [id, elegidos.filter((q) => (q.fuente || 'ANA') === id).length]).filter(([, n]) => n > 0).map(([id, n]) => `${C.nombreFuenteCauce(id)} ${n}`);
+        cuenta('quebradas', elegidos.length, `Quebradas y ríos: ${elegidos.length} ${elegidos.length === 1 ? 'tramo' : 'tramos'}${porFuente.length ? ` (${porFuente.join(', ')})` : ''}`);
       } else if (id === 'lineas') {
         if (!rutas) { sinDatos.push('lineas'); return; }
         const m = R().paraMapa(rutas, capa.nombres || [], capa.punto || null);

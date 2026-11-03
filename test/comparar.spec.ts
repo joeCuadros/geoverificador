@@ -388,6 +388,13 @@ describe('Comparar: quebradas y cauces (INFORMATIVO salvo el umbral del usuario)
   });
 });
 
+describe('Comparar: la fuente del cauce', () => {
+  it('la celda de quebradas nombra la fuente del cauce', () => {
+    const cel = Comparar.celda(crear({ cauce: cauce(50, { nombre: 'Quebrada Añashuayco', tipo: 'Quebrada', fuenteCorta: 'OpenStreetMap' }) }), 'quebradas');
+    expect(cel.partes[0].texto).toBe('Quebrada Añashuayco · 50 m en línea recta · fuente: OpenStreetMap');
+  });
+});
+
 describe('Comparar: contexto de riesgo (peligros geológicos y sismos), siempre informativo', () => {
   it('guarda el contexto con estado INFORMATIVO y nunca lo vuelve prioridad', () => {
     const c = crear({ contexto: ctxOk });

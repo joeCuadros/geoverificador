@@ -100,6 +100,7 @@ const Comparar = (() => {
       umbralM: null,
       nombre: cauce && esTexto(cauce.nombre) ? cauce.nombre : null,
       tipo: cauce && esTexto(cauce.tipo) ? cauce.tipo : null,
+      fuenteCorta: cauce && esTexto(cauce.fuenteCorta) ? cauce.fuenteCorta : null,
       segunUmbralUsuario: false,
     };
   }
@@ -280,7 +281,7 @@ const Comparar = (() => {
     const v = conUmbrales(candidato, umbrales).variables[id];
     if (id === 'quebradas') {
       if (v.distanciaM === null) return { estado: v.estado, partes: [{ texto: 'Sin dato' }] };
-      const partes = [{ texto: `${v.nombre || 'Sin nombre'}${v.tipo && !String(v.nombre).startsWith(v.tipo) ? ` (${v.tipo.toLowerCase()})` : ''} · ${fmtDist(v.distanciaM)} en línea recta` }];
+      const partes = [{ texto: `${v.nombre || 'Sin nombre'}${v.tipo && !String(v.nombre).startsWith(v.tipo) ? ` (${v.tipo.toLowerCase()})` : ''} · ${fmtDist(v.distanciaM)} en línea recta${v.fuenteCorta ? ` · fuente: ${v.fuenteCorta}` : ''}` }];
       partes.push({ texto: v.segunUmbralUsuario ? `Según tu umbral: al menos ${fmtRef(v.umbralM)}` : 'Sin umbral normativo: solo informativo' });
       return { estado: v.estado, partes };
     }

@@ -762,9 +762,11 @@ const Asistente = (() => {
     const partes = ['colegios', 'salud', 'paraderos', 'parques'].map((g) => parteDeConteo(g, p.conteo)).filter(Boolean);
     lineas.push(`• Servicios (OpenStreetMap, ${c.fecha || 'sin fecha'}; puede faltar alguno): ${partes.length ? partes.join('; ') : 'no encontré ninguno en los datos'}.`);
     const q = p.cauces;
-    if (q.sinDato) lineas.push('• Quebradas y ríos: no pude leer el archivo de la red de la ANA, así que no lo afirmo.');
-    else if (q.nombres.length) lineas.push(`• Quebradas y ríos: lo cruzan ${listaEs(q.nombres.slice(0, 5))} (red de la ANA; no incluye todas las quebradas urbanas ni es un mapa de peligro).`);
-    else lineas.push('• Quebradas y ríos: la red de la ANA no registra cauces en este distrito (no incluye todas las quebradas urbanas ni es un mapa de peligro).');
+    const deDonde = q.fuentes && q.fuentes.length ? listaEs(q.fuentes.map((f) => C.nombreFuenteCauce(f))) : 'la ANA';
+    const ningunoDe = Array.isArray(q.fuentes) ? 'la ANA, el IGP y OpenStreetMap no registran' : 'la ANA no registra';
+    if (q.sinDato) lineas.push('• Quebradas y ríos: no pude leer el archivo de cauces, así que no lo afirmo.');
+    else if (q.nombres.length) lineas.push(`• Quebradas y ríos: lo cruzan ${listaEs(q.nombres.slice(0, 5))} (según ${deDonde}; no incluyen todas las quebradas urbanas ni son un mapa de peligro).`);
+    else lineas.push(`• Quebradas y ríos: ${ningunoDe} cauces en este distrito (no incluyen todas las quebradas urbanas ni son un mapa de peligro).`);
     // Líneas de SmartBus que cruzan el distrito y precio de oferta por m² (Aptología, solo 3 distritos): se agregan solo si hay dato; nada inventado.
     const rd = c.rutasDistrito;
     if (rd && !rd.error && rd.res) {
@@ -812,10 +814,12 @@ const Asistente = (() => {
     const q = c.cauce;
     if (!q) return 'Todavía estoy calculando las quebradas cercanas a tu punto; vuelve a preguntar en unos segundos.';
     if (q.estado === 'SIN DATO' || q.distanciaM === null) return `No tengo el dato de quebradas y cauces para tu punto (${q.error || 'archivo no disponible'}), así que no lo afirmo. Consulta SIGRID (CENEPRED) y al IMPLA.`;
-    const lineas = [`El cauce más cercano en la red hidrográfica de la ANA es ${q.nombre}${q.tipo ? ` (${q.tipo.toLowerCase()})` : ''}, a ${fmtM(q.distanciaM)} en línea recta de tu punto.`];
+    const lineas = [`El cauce más cercano es ${q.nombre}${q.tipo ? ` (${q.tipo.toLowerCase()})` : ''}, a ${fmtM(q.distanciaM)} en línea recta de tu punto${q.fuenteCorta ? ` (fuente: ${q.fuenteCorta})` : ''}.`];
+    if (Array.isArray(q.alias) && q.alias.length) lineas.push(`También figura como ${listaEs(q.alias.map((a) => a.nombre))}.`);
     if (q.segunUmbralUsuario) lineas.push(`Según tu umbral (al menos ${fmtUmbral(q.umbralM)} de un cauce): ${q.estado === 'CUMPLE' ? 'cumple' : 'no cumple'}.`);
     else lineas.push('No existe una distancia normativa a una quebrada, así que no digo si es «cerca» o «lejos». Si quieres un criterio propio, fija tu distancia mínima en «Mis umbrales».');
-    lineas.push('Límites: la red de la ANA no incluye todas las quebradas urbanas, no es un mapa de peligro y no delimita la faja marginal.', AVISO_RIESGO);
+    const faltan = C.textoQuebradasAusentes(q.ausentes);
+    lineas.push(`Límites: los cauces vienen de ${C.textoFuentesCauces(q.fuentes)} y ninguna fuente es completa${faltan ? `; todavía no figuran ${faltan}` : ''}. Tampoco es un mapa de peligro ni delimita la faja marginal.`, AVISO_RIESGO);
     return lineas.join('\n');
   }
 
@@ -923,7 +927,7 @@ const Asistente = (() => {
     historico: 'no hay datos de barrios tradicionales',
   };
 
-  const TEXTO_LIMITE_CAUCES = 'Ojo: «lejos de quebradas y ríos» usa la red hidrográfica de la ANA, que no incluye todas las quebradas urbanas, no es un mapa de peligro y no delimita la faja marginal. Cumplirlo no garantiza que el lugar esté libre de huaicos.';
+  const TEXTO_LIMITE_CAUCES = 'Ojo: «lejos de quebradas y ríos» usa los cauces de la ANA, el IGP y OpenStreetMap, que no incluyen todas las quebradas urbanas, no son un mapa de peligro y no delimitan la faja marginal. Cumplirlo no garantiza que el lugar esté libre de huaicos.';
 
   const SUGERENCIAS_PRECIO = ['¿Cuánto cuesta el m² en Cayma?', 'Precio por m² en todos los distritos', 'Dame un resumen de mi punto'];
   // Se escribe con coma, como el resto de cifras del asistente, y sin espacios dentro del número (el texto se verifica cifra por cifra).
@@ -1364,10 +1368,10 @@ const Asistente = (() => {
   const LIM_RECTA = 'Las distancias son en línea recta, no recorrido a pie.';
   const LIM_OSM = 'OpenStreetMap es colaborativo: lo que no figura puede existir. «Sin dato» no significa que no exista.';
   const LIM_PLANO = 'El plano se extrajo de un PDF y cerca del borde entre dos zonas el resultado puede no ser exacto. La vigencia del PDM 2016-2025 es incierta y hay un PDM nuevo en trámite.';
-  const FUENTE_ANA = 'Red hidrográfica (capa «Cuerpos de Agua») de la Autoridad Nacional del Agua (ANA), elaborada en 2018, congelada con su fecha de extracción.';
+  const FUENTE_ANA = 'Cauces congelados con su fecha de extracción: la red hidrográfica de la Autoridad Nacional del Agua (ANA, 2018), las quebradas y ríos del Instituto Geofísico del Perú (IGP, sin fecha de elaboración) y los cauces de OpenStreetMap (ODbL). Cada cauce dice de cuál fuente viene.';
   const FUENTE_IGP = 'Sismos reportados, Instituto Geofísico del Perú (IGP), congelados con su fecha de extracción.';
   const FUENTE_INGEMMET = 'Inventario de peligros geológicos, GEOCATMIN (INGEMMET), congelado con su fecha de extracción.';
-  const LIM_CAUCES = 'La red de la ANA es de escala nacional: no incluye todas las quebradas urbanas ni las torrenteras menores, no es un mapa de peligro de huaicos o inundación y no delimita la faja marginal.';
+  const LIM_CAUCES = 'Ninguna de las tres fuentes de cauces es completa (la red de la ANA es de escala nacional): faltan quebradas urbanas y torrenteras menores, no son un mapa de peligro de huaicos o inundación y no delimitan la faja marginal.';
   const LIM_INVENTARIO = 'Es un inventario de eventos documentados, no un mapa de susceptibilidad: que no haya registros cerca no significa que el lugar sea seguro.';
   const GENERICO = {
     porque: ['Los datos, distancias y estados los calcula siempre el motor de la ficha con reglas explícitas. Un modelo, si está activo, solo interpreta tu frase y redacta; no aporta cifras, por eso no puede inventar un dato.'],
@@ -1405,7 +1409,7 @@ const Asistente = (() => {
       limites: ['Es un máximo teórico: no considera retiros, estacionamientos ni la forma del lote.', 'En zonas condicionadas o no construibles no se calcula.', LIM_REFERENCIAL],
     },
     quebrada: {
-      porque: ['Se mide la distancia en línea recta desde tu punto hasta el tramo más cercano de la red hidrográfica de la ANA. Si fijaste tu distancia mínima en «Mis umbrales», se compara con ella; si no, solo se informa.'],
+      porque: ['Se mide la distancia en línea recta desde tu punto hasta el tramo más cercano de los cauces de la ANA, el IGP y OpenStreetMap, y se dice de cuál fuente es. Si fijaste tu distancia mínima en «Mis umbrales», se compara con ella; si no, solo se informa.'],
       fuente: [FUENTE_ANA],
       limites: [LIM_CAUCES, 'No existe una distancia normativa a una quebrada: la faja marginal solo está delimitada donde la ANA la fijó.', LIM_RECTA, LIM_REFERENCIAL],
     },
@@ -1426,7 +1430,7 @@ const Asistente = (() => {
       limites: [LIM_OSM, 'Un colegio puede atender varios niveles; los que no declaran su nivel se cuentan como primaria y secundaria.', 'Los parques se cuentan todos; los criterios de búsqueda usan solo los de al menos 0,5 ha (OMS Europa, 2016).'],
     },
     perfil: {
-      porque: ['Junta lo que hay dentro del distrito: cómo se reparte la zonificación del plano (se mide con puntos cada 300 m), cuántos servicios hay y qué cauces de la red de la ANA lo cruzan.'],
+      porque: ['Junta lo que hay dentro del distrito: cómo se reparte la zonificación del plano (se mide con puntos cada 300 m), cuántos servicios hay y qué cauces (de la ANA, el IGP y OpenStreetMap) lo cruzan.'],
       fuente: [FUENTE_PLANO, FUENTE_OSM, FUENTE_ANA],
       limites: [LIM_PLANO, LIM_OSM, LIM_CAUCES, LIM_REFERENCIAL],
     },

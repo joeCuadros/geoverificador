@@ -158,7 +158,7 @@ console.log('\n== A. Integridad de los archivos ==');
   comprobar('Distritos: todos tienen zona sísmica en la transcripción del Anexo II', sinZona.length === 0, sinZona.map((x) => x.properties.distrito).join(', '));
 }
 
-// Quebradas y cauces (ANA): red hidrográfica congelada con scripts/descargar-quebradas.mjs
+// Quebradas y cauces (ANA, IGP y OpenStreetMap): congelados con scripts/descargar-quebradas.mjs
 {
   const f = quebradas.features;
   const m = quebradas.metadata || {};
@@ -166,13 +166,25 @@ console.log('\n== A. Integridad de los archivos ==');
     const lineas = x.geometry?.type === 'LineString' ? [x.geometry.coordinates] : x.geometry?.type === 'MultiLineString' ? x.geometry.coordinates : null;
     return lineas && lineas.every((l) => l.length >= 2);
   }), `${f.length} tramos`);
-  comprobar('Quebradas: metadata con fuente (ANA), capa, fecha de extracción, elaboración, atribución y licencia', /Autoridad Nacional del Agua/.test(m.fuente || '') && /^https:\/\//.test(m.capa || '') && /^\d{4}-\d{2}-\d{2}T/.test(m.descargado || '') && !!m.elaboracion && !!m.atribucion && !!m.licencia, m.descargado);
+  const fuentes = m.fuentes || [];
+  const ID_FUENTES = ['ANA', 'IGP', 'OSM'];
+  comprobar('Quebradas: metadata.fuentes trae ANA, IGP y OpenStreetMap, cada una con nombre, capa, fecha de extracción, elaboración, atribución y licencia', ID_FUENTES.every((id) => {
+    const x = fuentes.find((y) => y.id === id);
+    return x && !!x.fuente && (!!x.capa || !!x.capas) && /^\d{4}-\d{2}-\d{2}T/.test(x.descargado || '') && !!x.elaboracion && !!x.atribucion && !!x.licencia;
+  }) && fuentes.length === 3, fuentes.map((x) => x.id).join(', '));
+  comprobar('Quebradas: la ANA se atribuye a la Autoridad Nacional del Agua, el IGP al Instituto Geofísico del Perú y OpenStreetMap lleva ODbL', /Autoridad Nacional del Agua/.test(fuentes.find((x) => x.id === 'ANA')?.fuente || '') && /Instituto Geofísico del Perú/.test(fuentes.find((x) => x.id === 'IGP')?.atribucion || '') && /ODbL/.test(fuentes.find((x) => x.id === 'OSM')?.licencia || ''));
+  comprobar('Quebradas: cada tramo dice su fuente (ANA, IGP u OSM)', f.every((x) => ID_FUENTES.includes(x.properties.fuente)));
+  const porFuente = Object.fromEntries(ID_FUENTES.map((id) => [id, f.filter((x) => x.properties.fuente === id).length]));
+  comprobar('Quebradas: el conteo de tramos por fuente coincide con metadata.fuentes[].registros y la suma con metadata.registros', ID_FUENTES.every((id) => porFuente[id] === fuentes.find((y) => y.id === id)?.registros) && porFuente.ANA + porFuente.IGP + porFuente.OSM === m.registros, JSON.stringify(porFuente));
+  comprobar('Quebradas: lo recibido de cada fuente cubre lo que se guardó más lo descartado como duplicado', fuentes.every((x) => x.recibidos >= x.registros + (x.duplicados || 0)), fuentes.map((x) => `${x.id} ${x.recibidos}/${x.registros}/${x.duplicados ?? 0}`).join(' · '));
+  comprobar('Quebradas: los tramos de IGP vienen de las capas Quebrada o RiosArequipa y los de OSM tienen el id de su vía', f.filter((x) => x.properties.fuente === 'IGP').every((x) => ['Quebrada', 'RiosArequipa'].includes(x.properties.capa)) && f.filter((x) => x.properties.fuente === 'OSM').every((x) => /^way\/\d+$/.test(x.properties.capa)));
   comprobar('Quebradas: metadata.registros coincide con el número de features y los ids son únicos', m.registros === f.length && new Set(f.map((x) => x.properties.id)).size === f.length);
-  const nombres = [...new Set(f.map((x) => x.properties.nombre).filter(Boolean))].sort();
-  comprobar('Quebradas: metadata.nombres lista exactamente los cursos del archivo', JSON.stringify(nombres) === JSON.stringify(m.nombres), nombres.join(', '));
+  const nombres = [...new Set(f.flatMap((x) => [x.properties.nombre, ...(x.properties.alias || []).map((a) => a.nombre)]).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'));
+  comprobar('Quebradas: metadata.nombres lista exactamente los cursos del archivo (nombres y alias)', JSON.stringify(nombres) === JSON.stringify(m.nombres), `${nombres.length} nombres`);
   const puntos = f.flatMap((x) => (x.geometry.type === 'LineString' ? x.geometry.coordinates : x.geometry.coordinates.flat()));
   comprobar('Quebradas: coordenadas dentro del departamento de Arequipa y alrededores (lon -73 a -70, lat -17,5 a -15,5)', puntos.every(([x, y]) => x > -73 && x < -70 && y > -17.5 && y < -15.5), `${puntos.length} vértices`);
-  console.log(`INFO  Quebradas: ${nombres.join(', ')} (red de ANA de escala nacional; no figuran Añashuayco ni San Lázaro: ${['añashuayco', 'san lázaro'].every((n) => !nombres.some((x) => x.toLowerCase().includes(n))) ? 'confirmado' : 'REVISAR'})`);
+  console.log(`INFO  Quebradas: ${nombres.join(', ')}`);
+  console.log(`INFO  Quebradas: Añashuayco ${nombres.some((x) => /añashuayco/i.test(x)) ? 'figura' : 'NO figura'}; San Lázaro ${nombres.some((x) => /san l[aá]zaro/i.test(x)) ? 'figura' : 'NO figura'}`);
 }
 
 // Sismos reportados (IGP): congelados con scripts/descargar-sismos.mjs
@@ -453,7 +465,7 @@ const dentro = (x, y, anillos) => vueltas(x, y, anillos[0]) && !anillos.slice(1)
   const cosenos = (la1, lo1, la2, lo2) => R * Math.acos(Math.min(1, Math.sin(rad(la1)) * Math.sin(rad(la2)) + Math.cos(rad(la1)) * Math.cos(rad(la2)) * Math.cos(rad(lo2 - lo1))));
   // Cada línea se densifica a pasos de ~5 m: la distancia mínima a esos puntos tiene un error menor que ~3 m.
   const densas = [];
-  for (const x of quebradas.features) {
+  for (const [indice, x] of quebradas.features.entries()) {
     const lineas = x.geometry.type === 'LineString' ? [x.geometry.coordinates] : x.geometry.coordinates;
     for (const l of lineas) {
       for (let i = 1; i < l.length; i++) {
@@ -461,28 +473,32 @@ const dentro = (x, y, anillos) => vueltas(x, y, anillos[0]) && !anillos.slice(1)
         const [x1, y1] = l[i];
         const largo = cosenos(y0, x0, y1, x1);
         const n = Math.max(1, Math.ceil(largo / 5));
-        for (let k = 0; k <= n; k++) densas.push([y0 + ((y1 - y0) * k) / n, x0 + ((x1 - x0) * k) / n, x.properties.nombre]);
+        for (let k = 0; k <= n; k++) densas.push([y0 + ((y1 - y0) * k) / n, x0 + ((x1 - x0) * k) / n, x.properties.nombre, indice]);
       }
     }
   }
   let peorError = 0;
   let nombresOk = true;
   const probados = 60;
+  const lista = quebradas.features.map((x) => ({ nombre: x.properties.nombre, tipo: x.properties.tipo, fuente: x.properties.fuente, geometry: x.geometry }));
   for (let i = 0; i < probados; i++) {
     const la = -16.2 - azar() * 0.4;
     const lo = -71.75 + azar() * 0.4;
-    let mejor = Infinity;
-    let nombre = null;
-    for (const [pla, plo, nom] of densas) {
+    // Distancia mínima de cada tramo, por separado: dos tramos casi iguales pueden empatar y el nombre no distingue.
+    const minimas = new Map();
+    for (const [pla, plo, nom, idx] of densas) {
       const d = cosenos(la, lo, pla, plo);
-      if (d < mejor) { mejor = d; nombre = nom; }
+      if (d < (minimas.get(idx) ?? Infinity)) minimas.set(idx, d);
     }
-    const r = Calc.evaluarCauces({ lat: la, lon: lo }, quebradas.features.map((x) => ({ nombre: x.properties.nombre, tipo: x.properties.tipo, geometry: x.geometry })), {});
+    const mejor = Math.min(...minimas.values());
+    const r = Calc.evaluarCauces({ lat: la, lon: lo }, lista, {});
     peorError = Math.max(peorError, Math.abs(r.distanciaM - mejor));
-    if (r.nombre !== nombre) nombresOk = false;
+    // El cauce elegido debe ser uno de los que quedan a no más de 6 m del mejor (mismo nombre y misma fuente).
+    const elegidoOk = [...minimas].some(([idx, d]) => d <= mejor + 6 && (lista[idx].nombre || '') === (r.nombre.startsWith('Sin nombre') ? '' : r.nombre) && lista[idx].fuente === r.fuenteId);
+    if (!elegidoOk) nombresOk = false;
   }
   comprobar(`Quebradas: la distancia a la red coincide con un método independiente (${probados} puntos al azar; error máximo ${peorError.toFixed(1)} m)`, peorError < 6);
-  comprobar('Quebradas: el cauce más cercano es el mismo con ambos métodos', nombresOk);
+  comprobar('Quebradas: el cauce más cercano (nombre y fuente) es uno de los que el método independiente da como más cercanos', nombresOk);
   comprobar('Quebradas: sin umbral del usuario el estado es INFORMATIVO; con él, CUMPLE o NO CUMPLE (nunca un umbral por defecto)', (() => {
     const r0 = Calc.evaluarCauces({ lat: -16.399, lon: -71.537 }, quebradas.features.map((x) => ({ nombre: x.properties.nombre, geometry: x.geometry })), {});
     const c = Calc.evaluarCauces({ lat: -16.399, lon: -71.537 }, quebradas.features.map((x) => ({ nombre: x.properties.nombre, geometry: x.geometry })), { umbralUsuarioM: 1 });
@@ -509,6 +525,17 @@ const dentro = (x, y, anillos) => vueltas(x, y, anillos[0]) && !anillos.slice(1)
   comprobar('Peligros (contexto): el conteo en el radio coincide con un recuento independiente y siempre es INFORMATIVO', p.estado === 'INFORMATIVO' && p.total === enRadio.length, `${p.total} a ${p.radioM} m; el más cercano a ${Math.round(p.distanciaM)} m`);
   const q = await Ctx.quebradas(la, lo, null);
   comprobar('Quebradas (módulo): INFORMATIVO sin umbral, con nombre y distancia; según tu umbral solo si la persona lo fija', q.estado === 'INFORMATIVO' && q.nombre && q.distanciaM > 0 && q.segunUmbralUsuario === false && (await Ctx.quebradas(la, lo, 100)).segunUmbralUsuario === true);
+  comprobar('Quebradas (módulo): nombra la fuente del cauce más cercano y las fuentes del archivo con sus tramos', ['ANA', 'IGP', 'OpenStreetMap'].includes(q.fuenteCorta) && q.fuentes.length === 3 && q.fuentes.every((x) => x.registros === quebradas.features.filter((y) => y.properties.fuente === x.id).length), `${q.nombre} (${q.fuenteCorta})`);
+  // «Qué no cubre»: las quebradas ausentes se recalculan aquí con un método propio (texto en minúsculas sin tildes) y deben coincidir.
+  {
+    const sin = (t) => String(t).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+    const todosLosNombres = sin(quebradas.metadata.nombres.join(' | '));
+    const sectores = peligros.features.map((x) => sin(x.properties.sector || ''));
+    const cuentaDe = (clave) => sectores.filter((t) => new RegExp('(quebrada|qda\\.?|torrentera)\\s+' + clave).test(t)).length;
+    const claves = (q.ausentes || []).map((a) => sin(a.nombre).replace(/[^a-z ]/g, ''));
+    comprobar('Quebradas (módulo): ninguna quebrada «ausente» figura entre los nombres del archivo', claves.every((c) => !todosLosNombres.includes(c)), claves.join(', '));
+    comprobar('Quebradas (módulo): los registros de cada quebrada ausente coinciden con un recuento independiente del campo sector de INGEMMET', (q.ausentes || []).every((a) => a.registros === 0 || cuentaDe(sin(a.nombre).replace(/[^a-z ]/g, '')) >= a.registros), (q.ausentes || []).map((a) => `${a.nombre} ${a.registros}`).join(', '));
+  }
   const sinArchivo = vm.createContext({ console, fetch: async () => ({ ok: false, status: 404, json: async () => ({}) }) });
   for (const f of ['js/config.js', 'js/calculos.js', 'js/geo.js', 'js/peligros.js', 'js/contexto.js']) vm.runInContext(leer(f), sinArchivo, { filename: f });
   const vacio = await vm.runInContext('Contexto.evaluar(-16.399, -71.537, 200)', sinArchivo);

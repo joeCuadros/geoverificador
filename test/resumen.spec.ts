@@ -41,6 +41,10 @@ describe('Resumen.punto', () => {
     expect(s.texto).toContain('Lo más cercano en riesgo: Río Chili a 1,86 km.');
   });
 
+  it('nombra la fuente del cauce cuando se conoce', () => {
+    expect(Resumen.punto({ ...base, cauce: { ...cauce, fuenteCorta: 'OpenStreetMap' } }).texto).toContain('Lo más cercano en riesgo: Río Chili a 1,86 km (OpenStreetMap).');
+  });
+
   it('entrega tres líneas para el inicio de la ficha', () => {
     expect(s.lineas).toHaveLength(3);
     expect(s.lineas[0]).toMatch(/Sachaca/);

@@ -1,9 +1,9 @@
 /**
- * contexto.js — Quebradas y cauces (ANA) y contexto de riesgo (peligros geológicos y sismos) para el punto elegido.
+ * contexto.js — Quebradas y cauces (ANA, IGP y OpenStreetMap) y contexto de riesgo (peligros geológicos y sismos) para el punto elegido.
  *
  * Lee archivos CONGELADOS de public/data (no consulta ningún servicio al elegir el punto) y calcula con las funciones puras
  * de calculos.js. Nada de esto es una evaluación de peligro:
- *   - Quebradas y cauces: distancia al cauce más cercano de la red hidrográfica de la ANA. No hay umbral normativo, así que
+ *   - Quebradas y cauces: distancia al cauce más cercano de la red unida de la ANA, el IGP y OpenStreetMap (cada tramo dice su fuente). No hay umbral normativo, así que
  *     el estado es INFORMATIVO salvo que la persona fije el suyo en «Mis umbrales» (entonces CUMPLE / NO CUMPLE según su umbral).
  *   - Peligros geológicos: inventario de eventos documentados de INGEMMET (el estado es siempre INFORMATIVO).
  *   - Sismos: sismos reportados por el IGP en el periodo que cubre el archivo; contexto reciente, no predicción.
@@ -42,33 +42,68 @@ const Contexto = (() => {
 
   // ------------------------------------------------------------ Quebradas y cauces
 
-  /** Cauces listos para medir; las tarjetas y el asistente comparten esta lista. */
+  /** Las fuentes del archivo de cauces. Un archivo antiguo, de una sola fuente, se trata como ANA. */
+  function fuentesDe(meta) {
+    if (Array.isArray(meta.fuentes) && meta.fuentes.length) return meta.fuentes;
+    return [{ id: 'ANA', fuente: meta.fuente, capa: meta.capa, descargado: meta.descargado, elaboracion: meta.elaboracion, atribucion: meta.atribucion, licencia: meta.licencia, escala: meta.escala, registros: meta.registros }];
+  }
+
+  /** Cauces listos para medir; las tarjetas y el asistente comparten esta lista. Cada cauce dice de qué fuente es. */
   async function cauces() {
     const { features, meta } = await archivo('quebradas');
     const lista = features
       .filter((f) => f.geometry && /LineString/.test(f.geometry.type))
-      .map((f) => ({ nombre: f.properties.nombre, tipo: f.properties.tipo, categoria: f.properties.categoria, cuenca: f.properties.cuenca, geometry: f.geometry }));
+      .map((f) => ({
+        nombre: f.properties.nombre, tipo: f.properties.tipo, categoria: f.properties.categoria, cuenca: f.properties.cuenca,
+        fuente: f.properties.fuente || 'ANA', alias: f.properties.alias || [], tambienEn: f.properties.tambienEn || [], geometry: f.geometry,
+      }));
     if (lista.length === 0) throw new Error('El archivo de quebradas no tiene cauces.');
-    return { lista, meta };
+    return { lista, meta, fuentes: fuentesDe(meta) };
   }
 
   /**
-   * Cauce más cercano al punto. Con \`umbralUsuarioM\` (de «Mis umbrales») da CUMPLE o NO CUMPLE según ese umbral; sin él,
-   * INFORMATIVO. Devuelve SIN DATO si el archivo falta.
+   * Cauce más cercano al punto, con su fuente (ANA, IGP u OpenStreetMap). Con `umbralUsuarioM` (de «Mis umbrales») da CUMPLE o
+   * NO CUMPLE según ese umbral; sin él, INFORMATIVO. Devuelve SIN DATO si el archivo falta.
    */
   async function quebradas(lat, lon, umbralUsuarioM = null) {
     const base = { fuente: CONFIG.quebradas.fuente };
     try {
-      const { lista, meta } = await cauces();
+      const { lista, meta, fuentes } = await cauces();
       const r = Calculos.evaluarCauces({ lat, lon }, lista, {
         umbralUsuarioM,
-        fuente: meta.fuente || base.fuente,
-        fecha: dia(meta.descargado),
-        metodo: 'Distancia en línea recta desde el punto hasta el tramo más cercano de la red hidrográfica de la ANA (distancia a la línea del mapa, no al cauce real ni a su faja marginal). Datos congelados.',
+        metodo: 'Distancia en línea recta desde el punto hasta el tramo más cercano de los cauces de la ANA, el IGP y OpenStreetMap (distancia a la línea del mapa, no al cauce real ni a su faja marginal). Datos congelados.',
       });
-      return { ...r, nombres: meta.nombres || [], elaboracion: meta.elaboracion || null, tramos: meta.registros };
+      const origen = fuentes.find((f) => f.id === r.fuenteId) || fuentes[0];
+      const faltan = await quebradasAusentes();
+      return {
+        ...r,
+        fuente: origen.fuente || base.fuente,
+        fecha: dia(origen.descargado),
+        elaboracion: origen.elaboracion || null,
+        licencia: origen.licencia || null,
+        nombres: meta.nombres || [],
+        tramos: meta.registros,
+        ausentes: faltan ? faltan.ausentes : [],
+        fuentes: fuentes.map((f) => ({ id: f.id, fuente: f.fuente, registros: f.registros, fecha: dia(f.descargado), elaboracion: f.elaboracion || null, licencia: f.licencia || null })),
+      };
     } catch (err) {
       return sinDato({ ...base, nombre: null, tipo: null, umbralM: null, segunUmbralUsuario: false, fecha: null, metodo: 'No se pudo obtener el dato.', error: err.message });
+    }
+  }
+
+  /**
+   * Qué quebradas conocidas NO están en el archivo de cauces: las que nombra el inventario de INGEMMET en 2 o más registros
+   * y las que citan los informes (CONFIG.quebradas.citadas), menos las que sí figuran. Se calcula con los datos congelados;
+   * si falta alguno, devuelve null (no se afirma nada).
+   */
+  async function quebradasAusentes() {
+    try {
+      const [{ meta, lista }, peligros] = await Promise.all([cauces(), archivo('peligros')]);
+      const nombresCauces = [...(meta.nombres || []), ...lista.flatMap((c) => c.alias.map((a) => a.nombre))];
+      const mencionadas = Calculos.quebradasMencionadas(peligros.features.map((f) => f.properties.sector));
+      return Calculos.quebradasAusentes({ mencionadas, citadas: CONFIG.quebradas.citadas || [], nombresCauces, maximo: 6 });
+    } catch (_) {
+      return null;
     }
   }
 
@@ -138,5 +173,5 @@ const Contexto = (() => {
     return { quebradas: q, peligros: p, sismos: s };
   }
 
-  return { cauces, quebradas, peligros, sismos, sismosCrudos, evaluar };
+  return { cauces, quebradas, quebradasAusentes, peligros, sismos, sismosCrudos, evaluar };
 })();

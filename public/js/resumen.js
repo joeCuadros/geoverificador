@@ -106,7 +106,7 @@ const Resumen = (() => {
     const partes2 = [];
     if (lejos.length) partes2.push(`Más lejos de lo recomendado: ${lejos.join(', ')}.`);
     if (faltan.length) partes2.push(`Sin dato de: ${lista(faltan)}; eso no significa que no existan.`);
-    if (cauce && typeof cauce.distanciaM === 'number' && cauce.nombre) partes2.push(`Lo más cercano en riesgo: ${cauce.nombre} a ${fmt(cauce.distanciaM)}.`);
+    if (cauce && typeof cauce.distanciaM === 'number' && cauce.nombre) partes2.push(`Lo más cercano en riesgo: ${cauce.nombre} a ${fmt(cauce.distanciaM)}${cauce.fuenteCorta ? ` (${cauce.fuenteCorta})` : ''}.`);
     const l2 = partes2.join(' ');
     const lineas = [l0, l1, l2].filter(Boolean);
     return { texto: lineas.join(' '), lineas, aviso: AVISO };
