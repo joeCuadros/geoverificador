@@ -42,6 +42,32 @@ const Precios = (() => {
     return ALIAS[n] || n;
   }
 
+  /**
+   * Los 25 distritos de public/data/distritos_aqp.geojson (escritos como allí), para reconocer un distrito dentro de una frase.
+   * test/precios.spec.ts comprueba que esta lista y el GeoJSON digan lo mismo.
+   */
+  const DISTRITOS_AQP = [
+    'ALTO SELVA ALEGRE', 'AREQUIPA', 'CAYMA', 'CERRO COLORADO', 'CHARACATO', 'CHIGUATA', 'JACOBO HUNTER', 'JOSE LUIS BUSTAMANTE Y RIVERO',
+    'LA JOYA', 'MARIANO MELGAR', 'MIRAFLORES', 'MOLLEBAYA', 'PAUCARPATA', 'POCSI', 'POLOBAYA', 'QUEQUEÑA', 'SABANDIA', 'SACHACA',
+    'SAN JUAN DE TARUCANI', 'SOCABAYA', 'TIABAYA', 'UCHUMAYO', 'YANAHUARA', 'YARABAMBA', 'YURA',
+  ];
+
+  /**
+   * Distrito de Arequipa que se nombra en un texto libre, o null. Compara sin tildes ni mayúsculas y por palabras completas,
+   * y prefiere el nombre más largo. «Arequipa» solo cuenta si la frase no nombra otro distrito (es también la ciudad).
+   */
+  function distritoEnTexto(texto) {
+    const t = ` ${normalizarNombre(texto)} `;
+    if (t.trim() === '') return null;
+    const candidatos = [
+      ...DISTRITOS_AQP.map((d) => [normalizarNombre(d), d]),
+      ...Object.entries(ALIAS).map(([alias, real]) => [alias, DISTRITOS_AQP.find((d) => normalizarNombre(d) === real) || real]),
+    ].sort((a, b) => b[0].length - a[0].length);
+    const hallado = candidatos.find(([nombre]) => nombre !== 'AREQUIPA' && t.includes(` ${nombre} `));
+    if (hallado) return hallado[1];
+    return /distrito de arequipa|cercado/i.test(texto) ? 'AREQUIPA' : null;
+  }
+
   const sinDato = (distrito, causa, motivo) => ({ estado: 'SIN DATO', distrito: distrito || null, causa, motivo });
 
   /** Redondea a soles enteros (la fuente publica enteros; el CSV trae decimales de la mediana). */
@@ -117,7 +143,11 @@ const Precios = (() => {
   /** Texto del periodo: «avisos vistos del 11 al 18 de octubre de 2026» o, si solo hay corte, «con corte al 18 de …». */
   function textoPeriodo(periodo) {
     if (!periodo) return 'periodo no informado';
-    if (periodo.desde && periodo.hasta) return `avisos vistos del ${fechaLarga(periodo.desde)} al ${fechaLarga(periodo.hasta)}`;
+    if (periodo.desde && periodo.hasta) {
+      const mismoMes = periodo.desde.slice(0, 7) === periodo.hasta.slice(0, 7);
+      const dia = Number(periodo.desde.slice(8, 10));
+      return `avisos vistos del ${mismoMes && dia ? dia : fechaLarga(periodo.desde)} al ${fechaLarga(periodo.hasta)}`;
+    }
     return `datos con corte al ${fechaLarga(periodo.corte || periodo.hasta)}`;
   }
 
@@ -150,7 +180,7 @@ const Precios = (() => {
     return ready;
   }
 
-  return { normalizarNombre, claveDistrito: clave, buscar, distritosConDato, formatearSoles, fechaLarga, textoPeriodo, load };
+  return { DISTRITOS_AQP, normalizarNombre, claveDistrito: clave, distritoEnTexto, buscar, distritosConDato, formatearSoles, fechaLarga, textoPeriodo, load };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = Precios;

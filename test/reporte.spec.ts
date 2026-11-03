@@ -146,7 +146,7 @@ describe('Reporte.seccionPrecio', () => {
     expect(h).toContain('4 905');
     expect(h).toContain('118');
     expect(h).toContain('CAYMA');
-    expect(h).toContain('11 de octubre de 2026');
+    expect(h).toContain('11 al 18 de octubre de 2026');
     expect(h).toContain('Datos: Aptologia');
     expect(h).toContain('CC BY 4.0');
   });

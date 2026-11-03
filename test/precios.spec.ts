@@ -121,7 +121,7 @@ describe('Precios: formato', () => {
 
   it('escribe fechas y periodos en español', () => {
     expect(Precios.fechaLarga('2026-10-18')).toBe('18 de octubre de 2026');
-    expect(Precios.textoPeriodo({ desde: '2026-10-11', hasta: '2026-10-18', corte: '2026-10-18' })).toBe('avisos vistos del 11 de octubre de 2026 al 18 de octubre de 2026');
+    expect(Precios.textoPeriodo({ desde: '2026-10-11', hasta: '2026-10-18', corte: '2026-10-18' })).toBe('avisos vistos del 11 al 18 de octubre de 2026');
     expect(Precios.textoPeriodo({ corte: '2026-10-18' })).toBe('datos con corte al 18 de octubre de 2026');
     expect(Precios.textoPeriodo(null)).toBe('periodo no informado');
   });

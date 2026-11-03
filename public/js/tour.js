@@ -80,7 +80,7 @@ const Tour = (() => {
             'Escribe una frase, por ejemplo «busco cerca de un colegio y un parque», o arma la búsqueda con los menús, sin escribir.',
             'Cada respuesta trae un apartado «Por qué, fuente y límites» que puedes abrir.',
             'Los porcentajes son la parte del suelo habitable de un distrito que cumple lo pedido. No son una probabilidad ni una recomendación.',
-            'No sabe de seguridad, precios ni ruido, y lo dice en vez de responder a medias.',
+            'No sabe de seguridad ni ruido, ni el precio de una casa en particular (solo el precio de oferta por m² promedio de algunos distritos), y lo dice en vez de responder a medias.',
           ],
         },
       ],

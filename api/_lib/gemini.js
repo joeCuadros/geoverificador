@@ -57,8 +57,9 @@ const PROMPT_INTERPRETAR = [
   '- lejosQuebrada ("lejos de quebradas", "lejos del rio") needs a minimum distance said by the person (lejosQuebradaM). If they gave none, include lejosQuebrada in criterios and leave lejosQuebradaM empty. Never invent a distance.',
   '- modo agregar/quitar/priorizar only when the interface state says there is a previous search and the person adjusts it ("agrega transporte", "quita el parque", "prioriza el colegio"); then criterios holds only the criteria being added, removed or prioritized.',
   '- Questions about the selected point: zona (which zone), construir (how much can be built; set loteM2 if a lot area is given), cambio_zonificacion (will the zoning change / new PDM), resumen (summary of the point), quebradas, sismos, peligros, servicio_cercano (is there a school/health post/stop/park near my point; criterios = those services).',
+  '- precio_distrito = the person asks the price per square metre of a district ("cuanto cuesta el m2 en Cayma", "precio por metro cuadrado en Yanahuara", "que distrito es mas caro"). Set distrito only if they name one of the allowed districts; otherwise leave it empty (it then means their point or all districts). It is only an average offer price per district.',
   '- fuentes = where the data comes from; ayuda = what can you do; saludo = greeting.',
-  '- Security/crime, prices/rent/cost and noise are NOT available. If the whole message is about that, intencion=fuera_de_alcance with tema. If it is a search that also mentions it, keep intencion=buscar and set tema as well. "tranquilo" (quiet) as a wish is the criterio tranquilo.',
+  '- Security/crime and noise are NOT available, and neither is the price of a specific house, lot or property, rents, or finding zones by price. If the whole message is about that, intencion=fuera_de_alcance with tema (precio for property prices, rents and price-based searches). If it is a search that also mentions it, keep intencion=buscar and set tema as well. "tranquilo" (quiet) as a wish is the criterio tranquilo.',
   '- If you cannot map the message, use intencion=desconocido.',
 ].join('\n');
 

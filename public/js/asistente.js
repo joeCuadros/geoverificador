@@ -18,6 +18,7 @@
  */
 const Asistente = (() => {
   const C = typeof Calculos !== 'undefined' ? Calculos : require('./calculos.js'); // eslint-disable-line no-undef
+  const P = typeof Precios !== 'undefined' ? Precios : require('./precios.js'); // eslint-disable-line no-undef
   const M_POR_GRADO = (Math.PI / 180) * C.RADIO_TIERRA_M;
   const rad = (d) => (d * Math.PI) / 180;
   const esNumero = (n) => typeof n === 'number' && Number.isFinite(n);
@@ -68,7 +69,7 @@ const Asistente = (() => {
 
   const TEMAS_SIN_DATOS = [
     ['seguridad', /\b(segur\w*|inseguridad|delincuen\w*|robos?|crimen|asalt\w*|peligros[oa]s?)\b/],
-    ['precio', /\b(precios?|caro|cara|baratos?|baratas?|barato|costos?|cuanto cuesta|alquiler|presupuesto)\b/],
+    ['precio', /\b(precios?|caro|cara|baratos?|baratas?|barato|costos?|cuanto cuesta|cuanto vale|cuanto valdria|a cuanto (?:esta|sale|va|cuesta) (?:el )?(?:m2|metro cuadrado)|el m2|el metro cuadrado|por (?:m2|metro cuadrado)|tasaci\w*|tasar|valoriz\w*|avaluo|alquiler(?:es)?|alquilar|presupuesto)\b/],
   ];
 
   const RE = {
@@ -86,6 +87,11 @@ const Asistente = (() => {
     agregar: /^(y |tambien |ademas )|\b(agrega\w*|anade\w*|suma\w*|incorpora\w*)\b/,
     quitar: /\b(quita\w*|elimina\w*|saca\w*|ya no|olvida\w*)\b/,
     condicional: /condicional/,
+    // Precio de UN inmueble concreto o su valor: no hay dato (solo promedios de oferta por distrito).
+    precioInmueble: /\b(?:esta|este|mi|la|el|una|un)\s+(?:casa|departamento|depa|inmueble|predio|terreno|propiedad|lote|vivienda)\b|\b(?:cuanto vale|cuanto valdria|vale la pena|tasaci\w*|tasar|valoriz\w*|avaluo|alquil\w*)\b/,
+    // Precio de oferta por m² de un distrito (Aptología): el metro cuadrado, el distrito o la zona del punto.
+    precioM2: /\b(?:m2|metros? cuadrados?|por metro|el metro|precio de oferta|precio promedio|promedio de precios?|mas caro|mas barato|mas economico|distritos?)\b/,
+    precioTodos: /\b(?:distritos|todos|ranking|comparar?|mas caro|mas barato|mas economico|cada distrito)\b/,
     // Preguntas sobre el punto (contexto de riesgo, siempre informativo; no son una evaluación de peligro).
     quebrada: /\b(quebradas?|torrenteras?|cauces?|huaycos?|huaicos?|aluvion\w*|rios?|rio chili)\b/,
     sismos: /\b(sismos?|sismic\w*|temblor\w*|terremoto\w*)\b/,
@@ -133,13 +139,14 @@ const Asistente = (() => {
   /**
    * Convierte lo escrito en una intención.
    *   ctx: { hayPunto?: boolean, ultimaBusqueda?: { criterios } }
-   * tipo: saludo | ayuda | fuentes | pdm | construir | zona | ficha | servicio | quebrada | sismos | peligros | buscar | no_soportado | desconocido
+   * tipo: saludo | ayuda | fuentes | pdm | construir | zona | ficha | servicio | quebrada | sismos | peligros | precio | buscar | no_soportado | desconocido
+   * precio: precio de oferta por m² de un distrito (`distritoPrecio`, o el del punto; `todosPrecio` = lista de todos los que tienen cifra)
    * modo (solo en buscar): nuevo | agregar | quitar | priorizar
    */
   function interpretar(texto, ctx = {}) {
     const intencion = {
       tipo: 'desconocido', modo: 'nuevo', criterios: [], radioGlobalM: null, lote: null, incluirCondicional: false,
-      temaNoSoportado: null, aproximados: [], limitarAlPunto: false,
+      temaNoSoportado: null, aproximados: [], limitarAlPunto: false, distritoPrecio: null, todosPrecio: false,
     };
     let t = normalizar(texto);
     if (!t) return intencion;
@@ -188,6 +195,16 @@ const Asistente = (() => {
 
     if (!hayCriterios && RE.saludo.test(t)) return { ...intencion, tipo: 'saludo' };
     if (RE.ayuda.test(t) && !hayCriterios) return { ...intencion, tipo: 'ayuda' };
+
+    // Precio de oferta por m² de un distrito (Aptología): se atiende antes que las búsquedas, porque aquí «casa» o «vivienda»
+    // no son un criterio. El precio de UN inmueble, un alquiler o una búsqueda de zonas «baratas» siguen sin dato.
+    if (intencion.temaNoSoportado === 'precio' && intencion.criterios.every((c) => c.id === 'residencial')) {
+      const distrito = P.distritoEnTexto(t);
+      if (RE.precioInmueble.test(t)) return { ...intencion, tipo: 'no_soportado', criterios: [], aproximados: [] };
+      if (distrito || RE.precioM2.test(t) || !RE.busqueda.test(t)) {
+        return { ...intencion, tipo: 'precio', criterios: [], aproximados: [], distritoPrecio: distrito, todosPrecio: !distrito && RE.precioTodos.test(t) };
+      }
+    }
 
     // Ajustes sobre la búsqueda anterior.
     if (ultima) {
@@ -656,6 +673,7 @@ const Asistente = (() => {
     '• Zonificación: plano y reglamento del PDM Arequipa 2016-2025 (O.M. 961-MPA, con la zonificación restituida por la 975-MPA). Es referencial.',
     '• Salud, colegios, paraderos y áreas verdes: OpenStreetMap (ODbL), copia congelada con su fecha de extracción. Algo que falte en el mapa puede existir.',
     '• Umbrales: colegios 500 m inicial, 1500 m primaria y 3000 m secundaria (MINEDU); área verde ≥ 0,5 ha a 300 m (OMS Europa); salud 1000 m, paradero 400 m y borde de zona 20 m son convenciones del proyecto.',
+    '• Precio de oferta por m² del distrito: Aptología (datos abiertos, CC BY 4.0). Son precios pedidos en avisos, no de cierre, y solo hay cifra en los distritos con suficientes avisos.',
     '• Distancias en línea recta, no recorrido a pie.',
     '• Las búsquedas de zonas son un cálculo sobre una cuadrícula de celdas; el porcentaje es la parte del suelo habitable que cumple, no una probabilidad.',
     'Nada de esto reemplaza el certificado municipal.',
@@ -670,9 +688,45 @@ const Asistente = (() => {
 
   const TEXTO_LIMITE_CAUCES = 'Ojo: «lejos de quebradas y ríos» usa la red hidrográfica de la ANA, que no incluye todas las quebradas urbanas, no es un mapa de peligro y no delimita la faja marginal. Cumplirlo no garantiza que el lugar esté libre de huaicos.';
 
+  const SUGERENCIAS_PRECIO = ['¿Cuánto cuesta el m² en Cayma?', 'Precio por m² en todos los distritos', 'Dame un resumen de mi punto'];
+  // Se escribe con coma, como el resto de cifras del asistente, y sin espacios dentro del número (el texto se verifica cifra por cifra).
+  const soles = (n) => `S/ ${String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`;
+  const LIM_PRECIO = 'Son precios pedidos en avisos de venta de departamentos, no de cierre ni una tasación, y es la mediana del distrito, no el precio de un inmueble en particular.';
+
+  function lineaPrecio(r) {
+    const nAv = r.nAvisos.venta;
+    return `${titulo(r.distrito)}: ${soles(r.precioM2.venta)} por m² (${nAv} avisos)`;
+  }
+
+  /**
+   * Precio de oferta por m² del distrito, con los datos de Aptología congelados (ctx.precios = contenido de
+   * precios_m2_distrito.json). Solo informa: no compara con un precio, no dice si es caro y no recomienda.
+   *   ctx: { precios, distrito? (distrito del punto, en mayúsculas), punto? }
+   */
+  function textoPrecio(intencion, c) {
+    const datos = c.precios;
+    if (!datos) return 'No pude leer el archivo de precios por distrito, así que no tengo una cifra para darte.';
+    const conDato = P.distritosConDato(datos).map((d) => titulo(d));
+    const cierre = `${LIM_PRECIO}\n${datos.atribucion} (${datos.licencia}), ${P.textoPeriodo(datos.periodo)}. Es informativo y referencial: no reemplaza una tasación.`;
+    const nombre = intencion.distritoPrecio || (intencion.todosPrecio ? null : c.distrito || null);
+    if (!nombre) {
+      const filas = P.distritosConDato(datos).map((d) => P.buscar(datos, d)).filter((r) => r.estado === 'INFORMATIVO').map((r) => `• ${lineaPrecio(r)}`);
+      if (filas.length === 0) return 'El archivo de precios no trae ningún distrito con cifra.';
+      return [`Precio de oferta por m² (venta) en los distritos con cifra publicada:`, ...filas, 'Para los demás distritos no hay cifra: la fuente solo publica distritos con suficientes avisos.', cierre].join('\n');
+    }
+    const r = P.buscar(datos, nombre);
+    if (r.estado === 'SIN DATO') {
+      return [`${r.causa}`, conDato.length ? `Distritos con cifra: ${conDato.join(', ')}.` : null, 'No estimo un precio donde la fuente no lo publica.'].filter(Boolean).join('\n');
+    }
+    return [
+      `En ${titulo(r.distrito)} el precio de oferta mediano es ${soles(r.precioM2.venta)} por m² (departamentos en venta, ${r.nAvisos.venta} avisos).`,
+      cierre,
+    ].join('\n');
+  }
+
   const TEMAS = {
     seguridad: 'No evalúo seguridad ciudadana: el proyecto la dejó fuera de alcance, aunque los estudios muestran que pesa en la decisión de compra. No te doy una respuesta a medias.',
-    precio: 'No tengo datos de precios ni de alquileres, así que no puedo decirte qué zona es más barata.',
+    precio: 'No tengo el precio de una casa, un terreno ni un alquiler en particular, ni puedo decirte qué zona es más barata. Solo conozco el precio de oferta por m² promedio de algunos distritos (Aptología): pregúntame «¿cuánto cuesta el m² en Cayma?».',
     ruido: 'No tengo datos de ruido. «Zona tranquila» es solo una aproximación con la zonificación (residencial de densidad baja o media 1), no una medición.',
   };
 
@@ -686,11 +740,12 @@ const Asistente = (() => {
     const fin = (texto, sugerencias = SUGERENCIAS_BASE) => ({ texto, sugerencias });
 
     if (tipo === 'saludo') return fin('¡Hola! Soy el asistente de GeoVerificador. Puedo contarte lo que hay en tu punto (zona y servicios cercanos) o buscar zonas de Arequipa según lo que te importa: colegio, posta, área verde, transporte, campiña, zona residencial. Todo con los mismos datos de la ficha.');
-    if (tipo === 'ayuda') return fin('Puedo:\n• Buscar zonas: «busco cerca de un colegio y un parque, lo más importante es el parque» o «posta y paradero en un radio de 1 km».\n• Contarte de tu punto: «¿qué zona es?», «¿hay un colegio cerca?», «dame un resumen».\n• Calcular: «¿cuánto puedo construir en un lote de 200 m²?».\n• Explicar el PDM nuevo y de dónde salen los datos.\nNo tengo datos de seguridad, precios ni ruido.');
+    if (tipo === 'ayuda') return fin('Puedo:\n• Buscar zonas: «busco cerca de un colegio y un parque, lo más importante es el parque» o «posta y paradero en un radio de 1 km».\n• Contarte de tu punto: «¿qué zona es?», «¿hay un colegio cerca?», «dame un resumen».\n• Calcular: «¿cuánto puedo construir en un lote de 200 m²?».\n• Explicar el PDM nuevo y de dónde salen los datos.\n• Decirte el precio de oferta por m² promedio de un distrito: «¿cuánto cuesta el m² en Cayma?».\nNo tengo datos de seguridad ni ruido, ni el precio de una casa o un terreno en particular.');
     if (tipo === 'fuentes') return fin(TEXTO_FUENTES);
     if (tipo === 'no_soportado') return fin(`${TEMAS[intencion.temaNoSoportado] || 'Eso no está en los datos que uso.'}\nSí puedo ayudarte con la zonificación y con la cercanía a colegios, salud, transporte y áreas verdes.`);
     if (tipo === 'desconocido') return fin('No entendí eso. Puedes pedirme, por ejemplo:', SUGERENCIAS_BASE);
     if (tipo === 'pdm') return fin(textoPDM(c.estadoPDM));
+    if (tipo === 'precio') return fin(textoPrecio(intencion, c), SUGERENCIAS_PRECIO);
 
     if (!c.punto) return sinPunto();
 
@@ -943,7 +998,7 @@ const Asistente = (() => {
   const GENERICO = {
     porque: ['El asistente entiende frases con reglas explícitas, no con un modelo de lenguaje: por eso no puede inventar un dato.'],
     fuente: ['Responde solo con los datos de la ficha: el plano de zonificación y OpenStreetMap.'],
-    limites: ['No tiene datos de seguridad, precios ni ruido, y lo dice cuando se lo preguntan.', LIM_REFERENCIAL],
+    limites: ['No tiene datos de seguridad ni ruido, ni el precio de un inmueble en particular (solo el promedio de oferta por m² de algunos distritos), y lo dice cuando se lo preguntan.', LIM_REFERENCIAL],
   };
   const SERVICIOS = {
     porque: ['Se mide la distancia en línea recta desde tu punto hasta el elemento más cercano de cada tipo y se compara con la distancia de referencia (umbral).'],
@@ -991,6 +1046,11 @@ const Asistente = (() => {
       limites: [LIM_INVENTARIO, LIM_RECTA, LIM_REFERENCIAL],
     },
     servicio: SERVICIOS,
+    precio: {
+      porque: ['Busca el distrito en el archivo de precios de oferta por m² y lo dice tal cual: la mediana de los avisos de departamentos en venta del periodo indicado. No lo compara ni lo evalúa.'],
+      fuente: ['Aptología, estudio «Vivienda en Arequipa» (datos abiertos, CC BY 4.0): datos: Aptologia. Archivo congelado con su fecha de descarga.'],
+      limites: [LIM_PRECIO, 'Aptología solo publica distritos con al menos 30 avisos, así que para los demás no hay cifra y el asistente no la estima.', LIM_REFERENCIAL],
+    },
     ficha: {
       porque: ['Junta lo que la ficha ya calculó para tu punto: la zona del plano y la distancia al servicio más cercano de cada tipo.'],
       fuente: [FUENTE_PLANO, FUENTE_OSM, FUENTE_UMBRALES],

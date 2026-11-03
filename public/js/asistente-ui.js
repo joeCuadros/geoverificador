@@ -126,6 +126,16 @@ const AsistenteUI = (() => {
     return ctx;
   }
 
+  /** Para «¿cuánto cuesta el m² en…?»: el archivo de precios y, si hay punto, su distrito. No necesita el resto de la ficha. */
+  async function contextoPrecio() {
+    const p = api.obtenerPunto();
+    const [precios, dis] = await Promise.all([
+      Precios.load().catch(() => null), // sin archivo, el asistente lo dice
+      p ? Distritos.lookup(p.lat, p.lon).catch(() => null) : Promise.resolve(null),
+    ]);
+    return { estadoPDM: CONFIG.estadoPDM, potencial: Zonificacion.potencial, punto: p, distrito: dis ? dis.distrito : null, precios };
+  }
+
   // -------------------------------------------------------------------- Búsqueda
 
   /** Ordena los archivos congelados y el plano una sola vez; si falta equipamiento, no se puede buscar. */
@@ -259,7 +269,8 @@ const AsistenteUI = (() => {
       const intencion = eleccion.intencion;
       if (intencion.tipo === 'buscar') await ejecutarBusqueda(intencion);
       else {
-        const ctx = ['ficha', 'servicio', 'zona', 'construir', 'quebrada', 'sismos', 'peligros'].includes(intencion.tipo) ? await contexto() : { estadoPDM: CONFIG.estadoPDM, potencial: Zonificacion.potencial, punto: api.obtenerPunto() };
+        const ctx = intencion.tipo === 'precio' ? await contextoPrecio()
+          : ['ficha', 'servicio', 'zona', 'construir', 'quebrada', 'sismos', 'peligros'].includes(intencion.tipo) ? await contexto() : { estadoPDM: CONFIG.estadoPDM, potencial: Zonificacion.potencial, punto: api.obtenerPunto() };
         const resp = Asistente.responder(intencion, ctx);
         let texto = resp.texto;
         // Gemini only rewords the deterministic answer; the text is verified (numbers, names, caveat) or discarded.
