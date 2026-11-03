@@ -174,7 +174,7 @@ const CapasUI = (() => {
     if (r.leyenda.some((l) => ['colegios', 'salud', 'paraderos', 'parques'].includes(l.capa))) fuentes.push(`Colegios, salud, paraderos y parques: OpenStreetMap (ODbL), ${fecha || 'sin fecha'}. Puede faltar alguno.`);
     if (r.leyenda.some((l) => ['residencial', 'tranquilo', 'campina', 'comercial', 'historico'].includes(l.capa))) fuentes.push('Zonas: plano del PDM Arequipa 2016-2025 (referencial).');
     if (r.leyenda.some((l) => l.capa === 'quebradas')) fuentes.push('Quebradas y ríos: red hidrográfica de la ANA; no incluye todas las quebradas urbanas ni es un mapa de peligro.');
-    if (r.leyenda.some((l) => l.capa === 'lineas')) fuentes.push('Líneas de bus: Rutas: SmartBus (smartbus.app), recorridos publicados usados con autorización verbal; sin frecuencias ni horarios. La parada es la más cercana en línea recta.');
+    if (r.leyenda.some((l) => l.capa === 'lineas')) fuentes.push('Líneas de bus: Rutas: SmartBus (smartbus.app), recorridos publicados usados con autorización verbal; sin frecuencias ni horarios.' + (r.paradasBus.length ? ' La parada es la más cercana en línea recta.' : ''));
     if (r.leyenda.some((l) => l.capa === 'sismos')) fuentes.push('Sismos: Instituto Geofísico del Perú; actividad reciente reportada, no una predicción.');
     $('leyenda-filas').innerHTML = fuentes.map((f) => `<li><small>${esc(f)}</small></li>`).join('');
     $('leyenda-pie').textContent = r.sectores.length ? 'Los bordes de los sectores son aproximados. Distancias en línea recta.' : 'Distancias en línea recta.';
