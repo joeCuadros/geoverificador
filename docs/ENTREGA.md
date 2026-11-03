@@ -5,7 +5,7 @@ Resumen del estado técnico. El detalle de fuentes y límites está en [`METODOL
 ## Qué funciona
 
 - **Cinco variables por separado** con su fuente y umbral: zonificación vigente (V1a), aviso de zonificación proyectada (V1b), salud, educación por nivel, transporte y área verde. Los cálculos se hacen en el navegador, con archivos locales.
-- **Verificación automática:** 1 023 pruebas unitarias (`pnpm test`) y 136 comprobaciones de integridad y cálculo (`pnpm datos:verificar`), en la última corrida.
+- **Verificación automática:** 1 107 pruebas unitarias (`pnpm test`) y 144 comprobaciones de integridad y cálculo (`pnpm datos:verificar`), en la última corrida.
 - **Zonificación contrastada:** las reglas coinciden con el Reglamento y con la Memoria oficial (201 valores numéricos, ninguno faltante). Los polígonos se re-extrajeron del PDF del plano con 99,97 % de coincidencia en 13 255 puntos al azar.
 - **Equipamiento de OpenStreetMap** congelado en `public/data/equipamiento`, con la fecha de extracción y la atribución ODbL.
 - **Líneas de transporte de SmartBus** congeladas en `public/data/rutas_smartbus.geojson` (12 líneas, 241 recorridos, 9 301 paradas; descarga del 2026-11-03), visibles en la ficha, la comparación, el informe y el asistente. Se usan con **autorización verbal de SmartBus; la confirmación escrita está pendiente** (ver Pendiente). Son recorridos publicados: sin frecuencias ni horarios (METODOLOGIA §6c).
@@ -23,6 +23,7 @@ Resumen del estado técnico. El detalle de fuentes y límites está en [`METODOL
 
 - **Cobertura de precios.** Solo 3 distritos tienen precio de oferta por m²; no hay precio de alquiler por m² ni serie en el tiempo. Falta una fuente con más distritos (por ejemplo, un extracto agregado de un portal con permiso de uso y atribución) y volver a correr `node scripts/descargar-precios.mjs` cuando Aptología actualice su estudio (se anuncia mensual).
 
+- **Riesgo por distrito ante El Niño (CENEPRED).** Integrado solo a escala de distrito (nivel de riesgo y conteos confirmados; METODOLOGIA §12.8). Falta: el estudio actualizado en el que se basa la capa (Informe Técnico N.° 69-2026/SENAMHI-DMA-SPC, que no se encontró) para confirmar los umbrales de los niveles; los campos de población y de viviendas totales de la capa (no cuadran entre sí en varios distritos); y las dos capas de susceptibilidad por ráster (1 y 2), cuyo valor de píxel no trae la leyenda de sus clases. Las evaluaciones de riesgo de predio siguen siendo de la municipalidad.
 - **Quebradas urbanas.** Aun con las tres fuentes faltan quebradas que nombra el inventario de INGEMMET (hoy: Cabrería, Pajonal, Onda, Honda, Mariano Melgar y Pisac; se calculan, no se escriben a mano). Falta una fuente de peligro delimitado (CENEPRED/SIGRID o los informes de INGEMMET), que no respondió desde la red de prueba; probar desde una red en Perú.
 - **Peligro volcánico.** Confirmar con el IGP o INGEMMET de qué edición del mapa del Misti salen las capas del IGP (sin metadatos de fecha) y de qué volcán son las capas de ceniza; si se confirma que son anteriores al Boletín n.° 100 (2025), reemplazarlas con los nuevos mapas de INGEMMET.
 - **Catálogo sísmico histórico.** Descargar a mano el catálogo del IGP (datosabiertos.gob.pe) y congelarlo con fecha; la API solo trae 2026.
