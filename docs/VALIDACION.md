@@ -159,6 +159,37 @@ Los cementerios se excluyeron: el Reglamento no les asigna una zona, y suponerla
 
 **Resultado:** _pendiente_. Lo único que se puede afirmar hoy, porque se observó en el mapa, es que el centro histórico y los ejes de la Av. Ejército y de Cayma concentran la mayor densidad; eso es una observación, no una validación.
 
+### 3.4 OpenStreetMap frente a RENIPRESS y ESCALE (K2)
+
+**Resultado:** _pendiente de correr con los archivos oficiales_. El script y su lógica están hechos y probados con archivos CSV pequeños de muestra (`test/fixtures/`, datos inventados que no dicen nada de la realidad); **no se descargó ningún dato oficial**: los dos archivos los baja la persona a mano. Sigue el protocolo de `docs/INVESTIGACION-VARIABLES.md` §5.1.
+
+**Dónde descargar cada archivo** (las descargas automáticas reciben HTTP 418 o piden sesión: hay que usar un navegador):
+
+| Archivo | Dónde | Qué guardar |
+|---|---|---|
+| RENIPRESS (salud) | `https://www.datosabiertos.gob.pe/dataset/registro-nacional-de-entidades-prestadoras-de-servicios-de-salud-renipress` (SUSALUD/MINSA, licencia Open Data Commons Attribution) | El CSV de la edición más reciente que traiga las columnas de **latitud y longitud** (el catálogo lista ediciones mensuales). Anota la edición (por ejemplo «2026-09») |
+| Padrón de ESCALE (educación) | `https://escale.minedu.gob.pe/web/inicio/padron-de-iiee` (MINEDU) | La base del padrón de instituciones educativas (en la biblioteca de documentos de ESCALE viene como `.dbf` dentro de un `.zip`: ábrelo con una hoja de cálculo y guárdalo como **CSV**). Debe traer código de local, nombre, nivel, estado, distrito y las coordenadas del local. Anota la fecha |
+
+Si tu archivo de RENIPRESS solo trae coordenadas UTM (Norte y Este), el script lo rechaza y dice qué columnas faltan: busca otra edición con latitud y longitud.
+
+**Comando** (no usa internet; lee la copia de OpenStreetMap ya congelada en `public/data/equipamiento`):
+
+```bash
+pnpm datos:validar-oficial -- --escale=ruta/padron_escale.csv --renipress=ruta/renipress.csv   --fecha-escale=2026-10 --fecha-renipress=2026-09 --salida=docs/validacion/k2-resultado.json
+```
+
+Opciones: `--radios=50,100,200` (m), `--umbral-nombre=0.9`, `--paso=500` (separación, en m, de la malla de puntos), `--incluir-consultorios` y, para fijar los criterios de aceptación **antes de mirar los números**, `--min-exhaustividad=0.85 --min-precision=0.85` (el informe dice si se cumplen; el 85 % es la referencia de caminabilidad del estudio de Santiago de Chile citado en el protocolo, no una norma).
+
+**Qué hace, paso a paso:**
+
+1. Filtra Arequipa metropolitana: provincia y departamento AREQUIPA (si el archivo los trae), coordenadas dentro de la caja de la herramienta, estado activo y, en RENIPRESS, sin consultorios (salvo `--incluir-consultorios`). Las filas descartadas se cuentan y se muestran por causa.
+2. ESCALE: solo inicial, primaria y secundaria (no el programa no escolarizado ni la básica alternativa) y **una fila por código de local** (un local alberga varias instituciones; sus niveles se juntan y se guardan todos sus nombres).
+3. Empareja con OpenStreetMap de forma **uno a uno** por parecido de nombre ≥ 0,9 (sin tildes, signos ni palabras como «colegio», «puesto» o «centro de salud»; distancia de edición normalizada, sin importar el orden de las palabras) y distancia, barriendo **50, 100 y 200 m**. Los elementos de OSM sin nombre no se pueden emparejar por nombre: se cuentan aparte.
+4. Reporta, por radio y por categoría (salud, educación y cada nivel): **exhaustividad** (qué parte de lo oficial aparece en OSM), **precisión** (qué parte de lo de OSM con nombre corresponde a un registro oficial), **desfase posicional** (mediana y percentil 90) y la exhaustividad **por distrito**.
+5. **Impacto en la variable:** en una malla de puntos dentro del plano de zonificación calcula la distancia al establecimiento más cercano con OSM y con el registro oficial, y cuenta en cuántos puntos cambia CUMPLE / NO CUMPLE con los umbrales de la ficha (salud 1000 m; educación 500, 1500 y 3000 m), en qué dirección, y la diferencia mediana de la distancia.
+
+**Límites del método:** la precisión es una cota baja (un establecimiento real de OSM que el registro no incluye, o que se llama distinto, cuenta como no emparejado) y conviene revisar a mano una muestra de los no emparejados. Las coordenadas de ESCALE son las del local, reportadas por la UGEL, y pueden estar desplazadas. OSM etiqueta poco el nivel de los colegios: la ficha supone primaria y secundaria cuando no hay etiqueta, y este informe usa la misma regla. Si OSM no basta, la decisión posterior (a fijar por el equipo) es usar RENIPRESS y ESCALE como fuente primaria y mostrar la fuente y la fecha de cada dato.
+
 ## 4. Riesgos para la validez (amenazas conocidas)
 
 | Amenaza | Efecto | Qué se hace |
@@ -178,4 +209,5 @@ Los cementerios se excluyeron: el Reglamento no les asigna una zona, y suponerla
 - [ ] Obtener los certificados u otra referencia oficial para la muestra (§3.1).
 - [ ] Reclutar participantes y fijar las tareas con su respuesta correcta (§3.2).
 - [ ] Revisión del mapa de calor con conocedores (§3.3).
+- [ ] Descargar a mano RENIPRESS y el padrón de ESCALE, fijar los criterios de aceptación y correr `pnpm datos:validar-oficial` (§3.4).
 - [ ] Registrar resultados en las plantillas y completar este documento.
