@@ -57,6 +57,7 @@
 | **RENIPRESS** (establecimientos de salud con latitud, longitud, categoría y estado) | Portal de datos abiertos: <https://www.datosabiertos.gob.pe/dataset/registro-nacional-de-entidades-prestadoras-de-servicios-de-salud-renipress> (CSV mensual, licencia ODC-By, actualizado el 2026-09-30). También como servicio ArcGIS del MINSA (`RENIPRESS_PERU`, consulta por distancia, salida GeoJSON) | Contrastar o **reemplazar OSM** en salud; distinguir categoría (I-1 a I-4) | Las coordenadas oficiales también tienen errores (en Brasil, solo el 63 % de los hospitales del registro tenía coordenadas correctas) |
 | **ESCALE** (padrón de instituciones educativas) | <https://escale.minedu.gob.pe/padron-de-iiee/> (descarga por correo) | Colegios con nivel **oficial** | MINEDU advierte que las ubicaciones urbanas son referenciales |
 | **Precios de oferta por distrito** (Perú, octubre 2026) | Aptología, CC BY 4.0: <https://huggingface.co/datasets/aptologia/microestudios-vivienda-peru-2026> | Contexto de presupuesto **por distrito** | **Precios pedidos, no de cierre.** Muestras pequeñas (30 a 120 avisos por distrito). Autor individual: validar |
+| **Otras fuentes del Estado** (denuncias MININTER, suelo sísmico IGP, Misti INGEMMET, riesgo SIGRID, valor MiVivienda, OSINERGMIN, INDECI y más) | Sondeo del 2026-11-03 | Ver `05-FUENTES-ADICIONALES.md` | Casi ninguna declara licencia; varias no tienen CORS (precalcular, no consultar en vivo) |
 
 ## 5. Lo que NO existe (y no se debe prometer)
 
@@ -65,7 +66,7 @@
 | **Tiempos por red a trabajo y colegio** | Es el corazón de las anclas | Servidor de rutas **propio** (Valhalla u OpenRouteService) con el extracto de OSM de Perú. Los servidores públicos de demostración **no son para producción** |
 | **Tiempos en transporte público** | El transporte es informal; no se encontró GTFS | Mostrar «paradero cercano», **no** «tiempo en bus» |
 | **Calidad escolar** | Aparece en la literatura como factor positivo | Declarar que no está |
-| **Seguridad, ruido, precios** | Pesan en la decisión | Declarar que no están. Hoy el asistente ya responde «sin datos» a estos tres temas (`no_soportado`) y, si van dentro de una búsqueda, la ejecuta y añade el aviso. (La seguridad existe pero está oculta.) |
+| **Seguridad, ruido, precios** | Pesan en la decisión | Declarar que no están **en el producto**. Hoy el asistente ya responde «sin datos» a estos tres temas (`no_soportado`) y, si van dentro de una búsqueda, la ejecuta y añade el aviso. (La seguridad existe pero está oculta.) Existen **fuentes candidatas** fuera del proyecto (denuncias del MININTER, valor de vivienda financiada de MiVivienda): ver `05-FUENTES-ADICIONALES.md`. Ruido sigue sin fuente |
 | **Quebradas urbanas** (Añashuayco, San Lázaro, etc.) | Un «lejos de quebradas» incompleto da falsa tranquilidad | Mostrar el límite de la fuente en cada uso |
 | **Zonificación futura (PDM 2026-2046)** | Es el «futuro» del predio | Aviso con fuente y fecha; **no hay mapa** |
 | **Precios por predio o por zona fina** | «Compra y venta» | Solo rango distrital de oferta. **No raspar portales** sin revisar sus términos |

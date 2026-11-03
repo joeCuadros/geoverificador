@@ -11,6 +11,7 @@ Este paquete reúne todo lo necesario para pasar el diseño a otra cuenta o mode
 | `02-DATOS.md` | Datos existentes con conteos, umbrales y fuentes, datos externos, lo que no existe, privacidad, endpoints |
 | `03-EVIDENCIA.md` | Evidencia (E1 a E26) → decisión de diseño, y lo que la evidencia no resuelve |
 | `04-DIRECCION-DEL-EQUIPO.md` | Feedback del equipo del 2026-11-03: página de inicio con foto, tutorial y luego chat, chat grande, prioridad por criterio |
+| `05-FUENTES-ADICIONALES.md` | Sondeo de fuentes abiertas y sistemas del Estado (nacionales y regionales) que podrían sumarse, con lo verificado y lo que no, y las correcciones a lo dicho antes |
 | `referencias/` (por crear) | Capturas que envió el equipo; copiarlas aquí y adjuntarlas (no están en el repositorio) |
 | `contrato-datos.json` | Datos de **ejemplo** (marcados `muestra: true`) para prototipar con realismo |
 | `skill/geoverificador-decision-ux/` | Skill: `SKILL.md` + `references/identidad-visual.md` |

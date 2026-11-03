@@ -93,6 +93,7 @@ Recorrido completo (detalle en `01-DISENO-DE-INICIO-A-FIN.md`, sección 5):
 | `02-DATOS.md` | Qué datos existen, cuáles faltan y qué no prometer |
 | `03-EVIDENCIA.md` | Por qué cada decisión (las claves `[E#]`) y lo que la evidencia **no** resuelve |
 | `04-DIRECCION-DEL-EQUIPO.md` | Pedidos del equipo sobre la versión actual (inicio con foto, chat primero, chat grande, prioridades) y capturas de referencia |
+| `05-FUENTES-ADICIONALES.md` | Fuentes del Estado que podrían sumarse (seguridad, riesgo, precios por distrito) con su estado verificado; son **candidatas**, no existen en el producto |
 | `contrato-datos.json` | Forma de los datos de ejemplo para el prototipo |
 | Skill `geoverificador-decision-ux` | Reglas duras, patrones, microcopy, identidad visual y lista de revisión |
 

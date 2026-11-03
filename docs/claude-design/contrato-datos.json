@@ -256,5 +256,59 @@
     "llm_no_disponible": { "mensaje": "El chat avanzado no está disponible. Puedes seguir con el asistente básico." },
     "modo_chat": { "valores": ["gemini", "reglas"], "etiqueta": "Modo: reglas" },
     "estados_de_variable": ["CUMPLE", "NO CUMPLE", "SIN DATO", "INFORMATIVO", "PARCIAL"]
+  },
+  "fuentes_candidatas": {
+    "muestra": true,
+    "nota": "Fuentes que NO están en la aplicación. Se listan para diseñar estados y tarjetas de contexto; ver 05-FUENTES-ADICIONALES.md. Ningún valor es un dato real.",
+    "items": [
+      {
+        "id": "denuncias_mininter",
+        "etiqueta": "Denuncias cerca del punto",
+        "estado": "INFORMATIVO",
+        "limite": "Son denuncias, no delitos. Corte al 2025-06-30.",
+        "fuente": "MININTER",
+        "verificado": true
+      },
+      {
+        "id": "misti_ingemmet",
+        "etiqueta": "Peligro volcánico del Misti",
+        "estado": "INFORMATIVO",
+        "limite": "Niveles alto, moderado y bajo; escala de mapa, no de predio.",
+        "fuente": "INGEMMET",
+        "verificado": true
+      },
+      {
+        "id": "suelo_sismico_igp",
+        "etiqueta": "Tipo de suelo sísmico",
+        "estado": "INFORMATIVO",
+        "limite": "Solo la ciudad; dato de 2014.",
+        "fuente": "IGP",
+        "verificado": true
+      },
+      {
+        "id": "riesgo_distrito_sigrid",
+        "etiqueta": "Riesgo del distrito (inundación, movimientos en masa)",
+        "estado": "INFORMATIVO",
+        "limite": "Nivel distrital; no sirve para un predio.",
+        "fuente": "CENEPRED SIGRID",
+        "verificado": true
+      },
+      {
+        "id": "valor_vivienda_mivivienda",
+        "etiqueta": "Valor de vivienda financiada del distrito",
+        "estado": "INFORMATIVO",
+        "limite": "Solo vivienda con crédito; muestra pequeña por distrito (de 7 a 209 casos).",
+        "fuente": "Fondo MiVivienda",
+        "verificado": true
+      },
+      {
+        "id": "aviso_pdm",
+        "etiqueta": "Vigencia del plano de zonificación",
+        "estado": "AVISO",
+        "limite": "Una nota de prensa lo describe como suspendido; sin resolución hallada. El PDM nuevo no estaba aprobado.",
+        "fuente": "Prensa (El Búho, 2025-12-23)",
+        "verificado": false
+      }
+    ]
   }
 }
