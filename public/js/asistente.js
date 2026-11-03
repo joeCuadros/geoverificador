@@ -254,7 +254,8 @@ const Asistente = (() => {
     });
     return b;
   };
-  const puntoDe = (f) => ({ lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0], nombre: f.properties.nombre || null });
+  // Conserva `osm` y `tags`: el mapa por entidades y el conteo por distrito necesitan identificar y describir cada elemento.
+  const puntoDe = (f) => ({ lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0], nombre: f.properties.nombre || null, osm: f.properties.osm || null, tags: f.properties.tags || {} });
   const esPunto = (f) => f && f.geometry && f.geometry.type === 'Point';
 
   /** ¿La zona cumple lo que pide el criterio de zona (por código o por grupo)? */
@@ -280,13 +281,18 @@ const Asistente = (() => {
     const e = entrada || {};
     const areaMin = umbrales.areaVerde.areaMinM2;
     const colegios = { inicial: [], primaria: [], secundaria: [] };
+    const colegiosLista = []; // cada colegio una sola vez, con todos sus niveles
     (e.educacion || []).filter(esPunto).forEach((f) => {
-      C.nivelesEducativos(f.properties.tags).forEach((n) => colegios[n].push(puntoDe(f)));
+      const niveles = C.nivelesEducativos(f.properties.tags);
+      const p = puntoDe(f);
+      niveles.forEach((n) => colegios[n].push(p));
+      if (niveles.length > 0) colegiosLista.push({ ...p, niveles });
     });
-    const verdes = (e.areasVerdes || [])
-      .map((f) => ({ geometry: f.geometry, areaM2: C.areaGeometriaM2(f.geometry), nombre: f.properties.nombre || null }))
-      .filter((v) => v.areaM2 >= areaMin)
-      .map((v) => ({ ...v, bbox: bboxDeGeometria(v.geometry) }));
+    const verdesTodos = (e.areasVerdes || [])
+      .filter((f) => f && f.geometry)
+      .map((f) => ({ geometry: f.geometry, areaM2: C.areaGeometriaM2(f.geometry), nombre: f.properties.nombre || null, osm: f.properties.osm || null, tags: f.properties.tags || {} }))
+      .map((v) => ({ ...v, bbox: bboxDeGeometria(v.geometry), centro: C.centroDe(v.geometry) }));
+    const verdes = verdesTodos.filter((v) => v.areaM2 >= areaMin); // los criterios usan solo los de al menos 0,5 ha (OMS)
     const zonasPorCriterio = {};
     Object.entries(CRITERIOS).filter(([, d]) => d.tipo === 'zona').forEach(([id, def]) => {
       zonasPorCriterio[id] = (zonas || [])
@@ -296,6 +302,8 @@ const Asistente = (() => {
     return {
       salud: (e.salud || []).filter(esPunto).map(puntoDe),
       colegios,
+      colegiosLista,
+      verdesTodos,
       transporte: (e.transporte || []).filter(esPunto).map(puntoDe),
       verdes,
       cauces: (e.cauces || [])
