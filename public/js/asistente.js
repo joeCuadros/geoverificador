@@ -18,6 +18,7 @@
  */
 const Asistente = (() => {
   const C = typeof Calculos !== 'undefined' ? Calculos : require('./calculos.js'); // eslint-disable-line no-undef
+  const RT = typeof Rutas !== 'undefined' ? Rutas : require('./rutas.js'); // eslint-disable-line no-undef
   const M_POR_GRADO = (Math.PI / 180) * C.RADIO_TIERRA_M;
   const rad = (d) => (d * Math.PI) / 180;
   const esNumero = (n) => typeof n === 'number' && Number.isFinite(n);
@@ -86,6 +87,14 @@ const Asistente = (() => {
     agregar: /^(y |tambien |ademas )|\b(agrega\w*|anade\w*|suma\w*|incorpora\w*)\b/,
     quitar: /\b(quita\w*|elimina\w*|saca\w*|ya no|olvida\w*)\b/,
     condicional: /condicional/,
+    // «¿Qué buses pasan por aquí?», «¿qué líneas pasan por Paucarpata?»: líneas de transporte, no «transporte» como criterio de búsqueda.
+    rutasPregunta: /\b(?:que|cuales?|cual|cuantas?|cuantos?)\b[^.]*?\b(?:lineas?|rutas?|buses?|combis?|micros?|colectivos?)\b/,
+    rutasVerbo: /\b(?:pasa\w*|cruza\w*|recorre\w*|llega\w*|sirve\w*|circula\w*|hay|existe\w*|tengo|tiene\w*|cerca)\b/,
+    rutasLinea: /\b(?:lineas?|rutas?)\b[^.]*\b(?:pasa\w*|cruza\w*|recorre\w*|llega\w*|sirve\w*|circula\w*)\b/,
+    rutasVehiculo: /\b(?:buses?|combis?|micros?|colectivos?)\b[^.]*\b(?:pasa\w*|cruza\w*|recorre\w*|circula\w*)\b/,
+    rutasHay: /^(?:hay|existen?|tienen?)\b[^.]*\b(?:lineas?|rutas?|buses?|combis?|micros?|colectivos?)\b/,
+    noRutas: /\b(?:busc\w*|recomi\w*|sugier\w*|vivir|mudar\w*|comprar)\b/,
+    aqui: /\b(?:mi punto|este punto|mi predio|este predio|este terreno|mi terreno|esta ubicacion|el punto|aqui|ahi|aca|mi zona|esta zona|mi casa|este lugar|esta calle|mi calle|mi barrio|este barrio)\b/,
     // Preguntas sobre el punto (contexto de riesgo, siempre informativo; no son una evaluación de peligro).
     quebrada: /\b(quebradas?|torrenteras?|cauces?|huaycos?|huaicos?|aluvion\w*|rios?|rio chili)\b/,
     sismos: /\b(sismos?|sismic\w*|temblor\w*|terremoto\w*)\b/,
@@ -121,6 +130,24 @@ const Asistente = (() => {
     return [...ids];
   }
 
+  // Palabras que no son un distrito aunque vengan después de «por» o «en».
+  const NO_DISTRITO = /^(?:hoy|ahora|cerca|aqui|ahi|alla|la ciudad|arequipa ciudad|todas|todo|la zona|mi zona|esta zona|el centro|mi punto)$/;
+
+  /**
+   * Distrito que nombra una pregunta sobre líneas («que lineas pasan por cerro colorado» → «cerro colorado»), o null si
+   * habla del punto elegido o no nombra ninguno. Es solo el texto: el distrito real se resuelve contra los datos
+   * (Rutas.resolverDistrito); aquí no hay lista de distritos para no inventar ninguno.
+   */
+  function distritoEnRutas(t) {
+    if (RE.aqui.test(t)) return null;
+    const m = t.match(/\bdistrito\s+(?:de\s+)?([a-z ]+)$/)
+      || t.match(/\b(?:pasa\w*|cruza\w*|recorre\w*|llega\w*|circula\w*|sirve\w*|hay|existe\w*)\s+(?:(?:lineas?|rutas?|buses?|combis?|micros?|colectivos?)\s+)?(?:(?:por|en|a|hacia|para)\s+)?(?:cerca\s+de\s+)?(?:el\s+|la\s+)?(?:distrito\s+(?:de\s+)?)?([a-z ]+)$/);
+    if (!m) return null;
+    const nombre = m[1].replace(/\s+(?:hoy|ahora|actualmente|por favor|gracias)$/, '').trim();
+    if (!nombre || nombre.split(' ').length > 5 || NO_DISTRITO.test(nombre)) return null;
+    return nombre;
+  }
+
   /** Distancias en metros que aparecen en una frase. */
   function distanciasEn(frase) {
     const out = [];
@@ -139,7 +166,7 @@ const Asistente = (() => {
   function interpretar(texto, ctx = {}) {
     const intencion = {
       tipo: 'desconocido', modo: 'nuevo', criterios: [], radioGlobalM: null, lote: null, incluirCondicional: false,
-      temaNoSoportado: null, aproximados: [], limitarAlPunto: false,
+      temaNoSoportado: null, aproximados: [], limitarAlPunto: false, distrito: null,
     };
     let t = normalizar(texto);
     if (!t) return intencion;
@@ -188,6 +215,10 @@ const Asistente = (() => {
 
     if (!hayCriterios && RE.saludo.test(t)) return { ...intencion, tipo: 'saludo' };
     if (RE.ayuda.test(t) && !hayCriterios) return { ...intencion, tipo: 'ayuda' };
+
+    // Líneas de transporte (antes que los criterios: «buses» también es el criterio «transporte» de una búsqueda).
+    const preguntaRutas = (RE.rutasPregunta.test(t) && RE.rutasVerbo.test(t)) || RE.rutasLinea.test(t) || RE.rutasVehiculo.test(t) || RE.rutasHay.test(t);
+    if (preguntaRutas && !RE.noRutas.test(t)) return { ...intencion, tipo: 'rutas', criterios: [], aproximados: [], limitarAlPunto: false, distrito: distritoEnRutas(t) };
 
     // Ajustes sobre la búsqueda anterior.
     if (ultima) {
@@ -573,9 +604,12 @@ const Asistente = (() => {
     return `${etiqueta}: ${ESTADO[r.estado]} · ${r.nombre || 'sin nombre en OSM'} a ${fmtDist(r.distanciaM)} (referencia ${fmtUmbral(r.umbralM)}${extra}).`;
   };
 
+  // Líneas de SmartBus del punto, en una línea («Líneas que pasan a ≤400 m: C2 (Cono Norte), …»); nada si no se calcularon.
+  const lineaLineas = (t) => (t && t.rutas && !t.rutas.error ? [`${RT.resumen(t.rutas, 6)}.`] : []);
+
   function lineasServicio(id, entorno) {
     if (id === 'salud') return [linea('Salud', entorno.salud)];
-    if (id === 'transporte') return [linea('Transporte', entorno.transporte)];
+    if (id === 'transporte') return [linea('Transporte', entorno.transporte), ...lineaLineas(entorno.transporte)];
     if (id === 'areaVerde') return [linea('Área verde', entorno.areaVerde)];
     // Para describir un punto se cuentan los tres niveles, aunque la búsqueda de «colegio» use solo inicial y primaria.
     const niveles = id === 'colegio' ? ['inicial', 'primaria', 'secundaria'] : [CRITERIOS[id].nivel];
@@ -651,10 +685,58 @@ const Asistente = (() => {
     ].join('\n');
   }
 
+  const FUENTE_RUTAS = 'SmartBus (smartbus.app)';
+  const fmtFechaCorta = (iso) => (iso ? new Date(`${iso}T12:00:00Z`).toLocaleDateString('es-PE', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }) : 'sin fecha');
+  const citaRutas = (r) => `Fuente: ${r.fuente || FUENTE_RUTAS}, recorridos del ${fmtFechaCorta(r.fecha)}, usados con ${r.permiso || 'autorización verbal de SmartBus; confirmación escrita pendiente'}. Son los recorridos publicados: sin frecuencias ni horarios.`;
+  const MAX_LINEAS_TEXTO = 10;
+
+  /** Líneas que pasan cerca del punto elegido (r = Equipamiento.evaluar().transporte.rutas). */
+  function textoRutasPunto(r) {
+    if (!r) return 'No tengo las líneas de transporte para tu punto todavía; vuelve a preguntar en unos segundos.';
+    if (r.error) return `No pude leer las líneas de SmartBus (${r.error}). El paradero más cercano de OpenStreetMap sí está en la ficha.`;
+    const ref = fmtUmbral(r.distanciaM);
+    if (!r.lineas.length) {
+      return [`Ninguna de las líneas que publica SmartBus pasa a ${ref} o menos de tu punto (${ref} es una convención del proyecto).`, citaRutas(r), 'Distancia en línea recta al trazado, no recorrido a pie.'].join('\n');
+    }
+    const lineas = r.lineas.slice(0, MAX_LINEAS_TEXTO).map((l) => {
+      const parada = l.parada ? `; parada más cercana «${l.parada.nombre}» a ${fmtDist(l.parada.distanciaM)}` : '';
+      return `• ${RT.etiquetaLinea(l)}: el trazado pasa a ${fmtDist(l.distanciaM)}${parada}.`;
+    });
+    if (r.lineas.length > MAX_LINEAS_TEXTO) lineas.push(`• … y ${r.lineas.length - MAX_LINEAS_TEXTO} más.`);
+    return [
+      `Líneas que pasan a ${ref} o menos de tu punto: ${RT.listaTexto(r.lineas, MAX_LINEAS_TEXTO)}.`,
+      ...lineas,
+      `${ref} es una convención del proyecto. Distancia en línea recta al trazado, no recorrido a pie.`,
+      citaRutas(r),
+    ].join('\n');
+  }
+
+  /**
+   * Líneas que cruzan un distrito. `d` = { texto, distrito, res, error } que arma la vista con Rutas.cruzan:
+   *   distrito null = no se reconoció el nombre; res = resultado de Rutas.cruzan.
+   */
+  function textoRutasDistrito(d) {
+    if (!d) return 'No tengo las líneas de transporte todavía; vuelve a preguntar en unos segundos.';
+    if (d.error) return `No pude leer las líneas de SmartBus (${d.error}).`;
+    if (!d.distrito) return `No reconozco el distrito «${d.texto}». Prueba con el nombre completo, por ejemplo «¿qué líneas pasan por Paucarpata?».`;
+    const nombre = titulo(d.distrito);
+    const r = d.res;
+    if (!r.lineas.length) return [`Ninguna de las líneas que publica SmartBus tiene su trazado dentro del distrito de ${nombre}.`, citaRutas(r)].join('\n');
+    const lineas = r.lineas.slice(0, MAX_LINEAS_TEXTO + 2).map((l) => `• ${RT.etiquetaLinea(l)}: ${l.paradas > 0 ? `${l.paradas} ${l.paradas === 1 ? 'parada' : 'paradas'} dentro del distrito` : 'el trazado entra al distrito, sin paradas dentro'}.`);
+    if (r.lineas.length > MAX_LINEAS_TEXTO + 2) lineas.push(`• … y ${r.lineas.length - MAX_LINEAS_TEXTO - 2} más.`);
+    return [
+      `Líneas con trazado dentro del distrito de ${nombre}: ${RT.listaTexto(r.lineas, MAX_LINEAS_TEXTO + 2)}.`,
+      ...lineas,
+      'Una línea cuenta si algún punto de su trazado cae dentro del distrito; no dice por qué calles ni a qué hora. El límite del distrito es el de GEOCATMIN.',
+      citaRutas(r),
+    ].join('\n');
+  }
+
   const TEXTO_FUENTES = [
     'De dónde sale cada cosa:',
     '• Zonificación: plano y reglamento del PDM Arequipa 2016-2025 (O.M. 961-MPA, con la zonificación restituida por la 975-MPA). Es referencial.',
     '• Salud, colegios, paraderos y áreas verdes: OpenStreetMap (ODbL), copia congelada con su fecha de extracción. Algo que falte en el mapa puede existir.',
+    '• Líneas de transporte (recorridos y paradas): SmartBus (smartbus.app), usados con su autorización verbal (confirmación escrita pendiente). Sin frecuencias ni horarios.',
     '• Umbrales: colegios 500 m inicial, 1500 m primaria y 3000 m secundaria (MINEDU); área verde ≥ 0,5 ha a 300 m (OMS Europa); salud 1000 m, paradero 400 m y borde de zona 20 m son convenciones del proyecto.',
     '• Distancias en línea recta, no recorrido a pie.',
     '• Las búsquedas de zonas son un cálculo sobre una cuadrícula de celdas; el porcentaje es la parte del suelo habitable que cumple, no una probabilidad.',
@@ -686,11 +768,18 @@ const Asistente = (() => {
     const fin = (texto, sugerencias = SUGERENCIAS_BASE) => ({ texto, sugerencias });
 
     if (tipo === 'saludo') return fin('¡Hola! Soy el asistente de GeoVerificador. Puedo contarte lo que hay en tu punto (zona y servicios cercanos) o buscar zonas de Arequipa según lo que te importa: colegio, posta, área verde, transporte, campiña, zona residencial. Todo con los mismos datos de la ficha.');
-    if (tipo === 'ayuda') return fin('Puedo:\n• Buscar zonas: «busco cerca de un colegio y un parque, lo más importante es el parque» o «posta y paradero en un radio de 1 km».\n• Contarte de tu punto: «¿qué zona es?», «¿hay un colegio cerca?», «dame un resumen».\n• Calcular: «¿cuánto puedo construir en un lote de 200 m²?».\n• Explicar el PDM nuevo y de dónde salen los datos.\nNo tengo datos de seguridad, precios ni ruido.');
+    if (tipo === 'ayuda') return fin('Puedo:\n• Buscar zonas: «busco cerca de un colegio y un parque, lo más importante es el parque» o «posta y paradero en un radio de 1 km».\n• Contarte de tu punto: «¿qué zona es?», «¿hay un colegio cerca?», «dame un resumen».\n• Líneas de transporte: «¿qué buses pasan por aquí?» o «¿qué líneas pasan por Paucarpata?».\n• Calcular: «¿cuánto puedo construir en un lote de 200 m²?».\n• Explicar el PDM nuevo y de dónde salen los datos.\nNo tengo datos de seguridad, precios ni ruido.');
     if (tipo === 'fuentes') return fin(TEXTO_FUENTES);
     if (tipo === 'no_soportado') return fin(`${TEMAS[intencion.temaNoSoportado] || 'Eso no está en los datos que uso.'}\nSí puedo ayudarte con la zonificación y con la cercanía a colegios, salud, transporte y áreas verdes.`);
     if (tipo === 'desconocido') return fin('No entendí eso. Puedes pedirme, por ejemplo:', SUGERENCIAS_BASE);
     if (tipo === 'pdm') return fin(textoPDM(c.estadoPDM));
+
+    // Líneas de transporte: con un distrito no hace falta punto; sin él, se habla del punto elegido.
+    if (tipo === 'rutas') {
+      if (intencion.distrito) return fin(textoRutasDistrito(c.rutasDistrito), ['¿Qué buses pasan por aquí?', 'Dame un resumen del punto']);
+      if (!c.punto) return fin('Elige un punto en el mapa para ver qué líneas pasan cerca, o pregúntame por un distrito: «¿qué líneas pasan por Paucarpata?».', SUGERENCIAS_BASE);
+      return fin(textoRutasPunto(c.entorno && c.entorno.transporte && c.entorno.transporte.rutas), ['Dame un resumen del punto', '¿Hay un paradero cerca?']);
+    }
 
     if (!c.punto) return sinPunto();
 
@@ -737,6 +826,7 @@ const Asistente = (() => {
         linea('Salud', e.salud),
         `Colegios: ${colegios}.`,
         linea('Transporte', e.transporte),
+        ...lineaLineas(e.transporte),
         linea('Área verde', e.areaVerde),
         c.estadoPDM ? 'Sobre el PDM nuevo, pregúntame «¿cambiará la zonificación?».' : null,
         AVISO_REFERENCIAL,
@@ -991,6 +1081,11 @@ const Asistente = (() => {
       limites: [LIM_INVENTARIO, LIM_RECTA, LIM_REFERENCIAL],
     },
     servicio: SERVICIOS,
+    rutas: {
+      porque: ['Se mide la distancia en línea recta desde tu punto hasta el trazado de cada recorrido de SmartBus y se listan las líneas que pasan a 400 m o menos. Con un distrito, se listan las líneas cuyo trazado entra en él.'],
+      fuente: ['SmartBus (smartbus.app): recorridos y paradas descargados una vez, con fecha, y usados con su autorización verbal (confirmación escrita pendiente). Los 400 m son una convención del proyecto.'],
+      limites: ['Son los recorridos publicados, no un servicio garantizado: sin frecuencias ni horarios, y un cambio de ruta por tramos puede no estar reflejado.', 'La distancia es al trazado, no a donde se puede subir. Las paradas de SmartBus tienen nombres numerados.', LIM_RECTA],
+    },
     ficha: {
       porque: ['Junta lo que la ficha ya calculó para tu punto: la zona del plano y la distancia al servicio más cercano de cada tipo.'],
       fuente: [FUENTE_PLANO, FUENTE_OSM, FUENTE_UMBRALES],

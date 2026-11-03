@@ -21,14 +21,16 @@ const AsistenteLLM = (() => {
   // ------------------------------------------------------------------ Esquema
 
   const INTENCIONES = [
-    'buscar', 'zona', 'construir', 'cambio_zonificacion', 'resumen', 'quebradas', 'sismos', 'peligros', 'servicio_cercano',
+    'buscar', 'zona', 'construir', 'cambio_zonificacion', 'resumen', 'quebradas', 'sismos', 'peligros', 'servicio_cercano', 'rutas',
     'fuentes', 'ayuda', 'saludo', 'fuera_de_alcance', 'desconocido',
   ];
   const CRITERIOS = ['salud', 'colegio', 'inicial', 'primaria', 'secundaria', 'transporte', 'areaVerde', 'campina', 'residencial', 'tranquilo', 'comercial', 'historico', 'lejosQuebrada'];
   const SERVICIOS = ['salud', 'colegio', 'inicial', 'primaria', 'secundaria', 'transporte', 'areaVerde'];
   const MODOS = ['nuevo', 'agregar', 'quitar', 'priorizar'];
   const TEMAS = ['seguridad', 'precio', 'ruido'];
-  const CAMPOS = ['intencion', 'criterios', 'prioridades', 'distancias', 'radioM', 'lejosQuebradaM', 'incluirCondicional', 'cercaDeMiPunto', 'modo', 'loteM2', 'tema'];
+  const CAMPOS = ['intencion', 'criterios', 'prioridades', 'distancias', 'radioM', 'lejosQuebradaM', 'incluirCondicional', 'cercaDeMiPunto', 'modo', 'loteM2', 'tema', 'distrito'];
+  // Nombre de distrito tal como lo escribió la persona: solo letras, espacios, puntos, apóstrofos y guiones. Se resuelve contra los datos.
+  const DISTRITO_VALIDO = /^[\p{L}][\p{L} .'-]{1,39}$/u;
 
   // Rangos a los que se ajustan las distancias y el lote (en metros y m²). Un valor fuera de rango se recorta, no se rechaza.
   const RANGOS = { radioM: [100, 5000], lejosQuebradaM: [50, 5000], distanciaM: [50, 5000], loteM2: [10, 100000] };
@@ -44,7 +46,7 @@ const AsistenteLLM = (() => {
         intencion: {
           type: 'string',
           enum: INTENCIONES,
-          description: 'buscar = encontrar zonas de la ciudad por lo que importa a la persona; zona = qué zona es su punto; construir = cuánto se puede construir en su punto; cambio_zonificacion = si el plan nuevo cambiará la zonificación; resumen = resumen/ficha del punto; quebradas, sismos, peligros = contexto de riesgo del punto; servicio_cercano = si hay un servicio cerca de su punto; fuentes = de dónde salen los datos; ayuda; saludo; fuera_de_alcance = solo seguridad, precios o ruido; desconocido = no se entiende o no tiene relación.',
+          description: 'buscar = encontrar zonas de la ciudad por lo que importa a la persona; zona = qué zona es su punto; construir = cuánto se puede construir en su punto; cambio_zonificacion = si el plan nuevo cambiará la zonificación; resumen = resumen/ficha del punto; quebradas, sismos, peligros = contexto de riesgo del punto; servicio_cercano = si hay un servicio cerca de su punto; rutas = qué líneas de bus o combi pasan cerca de su punto o por un distrito; fuentes = de dónde salen los datos; ayuda; saludo; fuera_de_alcance = solo seguridad, precios o ruido; desconocido = no se entiende o no tiene relación.',
         },
         criterios: {
           type: 'array',
@@ -78,6 +80,10 @@ const AsistenteLLM = (() => {
           description: 'nuevo (por defecto) = búsqueda nueva. agregar, quitar o priorizar = ajuste de la búsqueda anterior («agrega transporte», «quita el parque», «prioriza el colegio»); solo si ya hubo una búsqueda.',
         },
         loteM2: { type: 'number', description: 'Área del lote en m² cuando la persona la menciona (intencion construir).' },
+        distrito: {
+          type: 'string',
+          description: 'Solo con intencion rutas: el distrito que la persona nombra, tal como lo escribió (por ejemplo «Paucarpata», «Cerro Colorado»). Vacío si pregunta por su punto («por aquí», «cerca de mí»). Nunca lo inventes.',
+        },
         tema: {
           type: 'string',
           enum: TEMAS,
@@ -136,6 +142,12 @@ const AsistenteLLM = (() => {
     if (!ausente(args.cercaDeMiPunto) && typeof args.cercaDeMiPunto !== 'boolean') return rechazo('cercaDeMiPunto_no_es_booleano');
     if (!ausente(args.modo) && !MODOS.includes(args.modo)) return rechazo('modo_invalido');
     if (!ausente(args.tema) && !TEMAS.includes(args.tema)) return rechazo('tema_invalido');
+    let distrito = null;
+    if (!ausente(args.distrito)) {
+      const d = typeof args.distrito === 'string' ? args.distrito.trim().replace(/\s+/g, ' ') : null;
+      if (d === null || (d !== '' && !DISTRITO_VALIDO.test(d))) return rechazo('distrito_invalido');
+      distrito = d || null;
+    }
 
     let distancias = [];
     if (!ausente(args.distancias)) {
@@ -159,9 +171,11 @@ const AsistenteLLM = (() => {
       modo: args.modo || 'nuevo',
       loteM2: lote.valor,
       tema: args.tema || null,
+      distrito,
     };
 
     if (spec.intencion === 'buscar') {
+      spec.distrito = null;
       // Una distancia a quebradas es, por sí sola, el criterio «lejos de quebradas».
       if (spec.lejosQuebradaM !== null && !spec.criterios.includes('lejosQuebrada')) spec.criterios.push('lejosQuebrada');
       const dQ = distancias.find((d) => d.criterio === 'lejosQuebrada');
@@ -175,7 +189,7 @@ const AsistenteLLM = (() => {
     }
 
     // Las demás intenciones no usan los campos de búsqueda: se vacían para que no se cuelen.
-    const limpio = { ...spec, criterios: [], prioridades: [], distancias: [], radioM: null, lejosQuebradaM: null, incluirCondicional: false, cercaDeMiPunto: false, modo: 'nuevo' };
+    const limpio = { ...spec, criterios: [], prioridades: [], distancias: [], radioM: null, lejosQuebradaM: null, incluirCondicional: false, cercaDeMiPunto: false, modo: 'nuevo', distrito: spec.intencion === 'rutas' ? spec.distrito : null };
     if (spec.intencion === 'servicio_cercano') {
       limpio.criterios = spec.criterios.filter((c) => SERVICIOS.includes(c));
       if (limpio.criterios.length === 0) return rechazo('servicio_sin_criterios');
@@ -220,6 +234,7 @@ const AsistenteLLM = (() => {
     const vacia = A.interpretar('');
     if (spec.intencion === 'desconocido') return vacia;
     if (spec.intencion === 'fuera_de_alcance') return { ...vacia, tipo: 'no_soportado', temaNoSoportado: spec.tema };
+    if (spec.intencion === 'rutas') return { ...vacia, tipo: 'rutas', distrito: spec.distrito ? A.normalizar(spec.distrito) : null };
     if (spec.intencion === 'servicio_cercano') {
       return { ...vacia, tipo: 'servicio', criterios: spec.criterios.map((id) => ({ id, umbralM: null, prioridad: 1 })) };
     }

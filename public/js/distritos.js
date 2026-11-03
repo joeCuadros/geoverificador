@@ -107,5 +107,14 @@ const Distritos = (() => {
     return hit ? hit.props.distrito : null;
   }
 
-  return { load, lookup, nombreDe };
+  /** Nombres de los distritos descargados (hay que haber llamado antes a `load`). */
+  const nombres = () => [...new Set(index.map((d) => d.props.distrito))];
+
+  /** Polígonos de un distrito por su nombre exacto (MultiPolygon GeoJSON), o null si no existe. */
+  function geometriaDe(nombre) {
+    const polys = index.filter((d) => d.props.distrito === nombre).flatMap((d) => d.polys);
+    return polys.length ? { type: 'MultiPolygon', coordinates: polys } : null;
+  }
+
+  return { load, lookup, nombreDe, nombres, geometriaDe };
 })();

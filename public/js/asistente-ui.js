@@ -126,6 +126,22 @@ const AsistenteUI = (() => {
     return ctx;
   }
 
+  /**
+   * Líneas de SmartBus que cruzan el distrito que nombró la persona: { texto, distrito, res } o { texto, error }.
+   * `distrito` es null si el nombre no coincide con ninguno de los descargados (la respuesta lo dice, no adivina).
+   */
+  async function rutasDeDistrito(texto) {
+    try {
+      const [indice] = await Promise.all([Equipamiento.indiceRutas(), Distritos.load()]);
+      const nombre = Rutas.resolverDistrito(texto, Distritos.nombres());
+      if (!nombre) return { texto, distrito: null };
+      return { texto, distrito: nombre, res: Rutas.cruzan(indice, Distritos.geometriaDe(nombre)) };
+    } catch (err) {
+      console.error('[Asistente] rutas por distrito', err);
+      return { texto, error: err.message };
+    }
+  }
+
   // -------------------------------------------------------------------- Búsqueda
 
   /** Ordena los archivos congelados y el plano una sola vez; si falta equipamiento, no se puede buscar. */
@@ -259,7 +275,10 @@ const AsistenteUI = (() => {
       const intencion = eleccion.intencion;
       if (intencion.tipo === 'buscar') await ejecutarBusqueda(intencion);
       else {
-        const ctx = ['ficha', 'servicio', 'zona', 'construir', 'quebrada', 'sismos', 'peligros'].includes(intencion.tipo) ? await contexto() : { estadoPDM: CONFIG.estadoPDM, potencial: Zonificacion.potencial, punto: api.obtenerPunto() };
+        const sencillo = { estadoPDM: CONFIG.estadoPDM, potencial: Zonificacion.potencial, punto: api.obtenerPunto() };
+        let ctx;
+        if (intencion.tipo === 'rutas' && intencion.distrito) ctx = { ...sencillo, rutasDistrito: await rutasDeDistrito(intencion.distrito) };
+        else ctx = ['ficha', 'servicio', 'zona', 'construir', 'quebrada', 'sismos', 'peligros', 'rutas'].includes(intencion.tipo) ? await contexto() : sencillo;
         const resp = Asistente.responder(intencion, ctx);
         let texto = resp.texto;
         // Gemini only rewords the deterministic answer; the text is verified (numbers, names, caveat) or discarded.

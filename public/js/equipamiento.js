@@ -205,5 +205,5 @@ const Equipamiento = (() => {
     return Object.fromEntries(categorias.map((c, i) => [c, lista[i]]));
   }
 
-  return { NIVELES, evaluar, datosCongelados };
+  return { NIVELES, evaluar, datosCongelados, indiceRutas: cargarRutas };
 })();
