@@ -112,13 +112,14 @@ const AsistenteUI = (() => {
   };
 
   /** Agrega un mensaje al registro. Devuelve el elemento (para poder quitar el aviso de «buscando»). */
-  function mensaje(rol, { texto, filas = [], sugerencias = [], espera = false, explicacion = null, detalle = [], verMapa = false }) {
+  function mensaje(rol, { texto, filas = [], sugerencias = [], espera = false, explicacion = null, detalle = [], verMapa = false, botones = [] }) {
     const log = $('asistente-log');
     const el = document.createElement('div');
     el.className = `chat-msg chat-${rol}`;
     if (espera) el.dataset.espera = 'true';
     const quien = rol === 'usuario' ? 'Tú: ' : 'Asistente: ';
     el.innerHTML = `<span class="sr-only">${quien}</span><div class="chat-burbuja">${rol === 'usuario' ? `<p>${esc(texto)}</p>` : textoAHtml(texto)}${filas.length ? `<ol class="chat-filas">${filas.map(filaHtml).join('')}</ol>` : ''}${masHtml(explicacion, detalle)}</div>`
+      + (botones.length ? `<div class="chat-acc">${botones.map((b) => `<button type="button" class="ghost" data-accion="${b.accion}">${esc(b.etiqueta)}</button>`).join('')}</div>` : '')
       + (verMapa ? '<div class="chat-acc chat-ver-mapa"><button type="button" class="ghost" data-accion="mapa">Ver el mapa</button></div>' : '')
       + (sugerencias.length ? `<div class="chat-sug" role="group" aria-label="Sugerencias">${sugerencias.map(botonSugerencia).join('')}</div>` : '');
     log.appendChild(el);
@@ -519,6 +520,10 @@ const AsistenteUI = (() => {
       const { accion } = b.dataset;
       if (accion === 'sugerir') { enviar(b.dataset.texto); return; }
       if (accion === 'mapa') { if (api.mostrarMapa) api.mostrarMapa(); return; }
+      if (accion === 'detalle') { api.abrirFicha(); return; }
+      if (accion === 'guardar') { mensaje('asistente', { texto: api.guardarParaComparar() }); return; }
+      if (accion === 'verificar') { mensaje('asistente', { texto: Resumen.verificar(Verificaciones.ITEMS), botones: [{ accion: 'verificar-ficha', etiqueta: 'Ver el detalle de cada trámite' }] }); return; }
+      if (accion === 'verificar-ficha') { api.abrirVerificaciones(); return; }
       const lat = Number(b.dataset.lat);
       const lon = Number(b.dataset.lon);
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
@@ -531,5 +536,19 @@ const AsistenteUI = (() => {
     });
   }
 
-  return { iniciar, activar, datosParaMapa, distanciaQuebradaM };
+  /** El punto elegido, resumido en palabras llanas, con los botones para seguir desde el chat (ver el detalle, guardar y qué verificar). */
+  function publicarPunto(r) {
+    recordar('asistente', r.texto);
+    mensaje('asistente', {
+      texto: [...r.lineas, r.aviso].join('\n'),
+      explicacion: Asistente.explicar('ficha'),
+      botones: [
+        { accion: 'detalle', etiqueta: 'Ver detalle técnico' },
+        { accion: 'guardar', etiqueta: 'Guardar para comparar' },
+        { accion: 'verificar', etiqueta: '¿Qué debo verificar antes de comprar?' },
+      ],
+    });
+  }
+
+  return { iniciar, activar, datosParaMapa, distanciaQuebradaM, publicarPunto };
 })();

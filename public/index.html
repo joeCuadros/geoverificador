@@ -324,6 +324,12 @@
             </div>
           </section>
 
+          <!-- En pocas palabras: el punto dicho en llano (resumen.js). Lo técnico sigue abajo, en tarjetas plegadas. -->
+          <section class="card ficha-resumen" id="ficha-resumen" aria-labelledby="ficha-resumen-h" hidden>
+            <h3 id="ficha-resumen-h">En pocas palabras</h3>
+            <div id="ficha-resumen-lineas"></div>
+          </section>
+
           <div class="aviso-referencial" role="note">
             <svg class="ico ico-lg" aria-hidden="true"><use href="#i-aviso"/></svg>
             <p><strong>Consulta referencial.</strong> No reemplaza el certificado municipal de zonificación. Las distancias son en línea recta, no recorrido a pie.</p>
@@ -349,7 +355,10 @@
               <span class="input-unit"><input id="lote" type="number" min="1" step="1" inputmode="decimal" placeholder="Ej.: 300"><em>m²</em></span>
             </label>
             <div id="zon-calc"></div>
-            <p id="zon-fuente" class="fuente-linea"></p>
+            <details class="disclosure ficha-fuentes">
+              <summary>Fuente, método y límites de la zonificación</summary>
+              <p id="zon-fuente" class="fuente-linea"></p>
+            </details>
             <div id="pdm-aviso"></div>
           </section>
 
@@ -362,7 +371,10 @@
             <div id="entorno" class="entorno" aria-busy="true">
               <p class="zon-msg loading"><span class="spinner"></span>Buscando los servicios más cercanos…</p>
             </div>
-            <p id="entorno-fuente" class="fuente-linea"></p>
+            <details class="disclosure ficha-fuentes">
+              <summary>Método y límites de los servicios</summary>
+              <p id="entorno-fuente" class="fuente-linea"></p>
+            </details>
           </section>
 
           <!-- Contexto de riesgo: peligros geológicos (INGEMMET) y sismos reportados (IGP). Informativo, no es una evaluación. -->
@@ -676,6 +688,7 @@
   <script src="js/entidades.js"></script>
   <script src="js/sectores.js"></script>
   <script src="js/capas.js"></script>
+  <script src="js/resumen.js"></script>
   <script src="js/asistente-llm.js"></script>
   <script src="js/disposicion.js"></script>
   <script src="js/asistente-ui.js"></script>

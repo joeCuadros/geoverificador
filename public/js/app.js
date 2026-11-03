@@ -315,6 +315,7 @@
   function consultar() {
     const { lat, lon } = state.point;
     state.anunciado = false;
+    state.resumenChat = null;
     drawCircle();
     updateZona();
     if (MODULOS.riesgos) state.evaluacion = Riesgos.leerEvaluacion(lat, lon);
@@ -702,6 +703,28 @@
     if (listo && !state.anunciado && state.flujo.paso === 'reporte') {
       state.anunciado = true;
       anunciar(textoResumen());
+    }
+    resumenLlano();
+  }
+
+  // Resumen en palabras de todos los días: encabeza la ficha y se publica una vez en el chat (resumen.js). Espera a tener
+  // la zona, los servicios, el distrito y el cauce más cercano; no calcula nada nuevo.
+  function resumenLlano() {
+    const listo = state.zonaStatus !== 'none' && state.zonaStatus !== 'loading' && state.entorno && state.cauce
+      && state.distritoStatus !== 'none' && state.distritoStatus !== 'loading';
+    if (!state.point || !listo) return;
+    const r = Resumen.punto({
+      distrito: state.distritoStatus === 'ok' ? state.distrito.distrito : null,
+      zona: state.zonaStatus === 'ok' ? state.zona : null,
+      entorno: state.entorno,
+      cauce: state.cauce,
+    });
+    $('ficha-resumen-lineas').innerHTML = r.lineas.map((l) => `<p>${esc(l)}</p>`).join('');
+    $('ficha-resumen').hidden = false;
+    const clave = `${state.point.lat},${state.point.lon}`;
+    if (state.resumenChat !== clave) {
+      state.resumenChat = clave;
+      AsistenteUI.publicarPunto({ ...r, etiqueta: state.etiqueta });
     }
   }
 
@@ -1551,6 +1574,14 @@
     mapaVisible: () => EspacioUI.mapaVisible(),
     alBuscar: (que) => CapasUI.mostrar(que),
     verSector: (n) => CapasUI.enfocarSector(n),
+    abrirFicha: () => { EspacioUI.abrirPunto({ foco: false }); $('resultado').scrollIntoView({ block: 'start' }); },
+    abrirVerificaciones: () => { EspacioUI.abrirPunto({ foco: false }); $('verif-detalle').open = true; $('verif-detalle').scrollIntoView({ block: 'start' }); },
+    guardarParaComparar: () => {
+      const b = $('btn-guardar');
+      if (b.dataset.modo === 'guardar' && !b.disabled) { b.click(); return 'Guardé este punto para comparar. Puedes verlo junto con los otros en «Comparar».'; }
+      if (b.dataset.modo === 'quitar') return 'Este punto ya está guardado. Lo ves en «Comparar».';
+      return 'Todavía no puedo guardarlo: espera a que termine de calcular el punto o revisa si ya tienes el máximo de puntos guardados.';
+    },
   });
   CapasUI.iniciar({ map, datos: () => AsistenteUI.datosParaMapa(), mapaVisible: () => EspacioUI.mapaVisible() });
   EspacioUI.iniciar({ map, enfocarPunto: () => $(PASO_TITULO[state.flujo.paso]) });
