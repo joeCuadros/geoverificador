@@ -326,9 +326,10 @@ const Asistente = (() => {
     });
     const dLat = pasoM / M_POR_GRADO;
     const celdas = [];
-    for (let lat = b[1] + dLat / 2; lat < b[3]; lat += dLat) {
+    // `i` (fila) y `j` (columna) numeran las celdas: sirven para saber cuáles se tocan (sectores.js), no se muestran.
+    for (let i = 0, lat = b[1] + dLat / 2; lat < b[3]; i += 1, lat = b[1] + dLat / 2 + i * dLat) {
       const dLon = pasoM / (M_POR_GRADO * Math.cos(rad(lat)));
-      for (let lon = b[0] + dLon / 2; lon < b[2]; lon += dLon) {
+      for (let j = 0, lon = b[0] + dLon / 2; lon < b[2]; j += 1, lon = b[0] + dLon / 2 + j * dLon) {
         if (centro && radioM !== null && distanciaM(centro, { lat, lon }) > radioM) continue;
         let hit = null; // gana la última zona que contiene el punto, como en el plano
         for (const z of conBbox) {
@@ -337,7 +338,7 @@ const Asistente = (() => {
         }
         if (!hit || !hit.regla) continue;
         const ed = hit.regla.edificable;
-        if (ed === 'si' || (incluirCondicional && ed === 'condicionado')) celdas.push({ lat, lon, zona: hit.codigo, grupo: hit.regla.grupo });
+        if (ed === 'si' || (incluirCondicional && ed === 'condicionado')) celdas.push({ lat, lon, i, j, zona: hit.codigo, grupo: hit.regla.grupo });
       }
     }
     return celdas;
