@@ -48,7 +48,37 @@ describe('Tour.PASOS', () => {
 
   it('explica el asistente y que no inventa', () => {
     const t = texto(paso('asistente'));
-    ['no usa un modelo de lenguaje', 'no inventa', 'por qué, fuente y límites', 'no son una probabilidad'].forEach((f) => expect(t).toContain(f));
+    ['no inventa', 'por qué, fuente y límites', 'no son una probabilidad'].forEach((f) => expect(t).toContain(f));
+  });
+
+  // Copy cambiado a propósito: antes decía que el asistente «no usa un modelo de lenguaje ni envía lo que escribes»,
+  // y eso es falso con Gemini activo (el texto llega al proveedor del modelo).
+  it('dice la verdad sobre lo que se envía: con Gemini el texto va al proveedor; con reglas no sale', () => {
+    const t = texto(paso('asistente'));
+    expect(t).toContain('gemini');
+    expect(t).toContain('se envía');
+    expect(t).toContain('reglas');
+    expect(t).not.toContain('no usa un modelo de lenguaje');
+    expect(t).not.toContain('ni envía lo que escribes');
+  });
+
+  it('el chat es lo primero que se explica después del alcance', () => {
+    const ids = Tour.PASOS.map((p: any) => p.id);
+    expect(ids[0]).toBe('alcance');
+    expect(ids[1]).toBe('asistente');
+    expect(ids.indexOf('asistente')).toBeLessThan(ids.indexOf('punto'));
+  });
+
+  it('explica cómo pintar el mapa por un criterio, con su leyenda y sin «mejor zona»', () => {
+    const t = texto(paso('pintar'));
+    ['pintar el mapa', 'cumple', 'no cumple', 'sin dato', 'quitar colores', 'umbral', 'fuente'].forEach((f) => expect(t).toContain(f));
+    expect(t).not.toMatch(/la mejor zona|recomendamos/);
+  });
+
+  it('presenta «Buscar por punto» como una vía secundaria', () => {
+    const t = texto(paso('punto'));
+    expect(t).toContain('buscar por punto');
+    expect(t).toContain('también');
   });
 
   it('explica cómo comparar puntos sin puntaje global', () => {

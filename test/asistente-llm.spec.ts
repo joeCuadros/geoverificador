@@ -318,3 +318,26 @@ describe('AsistenteLLM.elegirIntencion', () => {
     expect(e.intencion.radioGlobalM).toBe(viaReglas.radioGlobalM);
   });
 });
+
+describe('AsistenteLLM.textoModo (qué se envía y adónde)', () => {
+  it('con Gemini dice que lo escrito llega al proveedor del modelo y pide no escribir la dirección', () => {
+    const m = LLM.textoModo('gemini');
+    expect(m.etiqueta).toBe('Modo: Gemini');
+    expect(m.privacidad).toMatch(/se envía/i);
+    expect(m.privacidad).toMatch(/Gemini/);
+    expect(m.privacidad).toMatch(/dirección/i);
+    expect(m.ayuda).toMatch(/datos, distancias y estados/i);
+  });
+  it('con reglas dice que no se envía a ningún modelo', () => {
+    const m = LLM.textoModo('reglas');
+    expect(m.etiqueta).toBe('Modo: reglas');
+    expect(m.privacidad).toMatch(/no se envía a ningún modelo/i);
+  });
+  it('cualquier otro valor cae a reglas (nunca afirma Gemini sin saberlo)', () => {
+    expect(LLM.textoModo(undefined).etiqueta).toBe('Modo: reglas');
+    expect(LLM.textoModo('otro').etiqueta).toBe('Modo: reglas');
+  });
+  it('nunca dice que no se envía lo que escribes en modo Gemini', () => {
+    expect(JSON.stringify(LLM.textoModo('gemini'))).not.toMatch(/no (se )?env[ií]a/i);
+  });
+});

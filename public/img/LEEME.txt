@@ -1,0 +1,15 @@
+Arte del Inicio (pagina de entrada)
+
+Por defecto el Inicio muestra arequipa-hero.svg: una ilustracion hecha para el proyecto (el Misti sobre el plano de la
+ciudad, con juntas de sillar y lineas de plano en tinta azul). Sirve en tema claro y oscuro.
+
+Para usar una fotografia de Arequipa basta con dejar UN archivo en esta carpeta:
+
+    public/img/arequipa-hero.jpg
+
+Si existe, se dibuja encima de la ilustracion y la cubre. Si no existe, se ve la ilustracion (no hace falta tocar codigo).
+La regla esta en css/styles.css, selector .inicio-arte (dos fondos: primero el .jpg y debajo el .svg).
+
+Recomendaciones para la foto: horizontal o cuadrada, de al menos 1600 px de ancho y menos de 400 KB; el recorte es "cover"
+centrado un poco hacia abajo, asi que el sujeto (por ejemplo el Misti) debe quedar al centro. Debe ser una foto cuyo uso este
+permitido (propia o con licencia); el repositorio no incluye ninguna.

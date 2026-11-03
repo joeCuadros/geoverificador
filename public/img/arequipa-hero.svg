@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" preserveAspectRatio="xMidYMid slice">
+  <title>El volcan Misti sobre el plano de Arequipa</title>
+  <style>
+    :root {
+      --cielo: #f3eee3; --suelo: #ece6d8; --lejos: #c9d4e8; --misti: #1c3a6b; --luz: #2f5796; --junta: rgba(251,248,241,.2);
+      --linea: #1c3a6b; --manzana: #fbf8f1; --rio: #8ea9d6; --ok: #17603a; --no: #9b2415; --dato: #444b5c; --papel: #fbf8f1;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --cielo: #101520; --suelo: #171d2b; --lejos: #1f2c47; --misti: #2b4272; --luz: #3d5b99; --junta: rgba(157,188,240,.2);
+        --linea: #9dbcf0; --manzana: #1f2738; --rio: #34476d; --ok: #8fd6a6; --no: #ffa595; --dato: #b9bfce; --papel: #101520;
+      }
+    }
+    .l { fill: none; stroke: var(--linea); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+    .g { fill: none; stroke: var(--linea); stroke-width: 1; opacity: .1; }
+    .g-m { opacity: .24; }
+    .gs { opacity: .06; }
+    .aro { fill: none; stroke: var(--linea); stroke-width: 1.2; opacity: .2; }
+    .mz { fill: var(--manzana); stroke: var(--linea); stroke-width: .8; stroke-opacity: .55; }
+    .p-ok { fill: var(--ok); fill-opacity: .55; }
+    .p-no { fill: url(#rayas); }
+    .p-dato { fill: url(#puntos); }
+    .rio { fill: none; stroke: var(--rio); stroke-width: 9; stroke-linecap: round; stroke-linejoin: round; opacity: .85; }
+    .rio-c { fill: none; stroke: var(--linea); stroke-width: 1; stroke-dasharray: 2 5; opacity: .5; }
+    .ladera { fill: none; stroke: var(--junta); stroke-width: 2; }
+  </style>
+  <defs>
+    <pattern id="sillar" width="44" height="22" patternUnits="userSpaceOnUse">
+      <path d="M0 11H44M0 22H44M11 0V11M33 11V22" fill="none" stroke="var(--junta)" stroke-width="1.3"/>
+    </pattern>
+    <pattern id="rayas" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <rect width="10" height="10" fill="var(--no)" fill-opacity=".08"/>
+      <path d="M0 0V10" stroke="var(--no)" stroke-width="3.2" stroke-opacity=".75"/>
+    </pattern>
+    <pattern id="puntos" width="9" height="9" patternUnits="userSpaceOnUse">
+      <rect width="9" height="9" fill="var(--dato)" fill-opacity=".08"/>
+      <circle cx="4.5" cy="4.5" r="1.6" fill="var(--dato)" fill-opacity=".8"/>
+    </pattern>
+    <clipPath id="clip-misti"><path id="forma-misti" d="M170 560C300 530 440 410 540 270L590 214L620 222L640 214L662 224L690 214L742 272C840 410 980 530 1090 560Z"/></clipPath>
+  </defs>
+
+  <rect width="1200" height="900" fill="var(--cielo)"/>
+  <path d="M100 0V560" class="g gs"/><path d="M200 0V560" class="g gs"/><path d="M300 0V560" class="g gs"/><path d="M400 0V560" class="g gs"/><path d="M500 0V560" class="g gs"/><path d="M600 0V560" class="g gs"/><path d="M700 0V560" class="g gs"/><path d="M800 0V560" class="g gs"/><path d="M900 0V560" class="g gs"/><path d="M1000 0V560" class="g gs"/><path d="M1100 0V560" class="g gs"/>
+  <circle cx="640" cy="214" r="96" class="aro"/><circle cx="640" cy="214" r="168" class="aro"/><circle cx="640" cy="214" r="250" class="aro"/><circle cx="640" cy="214" r="340" class="aro"/>
+
+  <!-- Chachani y Pichu Pichu -->
+  <path d="M-60 560V420C20 402 80 350 140 312L176 288L214 316C262 334 300 376 372 442C430 496 472 534 530 560Z" fill="var(--lejos)"/>
+  <path d="M176 288C190 350 214 420 250 560" class="l" opacity=".28"/>
+  <path d="M700 560C790 530 860 484 930 442L986 418L1030 436C1090 456 1150 448 1260 478V560Z" fill="var(--lejos)"/>
+  <path d="M986 418C975 470 960 520 950 560" class="l" opacity=".28"/>
+
+  <!-- Misti: silueta de tinta con juntas de sillar -->
+  <use href="#forma-misti" fill="var(--misti)"/>
+  <g clip-path="url(#clip-misti)">
+    <rect x="150" y="200" width="960" height="370" fill="url(#sillar)"/>
+    <path d="M640 214L690 214L742 272C840 410 980 530 1090 560L880 560C820 470 730 360 640 214Z" fill="var(--luz)" opacity=".55"/>
+    <path d="M600 232C582 330 540 430 470 550" class="ladera"/>
+    <path d="M626 236C612 340 590 440 562 556" class="ladera"/>
+    <path d="M660 236C680 340 722 450 764 556" class="ladera"/>
+    <path d="M690 236C732 332 802 442 902 552" class="ladera"/>
+  </g>
+
+  <!-- Linea de corte entre alzado y planta -->
+  <rect y="560" width="1200" height="340" fill="var(--suelo)"/>
+  <path d="M0 560V900" class="g g-m"/><path d="M50 560V900" class="g"/><path d="M100 560V900" class="g"/><path d="M150 560V900" class="g"/><path d="M200 560V900" class="g"/><path d="M250 560V900" class="g g-m"/><path d="M300 560V900" class="g"/><path d="M350 560V900" class="g"/><path d="M400 560V900" class="g"/><path d="M450 560V900" class="g"/><path d="M500 560V900" class="g g-m"/><path d="M550 560V900" class="g"/><path d="M600 560V900" class="g"/><path d="M650 560V900" class="g"/><path d="M700 560V900" class="g"/><path d="M750 560V900" class="g g-m"/><path d="M800 560V900" class="g"/><path d="M850 560V900" class="g"/><path d="M900 560V900" class="g"/><path d="M950 560V900" class="g"/><path d="M1000 560V900" class="g g-m"/><path d="M1050 560V900" class="g"/><path d="M1100 560V900" class="g"/><path d="M1150 560V900" class="g"/><path d="M1200 560V900" class="g"/><path d="M0 600H1200" class="g"/><path d="M0 650H1200" class="g"/><path d="M0 700H1200" class="g"/><path d="M0 750H1200" class="g"/><path d="M0 800H1200" class="g"/><path d="M0 850H1200" class="g"/>
+  <path d="M0 560H1200" class="l" style="stroke-width:2"/>
+  <path d="M0 560v14" class="l"/><path d="M50 560v8" class="l"/><path d="M100 560v14" class="l"/><path d="M150 560v8" class="l"/><path d="M200 560v14" class="l"/><path d="M250 560v8" class="l"/><path d="M300 560v14" class="l"/><path d="M350 560v8" class="l"/><path d="M400 560v14" class="l"/><path d="M450 560v8" class="l"/><path d="M500 560v14" class="l"/><path d="M550 560v8" class="l"/><path d="M600 560v14" class="l"/><path d="M650 560v8" class="l"/><path d="M700 560v14" class="l"/><path d="M750 560v8" class="l"/><path d="M800 560v14" class="l"/><path d="M850 560v8" class="l"/><path d="M900 560v14" class="l"/><path d="M950 560v8" class="l"/><path d="M1000 560v14" class="l"/><path d="M1050 560v8" class="l"/><path d="M1100 560v14" class="l"/><path d="M1150 560v8" class="l"/><path d="M1200 560v14" class="l"/>
+
+  <!-- Rio Chili y una quebrada -->
+  <path d="M472 560C440 610 520 650 470 700S400 770 440 820S400 880 392 900" class="rio"/>
+  <path d="M472 560C440 610 520 650 470 700S400 770 440 820S400 880 392 900" class="rio-c"/>
+  <path d="M310 900C330 860 380 840 420 822" class="rio" style="stroke-width:5"/>
+
+  <!-- Manzanas -->
+  <rect x="657" y="667" width="36" height="36" rx="2" class="mz"/><rect x="707" y="667" width="36" height="36" rx="2" class="mz"/><rect x="757" y="667" width="36" height="36" rx="2" class="mz"/><rect x="807" y="667" width="36" height="36" rx="2" class="mz"/><rect x="857" y="667" width="36" height="36" rx="2" class="mz"/><rect x="657" y="717" width="36" height="36" rx="2" class="mz"/><rect x="707" y="717" width="36" height="36" rx="2" class="mz"/><rect x="757" y="717" width="36" height="36" rx="2" class="mz"/><rect x="807" y="717" width="36" height="36" rx="2" class="mz"/><rect x="857" y="717" width="36" height="36" rx="2" class="mz"/><rect x="657" y="767" width="36" height="36" rx="2" class="mz"/><rect x="707" y="767" width="36" height="36" rx="2" class="mz"/><rect x="757" y="767" width="36" height="36" rx="2" class="mz"/><rect x="807" y="767" width="36" height="36" rx="2" class="mz"/><rect x="857" y="767" width="36" height="36" rx="2" class="mz"/>
+  <rect x="457" y="567" width="36" height="36" rx="2" class="mz"/><rect x="557" y="567" width="36" height="36" rx="2" class="mz"/><rect x="657" y="567" width="36" height="36" rx="2" class="mz"/><rect x="707" y="567" width="36" height="36" rx="2" class="mz"/><rect x="807" y="567" width="36" height="36" rx="2" class="mz"/><rect x="907" y="567" width="36" height="36" rx="2" class="mz"/><rect x="507" y="617" width="36" height="36" rx="2" class="mz"/><rect x="557" y="617" width="36" height="36" rx="2" class="mz"/><rect x="657" y="617" width="36" height="36" rx="2" class="mz"/><rect x="707" y="617" width="36" height="36" rx="2" class="mz"/><rect x="757" y="617" width="36" height="36" rx="2" class="mz"/><rect x="807" y="617" width="36" height="36" rx="2" class="mz"/><rect x="857" y="617" width="36" height="36" rx="2" class="mz"/><rect x="907" y="617" width="36" height="36" rx="2" class="mz"/><rect x="557" y="667" width="36" height="36" rx="2" class="mz"/><rect x="607" y="667" width="36" height="36" rx="2" class="mz"/><rect x="557" y="717" width="36" height="36" rx="2" class="mz"/><rect x="607" y="717" width="36" height="36" rx="2" class="mz"/><rect x="957" y="717" width="36" height="36" rx="2" class="mz"/><rect x="557" y="767" width="36" height="36" rx="2" class="mz"/><rect x="607" y="767" width="36" height="36" rx="2" class="mz"/><rect x="907" y="767" width="36" height="36" rx="2" class="mz"/><rect x="657" y="817" width="36" height="36" rx="2" class="mz"/><rect x="707" y="817" width="36" height="36" rx="2" class="mz"/><rect x="757" y="817" width="36" height="36" rx="2" class="mz"/><rect x="807" y="817" width="36" height="36" rx="2" class="mz"/><rect x="857" y="817" width="36" height="36" rx="2" class="mz"/><rect x="907" y="817" width="36" height="36" rx="2" class="mz"/><rect x="957" y="817" width="36" height="36" rx="2" class="mz"/><rect x="557" y="867" width="36" height="36" rx="2" class="mz"/><rect x="607" y="867" width="36" height="36" rx="2" class="mz"/><rect x="657" y="867" width="36" height="36" rx="2" class="mz"/><rect x="707" y="867" width="36" height="36" rx="2" class="mz"/><rect x="757" y="867" width="36" height="36" rx="2" class="mz"/><rect x="807" y="867" width="36" height="36" rx="2" class="mz"/><rect x="857" y="867" width="36" height="36" rx="2" class="mz"/><rect x="907" y="867" width="36" height="36" rx="2" class="mz"/>
+  <!-- Celdas pintadas: cumple (liso), no cumple (rayas), sin dato (puntos) -->
+  <rect x="650" y="660" width="50" height="50" class="p-ok"/><rect x="700" y="660" width="50" height="50" class="p-ok"/><rect x="750" y="660" width="50" height="50" class="p-no"/><rect x="800" y="660" width="50" height="50" class="p-no"/><rect x="850" y="660" width="50" height="50" class="p-dato"/><rect x="650" y="710" width="50" height="50" class="p-ok"/><rect x="700" y="710" width="50" height="50" class="p-ok"/><rect x="750" y="710" width="50" height="50" class="p-ok"/><rect x="800" y="710" width="50" height="50" class="p-no"/><rect x="850" y="710" width="50" height="50" class="p-dato"/><rect x="650" y="760" width="50" height="50" class="p-no"/><rect x="700" y="760" width="50" height="50" class="p-ok"/><rect x="750" y="760" width="50" height="50" class="p-ok"/><rect x="800" y="760" width="50" height="50" class="p-ok"/><rect x="850" y="760" width="50" height="50" class="p-no"/>
+
+  <!-- Punto elegido -->
+  <g transform="translate(775 735)">
+    <circle r="46" fill="none" stroke="var(--linea)" stroke-width="1.5" stroke-dasharray="4 5" opacity=".7"/>
+    <path d="M0 0C-8 -13 -19 -25 -19 -43a19 19 0 0 1 38 0C19 -25 8 -13 0 0Z" fill="var(--linea)" stroke="var(--papel)" stroke-width="2.5"/>
+    <circle cy="-43" r="7" fill="var(--papel)"/>
+  </g>
+
+  <!-- Marcas de registro, norte y escala -->
+  <g class="l" opacity=".6">
+    <path d="M30 16v28M16 30h28"/><path d="M1170 16v28M1156 30h28"/><path d="M30 856v28M16 870h28"/><path d="M1170 856v28M1156 870h28"/>
+  </g>
+  <g class="l" transform="translate(1110 640)" opacity=".8">
+    <circle r="20"/><path d="M0 14V-18M-7 -9L0 -18L7 -9"/>
+  </g>
+  <g transform="translate(80 866)">
+    <rect width="50" height="7" fill="var(--linea)"/><rect x="50" width="50" height="7" fill="var(--papel)" stroke="var(--linea)" stroke-width="1.2"/>
+    <rect x="100" width="50" height="7" fill="var(--linea)"/><rect x="150" width="50" height="7" fill="var(--papel)" stroke="var(--linea)" stroke-width="1.2"/>
+  </g>
+</svg>
