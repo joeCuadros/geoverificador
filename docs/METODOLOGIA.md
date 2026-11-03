@@ -1,6 +1,6 @@
 # GeoVerificador — Metodología y trazabilidad
 
-> **Alcance vigente: 5 variables** (zonificación vigente, zonificación proyectada, salud, educación por nivel, transporte y área verde; ver §6 y §6b). Los capítulos de desastre, seguridad y gestión de riesgos (§4, §5, §10) describen módulos que siguen en el código pero están ocultos (`CONFIG.modulos`; se ven con `?modulos=todos`).
+> **Alcance vigente: 5 variables** (zonificación vigente, zonificación proyectada, salud, educación por nivel, transporte y área verde; ver §6, §6b y §6c). Los capítulos de desastre, seguridad y gestión de riesgos (§4, §5, §10) describen módulos que siguen en el código pero están ocultos (`CONFIG.modulos`; se ven con `?modulos=todos`).
 >
 > Cada dato que muestra la aplicación tiene aquí su origen, su transformación, la decisión que lo justifica y su límite.
 > Lo que **no** se pudo comprobar está marcado como tal. Cifras consultadas el 2026-10-12 y, para el peligro sísmico y la gestión de riesgos, el 2026-10-13.
@@ -226,6 +226,45 @@ Descarga: `node scripts/descargar-delitos.mjs` → `public/data/delitos_aqp.geoj
 - **Zonificación proyectada.** Solo un aviso de texto sobre el estado del PDM nuevo, con su fuente y fecha, tomado de `CONFIG.estadoPDM`. Si ese valor es `null` o le falta fuente o fecha, no se muestra nada (`Calculos.avisoPDMProyectado`). La fuente actual es una nota de prensa (Diario Correo, 2026-10-24), no un documento oficial. No hay mapa de la zonificación proyectada.
 - **Artículo del Reglamento.** La tabla de reglas no guarda el artículo de cada parámetro; la ficha cita el Título III del Reglamento y mostrará el artículo si una regla trae el campo opcional `articulo`.
 
+## 6c. Líneas de transporte (SmartBus)
+
+La variable V4 sigue siendo el **paradero más cercano de OpenStreetMap** (§6). Además, la tarjeta «Transporte» muestra **qué líneas pasan cerca**, con una fuente distinta: los recorridos que publica SmartBus (smartbus.app), una empresa privada de Arequipa. Las dos fuentes no se mezclan: la tarjeta las rotula por separado.
+
+**Permiso.** Los datos se usan con **autorización verbal de SmartBus; la confirmación escrita está pendiente**. Esa frase viaja en el archivo (`metadata.permiso`) y aparece en la ficha, el informe y el asistente. Mientras no haya confirmación escrita, el archivo es «datos con permiso verbal»: no debe redistribuirse como si fuera abierto.
+
+**De dónde salen los datos (sin autenticación, los mismos que usa el mapa de la página para cualquier visitante).** Se averiguó leyendo el JavaScript público de https://smartbus.app/pe/arequipa/c2: el mapa llama a `/smartbus/{país}/{ciudad}/routes`, `/routes/{id}` y `/routes-geo`.
+
+| Endpoint (GET, JSON) | Qué trae |
+|---|---|
+| `https://smartbus.app/smartbus/pe/arequipa/routes` | Lista de rutas: id, nombre corto y largo («Cettar : Ciudad Municipal → Terminal Terrestre»), empresa en `agency.name` («C2 - Cono Norte»), color y número de paradas |
+| `https://smartbus.app/smartbus/pe/arequipa/routes/{id}` | Detalle de una ruta: paradas `{ nombre, lat, lng, sequence }` y trazado `geometry` `[[lat, lng], …]` |
+| `/routes-geo` | Todos los trazados en una sola respuesta (sin paradas); no se usa |
+
+`robots.txt` de smartbus.app declara `User-agent: * / Allow: /`. El script lo vuelve a leer y se detiene si deja de permitirlo.
+
+**Cómo se descarga** (`pnpm datos:rutas`, `scripts/descargar-rutas-smartbus.mjs`): solicitudes HTTP simples con un User-Agent honesto («GeoVerificador/1.0 (datos con permiso de SmartBus)»), sin suplantar un navegador, sin saltar captchas y sin tokens; al menos 1,1 s entre solicitudes; las respuestas crudas quedan en `.cache-smartbus/` (ignorada por git). Si un endpoint pide inicio de sesión, responde 401/403/429, redirige o muestra una verificación anti-bot, el script **se detiene** sin insistir. Valida el resultado (números finitos, todo dentro de Arequipa, rutas y paradas completas) y, si algo falla, **no toca el archivo existente**. Salida: `public/data/rutas_smartbus.geojson`.
+
+**Qué trae el archivo.** Un `LineString` (o `MultiLineString`) por línea, empresa y sentido (`linea`, `empresa`, `ramal`, `nombre`, `sentido`, `id_ruta`, `fuente`, `url`) y un `Point` por parada (`nombre`, `linea`, `ramal`, `orden`, `id_ruta`). Descarga del 2026-11-03: **12 líneas** (C2 a C11, Albotran y Chiguata), **126 ramales**, **241 recorridos** (uno por sentido), **9 301 paradas** y 122 574 vértices. `metadata` trae la fuente, el permiso, la atribución («Rutas: SmartBus (smartbus.app)»), la fecha de descarga y los conteos.
+
+**Decisiones.**
+- La línea y la empresa salen de `agency.name` («C2 - Cono Norte» → línea C2, empresa Cono Norte). Lo que SmartBus llama «ruta» (por ejemplo «Cettar») es un **ramal** de esa línea. Albotran y Chiguata no tienen código: la línea lleva su nombre.
+- SmartBus entrega cada trazado como tramos pegados, y a veces hay saltos entre tramos consecutivos. Un salto de más de 300 m (el 99,7 % de los segmentos mide menos) no se dibuja como calle: el trazado se parte ahí y queda como `MultiLineString` (102 de los 241 recorridos). Así la distancia nunca se mide contra un tramo que no existe.
+- Las paradas se publican con nombres numerados («Cettar - 12»), sin el nombre de la calle; se muestran tal cual.
+
+**Qué se calcula** (`public/js/rutas.js`, sin DOM ni red).
+- *Líneas cerca de un punto:* la distancia del punto a la polilínea de cada recorrido (plano local, la misma de las quebradas, `Calculos.distanciaALineaM`) y, por línea, la distancia mínima, sus ramales y la **parada más cercana** (haversine). Se listan las líneas a **400 m o menos** (`CONFIG.umbrales.transporte`, **convención del proyecto**, no una norma; la ficha lo rotula así).
+- *Líneas que cruzan un distrito:* una línea cuenta si algún punto de su trazado (densificado a tramos de 100 m) cae dentro del polígono del distrito (límites de GEOCATMIN); se informan también cuántas paradas tiene dentro. Es una aproximación: un trazado que solo roza una esquina del distrito podría no contarse.
+- Dónde se ve: tarjeta «Transporte» de la ficha, fila de transporte de «Comparar puntos», sección «Transporte» del informe PDF y el asistente («¿qué buses pasan por aquí?», «¿qué líneas pasan por Paucarpata?»; con Gemini la intención es `rutas` y el campo `distrito`, validados igual que el resto; el modelo solo nombra el distrito y las líneas salen siempre del motor).
+
+**Qué no cubre.**
+- Son los recorridos **tal como SmartBus los publicó en la fecha de descarga**; los datos no se actualizan solos.
+- **No hay frecuencias ni horarios**, ni si el servicio está operando hoy; una línea que «pasa» no garantiza que pase cuando la persona la necesite.
+- **Un cambio de ruta por tramos** (obras, desvíos, ajustes de la empresa) puede no estar reflejado. Lo que SmartBus no publica no aparece.
+- La distancia es **al trazado**, no al lugar donde se puede subir, y en línea recta, no a pie.
+- Los nombres de las paradas son números de orden, no calles ni referencias.
+
+**Verificación.** `test/rutas.spec.ts` (módulo con fixtures: distancias a mano, hueco entre tramos, cruces de distrito, orden de líneas), `test/rutas-integracion.spec.ts` (comparación e informe), `test/asistente-rutas.spec.ts` (reglas, respuestas, contrato con Gemini) y `scripts/verificar-datos.mjs`, sección D: integridad del archivo, conteos que cuadran con los metadatos, ningún segmento de más de 300 m, paradas sobre el trazado de su ruta, las líneas a 400 m de 200 puntos frente a la distancia punto-segmento sobre la esfera (fuerza bruta) y las líneas de 6 distritos frente a un barrido cada 20 m con número de vueltas.
+
 ## 7. Trazabilidad: de dónde sale cada cifra de la pantalla
 
 | Lo que se ve | Cómo se obtiene | Archivo / código |
@@ -241,6 +280,7 @@ Descarga: `node scripts/descargar-delitos.mjs` → `public/data/delitos_aqp.geoj
 | Periodo y cobertura | Regla de cobertura sobre `metadata.cobertura` | `Delitos.load`, `metadata.cobertura` |
 | Mapa de calor | Densidad gaussiana (σ 200 m, celdas 100 m) | `Delitos.capa` |
 | Salud, educación por nivel, transporte y área verde (estado, distancia, nombre) | Más cercano por haversine y umbral; área geodésica y distancia al borde en áreas verdes | `calculos.js`, `equipamiento.js`, `data/equipamiento/*.geojson` |
+| «Líneas que pasan a ≤400 m», trazado y parada más cercana | Distancia punto → polilínea de cada recorrido, agrupada por línea; parada más cercana por haversine | `rutas.js`, `data/rutas_smartbus.geojson` (SmartBus, permiso verbal) |
 | Aviso de borde de zona | Otra zona a ≤ 20 m del punto | `Calculos.alertaBorde`, `zonificacion.js` |
 | Aviso del PDM proyectado | Texto de `CONFIG.estadoPDM` (solo con fuente y fecha) | `config.js`, `calculos.js` |
 | Distrito, zona sísmica y Z | Punto-en-polígono sobre los límites del INEI; zona y Z de la E.030 | `distritos.js`, `distritos_aqp.geojson`, `zonas_sismicas_e030.json` |
@@ -279,6 +319,7 @@ Las fuentes públicas cambian: al volver a descargar, las cifras de este documen
 - Peligro volcánico (Misti), licuación y amplificación por el suelo del predio, y tsunami. El peligro sísmico solo está a escala de distrito (zona E.030).
 - Precio del suelo, rentabilidad o demanda: no se relaciona ningún factor con el valor de un predio. Eso exigiría datos de precios y es un trabajo aparte.
 - Calidad de la construcción, servicios básicos (agua, desagüe, luz) y situación legal del predio (títulos, cargas).
+- **Transporte como servicio.** Las líneas son los recorridos que SmartBus publicó en la fecha de descarga: sin frecuencias ni horarios, sin saber si hoy operan, y un cambio de ruta por tramos puede no estar reflejado (§6c).
 - Planes urbanos posteriores a 2016.
 
 ## 10. Gestión de riesgos del predio (registro de riesgos)
@@ -376,6 +417,8 @@ Los umbrales de campiña, comercial y centro histórico son convenciones del pro
 5. Cada distrito trae su mejor celda (más puntaje y, a igual puntaje, la que cumple con más holgura) para verla en el mapa o consultarla con la ficha completa.
 
 **Qué NO es.** No es una probabilidad ni una recomendación: es la parte del suelo habitable de un distrito que cumple lo que se pidió. La resolución es de 250 m. Hereda todos los límites de la ficha (distancia en línea recta, OpenStreetMap incompleto, plano 2016-2025). La palabra «probabilidad» no aparece en ninguna cifra y el texto aclara que no lo es.
+
+**Líneas de transporte.** «¿Qué buses pasan por aquí?» y «¿qué líneas pasan por Paucarpata?» se responden con los recorridos de SmartBus (§6c), no con el criterio «transporte» de las búsquedas. Sobre el punto usa las líneas a 400 m o menos de la ficha; con un distrito (no necesita punto), las líneas cuyo trazado entra en él. Si el nombre del distrito no coincide con ninguno de los descargados, lo dice en vez de adivinar. Cita siempre la fuente, el permiso verbal con confirmación escrita pendiente y que no hay frecuencias ni horarios.
 
 **Ajustes sobre la búsqueda anterior.** «agrega transporte», «quita el parque», «prioriza el colegio», «incluye zonas condicionales». La cuadrícula se reutiliza entre ajustes porque no depende de los criterios.
 

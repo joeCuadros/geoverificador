@@ -8,7 +8,7 @@ Ficha de un predio en Arequipa metropolitana, con datos públicos. Se elige un p
 | V1b Zonificación proyectada | Solo un aviso de texto sobre el estado del PDM nuevo; aparece únicamente si `CONFIG.estadoPDM` tiene fuente y fecha. No hay mapa | — | Diario Correo (nota de prensa) |
 | V2 Salud | Establecimiento de salud más cercano | 1000 m (convención del proyecto) | OpenStreetMap |
 | V3 Educación | Colegio más cercano por nivel: inicial, primaria y secundaria | 500 / 1500 / 3000 m (MINEDU, Cuadro N.° 1 del Instructivo FTE; RVM 104-2019 y 208-2019-MINEDU) | OpenStreetMap |
-| V4 Transporte | Paradero más cercano | 400 m (convención del proyecto) | OpenStreetMap |
+| V4 Transporte | Paradero más cercano y líneas de bus que pasan a 400 m o menos | 400 m (convención del proyecto) | OpenStreetMap (paradero); SmartBus, con permiso verbal (líneas) |
 | V5 Área verde | Área verde de al menos 5000 m² a 300 m o menos (y, como sensibilidad, de al menos 1 ha) | 300 m / 5000 m² (OMS Europa, 2016) | OpenStreetMap |
 | N1 Quebradas y cauces | Cauce más cercano de la red hidrográfica y su distancia. **Estado `INFORMATIVO`**: no hay umbral normativo, así que no dice cumple ni no cumple, salvo con el umbral que fije la persona en «Mis umbrales» («según tu umbral») | Ninguno (parámetro del usuario) | ANA (red de 2018, escala nacional; no incluye todas las quebradas urbanas) |
 | Contexto de riesgo | Peligros geológicos registrados a 500 m y sismos reportados a 100 km. **Siempre `INFORMATIVO`**: contexto, no una evaluación de peligro | — | INGEMMET (inventario) e IGP (sismos reportados desde el 2026-01-01) |
@@ -40,6 +40,7 @@ El botón **Asistente** de la barra superior abre un chat que usa los mismos dat
 - **Sobre tu punto:** «¿qué zona es?», «¿hay un colegio cerca de mi punto?», «¿cuánto puedo construir en un lote de 200 m²?», «¿cambiará la zonificación?», «dame un resumen».
 - **Buscar zonas:** «busco cerca de un colegio y un parque, lo más importante es el parque, en un radio de 1 km». Revisa una cuadrícula de 250 m sobre las zonas construibles del plano y las agrupa por distrito. Informa el **porcentaje del suelo habitable** que cumple lo pedido (no una probabilidad). Se ajusta con «agrega transporte», «quita el parque», «prioriza el colegio» o «incluye zonas condicionales». Cada distrito trae botones para verlo en el mapa y consultar su mejor punto con la ficha completa.
 - **Sin escribir:** «Armar una búsqueda sin escribir» abre menús desplegables: qué quieres tener cerca (servicios y tipo de zona, con selección múltiple), nivel educativo, lo más importante, distancia máxima y «Incluir zonas condicionales», más búsquedas rápidas con un toque. Los menús generan la misma consulta que el chat saca de una frase (`Asistente.construirConsulta`), así que hay un solo motor de decisión. Cada distrito del resultado se abre y cierra, y cada respuesta trae un apartado «Por qué, fuente y límites».
+- **Líneas de transporte:** «¿qué buses pasan por aquí?» (sobre tu punto) o «¿qué líneas pasan por Paucarpata?» (sobre un distrito). Usa los recorridos de SmartBus; no tiene frecuencias ni horarios.
 - **Quebradas, sismos y peligros:** «¿hay una quebrada cerca de mi punto?», «¿cuántos sismos hubo?», «¿hay peligros geológicos cerca?» se responden sobre el punto con su fuente y sus límites, como contexto informativo. También se puede pedir «lejos de quebradas a más de 200 m» (o elegirlo en el menú «Lejos de quebradas y ríos»): la distancia la fija la persona, porque no existe una oficial; si falta, el asistente la pide.
 - **Qué entiende:** salud, colegio (inicial, primaria o secundaria), transporte, área verde, campiña (zona agrícola), zona residencial, tranquilo, comercial y centro histórico. «Tranquilo», «mall» y «barrio tradicional» son aproximaciones con la zonificación y el chat lo avisa.
 - **Qué no sabe:** seguridad, precios y ruido. Lo dice en vez de responder a medias.
@@ -58,6 +59,7 @@ Las reglas y sus límites están en [`docs/METODOLOGIA.md`](docs/METODOLOGIA.md)
 - **Distancia en línea recta**, no recorrido real. Un colegio o paradero a 400 m en línea recta puede estar mucho más lejos por la red vial.
 - **Referencial.** No reemplaza el Certificado de Zonificación y Vías ni el Certificado de Parámetros Urbanísticos y Edificatorios, que son los documentos con valor legal (los emite el IMPLA o la municipalidad distrital).
 - **Vigencia del PDM incierta.** El PDM 2016-2025 llegó al fin de su vigencia de diez años, hay un PDM nuevo en trámite y hay una suspensión judicial de ciertos actos de ejecución. La zona mostrada puede no ser la que aplica hoy. Ver [`docs/METODOLOGIA.md`](docs/METODOLOGIA.md), §3.
+- **Líneas de transporte (SmartBus).** Son los recorridos que SmartBus publicó en la fecha de descarga (`metadata.fecha_descarga`): sin frecuencias ni horarios, y un cambio de ruta por tramos puede no estar reflejado. Se usan con autorización verbal de SmartBus; la confirmación escrita está pendiente. Las paradas de SmartBus tienen nombres numerados («Cettar - 12»).
 - **Equipamiento de OpenStreetMap.** Los datos dependen de lo mapeado por los colaboradores; pueden faltar o estar desactualizados establecimientos, colegios y paraderos.
 
 ## Documentación
@@ -100,6 +102,7 @@ El frontend es JavaScript sin dependencias de compilación (Leaflet se carga des
 | `pnpm test:e2e` | Pruebas extremo a extremo (`GET /` y `GET /api`) | No |
 | `pnpm lint` | Análisis estático con oxlint (`src/` y `test/`) | No |
 | `pnpm datos:verificar` | Integridad de los datos y cálculos frente a un método independiente | No |
+| `pnpm datos:rutas` | Descarga las rutas y paradas de SmartBus a `public/data/rutas_smartbus.geojson` (≥ 1 s entre solicitudes, User-Agent propio, caché en `.cache-smartbus/`; se detiene si el sitio pide sesión o bloquea) | Sí (smartbus.app) |
 | `pnpm datos:extraer` | Descarga el equipamiento de OpenStreetMap a `public/data/equipamiento` | Sí (Overpass) |
 | `pnpm datos:validar-osm` | Contrasta la zonificación con lugares de OpenStreetMap (usa la referencia guardada en `docs/validacion/`) | No |
 | `pnpm datos:validar-plano` | Contrasta la zonificación con el PDF oficial del plano (la ruta del PDF se pasa como argumento) | No |
@@ -121,6 +124,7 @@ Los datos ya descargados están en el repositorio: solo es necesario regenerarlo
 - **OpenStreetMap.** Salud, educación, transporte, áreas verdes y mapa base: © colaboradores de OpenStreetMap, bajo [ODbL](https://opendatacommons.org/licenses/odbl/). La atribución figura en la aplicación.
 - **Zonificación.** Plano de Zonificación y Reglamento del Plan de Desarrollo Metropolitano de Arequipa 2016-2025, aprobado por la Ordenanza Municipal N.° 961-MPA (del 3 de febrero de 2016), con la zonificación restituida por la Ordenanza N.° 975-MPA. Fuente: Municipalidad Provincial de Arequipa e IMPLA.
 - **Norma E.030 y límites distritales.** Ver `public/js/config.js` y `docs/METODOLOGIA.md`.
+- **Rutas de transporte.** Rutas y paradas: SmartBus (smartbus.app), usadas con autorización verbal; confirmación escrita pendiente. Atribución en la aplicación: «Rutas: SmartBus (smartbus.app)». Hasta tener la confirmación escrita, no se redistribuye el archivo como dato abierto.
 - **Búsqueda de direcciones.** Nominatim (OpenStreetMap), sujeta a su política de uso (máximo 1 solicitud por segundo).
 
 El código no tiene licencia de código abierto: `package.json` declara `UNLICENSED`.
