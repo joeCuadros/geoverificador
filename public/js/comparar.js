@@ -33,6 +33,9 @@ const Comparar = (() => {
     { id: 'quebradas', titulo: 'Quebradas y cauces', ayuda: 'A la distancia mínima de una quebrada o río que fijes en «Mis umbrales». Sin tu umbral solo es informativo' },
   ];
   const IDS = VARIABLES.map((v) => v.id);
+  /** Filas informativas de mercado: precio de oferta del distrito (Aptología). Nunca prioridad, cumple ni puntaje. */
+  const MERCADO = [{ id: 'precio', titulo: 'Precio de oferta del distrito (por m²)' }];
+  const P = typeof Precios !== 'undefined' ? Precios : require('./precios.js'); // eslint-disable-line no-undef
   /** Filas informativas de la tabla: contexto, nunca prioridad. */
   const CONTEXTO = [
     { id: 'peligros', titulo: 'Peligros geológicos registrados' },
@@ -118,16 +121,34 @@ const Comparar = (() => {
     hasta: s && esTexto(s.hasta) ? s.hasta : null,
   });
 
+  // Precio de oferta del distrito (resultado de Precios.buscar): solo lo necesario para la fila, sin decidir nada.
+  function variablePrecio(p) {
+    const venta = p && p.estado === 'INFORMATIVO' && p.precioM2 && esNumero(p.precioM2.venta) ? p.precioM2.venta : null;
+    if (venta === null) {
+      return { estado: 'SIN DATO', distrito: p && esTexto(p.distrito) ? p.distrito : null, ventaM2: null, nAvisos: null, corte: null, url: null, causa: p && esTexto(p.causa) ? p.causa : null };
+    }
+    return {
+      estado: 'INFORMATIVO',
+      distrito: esTexto(p.distrito) ? p.distrito : null,
+      ventaM2: venta,
+      nAvisos: p.nAvisos && esNumero(p.nAvisos.venta) ? p.nAvisos.venta : null,
+      corte: p.periodo && esTexto(p.periodo.corte) ? p.periodo.corte : null,
+      url: esTexto(p.url) ? p.url : null,
+      causa: null,
+    };
+  }
+
   /**
    * Instantánea de un punto con lo que la ficha ya calculó.
    *   entrada: { lat, lon, etiqueta, distrito, zona, entorno, cauce, contexto }
    *     entorno  = resultado de Equipamiento.evaluar
    *     cauce    = resultado de Contexto.quebradas (si falta, la variable queda SIN DATO)
    *     contexto = { peligros, sismos } de Contexto (si faltan, esas filas quedan SIN DATO)
+   *     precio   = resultado de Precios.buscar (si falta, la fila de precio queda SIN DATO)
    * Devuelve null si falta lo mínimo (coordenadas o el entorno), para no guardar un punto a medias.
    */
   function crearCandidato(entrada) {
-    const { lat, lon, etiqueta = '', distrito = '', zona = null, entorno = null, cauce = null, contexto = null } = entrada || {};
+    const { lat, lon, etiqueta = '', distrito = '', zona = null, entorno = null, cauce = null, contexto = null, precio = null } = entrada || {};
     if (!esNumero(lat) || !esNumero(lon) || !entorno || !entorno.educacion) return null;
     const niveles = Object.fromEntries(NIVELES.map((n) => [n, servicio(entorno.educacion[n])]));
     return {
@@ -146,6 +167,7 @@ const Comparar = (() => {
         quebradas: variableQuebradas(cauce),
       },
       contexto: { peligros: contextoPeligros(contexto && contexto.peligros), sismos: contextoSismos(contexto && contexto.sismos) },
+      precio: variablePrecio(precio),
     };
   }
 
@@ -299,6 +321,23 @@ const Comparar = (() => {
   }
 
   /**
+   * Fila de mercado (precio de oferta del distrito): INFORMATIVO o SIN DATO, nunca CUMPLE / NO CUMPLE. Dos puntos del mismo
+   * distrito muestran la misma cifra: es el promedio del distrito, no el precio del inmueble. Los puntos guardados antes de
+   * existir esta fila no tienen `precio` y quedan SIN DATO.
+   */
+  function celdaMercado(candidato) {
+    const v = candidato.precio;
+    if (!v || v.estado !== 'INFORMATIVO' || !esNumero(v.ventaM2)) {
+      return { estado: 'SIN DATO', partes: [{ texto: v && v.causa ? `Sin dato: ${v.causa}` : 'Sin dato' }] };
+    }
+    const partes = [{ texto: `${P.formatearSoles(v.ventaM2)} por m² (mediana de oferta en venta)` }];
+    partes.push({ texto: `Mediana de ${candidato.distrito || 'el distrito'}, no de este inmueble${v.nAvisos !== null ? ` · ${v.nAvisos} avisos` : ''}` });
+    if (v.corte) partes.push({ texto: `Datos con corte al ${P.fechaLarga(v.corte)}` });
+    partes.push({ texto: 'Datos: Aptologia (CC BY 4.0)', url: v.url });
+    return { estado: 'INFORMATIVO', partes };
+  }
+
+  /**
    * Todo lo que muestra la comparación, fila por fila: la tabla (escritorio) y las tarjetas (móvil) se dibujan con esto, así
    * no pueden diferir. Cada celda: { candidatoId, estado, partes, mejor } (mejor = el punto cumple todas las prioridades).
    *   Devuelve { variables: [{ id, titulo, prioritaria, celdas }], contexto: [{ id, titulo, prioritaria: false, celdas }] }
@@ -319,6 +358,12 @@ const Comparar = (() => {
         titulo: v.titulo,
         prioritaria: false,
         celdas: lista.map((c) => ({ candidatoId: c.id, ...celdaContexto(c, v.id), mejor: false })),
+      })),
+      mercado: MERCADO.map((v) => ({
+        id: v.id,
+        titulo: v.titulo,
+        prioritaria: false,
+        celdas: lista.map((c) => ({ candidatoId: c.id, ...celdaMercado(c), mejor: false })),
       })),
     };
   }
@@ -371,9 +416,9 @@ const Comparar = (() => {
   }
 
   return {
-    MAX_CANDIDATOS, VARIABLES, CONTEXTO, NIVELES, CLAVE_PRIORIDADES, CLAVE_CANDIDATOS,
+    MAX_CANDIDATOS, VARIABLES, CONTEXTO, MERCADO, NIVELES, CLAVE_PRIORIDADES, CLAVE_CANDIDATOS,
     estadoEducacion, crearCandidato, conUmbrales, agregar, quitar, estaGuardado,
-    normalizarPrioridades, alternar, evaluarPrioridades, quienesCumplen, dominancias, celda, celdaContexto, filas, fmtDist,
+    normalizarPrioridades, alternar, evaluarPrioridades, quienesCumplen, dominancias, celda, celdaContexto, celdaMercado, filas, fmtDist,
     leerPrioridades, guardarPrioridades, leerCandidatos, guardarCandidatos,
   };
 })();

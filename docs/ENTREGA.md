@@ -16,9 +16,12 @@ Resumen del estado técnico. El detalle de fuentes y límites está en [`METODOL
 
 - **Recorrido guiado, tarjetas desplegables, «Comparar puntos», verificaciones antes de comprar y menús del asistente** (ver el [`README.md`](../README.md)).
 - **Quebradas y cauces (ANA)** como variable INFORMATIVA (14 tramos, 7 cursos, descargados el 2026-11-02), con «Mis umbrales» para que la persona fije su propia distancia mínima. **Contexto de riesgo (informativo):** peligros geológicos de INGEMMET (394 registros, congelados el 2026-10-12) y 94 sismos del IGP entre el 2026-01-01 y el 2026-11-02. Detalle, fuentes y límites en [`METODOLOGIA.md`](METODOLOGIA.md) §12.
+- **Precio de oferta por m² del distrito (informativo).** Aptología, datos abiertos CC BY 4.0 (atribución «Datos: Aptologia»), congelados el 2026-11-03 con `scripts/descargar-precios.mjs`: mediana del precio pedido de departamentos en venta, con corte al 2026-10-18. **Solo 3 de los 25 distritos tienen cifra** (Cayma, Yanahuara y Cerro Colorado, 273 avisos; Aptología publica solo distritos con al menos 30 avisos); el resto es SIN DATO con su causa. Está en la ficha, en «Comparar puntos», en el PDF y en el asistente («¿cuánto cuesta el m² en Cayma?»); el precio de una casa o un alquiler sigue fuera de alcance. Nunca es cumple / no cumple ni puntaje. Detalle, licencia verificada y límites en [`METODOLOGIA.md`](METODOLOGIA.md) §13.
 - **Datos sin servicio.** `scripts/descargar-peligros.mjs` apunta al servicio público de INGEMMET, que solo trae 291 de los 394 registros congelados; se conserva el archivo completo y el script no lo sobrescribe sin `--forzar`. El servicio original exige token.
 
 ## Pendiente
+
+- **Cobertura de precios.** Solo 3 distritos tienen precio de oferta por m²; no hay precio de alquiler por m² ni serie en el tiempo. Falta una fuente con más distritos (por ejemplo, un extracto agregado de un portal con permiso de uso y atribución) y volver a correr `node scripts/descargar-precios.mjs` cuando Aptología actualice su estudio (se anuncia mensual).
 
 - **Quebradas urbanas.** La red de la ANA no incluye todas (no figuran Añashuayco ni San Lázaro). Falta una fuente de peligro delimitado (CENEPRED/SIGRID o los informes de INGEMMET), que no respondió desde la red de prueba; probar desde una red en Perú.
 

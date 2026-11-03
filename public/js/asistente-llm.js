@@ -14,6 +14,7 @@ const AsistenteLLM = (() => {
   // Se resuelve al usarlo: el servidor valida y verifica sin necesitar el motor de búsqueda.
   const motor = () => (typeof Asistente !== 'undefined' ? Asistente : require('./asistente.js')); // eslint-disable-line no-undef
 
+
   const esObjeto = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
   const esNumero = (n) => typeof n === 'number' && Number.isFinite(n);
   const ausente = (v) => v === undefined || v === null;
@@ -21,7 +22,7 @@ const AsistenteLLM = (() => {
   // ------------------------------------------------------------------ Esquema
 
   const INTENCIONES = [
-    'buscar', 'zona', 'construir', 'cambio_zonificacion', 'resumen', 'quebradas', 'sismos', 'peligros', 'servicio_cercano', 'rutas',
+    'buscar', 'zona', 'construir', 'cambio_zonificacion', 'resumen', 'quebradas', 'sismos', 'peligros', 'servicio_cercano', 'rutas', 'precio_distrito',
     'fuentes', 'ayuda', 'saludo', 'fuera_de_alcance', 'desconocido', 'contar_en_distrito', 'perfil_distrito', 'mejor_zona',
   ];
   const CRITERIOS = ['salud', 'colegio', 'inicial', 'primaria', 'secundaria', 'transporte', 'areaVerde', 'campina', 'residencial', 'tranquilo', 'comercial', 'historico', 'lejosQuebrada'];
@@ -47,7 +48,7 @@ const AsistenteLLM = (() => {
         intencion: {
           type: 'string',
           enum: INTENCIONES,
-          description: 'buscar = encontrar zonas de la ciudad por lo que importa a la persona; zona = qué zona es su punto; construir = cuánto se puede construir en su punto; cambio_zonificacion = si el plan nuevo cambiará la zonificación; resumen = resumen/ficha del punto; quebradas, sismos, peligros = contexto de riesgo del punto; servicio_cercano = si hay un servicio cerca de su punto; rutas = qué líneas de bus o combi pasan cerca de su punto o por un distrito (distrito = el distrito; vacío si pregunta por su punto); fuentes = de dónde salen los datos; ayuda; saludo; fuera_de_alcance = solo seguridad, precios o ruido; contar_en_distrito = cuántos colegios, postas, paraderos o parques hay en un distrito (criterios = lo que se cuenta, distrito = el distrito); perfil_distrito = la persona habla de un distrito sin pedir algo concreto («quiero vivir en Paucarpata», «cómo es Cayma»); mejor_zona = pide la mejor zona o dónde vivir sin nombrar un distrito ni decir qué le importa; desconocido = no se entiende o no tiene relación.',
+          description: 'buscar = encontrar zonas de la ciudad por lo que importa a la persona; zona = qué zona es su punto; construir = cuánto se puede construir en su punto; cambio_zonificacion = si el plan nuevo cambiará la zonificación; resumen = resumen/ficha del punto; quebradas, sismos, peligros = contexto de riesgo del punto; servicio_cercano = si hay un servicio cerca de su punto; precio_distrito = precio de oferta por m² promedio de un distrito (por ejemplo «cuánto cuesta el m² en Cayma»); rutas = qué líneas de bus o combi pasan cerca de su punto o por un distrito (distrito = el distrito; vacío si pregunta por su punto); fuentes = de dónde salen los datos; ayuda; saludo; fuera_de_alcance = solo seguridad, ruido, el precio de una casa o terreno en particular, alquileres o búsquedas por precio; contar_en_distrito = cuántos colegios, postas, paraderos o parques hay en un distrito (criterios = lo que se cuenta, distrito = el distrito); perfil_distrito = la persona habla de un distrito sin pedir algo concreto («quiero vivir en Paucarpata», «cómo es Cayma»); mejor_zona = pide la mejor zona o dónde vivir sin nombrar un distrito ni decir qué le importa; desconocido = no se entiende o no tiene relación.',
         },
         criterios: {
           type: 'array',
@@ -83,12 +84,12 @@ const AsistenteLLM = (() => {
         loteM2: { type: 'number', description: 'Área del lote en m² cuando la persona la menciona (intencion construir).' },
         distrito: {
           type: 'string',
-          description: 'Nombre del distrito de la provincia de Arequipa que la persona nombra, tal como lo escribió (con sus errores de tipeo): nunca lo corrijas ni inventes uno. Obligatorio en contar_en_distrito y perfil_distrito; en rutas solo si pregunta por un distrito (vacío si habla de su punto: «por aquí», «cerca de mí»); en buscar solo si pide buscar dentro de un distrito.',
+          description: 'Nombre del distrito de la provincia de Arequipa que la persona nombra, tal como lo escribió (con sus errores de tipeo): nunca lo corrijas ni inventes uno. Obligatorio en contar_en_distrito y perfil_distrito; en rutas y precio_distrito solo si nombra un distrito (vacío si habla de su punto: «por aquí», «cerca de mí»); en buscar solo si pide buscar dentro de un distrito.',
         },
         tema: {
           type: 'string',
           enum: TEMAS,
-          description: 'Si la persona menciona seguridad, precios o ruido (datos que el asistente no tiene), el tema; también en una búsqueda que lo incluye.',
+          description: 'Si la persona menciona seguridad, ruido o el precio de un inmueble concreto, un alquiler o zonas por precio (datos que el asistente no tiene), el tema; también en una búsqueda que lo incluye.',
         },
       },
       required: ['intencion'],
@@ -209,6 +210,7 @@ const AsistenteLLM = (() => {
       if (limpio.criterios.length === 0) return rechazo('servicio_sin_criterios');
     }
     if (spec.intencion !== 'construir') limpio.loteM2 = null;
+    if (spec.intencion === 'precio_distrito') limpio.distrito = spec.distrito; // vacío = el distrito de su punto
     if (spec.intencion === 'fuera_de_alcance' && !spec.tema) return rechazo('fuera_de_alcance_sin_tema');
     return { ok: true, spec: limpio };
   }
@@ -236,7 +238,7 @@ const AsistenteLLM = (() => {
 
   const TIPO_DE_INTENCION = {
     zona: 'zona', construir: 'construir', cambio_zonificacion: 'pdm', resumen: 'ficha', quebradas: 'quebrada', sismos: 'sismos',
-    peligros: 'peligros', fuentes: 'fuentes', ayuda: 'ayuda', saludo: 'saludo', mejor_zona: 'mejor_zona',
+    peligros: 'peligros', fuentes: 'fuentes', ayuda: 'ayuda', saludo: 'saludo', mejor_zona: 'mejor_zona', precio_distrito: 'precio',
   };
   const distritos = () => (typeof Distritos !== 'undefined' ? Distritos : require('./distritos.js')); // eslint-disable-line no-undef
 
@@ -255,7 +257,7 @@ const AsistenteLLM = (() => {
     const vacia = A.interpretar('');
     if (spec.intencion === 'desconocido') return vacia;
     if (spec.intencion === 'mejor_zona') return { ...vacia, tipo: 'mejor_zona' };
-    const conDistrito = ['contar_en_distrito', 'perfil_distrito'].includes(spec.intencion) || (spec.intencion === 'rutas' && spec.distrito) || (spec.intencion === 'buscar' && spec.distrito);
+    const conDistrito = ['contar_en_distrito', 'perfil_distrito'].includes(spec.intencion) || (['rutas', 'precio_distrito'].includes(spec.intencion) && spec.distrito) || (spec.intencion === 'buscar' && spec.distrito);
     const dis = conDistrito ? resolverDistrito(spec.distrito) : null;
     if (conDistrito && !dis) return { ...vacia, tipo: 'distrito_desconocido', distritoTexto: spec.distrito };
     if (spec.intencion === 'perfil_distrito') return { ...vacia, tipo: 'perfil', ...dis };
@@ -285,7 +287,12 @@ const AsistenteLLM = (() => {
       });
       return { ...q, modo, temaNoSoportado: spec.tema, ...(dis || {}) };
     }
-    return { ...vacia, tipo: TIPO_DE_INTENCION[spec.intencion] || 'desconocido', lote: spec.intencion === 'construir' ? spec.loteM2 : null };
+    return {
+      ...vacia,
+      tipo: TIPO_DE_INTENCION[spec.intencion] || 'desconocido',
+      lote: spec.intencion === 'construir' ? spec.loteM2 : null,
+      ...(spec.intencion === 'precio_distrito' ? dis || {} : {}),
+    };
   }
 
   /**

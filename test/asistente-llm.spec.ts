@@ -341,3 +341,55 @@ describe('AsistenteLLM.textoModo (qué se envía y adónde)', () => {
     expect(JSON.stringify(LLM.textoModo('gemini'))).not.toMatch(/no (se )?env[ií]a/i);
   });
 });
+
+describe('AsistenteLLM: precio de oferta por m² de un distrito', () => {
+  const intencion = (args: unknown, ctx = {}) => LLM.aIntencion(valido(args), ctx);
+
+  it('«precio_distrito» es una intención del esquema y usa el mismo campo «distrito» que las demás', () => {
+    expect(LLM.INTENCIONES).toContain('precio_distrito');
+    expect(LLM.HERRAMIENTA.parameters.properties.distrito.type).toBe('string');
+    expect(LLM.HERRAMIENTA.parameters.properties.distrito.enum).toBeUndefined();
+    expect(valido({ intencion: 'precio_distrito', distrito: 'Cayma' })).toMatchObject({ intencion: 'precio_distrito', distrito: 'Cayma' });
+    expect(valido({ intencion: 'precio_distrito' }).distrito).toBeNull();
+  });
+
+  it('valida el distrito con la misma regla que el resto: forma y largo; qué distrito es lo resuelve el buscador', () => {
+    expect(LLM.validarSpec({ intencion: 'precio_distrito', distrito: 'Cayma; DROP' })).toEqual({ ok: false, motivo: 'distrito_invalido' });
+    expect(LLM.validarSpec({ intencion: 'precio_distrito', distrito: 5 }).ok).toBe(false);
+    expect(LLM.validarSpec({ intencion: 'precio_distrito', distrito: 'LIMA' }).ok).toBe(true); // forma válida; el buscador dirá que no es un distrito
+    expect(intencion({ intencion: 'precio_distrito', distrito: 'LIMA' })).toMatchObject({ tipo: 'distrito_desconocido', distritoTexto: 'LIMA' });
+  });
+
+  it('el distrito solo se conserva con las intenciones que lo usan', () => {
+    expect(valido({ intencion: 'zona', distrito: 'CAYMA' }).distrito).toBeNull();
+  });
+
+  it('se mapea al tipo «precio» del motor, con el distrito resuelto igual que con las reglas (también con tipeo)', () => {
+    expect(intencion({ intencion: 'precio_distrito', distrito: 'YANAHUARA' })).toMatchObject({ tipo: 'precio', distrito: 'YANAHUARA' });
+    expect(intencion({ intencion: 'precio_distrito', distrito: 'cayma' })).toMatchObject({ tipo: 'precio', distrito: 'CAYMA' });
+    expect(intencion({ intencion: 'precio_distrito', distrito: 'Cayma' }).distrito).toBe(Asistente.interpretar('¿cuánto cuesta el m² en Cayma?').distrito);
+    expect(intencion({ intencion: 'precio_distrito' })).toMatchObject({ tipo: 'precio', distrito: null });
+  });
+
+  it('el precio de una casa sigue siendo fuera_de_alcance y el asistente dice que solo conoce promedios por distrito', () => {
+    const i = intencion({ intencion: 'fuera_de_alcance', tema: 'precio' });
+    expect(i).toMatchObject({ tipo: 'no_soportado', temaNoSoportado: 'precio' });
+    const r = Asistente.responder(i, {});
+    expect(r.texto).toMatch(/precio de oferta por m² promedio de algunos distritos/);
+    expect(r.texto).toMatch(/casa/);
+  });
+
+  it('la herramienta describe precio_distrito y no pretende dar el precio de un inmueble', () => {
+    const d = LLM.HERRAMIENTA.parameters.properties.intencion.description;
+    expect(d).toMatch(/precio_distrito = precio de oferta por m² promedio/);
+    expect(d).toMatch(/fuera_de_alcance = .*precio de una casa o terreno en particular/);
+  });
+
+  it('el texto redactado por el modelo se acepta con las cifras del resultado y se descarta con una cifra nueva', () => {
+    const { texto } = Asistente.responder(intencion({ intencion: 'precio_distrito', distrito: 'CAYMA' }), {
+      precios: JSON.parse(require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'public', 'data', 'precios_m2_distrito.json'), 'utf8')),
+    });
+    expect(LLM.verificarTexto('En Cayma el precio de oferta mediano es S/ 4,905 por m² (118 avisos). Son precios pedidos, no de cierre; es referencial.', { tipo: 'precio', texto })).toEqual({ ok: true });
+    expect(LLM.verificarTexto('En Cayma el precio de oferta mediano es S/ 5,200 por m².', { tipo: 'precio', texto }).ok).toBe(false);
+  });
+});

@@ -160,6 +160,16 @@ const AsistenteUI = (() => {
     }
   }
 
+  /** Para «¿cuánto cuesta el m² en…?»: el archivo de precios y, si hay punto, su distrito. No necesita el resto de la ficha. */
+  async function contextoPrecio() {
+    const p = api.obtenerPunto();
+    const [precios, dis] = await Promise.all([
+      Precios.load().catch(() => null), // sin archivo, el asistente lo dice
+      p ? Distritos.lookup(p.lat, p.lon).catch(() => null) : Promise.resolve(null),
+    ]);
+    return { estadoPDM: CONFIG.estadoPDM, potencial: Zonificacion.potencial, punto: p, distrito: dis ? dis.distrito : null, precios };
+  }
+
   // -------------------------------------------------------------------- Búsqueda
 
   /** Ordena los archivos congelados y el plano una sola vez; si falta equipamiento, no se puede buscar. */
@@ -196,7 +206,9 @@ const AsistenteUI = (() => {
     const polys = Distritos.poligonos(intencion.distrito);
     const opciones = { areaMinM2: CONFIG.umbrales.areaVerde.areaMinM2 };
     if (intencion.tipo === 'contar') return { ...base, fecha, conteo: Entidades.contar(datos, polys, opciones) };
-    return { ...base, fecha, perfil: Entidades.perfil(datos, zonas, cauces, polys, { ...opciones, pasoM: 300 }) };
+    // El perfil suma lo que ya existe en el resto de las fuentes: líneas de SmartBus que lo cruzan y precio de oferta (solo 3 distritos).
+    const [rutasDistrito, precios] = await Promise.all([rutasDeDistrito(intencion.distrito), Precios.load().catch(() => null)]);
+    return { ...base, fecha, perfil: Entidades.perfil(datos, zonas, cauces, polys, { ...opciones, pasoM: 300 }), rutasDistrito, precios };
   }
 
   /** Distancia mínima a quebradas que dio la persona (menú o frase), o null: solo con ella existe el criterio «lejos de quebradas». */
@@ -316,7 +328,7 @@ const AsistenteUI = (() => {
       else {
         const esDistrito = ['contar', 'perfil', 'rutas'].includes(intencion.tipo) && intencion.distrito;
         const conPunto = ['ficha', 'servicio', 'zona', 'construir', 'quebrada', 'sismos', 'peligros', 'rutas'].includes(intencion.tipo);
-        const ctx = esDistrito ? await contextoDistrito(intencion) : conPunto ? await contexto() : { estadoPDM: CONFIG.estadoPDM, potencial: Zonificacion.potencial, punto: api.obtenerPunto() };
+        const ctx = intencion.tipo === 'precio' ? await contextoPrecio() : esDistrito ? await contextoDistrito(intencion) : conPunto ? await contexto() : { estadoPDM: CONFIG.estadoPDM, potencial: Zonificacion.potencial, punto: api.obtenerPunto() };
         const resp = Asistente.responder(intencion, ctx);
         let texto = resp.texto;
         // Gemini only rewords the deterministic answer; the text is verified (numbers, names, caveat) or discarded.
