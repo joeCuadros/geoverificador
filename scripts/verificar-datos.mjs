@@ -297,7 +297,7 @@ const ctx = vm.createContext({
     }
   },
 });
-for (const f of ['js/config.js', 'js/calculos.js', 'js/rutas.js', 'js/geo.js', 'js/zonificacion.js', 'js/peligros.js', 'js/volcan.js', 'js/contexto.js', 'js/delitos.js', 'js/distritos.js', 'js/riesgos.js']) {
+for (const f of ['js/config.js', 'js/calculos.js', 'js/rutas.js', 'js/geo.js', 'js/zonificacion.js', 'js/peligros.js', 'js/volcan.js', 'js/cenepred.js', 'js/contexto.js', 'js/delitos.js', 'js/distritos.js', 'js/riesgos.js']) {
   vm.runInContext(leer(f), ctx, { filename: f });
 }
 const app = (expr) => vm.runInContext(expr, ctx);
@@ -548,6 +548,34 @@ const dentro = (x, y, anillos) => vueltas(x, y, anillos[0]) && !anillos.slice(1)
   })());
 }
 
+// B5b. Riesgo del distrito ante El Niño (CENEPRED): el módulo del navegador frente al distrito por número de vueltas y al archivo leído aquí.
+{
+  const Ctx = app('Contexto');
+  let malos = 0;
+  let conDato = 0;
+  let sinDistrito = 0;
+  for (let k = 0; k < 400; k++) {
+    const lat = sur + azar() * (norte - sur);
+    const lon = oeste + azar() * (este - oeste);
+    let ubigeo = null;
+    for (const f of distritos.features) {
+      const polis = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates;
+      if (polis.some((p) => dentro(lon, lat, p))) { ubigeo = f.properties.ubigeo; break; }
+    }
+    const r = await Ctx.cenepred(lat, lon);
+    if (ubigeo === null) {
+      sinDistrito++;
+      if (r.estado !== 'SIN DATO' || !r.error || r.inundacion !== undefined) malos++;
+      continue;
+    }
+    conDato++;
+    const e = riesgoCenepred.distritos[ubigeo];
+    if (r.estado !== 'INFORMATIVO' || r.ubigeo !== ubigeo || r.inundacion.nivel !== e.inundacion.nivel || r.movimientos_masa.nivel !== e.movimientos_masa.nivel || r.inundacion.viviendas !== e.inundacion.viviendas) malos++;
+  }
+  comprobar('CENEPRED (módulo): 400 puntos al azar dan el nivel del distrito que da el método independiente, y fuera de los distritos queda SIN DATO con su causa', malos === 0, `${malos} diferencias; ${conDato} dentro de un distrito, ${sinDistrito} fuera`);
+  const sachaca = await Ctx.cenepred(-16.4436, -71.5744);
+  comprobar('CENEPRED (módulo): un punto de Sachaca da INFORMATIVO, con la frase del distrito, la fuente y sin cumple ni puntaje', sachaca.estado === 'INFORMATIVO' && sachaca.distrito === 'SACHACA' && /^Según el CENEPRED, el distrito de Sachaca tiene riesgo muy alto ante inundaciones/.test(sachaca.frase) && /CENEPRED/.test(sachaca.fuente) && !/cumple|puntaje/i.test(JSON.stringify(sachaca)), sachaca.frase);
+}
 // B7a. Peligro volcánico: el módulo del navegador frente a un recuento independiente (número de vueltas, sin índice de cajas).
 {
   const Vol = app('Volcan');

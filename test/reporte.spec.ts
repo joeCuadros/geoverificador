@@ -146,6 +146,52 @@ describe('Reporte: peligro volcánico del Misti en el contexto de riesgo', () =>
   });
 });
 
+const cenepred = (extra = {}) => ({
+  estado: 'INFORMATIVO', distrito: 'SACHACA', titulo: 'Sachaca', ubigeo: '040117',
+  inundacion: { nivel: 'Muy alto', viviendas: 7926, instituciones_educativas: 50, establecimientos_salud: 6 },
+  movimientos_masa: { nivel: 'Alto', viviendas: 7926, instituciones_educativas: 23, establecimientos_salud: 3 },
+  frase: 'Según el CENEPRED, el distrito de Sachaca tiene riesgo muy alto ante inundaciones y alto ante movimientos en masa en un escenario El Niño (estimación por distrito, no del predio).',
+  lineas: [{ texto: 'Inundaciones: riesgo muy alto. En zonas de mayor susceptibilidad a inundaciones: 7 926 viviendas, 50 locales educativos y 6 establecimientos de salud.' }],
+  fuente: 'CENEPRED (SIGRID), escenario de riesgo ante El Niño 2026-2027', fecha: '2026-11-03', urlVisor: 'https://sigrid.cenepred.gob.pe/sigridv3/', ...extra,
+});
+
+describe('Reporte: riesgo del distrito ante El Niño (CENEPRED) en el contexto de riesgo', () => {
+  const conCen = (c: unknown) => base({ contextoRiesgo: { peligros: peligros(), sismos: sismos(), cenepred: c } });
+
+  it('muestra la frase, el detalle y la fuente, como INFORMATIVO', () => {
+    const h = Reporte.seccionContexto(conCen(cenepred()));
+    expect(h).toContain('Riesgo del distrito ante El Niño (CENEPRED)');
+    expect(h).toContain('Según el CENEPRED, el distrito de Sachaca tiene riesgo muy alto ante inundaciones');
+    expect(h).toContain('7 926 viviendas');
+    expect(h).toMatch(/INFORMATIVO/);
+  });
+
+  it('dice lo que no cubre: es del distrito, no del predio ni una predicción, y a quién consultar', () => {
+    const h = Reporte.seccionContexto(conCen(cenepred()));
+    expect(h).toMatch(/estimación por distrito, no una predicción ni una evaluación de este predio/);
+    expect(h).toMatch(/evaluación de riesgos de la municipalidad/);
+    expect(h).toContain('https://sigrid.cenepred.gob.pe/sigridv3/');
+  });
+
+  it('nunca dice cumple ni da un puntaje', () => {
+    expect(Reporte.seccionContexto(conCen(cenepred()))).not.toMatch(/NO CUMPLE|>CUMPLE|puntaje/);
+  });
+
+  it('sin dato muestra la causa; un informe anterior a esta variable no dice nada', () => {
+    const h = Reporte.seccionContexto(conCen({ estado: 'SIN DATO', error: 'sin archivo' }));
+    expect(h).toContain('SIN DATO');
+    expect(h).toContain('sin archivo');
+    expect(Reporte.seccionContexto(base({ contextoRiesgo: { peligros: peligros(), sismos: sismos() } }))).not.toContain('CENEPRED)');
+  });
+
+  it('el resumen suma una fila informativa y la fuente se cita', () => {
+    const f = Reporte.filasResumenExtra(conCen(cenepred())).find(([k]: [string]) => k.startsWith('Riesgo del distrito'));
+    expect(f[1]).toBe('INFORMATIVO · en Sachaca: inundaciones muy alto, movimientos en masa alto (estimación del distrito, no del predio)');
+    const s = Reporte.construirSecciones(conCen(cenepred())).find((x: { titulo: string }) => x.titulo.startsWith('Contexto de riesgo'));
+    expect(s.fuente).toContain('CENEPRED (SIGRID)');
+  });
+});
+
 describe('Reporte.seccionContexto', () => {
   it('presenta peligros y sismos como contexto informativo, no como evaluación', () => {
     const h = Reporte.seccionContexto(base());

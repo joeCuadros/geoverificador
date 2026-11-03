@@ -41,8 +41,8 @@ const Comparar = (() => {
     { id: 'peligros', titulo: 'Peligros geológicos registrados' },
     { id: 'sismos', titulo: 'Sismos recientes (IGP)' },
   ];
-  // El peligro volcánico se sumó después: los puntos guardados antes no lo tienen y siguen siendo válidos (celda «Sin dato»).
-  const CONTEXTO = [...CONTEXTO_BASE, { id: 'volcan', titulo: 'Peligro volcánico del Misti (IGP)' }];
+  // El peligro volcánico y el escenario del CENEPRED se sumaron después: los puntos guardados antes no los tienen y siguen siendo válidos (celda «Sin dato»).
+  const CONTEXTO = [...CONTEXTO_BASE, { id: 'volcan', titulo: 'Peligro volcánico del Misti (IGP)' }, { id: 'cenepred', titulo: 'Riesgo del distrito ante El Niño (CENEPRED)' }];
 
   const esNumero = (n) => typeof n === 'number' && Number.isFinite(n);
   const esTexto = (t) => typeof t === 'string';
@@ -123,6 +123,15 @@ const Comparar = (() => {
     zonas: v && Array.isArray(v.resumen) ? v.resumen.filter((r) => r && esTexto(r.tipo) && esTexto(r.nivel)).map((r) => ({ tipo: r.tipo, nivel: r.nivel })) : [],
   });
 
+  // Escenario de riesgo del CENEPRED ante El Niño (Contexto.cenepred): solo el distrito y los dos niveles; siempre informativo.
+  const NIVELES_CEN = ['Bajo', 'Medio', 'Alto', 'Muy alto'];
+  const contextoCenepred = (c) => {
+    const ok = c && c.estado === 'INFORMATIVO' && esTexto(c.titulo) && c.inundacion && c.movimientos_masa && NIVELES_CEN.includes(c.inundacion.nivel) && NIVELES_CEN.includes(c.movimientos_masa.nivel);
+    return ok
+      ? { estado: 'INFORMATIVO', titulo: c.titulo, inundacion: c.inundacion.nivel, movimientos_masa: c.movimientos_masa.nivel }
+      : { estado: 'SIN DATO', titulo: null, inundacion: null, movimientos_masa: null };
+  };
+
   const contextoSismos = (s) => ({
     estado: s && s.estado === 'INFORMATIVO' && esNumero(s.total) ? 'INFORMATIVO' : 'SIN DATO',
     total: s && esNumero(s.total) ? s.total : null,
@@ -177,7 +186,7 @@ const Comparar = (() => {
         areaVerde: servicio(entorno.areaVerde),
         quebradas: variableQuebradas(cauce),
       },
-      contexto: { peligros: contextoPeligros(contexto && contexto.peligros), sismos: contextoSismos(contexto && contexto.sismos), volcan: contextoVolcan(contexto && contexto.volcan) },
+      contexto: { peligros: contextoPeligros(contexto && contexto.peligros), sismos: contextoSismos(contexto && contexto.sismos), volcan: contextoVolcan(contexto && contexto.volcan), cenepred: contextoCenepred(contexto && contexto.cenepred) },
       precio: variablePrecio(precio),
     };
   }
@@ -323,6 +332,9 @@ const Comparar = (() => {
     if (id === 'volcan') {
       const texto = v.enZona ? v.frase.replace(/^Tu punto está en zona de /, 'En zona de ').replace(/ del Misti, según el IGP[.]$/, '') : 'Fuera de las zonas mapeadas por el IGP';
       return { estado: 'INFORMATIVO', partes: [{ texto }, { texto: 'Mapa del IGP de escala regional, sin fecha; no es una evaluación' }] };
+    }
+    if (id === 'cenepred') {
+      return { estado: 'INFORMATIVO', partes: [{ texto: `Inundaciones: ${String(v.inundacion).toLowerCase()}` }, { texto: `Movimientos en masa: ${String(v.movimientos_masa).toLowerCase()}` }, { texto: `Estimación del distrito de ${v.titulo} en un escenario El Niño; no es del predio` }] };
     }
     if (id === 'peligros') {
       const partes = [{ texto: `${v.total} registrado${v.total === 1 ? '' : 's'} a ${fmtRef(v.radioM)} o menos` }];

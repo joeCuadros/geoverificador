@@ -19,6 +19,13 @@ describe('Verificaciones.ITEMS', () => {
     expect(Verificaciones.ITEMS.length).toBeGreaterThanOrEqual(7);
   });
 
+  it('el elemento de peligros apunta al visor público del SIGRID y dice que GeoVerificador no evalúa el predio', () => {
+    const item = Verificaciones.ITEMS.find((i: any) => i.id === 'peligros');
+    expect(item.enlaces).toEqual([{ texto: 'Visor público del SIGRID (CENEPRED)', url: 'https://sigrid.cenepred.gob.pe/sigridv3/' }]);
+    expect(item.queConfirma).toMatch(/estimación del CENEPRED por distrito ante El Niño/);
+    expect(item.queConfirma).toMatch(/no evalúa el peligro de tu predio/);
+  });
+
   it('solo enlaza a sitios comprobados; SEDAPAR queda como texto', () => {
     const urls = Verificaciones.ITEMS.flatMap((i: any) => i.enlaces.map((e: any) => e.url));
     urls.forEach((u: string) => expect(u).toMatch(/^https:\/\//));

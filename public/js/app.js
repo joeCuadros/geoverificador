@@ -58,7 +58,7 @@
     evaluacion: {},      // evaluación del usuario por riesgo: { id: { p, i, decision, hechas } }
     umbrales: Umbrales.leer(almacen()), // «Mis umbrales»: lo que fija la persona (hoy, distancia mínima a una quebrada)
     cauce: null,         // resultado de Contexto.quebradas para el punto actual (INFORMATIVO, o según el umbral de la persona)
-    contextoRiesgo: null, // { peligros, sismos, volcan } de Contexto: contexto informativo, no una evaluación
+    contextoRiesgo: null, // { peligros, sismos, volcan, cenepred } de Contexto: contexto informativo, no una evaluación
     contextoSeq: 0,      // descarta respuestas de un punto anterior
     precio: null,        // resultado de Precios.buscar para el distrito del punto (INFORMATIVO o SIN DATO; nunca cumple / no cumple)
     precioSeq: 0,        // descarta respuestas de un punto anterior
@@ -150,6 +150,7 @@
     peligros: { titulo: 'Peligros geológicos registrados', icono: 'aviso' },
     sismos: { titulo: 'Sismos recientes (IGP)', icono: 'sismo' },
     volcan: { titulo: 'Peligro volcánico del Misti', icono: 'aviso' },
+    cenepred: { titulo: 'Riesgo del distrito ante El Niño (CENEPRED)', icono: 'aviso' },
     precio: { titulo: 'Precio de oferta del distrito', icono: 'precio' },
   };
   const colorMapa = (nombre) => getComputedStyle(document.documentElement).getPropertyValue(nombre).trim() || '#1c3a6b';
@@ -724,6 +725,7 @@
       entorno: state.entorno,
       cauce: state.cauce,
       volcan: state.contextoRiesgo ? state.contextoRiesgo.volcan : null,
+      cenepred: state.contextoRiesgo ? state.contextoRiesgo.cenepred : null,
     });
     $('ficha-resumen-lineas').innerHTML = r.lineas.map((l) => `<p>${esc(l)}</p>`).join('');
     $('ficha-resumen').hidden = false;
@@ -1356,16 +1358,36 @@
     return tarjetaVariable(VARIABLES.volcan, 'INFORMATIVO', resumen, cuerpo, 'Informativo');
   }
 
+  function tarjetaCenepred(c) {
+    if (!c || c.estado === 'SIN DATO') {
+      return tarjetaVariable(VARIABLES.cenepred, 'SIN DATO', 'Sin dato: no hay escenario del CENEPRED para este distrito', `<p class="zon-msg error"><strong>No se pudo obtener el dato.</strong> ${esc((c && c.error) || '')}</p>`);
+    }
+    const resumen = `Inundaciones: ${c.inundacion.nivel.toLowerCase()} · Movimientos en masa: ${c.movimientos_masa.nivel.toLowerCase()} · ${c.titulo}`;
+    const lineas = c.lineas || [];
+    const cuerpo = `<div class="var-dato">
+        <p class="var-nombre">${esc(c.frase)}</p>
+      </div>
+      ${lineas.length ? `<ul class="pel-tipos">${lineas.map((l) => `<li>${esc(l.texto)}</li>`).join('')}</ul>` : ''}
+      <p class="var-explica"><strong>Informativo.</strong> Es una estimación para todo el distrito en un escenario de lluvias como las de El Niño, no una evaluación de tu predio. Los movimientos en masa son, por ejemplo, ${esc(Cenepred.EXPLICA_MM)}.</p>
+      <dl class="var-detalle">
+        <div><dt>Fuente</dt><dd>${esc(c.fuente)}. Metodología: ${esc(c.estudio ? `${c.estudio.titulo} (${c.estudio.autor}, ${c.estudio.fecha})` : 'estudio del CENEPRED')}</dd></div>
+        <div><dt>Fecha de los datos</dt><dd>Escenario de ${esc(c.estudio ? c.estudio.fecha : 'sin fecha')}, actualizado por el CENEPRED en 2026. Datos congelados el ${esc(fmtFechaDato(c.fecha))}</dd></div>
+        <div><dt>Método</dt><dd>${esc(c.metodo)}</dd></div>
+        <div><dt>Qué no cubre</dt><dd>${esc(Cenepred.QUE_NO_CUBRE)} <a href="${esc(CONFIG.cenepred.visorUrl)}" target="_blank" rel="noopener noreferrer">Abrir el SIGRID del CENEPRED</a></dd></div>
+      </dl>`;
+    return tarjetaVariable(VARIABLES.cenepred, 'INFORMATIVO', resumen, cuerpo, 'Informativo');
+  }
+
   function renderContexto() {
     const host = $('contexto-cuerpo');
     const c = state.contextoRiesgo;
     if (!c) {
       host.setAttribute('aria-busy', 'true');
-      host.innerHTML = '<p class="zon-msg loading"><span class="spinner"></span>Buscando peligros registrados, sismos y peligro volcánico…</p>';
+      host.innerHTML = '<p class="zon-msg loading"><span class="spinner"></span>Buscando peligros registrados, sismos, peligro volcánico y riesgo del distrito…</p>';
       return;
     }
     const abiertas = [...host.querySelectorAll('details.var-card')].map((d) => d.open);
-    host.innerHTML = tarjetaPeligros(c.peligros) + tarjetaSismos(c.sismos) + tarjetaVolcan(c.volcan);
+    host.innerHTML = tarjetaPeligros(c.peligros) + tarjetaSismos(c.sismos) + tarjetaVolcan(c.volcan) + tarjetaCenepred(c.cenepred);
     host.querySelectorAll('details.var-card').forEach((d, i) => { d.open = Boolean(abiertas[i]); });
     host.setAttribute('aria-busy', 'false');
     $('contexto-fuente').textContent = 'Contexto informativo, no una evaluación de peligro. Distancias en línea recta. Para decidir, consulta SIGRID (CENEPRED) y al IMPLA.';
@@ -1381,7 +1403,7 @@
     const r = await Contexto.evaluar(lat, lon, state.umbrales.quebradaMinM); // nunca rechaza: cada variable devuelve SIN DATO con su causa
     if (seq !== state.contextoSeq) return; // la persona ya eligió otro punto
     state.cauce = r.quebradas;
-    state.contextoRiesgo = { peligros: r.peligros, sismos: r.sismos, volcan: r.volcan };
+    state.contextoRiesgo = { peligros: r.peligros, sismos: r.sismos, volcan: r.volcan, cenepred: r.cenepred };
     renderQuebradas();
     renderContexto();
     renderResumen();

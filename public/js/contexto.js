@@ -207,17 +207,39 @@ const Contexto = (() => {
     return zonasVolcanicas();
   }
 
+  // ------------------------------------------------- Escenario de riesgo del CENEPRED ante El Niño (por distrito)
+
+  const Cen = () => (typeof Cenepred !== 'undefined' ? Cenepred : require('./cenepred.js')); // eslint-disable-line no-undef
+  const Dis = () => (typeof Distritos !== 'undefined' ? Distritos : require('./distritos.js')); // eslint-disable-line no-undef
+
+  /**
+   * El nivel de riesgo ante inundaciones y movimientos en masa que el CENEPRED estima para el DISTRITO del punto en un escenario El Niño
+   * (INFORMATIVO: nunca cumple ni puntaje; no es una evaluación del predio). Si el archivo falta o el punto no cae en un distrito de
+   * los datos, SIN DATO con la causa.
+   */
+  async function cenepred(lat, lon) {
+    const base = { fuente: CONFIG.cenepred.fuente };
+    try {
+      const [datos, d] = await Promise.all([Cen().load(), Dis().lookup(lat, lon)]);
+      const r = Cen().buscar(datos, d ? d.distrito : null);
+      if (r.estado !== 'INFORMATIVO') return { ...base, estado: 'SIN DATO', distrito: r.distrito, motivo: r.motivo, error: r.causa };
+      return { ...r, ...base, fuente: r.fuente || base.fuente, frase: Cen().frase(r), lineas: Cen().lineas(r), fecha: r.fechaDescarga, metodo: Cen().METODO };
+    } catch (err) {
+      return { ...base, estado: 'SIN DATO', distrito: null, motivo: 'sin_archivo', error: err.message };
+    }
+  }
+
   /** Los sismos del archivo congelado tal como vienen (GeoJSON), para dibujarlos en el mapa. Rechaza si el archivo falta. */
   async function sismosCrudos() {
     const { features } = await archivo('sismos');
     return features;
   }
 
-  /** Las variables para un punto: { quebradas, peligros, sismos, volcan } (ninguna rechaza). */
+  /** Las variables para un punto: { quebradas, peligros, sismos, volcan, cenepred } (ninguna rechaza). */
   async function evaluar(lat, lon, umbralUsuarioM = null) {
-    const [q, p, s, v] = await Promise.all([quebradas(lat, lon, umbralUsuarioM), peligros(lat, lon), sismos(lat, lon), volcan(lat, lon)]);
-    return { quebradas: q, peligros: p, sismos: s, volcan: v };
+    const [q, p, s, v, c] = await Promise.all([quebradas(lat, lon, umbralUsuarioM), peligros(lat, lon), sismos(lat, lon), volcan(lat, lon), cenepred(lat, lon)]);
+    return { quebradas: q, peligros: p, sismos: s, volcan: v, cenepred: c };
   }
 
-  return { cauces, quebradas, quebradasAusentes, peligros, sismos, sismosCrudos, volcan, volcanCrudo, evaluar };
+  return { cauces, quebradas, quebradasAusentes, peligros, sismos, sismosCrudos, volcan, volcanCrudo, cenepred, evaluar };
 })();

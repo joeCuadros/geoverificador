@@ -52,6 +52,18 @@ describe('Resumen.punto', () => {
     expect(t).not.toMatch(/puntaje|cumple/i);
   });
 
+  it('suma la frase del escenario del CENEPRED ante El Niño (informativa, del distrito) cuando se conoce', () => {
+    const cenepred = { estado: 'INFORMATIVO', frase: 'Según el CENEPRED, el distrito de Sachaca tiene riesgo muy alto ante inundaciones en un escenario El Niño (estimación por distrito, no del predio).' };
+    const t = Resumen.punto({ ...base, cenepred }).texto;
+    expect(t).toContain('Según el CENEPRED, el distrito de Sachaca tiene riesgo muy alto ante inundaciones en un escenario El Niño (estimación por distrito, no del predio).');
+    expect(t).not.toMatch(/puntaje|cumple/i);
+  });
+
+  it('sin dato del CENEPRED no dice nada de él', () => {
+    expect(Resumen.punto({ ...base, cenepred: { estado: 'SIN DATO', frase: null } }).texto).not.toContain('CENEPRED');
+    expect(Resumen.punto(base).texto).not.toContain('CENEPRED');
+  });
+
   it('sin dato del peligro volcánico no dice nada de él', () => {
     expect(Resumen.punto({ ...base, volcan: { estado: 'SIN DATO', frase: null } }).texto).not.toContain('Misti');
     expect(Resumen.punto(base).texto).not.toContain('Misti');
