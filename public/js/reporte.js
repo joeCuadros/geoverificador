@@ -7,7 +7,7 @@
  *
  * Incluye las variables del alcance: zonificación vigente, zonificación proyectada, salud, educación, transporte y
  * área verde, más quebradas y cauces (INFORMATIVO, o cumple / no cumple «según tu umbral» si la persona fijó el suyo), el
- * contexto de riesgo (peligros geológicos y sismos, siempre informativo) y las verificaciones recomendadas antes de comprar
+ * contexto de riesgo (peligros geológicos y sismos, siempre informativo), el precio de oferta por m² del distrito (informativo) y las verificaciones recomendadas antes de comprar
  * (lo que la herramienta calculó frente a lo que la persona debe comprobar; las URL se imprimen como texto). Los módulos fuera de alcance (peligros, zona sísmica, denuncias, registro de riesgos) solo aparecen si
  * están activos (`d.modulos`, ver CONFIG.modulos y ?modulos=todos); con los módulos ocultos el informe no los menciona.
  *
@@ -15,11 +15,13 @@
  * sección son puras (no tocan el DOM) y se prueban en test/reporte.spec.ts; solo `imprimir` usa document y window.
  */
 const Reporte = (() => {
+  const RT = typeof Rutas !== 'undefined' ? Rutas : require('./rutas.js'); // eslint-disable-line no-undef
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const num = (n) => Math.round(n).toLocaleString('es-PE');
   const dist = (m) => (m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(2).replace('.', ',')} km`);
   const coma = (n) => String(n).replace('.', ',');
   const fila = (k, v) => `<tr><th>${esc(k)}</th><td>${v}</td></tr>`;
+  const P = typeof Precios !== 'undefined' ? Precios : require('./precios.js'); // eslint-disable-line no-undef
   const NIVELES = ['inicial', 'primaria', 'secundaria'];
   const nombreNivel = (n) => n[0].toUpperCase() + n.slice(1);
 
@@ -107,10 +109,28 @@ const Reporte = (() => {
       <p class="rp-nota">Umbrales: ${esc(d.fuentesUmbral.educacion)}. OpenStreetMap casi no etiqueta el nivel de los colegios: uno sin nivel se toma como candidato a primaria y secundaria; los jardines (amenity=kindergarten) cuentan como inicial.</p>`;
   }
 
+  // Líneas de SmartBus que pasan cerca del punto: fuente distinta del paradero de OpenStreetMap, con su permiso y sus límites.
+  function lineasTransporte(t, d) {
+    const r = t.rutas;
+    if (!r) return '';
+    if (r.error) return `<p class="rp-muted">No se pudieron cargar las líneas de transporte: ${esc(r.error)}</p>`;
+    const ref = `${dist(r.distanciaM)} (${esc(d.fuentesUmbral.transporte)})`;
+    const filas = r.lineas.length
+      ? r.lineas.map((l) => {
+        const ramales = [...new Set(l.ramales.map((x) => x.ramal))];
+        const parada = l.parada ? ` · parada más cercana «${esc(l.parada.nombre)}» a ${dist(l.parada.distanciaM)}` : '';
+        return fila(RT.etiquetaLinea(l), `trazado a ${dist(l.distanciaM)}${parada} · ${esc(ramales.slice(0, 4).join(', '))}${ramales.length > 4 ? ` y ${ramales.length - 4} más` : ''}`);
+      })
+      : [fila('Líneas', `Ninguna línea publicada por SmartBus pasa a ${dist(r.distanciaM)} o menos`)];
+    return `<p class="rp-destacado"><strong>Líneas que pasan a ${dist(r.distanciaM)} o menos</strong> ${r.lineas.length ? esc(RT.listaTexto(r.lineas)) : '(ninguna)'}</p>
+      <table class="rp-tabla">${filas.join('')}</table>
+      <p class="rp-nota">Fuente: ${esc(r.fuente)}, recorridos descargados el ${esc(r.fecha || 'sin fecha')}, usados con ${esc(r.permiso || '')}. Distancia en línea recta del punto al trazado de cada recorrido; referencia de ${ref}. Son los recorridos publicados, no un servicio garantizado: sin frecuencias ni horarios, y un cambio de ruta por tramos puede no estar reflejado.</p>`;
+  }
+
   function transporte(d) {
     const r = d.variables && d.variables.transporte;
     if (!r) return sinResultado;
-    return `<table class="rp-tabla">${filasDe(r, d.fuentesUmbral.transporte).join('')}</table><p class="rp-nota">${esc(r.metodo)}</p>`;
+    return `<table class="rp-tabla">${filasDe(r, d.fuentesUmbral.transporte).join('')}</table><p class="rp-nota">${esc(r.metodo)}</p>${lineasTransporte(r, d)}`;
   }
 
   function areaVerde(d) {
@@ -185,6 +205,26 @@ const Reporte = (() => {
     return `<p class="rp-nota">Datos de contexto, no una evaluación de peligro: no hay umbral que diga si un lugar es seguro. Que algo no aparezca aquí no significa que el lugar esté libre de riesgo.</p>${bloquePeligros(c.peligros)}${bloqueSismos(c.sismos)}`;
   }
 
+  // ------------------------------- Precio de oferta del distrito (Aptología, CC BY 4.0)
+  const QUE_NO_CUBRE_PRECIO = 'Son precios pedidos en avisos de venta, no de cierre ni una tasación. Es la mediana del distrito, no el precio de este inmueble: una vivienda concreta puede costar mucho más o menos según su estado, tamaño, piso y ubicación exacta. Solo cubre departamentos y los distritos con al menos 30 avisos; no hay cifra para casas ni terrenos. Refleja un periodo corto, así que no muestra tendencia.';
+
+  function seccionPrecio(d) {
+    const p = d.precio;
+    if (!p) return '<p class="rp-muted">No se calculó el precio de oferta del distrito.</p>';
+    if (p.estado === 'SIN DATO') {
+      return `<table class="rp-tabla">${fila('Precio de oferta por m² del distrito', `${estado('SIN DATO')} ${esc(p.causa || '')}`)}</table>
+        <p class="rp-nota">${esc(QUE_NO_CUBRE_PRECIO)}</p>`;
+    }
+    const filas = [
+      fila('Precio de oferta por m² (venta)', `${estado('INFORMATIVO')} <strong>${esc(P.formatearSoles(p.precioM2.venta))}</strong> por m², mediana de ${num(p.nAvisos.venta)} avisos de departamentos en ${esc(p.distrito)}`),
+      fila('Periodo de los datos', esc(P.textoPeriodo(p.periodo))),
+    ];
+    if (p.arriendoMensual !== null && p.arriendoMensual !== undefined) filas.push(fila('Arriendo mensual (mediana)', `${esc(P.formatearSoles(p.arriendoMensual))} por mes, sin administración ni gastos comunes (${num(p.nAvisos.arriendo ?? 0)} avisos)`));
+    filas.push(fila('Atribución', `${esc(p.atribucion)}${p.url ? ` (${esc(p.url)})` : ''} · licencia ${esc(p.licencia)}`));
+    return `<table class="rp-tabla">${filas.join('')}</table>
+      <p class="rp-nota">Informativo: es lo que piden los vendedores en el distrito, no el valor de este inmueble. No dice si un precio es caro o barato y no entra en ningún puntaje. ${esc(QUE_NO_CUBRE_PRECIO)} Datos congelados el ${esc(p.fechaDescarga || 'sin fecha')}. Valores redondeados a soles enteros.</p>`;
+  }
+
   // ------------------------------- Verificaciones recomendadas antes de comprar
   // En papel no se puede hacer clic: las URL se imprimen como texto, sin enlaces.
   function seccionVerificaciones(d) {
@@ -233,11 +273,15 @@ const Reporte = (() => {
       const s = c.sismos;
       out.push(['Sismos recientes (contexto)', !s || s.estado === 'SIN DATO' ? 'SIN DATO' : `INFORMATIVO · ${num(s.total)} a ${coma(s.radioM / 1000)} km o menos entre el ${s.desde} y el ${s.hasta}${s.magnitudMaxima !== null && s.magnitudMaxima !== undefined ? `; magnitud máxima ${coma(s.magnitudMaxima)}` : ''}`]);
     }
+    const pr = d.precio;
+    if (pr) out.push(['Precio de oferta del distrito (informativo)', pr.estado === 'INFORMATIVO' ? `INFORMATIVO · ${P.formatearSoles(pr.precioM2.venta)} por m² (mediana de ${num(pr.nAvisos.venta)} avisos en ${pr.distrito}; oferta, no cierre; ${P.textoPeriodo(pr.periodo)})` : 'SIN DATO']);
     return out;
   }
 
   const fuenteCauce = (q) => (q ? `${q.fuente}${q.fecha ? `, datos extraídos el ${q.fecha}` : ''}` : '');
   const fuenteContexto = (c) => (c ? [c.peligros && c.peligros.fuente, c.sismos && c.sismos.fuente].filter(Boolean).join('; ') : '');
+
+  const fuentePrecio = (p) => (p && p.estado === 'INFORMATIVO' ? `${p.atribucion} — ${p.fuente}, licencia ${p.licencia}, descargado el ${p.fechaDescarga}` : '');
 
   /** Las secciones del informe en orden: [{ titulo, color, cuerpo, fuente }]. */
   function construirSecciones(d) {
@@ -246,10 +290,11 @@ const Reporte = (() => {
       ['Zonificación vigente y proyectada', '#4f46e5', zonificacion(d), d.fuentes.zonificacion],
       ['Salud', '#c2410c', salud(d), d.variables ? fuenteDe(d.variables.salud) : ''],
       ['Educación por nivel', '#7c3aed', educacion(d), d.variables ? fuenteDe(d.variables.educacion.inicial) : ''],
-      ['Transporte', '#1d4ed8', transporte(d), d.variables ? fuenteDe(d.variables.transporte) : ''],
+      ['Transporte', '#1d4ed8', transporte(d), d.variables ? [fuenteDe(d.variables.transporte), d.variables.transporte.rutas && !d.variables.transporte.rutas.error ? `${d.variables.transporte.rutas.atribucion || 'Rutas: SmartBus (smartbus.app)'}` : ''].filter(Boolean).join('; ') : ''],
       ['Área verde', '#15803d', areaVerde(d), d.variables ? fuenteDe(d.variables.areaVerde) : ''],
       ['Quebradas y cauces', '#0369a1', seccionQuebradas(d), fuenteCauce(d.cauce)],
       ['Contexto de riesgo (informativo)', '#64748b', seccionContexto(d), fuenteContexto(d.contextoRiesgo)],
+      ['Precio de oferta del distrito (informativo)', '#a16207', seccionPrecio(d), fuentePrecio(d.precio)],
     ];
     if (m.desastre) lista.push(['Desastre', '#ea580c', desastre(d), [m.desastre.mostrarPeligro ? d.fuentes.peligros : '', m.desastre.mostrarSismica ? d.fuentes.distritos : ''].filter(Boolean).join('; ')]);
     if (m.seguridad) lista.push(['Seguridad', '#dc2626', seguridad(d), d.fuentes.delitos]);
@@ -265,10 +310,12 @@ const Reporte = (() => {
       'La zonificación vigente es la del PDM 2016-2025, cuya vigencia de 10 años se cumplió; hay un PDM nuevo en trámite y una sentencia (183-2019) que suspendió ciertos actos para predios antes agrícolas o de reserva paisajista. La zonificación proyectada no se muestra: solo se advierte su estado, con la fuente indicada.',
       'Los polígonos de la zonificación se extrajeron de un PDF: cerca del borde entre dos zonas el resultado puede no ser exacto (por eso se avisa cuando otra zona queda a 20 m o menos).',
       'Salud, educación, transporte y área verde salen de OpenStreetMap, un mapa colaborativo: algo ausente puede existir. Los datos se extrajeron una vez (fecha indicada en cada sección) y no se actualizan solos.',
+      'Las líneas de transporte son los recorridos que SmartBus (smartbus.app) publicó en la fecha indicada, usados con su autorización verbal (confirmación escrita pendiente): no traen frecuencias ni horarios, y un cambio de ruta por tramos puede no estar reflejado.',
       'Todas las distancias son en línea recta, no recorrido a pie. Los umbrales de salud (1000 m), transporte (400 m) y borde de zona (20 m) son convenciones del proyecto; los de educación vienen del Instructivo FTE del MEF/MINEDU y el de área verde, de la OMS Europa (2016).',
       'OpenStreetMap casi no etiqueta el nivel de los colegios: un colegio sin nivel se toma como candidato a primaria y secundaria, lo que puede sobrestimar la oferta de un nivel.',
       'Quebradas y cauces: no existe una distancia normativa a una quebrada, así que el estado es INFORMATIVO salvo que la persona fije su propio umbral («según tu umbral»). La red de la ANA es de escala nacional: no incluye todas las quebradas urbanas, no es un mapa de peligro y no delimita la faja marginal.',
       'El contexto de riesgo (peligros geológicos de INGEMMET y sismos reportados por el IGP en el periodo indicado) es informativo: no es una evaluación, no predice sismos y que no haya registros no significa que el lugar sea seguro.',
+      'El precio de oferta por m² del distrito (Aptología, CC BY 4.0) es informativo: son precios pedidos en avisos, no de cierre, y es la mediana del distrito, no el precio de este inmueble. Solo hay cifra en los distritos con al menos 30 avisos.',
     ];
     if (m.desastre) l.push('Los peligros geológicos son un inventario de eventos documentados, no un mapa de susceptibilidad. La zona sísmica es regional y no considera el suelo del predio. No se evalúa el peligro volcánico (Misti).');
     if (m.seguridad) l.push('Las denuncias no son todos los delitos y solo se cuentan las que tienen ubicación.');
@@ -357,7 +404,7 @@ const Reporte = (() => {
     const secciones = construirSecciones(d);
     const resumen = [...d.resumen, ...filasResumenExtra(d)];
 
-    const datos = ['MPA/IMPLA (zonificación)', '© colaboradores de OpenStreetMap (ODbL)', 'ANA (red hidrográfica)', 'INGEMMET (peligros geológicos)', 'IGP (sismos reportados)'];
+    const datos = ['MPA/IMPLA (zonificación)', '© colaboradores de OpenStreetMap (ODbL)', 'ANA (red hidrográfica)', 'INGEMMET (peligros geológicos)', 'IGP (sismos reportados)', 'Datos: Aptologia (precio de oferta, CC BY 4.0)'];
     if (m.desastre) datos.push('INGEMMET (GEOCATMIN), INEI, MVCS (E.030)');
     if (m.seguridad) datos.push('MININTER (SIDPOL)');
 
@@ -393,7 +440,7 @@ const Reporte = (() => {
     window.print();
   }
 
-  return { imprimir, seccionQuebradas, seccionContexto, seccionVerificaciones, filasResumenExtra, construirSecciones, limites, estadoHtml };
+  return { imprimir, seccionQuebradas, seccionContexto, seccionPrecio, seccionVerificaciones, filasResumenExtra, construirSecciones, limites, estadoHtml };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = Reporte;

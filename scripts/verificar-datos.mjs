@@ -48,6 +48,7 @@ const distritos = json('data/distritos_aqp.geojson');
 const quebradas = json('data/quebradas_aqp.geojson');
 const sismos = json('data/sismos_igp.geojson');
 const e030 = json('data/zonas_sismicas_e030.json');
+const precios = json('data/precios_m2_distrito.json');
 const equipamiento = Object.fromEntries(['salud', 'educacion', 'transporte', 'areas_verdes'].map((n) => [n, json(`data/equipamiento/${n}.geojson`)]));
 
 // ------------------------------------------------------------------ A. Integridad
@@ -208,6 +209,26 @@ console.log('\n== A. Integridad de los archivos ==');
   comprobar('Equipamiento/salud: todo elemento tiene amenity=hospital|clinic|doctors o healthcare', sinSalud.length === 0);
 }
 
+// Precio de oferta por m² del distrito (Aptología, CC BY 4.0): congelado con scripts/descargar-precios.mjs
+{
+  const m = precios;
+  const nombres = distritos.features.map((x) => x.properties.distrito);
+  const filas = Object.entries(m.distritos || {});
+  comprobar('Precios: metadata con fuente, URL https, licencia CC BY 4.0 y la atribución «Datos: Aptologia»', !!m.fuente && /^https:\/\//.test(m.url || '') && m.licencia === 'CC BY 4.0' && m.atribucion === 'Datos: Aptologia', m.licencia);
+  comprobar('Precios: fecha de descarga y periodo (corte) con formato AAAA-MM-DD, y el corte no es posterior a la descarga', /^\d{4}-\d{2}-\d{2}$/.test(m.fecha_descarga || '') && /^\d{4}-\d{2}-\d{2}$/.test(m.periodo?.corte || '') && m.periodo.corte <= m.fecha_descarga, `corte ${m.periodo?.corte}, descarga ${m.fecha_descarga}`);
+  comprobar('Precios: se rotula como precio de oferta (no de cierre), en soles, con unidades y muestra mínima', /oferta/.test(m.tipo || '') && /no de cierre/.test(m.tipo || '') && m.moneda === 'PEN' && !!m.unidades?.venta_m2 && m.muestra_minima >= 1);
+  comprobar('Precios: hay al menos un distrito y cada uno está escrito como en distritos_aqp.geojson', filas.length > 0 && filas.every(([n]) => nombres.includes(n)), `${filas.length} distritos: ${filas.map(([n]) => n).join(', ')}`);
+  comprobar('Precios: cada precio por m² es positivo y razonable (S/ 500 a S/ 30 000) y cumple la muestra mínima de avisos', filas.every(([, d]) => (d.venta_m2 === null || (d.venta_m2 >= 500 && d.venta_m2 <= 30000 && d.avisos_venta >= m.muestra_minima)) && (d.arriendo_mensual === null || d.avisos_arriendo >= m.muestra_minima)));
+  comprobar('Precios: n_avisos.venta es la suma de los avisos de venta por distrito', m.n_avisos?.venta === filas.reduce((s, [, d]) => s + (d.avisos_venta || 0), 0), `${m.n_avisos?.venta}`);
+  const P = createRequire(import.meta.url)('../public/js/precios.js');
+  comprobar('Precios (módulo): cada distrito del archivo da INFORMATIVO y uno sin cifra da SIN DATO con su causa, sin inventar un precio', filas.every(([n]) => P.buscar(m, n).estado === 'INFORMATIVO') && (() => {
+    const sin = nombres.find((n) => !(n in m.distritos));
+    const r = P.buscar(m, sin);
+    return r.estado === 'SIN DATO' && !!r.causa && r.precioM2 === undefined;
+  })());
+  console.log(`INFO  Precios: ${filas.length} de ${nombres.length} distritos con cifra; ${m.fuente}; corte ${m.periodo?.corte}; descargado ${m.fecha_descarga}`);
+}
+
 // ------------------------------------------------- B. Corrección de los cálculos
 console.log('\n== B. Cálculos del navegador frente a un método independiente ==');
 
@@ -223,7 +244,7 @@ const ctx = vm.createContext({
     }
   },
 });
-for (const f of ['js/config.js', 'js/calculos.js', 'js/geo.js', 'js/zonificacion.js', 'js/peligros.js', 'js/contexto.js', 'js/delitos.js', 'js/distritos.js', 'js/riesgos.js']) {
+for (const f of ['js/config.js', 'js/calculos.js', 'js/rutas.js', 'js/geo.js', 'js/zonificacion.js', 'js/peligros.js', 'js/contexto.js', 'js/delitos.js', 'js/distritos.js', 'js/riesgos.js']) {
   vm.runInContext(leer(f), ctx, { filename: f });
 }
 const app = (expr) => vm.runInContext(expr, ctx);
@@ -528,6 +549,7 @@ const dentro = (x, y, anillos) => vueltas(x, y, anillos[0]) && !anillos.slice(1)
 // ------------------------------------------------- C. Asistente de chat
 console.log('\n== C. Asistente: búsqueda de zonas frente a un método independiente ==');
 {
+  vm.runInContext(leer('js/precios.js'), ctx, { filename: 'js/precios.js' }); // asistente.js lo usa para el precio por m² del distrito
   vm.runInContext(leer('js/asistente.js'), ctx, { filename: 'js/asistente.js' });
   const A = app('Asistente');
   const U = { ...CONFIG.umbrales, zona: CONFIG.asistente.umbralesZona };
@@ -601,8 +623,141 @@ console.log('\n== C. Asistente: búsqueda de zonas frente a un método independi
   comprobar('Asistente: los porcentajes están entre 0 y 100 y las áreas vienen ordenadas por coincidencia', r.areas.length > 0 && r.areas.every((a, i) => a.pctCumpleTodo >= 0 && a.pctCumpleTodo <= 100 && a.puntajePct >= 0 && a.puntajePct <= 100 && (i === 0 || r.areas[i - 1].puntajePct >= a.puntajePct)), `${r.areas.length} distritos`);
   comprobar('Asistente: la mejor celda de cada área cae realmente en ese distrito', r.areas.every((a) => Dis.nombreDe(a.mejor.lat, a.mejor.lon) === a.nombre));
   comprobar('Asistente: la suma de celdas por distrito no supera el total', r.areas.reduce((s, a) => s + a.celdas, 0) <= r.totalCeldas);
+  // Distritos y entidades: conteo por distrito, sectores dentro de un distrito y lenguaje de la respuesta.
+  const Ent = createRequire(import.meta.url)('../public/js/entidades.js');
+  const nombresDistrito = Dis.lista().map((d) => d.nombre);
+  const conteos = nombresDistrito.map((n) => [n, Ent.contar(datosRapido, Dis.poligonos(n))]);
+  const sumaColegios = conteos.reduce((s, [, c]) => s + c.colegios.total, 0);
+  comprobar('Distritos: la lista trae los 25 distritos del archivo, cada uno con polígono', nombresDistrito.length === 25 && nombresDistrito.every((n) => Dis.poligonos(n).length > 0), `${nombresDistrito.length} distritos`);
+  comprobar('Distritos: los colegios por distrito no superan el total de colegios con nivel (ninguno se cuenta en dos distritos)', sumaColegios <= datosRapido.colegiosLista.length, `${sumaColegios} de ${datosRapido.colegiosLista.length}`);
+  const pau = Object.fromEntries(conteos).PAUCARPATA;
+  comprobar('Distritos: Paucarpata tiene colegios, salud, paraderos y parques en los datos', pau.colegios.total > 0 && pau.salud.total > 0 && pau.paraderos.total > 0 && pau.parques.total > 0, `${pau.colegios.total} colegios, ${pau.salud.total} salud, ${pau.paraderos.total} paraderos, ${pau.parques.total} parques`);
+  const enPau = Rapido.buscar({ ...parametros, criterios: [req('inicial'), req('areaVerde')], distrito: 'PAUCARPATA', celdas: celdasListas });
+  const fPau = Rapido.formatearBusqueda(enPau, { datos: datosRapido, distrito: 'Paucarpata' });
+  comprobar('Asistente: una búsqueda dentro de Paucarpata solo devuelve celdas de Paucarpata y sectores con su contorno', enPau.cumplen.length > 0 && enPau.cumplen.every((c) => c.distrito === 'PAUCARPATA') && fPau.sectores.length > 0 && fPau.sectores.every((s) => s.contorno.length > 0), `${fPau.sectores.length} sectores`);
+  comprobar('Asistente: el centro de cada sector cae dentro de Paucarpata', fPau.sectores.every((s) => Dis.contiene('PAUCARPATA', s.centro.lat, s.centro.lon)));
+  comprobar('Asistente: el texto de una búsqueda no habla de suelo, coincidencia ni celdas', !/suelo|coincidencia|ponderad|celda|cuadr[ií]cula/i.test(fPau.texto), fPau.texto.split('\n')[0]);
+  const frase = Rapido.interpretar('quiero vivir en pauccarpata cuantos colegios hay ahi', {});
+  comprobar('Asistente: «quiero vivir en pauccarpata cuantos colegios hay ahi» cuenta colegios en Paucarpata', frase.tipo === 'contar' && frase.distrito === 'PAUCARPATA');
   const cubre = (id) => `${id} ${Math.round((100 * celdas.filter((c) => A.evaluarCelda(c, datos, [req(id)], U)[id].cumple).length) / celdas.length)} %`;
   console.log(`INFO  Parte de las celdas que cumple cada criterio con su umbral: ${['colegio', 'inicial', 'primaria', 'secundaria', 'salud', 'transporte', 'areaVerde', 'campina'].map(cubre).join(' · ')}`);
+}
+
+// ------------------------------------------------- D. Rutas de transporte (SmartBus)
+console.log('\n== D. Rutas de SmartBus: integridad y cálculos frente a métodos independientes ==');
+{
+  const rutasFc = json('data/rutas_smartbus.geojson');
+  const meta = rutasFc.metadata || {};
+  const feats = rutasFc.features;
+  const lineasF = feats.filter((f) => f.properties?.tipo === 'ruta');
+  const paradasF = feats.filter((f) => f.properties?.tipo === 'parada');
+  const CAJA = { oeste: -71.8, sur: -16.7, este: -71.2, norte: -16.1 }; // la misma de scripts/descargar-rutas-smartbus.mjs
+  const enCaja = ([x, y]) => Number.isFinite(x) && Number.isFinite(y) && x >= CAJA.oeste && x <= CAJA.este && y >= CAJA.sur && y <= CAJA.norte;
+  const partesDe = (f) => (f.geometry.type === 'LineString' ? [f.geometry.coordinates] : f.geometry.coordinates);
+
+  // D1. Integridad
+  comprobar('Rutas: es una FeatureCollection solo de rutas (LineString o MultiLineString) y paradas (Point)', rutasFc.type === 'FeatureCollection' && feats.length === lineasF.length + paradasF.length && lineasF.every((f) => /^(Multi)?LineString$/.test(f.geometry?.type)) && paradasF.every((f) => f.geometry?.type === 'Point'), `${lineasF.length} rutas, ${paradasF.length} paradas`);
+  comprobar('Rutas: metadatos con fuente, permiso (verbal, confirmación escrita pendiente), atribución y fecha de descarga', meta.fuente === 'SmartBus (smartbus.app)' && /verbal/.test(meta.permiso) && /confirmaci[oó]n escrita pendiente/.test(meta.permiso) && meta.atribucion === 'Rutas: SmartBus (smartbus.app)' && /^\d{4}-\d{2}-\d{2}$/.test(meta.fecha_descarga), `${meta.fecha_descarga}`);
+  const lineasUnicas = new Set(lineasF.map((f) => f.properties.linea));
+  const vertices = lineasF.reduce((n, f) => n + partesDe(f).reduce((m, p) => m + p.length, 0), 0);
+  const ramales = new Set(lineasF.map((f) => `${f.properties.linea}|${f.properties.ramal}`));
+  comprobar('Rutas: los conteos de los metadatos cuadran con el contenido', meta.conteos?.rutas === lineasF.length && meta.conteos?.paradas === paradasF.length && meta.conteos?.lineas === lineasUnicas.size && meta.conteos?.ramales === ramales.size && meta.conteos?.vertices === vertices, JSON.stringify(meta.conteos));
+  comprobar('Rutas: cada ruta tiene línea, empresa, ramal, nombre, sentido, id, fuente y enlace https a smartbus.app', lineasF.every((f) => ['linea', 'empresa', 'ramal', 'nombre', 'sentido', 'id_ruta'].every((k) => typeof f.properties[k] === 'string' && f.properties[k]) && f.properties.fuente === 'SmartBus (smartbus.app)' && /^https:\/\/smartbus\.app\/pe\/arequipa\//.test(f.properties.url)));
+  comprobar('Rutas: ids de ruta únicos', new Set(lineasF.map((f) => f.properties.id_ruta)).size === lineasF.length);
+  comprobar('Rutas: todos los vértices y paradas son números dentro de Arequipa', lineasF.every((f) => partesDe(f).every((p) => p.length >= 2 && p.every(enCaja))) && paradasF.every((f) => enCaja(f.geometry.coordinates)));
+  const deAB = (a, b) => { const x = (rad(b[0] - a[0])) * Math.cos(rad((a[1] + b[1]) / 2)); const y = rad(b[1] - a[1]); return R * Math.hypot(x, y); };
+  const saltos = lineasF.flatMap((f) => partesDe(f).flatMap((p) => p.slice(1).map((c, i) => deAB(p[i], c)))).filter((d) => d > meta.salto_maximo_m + 1);
+  comprobar(`Rutas: ningún segmento mide más de ${meta.salto_maximo_m} m (los saltos entre tramos se partieron en el archivo)`, saltos.length === 0, `${saltos.length} segmentos`);
+  const paradasPorRuta = new Map();
+  paradasF.forEach((f) => { if (!paradasPorRuta.has(f.properties.id_ruta)) paradasPorRuta.set(f.properties.id_ruta, []); paradasPorRuta.get(f.properties.id_ruta).push(f.properties.orden); });
+  const ids = new Set(lineasF.map((f) => f.properties.id_ruta));
+  comprobar('Rutas: toda parada pertenece a una ruta existente, el campo «paradas» de la ruta coincide con las que tiene y el orden es 1…n sin saltos', paradasF.every((f) => ids.has(f.properties.id_ruta) && Number.isInteger(f.properties.orden) && f.properties.nombre)
+    && lineasF.every((f) => { const o = (paradasPorRuta.get(f.properties.id_ruta) || []).sort((a, b) => a - b); return o.length === f.properties.paradas && o.every((v, i) => v === i + 1); }));
+
+  // Las paradas son vértices del recorrido o están sobre él: medida con el mismo módulo del navegador.
+  const RutasMod = app('Rutas');
+  const indice = RutasMod.indexar(rutasFc);
+  const rutaPorId = new Map(indice.rutas.map((r) => [r.props.id_ruta, r]));
+  const distParada = indice.paradas.map((s) => Math.min(...rutaPorId.get(s.props.id_ruta).partes.map((p) => Calc.distanciaALineaM(s.lat, s.lon, p))));
+  const lejosDeSuRuta = distParada.filter((d) => d > 50).length;
+  comprobar('Rutas: al menos el 99,9 % de las paradas queda a 50 m o menos del trazado de su propia ruta', lejosDeSuRuta <= Math.floor(indice.paradas.length * 0.001), `${lejosDeSuRuta} de ${indice.paradas.length} a más de 50 m`);
+
+  // D2. Líneas cerca de un punto frente a la distancia sobre la esfera punto-segmento (cross-track), por fuerza bruta.
+  const aRad = (c) => [rad(c[1]), rad(c[0])]; // [lat, lon] en radianes
+  const angular = (p, q) => { const dLa = q[0] - p[0]; const dLo = q[1] - p[1]; const h = Math.sin(dLa / 2) ** 2 + Math.cos(p[0]) * Math.cos(q[0]) * Math.sin(dLo / 2) ** 2; return 2 * Math.asin(Math.min(1, Math.sqrt(h))); };
+  const rumbo = (p, q) => Math.atan2(Math.sin(q[1] - p[1]) * Math.cos(q[0]), Math.cos(p[0]) * Math.sin(q[0]) - Math.sin(p[0]) * Math.cos(q[0]) * Math.cos(q[1] - p[1]));
+  function distSegEsfera(p, a, b) {
+    const dA = angular(a, p);
+    const dB = angular(b, p);
+    const dAB = angular(a, b);
+    if (dAB < 1e-12) return R * dA;
+    const xt = Math.asin(Math.sin(dA) * Math.sin(rumbo(a, p) - rumbo(a, b)));
+    const at = Math.acos(Math.min(1, Math.max(-1, Math.cos(dA) / Math.cos(xt))));
+    const aviene = Math.cos(rumbo(a, p) - rumbo(a, b)) >= 0;
+    return R * (aviene && at <= dAB ? Math.abs(xt) : Math.min(dA, dB));
+  }
+  const prec = lineasF.map((f) => ({ linea: f.properties.linea, partes: partesDe(f).map((p) => p.map(aRad)) }));
+  const puntosPrueba = [];
+  for (let k = 0; k < 80; k++) puntosPrueba.push([sur + azar() * (norte - sur), oeste + azar() * (este - oeste)]);
+  for (let k = 0; k < 120; k++) { // la mitad cerca de algún vértice real, para que haya líneas que sí pasan
+    const f = lineasF[Math.floor(azar() * lineasF.length)];
+    const p = partesDe(f); const pp = p[Math.floor(azar() * p.length)]; const v = pp[Math.floor(azar() * pp.length)];
+    puntosPrueba.push([v[1] + (azar() - 0.5) * 0.008, v[0] + (azar() - 0.5) * 0.008]);
+  }
+  let conLineas = 0; let diferencias = 0; let desvio = 0; const muestras = [];
+  const D = CONFIG.umbrales.transporte;
+  for (const [la, lo] of puntosPrueba) {
+    const obtenido = RutasMod.cerca(indice, la, lo, D);
+    const p = aRad([lo, la]);
+    const minPorLinea = new Map();
+    for (const r of prec) {
+      let m = Infinity;
+      for (const parte of r.partes) for (let i = 1; i < parte.length; i++) m = Math.min(m, distSegEsfera(p, parte[i - 1], parte[i]));
+      minPorLinea.set(r.linea, Math.min(minPorLinea.get(r.linea) ?? Infinity, m));
+    }
+    const esperadas = [...minPorLinea].filter(([, d]) => d <= D);
+    if (obtenido.lineas.length) conLineas++;
+    const dudosas = new Set([...minPorLinea].filter(([, d]) => Math.abs(d - D) < 2).map(([l]) => l)); // en el borde de 400 m las dos fórmulas pueden diferir por metros
+    const a = new Set(obtenido.lineas.map((l) => l.linea).filter((l) => !dudosas.has(l)));
+    const b = new Set(esperadas.map(([l]) => l).filter((l) => !dudosas.has(l)));
+    if (a.size !== b.size || [...a].some((l) => !b.has(l))) { diferencias++; if (muestras.length < 3) muestras.push(`${la.toFixed(5)},${lo.toFixed(5)}: ${[...a]} vs ${[...b]}`); }
+    obtenido.lineas.forEach((l) => { desvio = Math.max(desvio, Math.abs(l.distanciaM - minPorLinea.get(l.linea))); });
+  }
+  comprobar(`Rutas: líneas a ${D} m o menos de ${puntosPrueba.length} puntos coinciden con la distancia punto-segmento sobre la esfera (fuerza bruta)`, diferencias === 0, `${conLineas} puntos con alguna línea; ${muestras.join(' | ')}`);
+  comprobar('Rutas: la distancia a cada línea difiere menos de 2,5 m de la calculada sobre la esfera', desvio < 2.5, `máxima diferencia ${desvio.toFixed(2)} m`);
+
+  // D3. Líneas que cruzan un distrito frente a un barrido más fino (cada 20 m) con punto en polígono por número de vueltas.
+  const nombresProbados = ['PAUCARPATA', 'CAYMA', 'SOCABAYA', 'YURA', 'MIRAFLORES', 'CHARACATO'];
+  const fallosDistrito = [];
+  const resumenDistrito = [];
+  for (const nombre of nombresProbados) {
+    const fs = distritos.features.filter((f) => f.properties.distrito === nombre);
+    const polis = fs.flatMap((f) => (f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates));
+    const geo = { type: 'MultiPolygon', coordinates: polis };
+    const obtenido = new Set(RutasMod.cruzan(indice, geo).lineas.map((l) => l.linea));
+    const cuenta = new Map();
+    for (const f of lineasF) for (const parte of partesDe(f)) {
+      for (let i = 0; i < parte.length; i++) {
+        const pasos = i + 1 < parte.length ? Math.max(1, Math.ceil(deAB(parte[i], parte[i + 1]) / 20)) : 1;
+        for (let s = 0; s < pasos; s++) {
+          const t = s / pasos;
+          const x = i + 1 < parte.length ? parte[i][0] + (parte[i + 1][0] - parte[i][0]) * t : parte[i][0];
+          const y = i + 1 < parte.length ? parte[i][1] + (parte[i + 1][1] - parte[i][1]) * t : parte[i][1];
+          if (polis.some((p) => dentro(x, y, p))) cuenta.set(f.properties.linea, (cuenta.get(f.properties.linea) ?? 0) + 1);
+        }
+      }
+    }
+    const esperado = new Set([...cuenta].filter(([, n]) => n >= 5).map(([l]) => l)); // con menos de 5 puntos (100 m) el cruce es un roce que el método del código puede no contar
+    const roce = new Set([...cuenta].filter(([, n]) => n < 5).map(([l]) => l));
+    const faltan = [...esperado].filter((l) => !obtenido.has(l));
+    const sobran = [...obtenido].filter((l) => !cuenta.has(l));
+    if (faltan.length || sobran.length) fallosDistrito.push(`${nombre}: faltan ${faltan} sobran ${sobran}`);
+    resumenDistrito.push(`${nombre} ${obtenido.size} líneas${roce.size ? ` (${roce.size} roces)` : ''}`);
+  }
+  comprobar(`Rutas: las líneas que cruzan ${nombresProbados.length} distritos coinciden con un barrido cada 20 m y número de vueltas`, fallosDistrito.length === 0, fallosDistrito.join(' | ') || resumenDistrito.join(', '));
+  const plazaRutas = RutasMod.cerca(indice, CONFIG.center[0], CONFIG.center[1], D);
+  console.log(`INFO  Plaza de Armas: ${RutasMod.resumen(plazaRutas, 20)}`);
+  comprobar('Rutas: lejos de toda ruta (Pampa de Majes, 120 km al oeste) no se inventa ninguna línea', RutasMod.cerca(indice, -16.35, -72.65, D).lineas.length === 0);
 }
 
 console.log(`\n${pruebas - fallos} de ${pruebas} comprobaciones correctas.`);

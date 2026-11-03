@@ -126,11 +126,17 @@ const Contexto = (() => {
     }
   }
 
+  /** Los sismos del archivo congelado tal como vienen (GeoJSON), para dibujarlos en el mapa. Rechaza si el archivo falta. */
+  async function sismosCrudos() {
+    const { features } = await archivo('sismos');
+    return features;
+  }
+
   /** Las tres variables para un punto: { quebradas, peligros, sismos } (ninguna rechaza). */
   async function evaluar(lat, lon, umbralUsuarioM = null) {
     const [q, p, s] = await Promise.all([quebradas(lat, lon, umbralUsuarioM), peligros(lat, lon), sismos(lat, lon)]);
     return { quebradas: q, peligros: p, sismos: s };
   }
 
-  return { cauces, quebradas, peligros, sismos, evaluar };
+  return { cauces, quebradas, peligros, sismos, sismosCrudos, evaluar };
 })();

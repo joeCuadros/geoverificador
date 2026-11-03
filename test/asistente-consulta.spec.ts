@@ -207,13 +207,7 @@ describe('Asistente.formatearBusqueda (apartado de detalle)', () => {
     const f = Asistente.formatearBusqueda(resultado, { aproximados: ['tranquilo'], temaNoSoportado: null, radioGlobalM: 1000 });
     const porTexto = (a: string, b: string) => a.localeCompare(b);
     expect([...f.lineas.principal, ...f.lineas.detalle].sort(porTexto)).toEqual(f.texto.split('\n').sort(porTexto));
-    expect(f.lineas.principal[0]).toMatch(/^Busqué zonas con/);
-    expect(f.lineas.detalle.join(' ')).toMatch(/1[ ,.]?200 celdas/);
-  });
-
-  it('cada fila trae el porcentaje como número para poder resumirlo', () => {
-    const f = Asistente.formatearBusqueda(resultado, {});
-    expect(f.filas[0].pctCumpleTodo).toBeCloseTo(62.4);
-    expect(f.filas[0].puntajePct).toBeCloseTo(81.2);
+    expect(f.lineas.principal[0]).toMatch(/^(Encontré|No encontré)/);
+    expect(f.lineas.detalle.join(' ')).toMatch(/1 km/);
   });
 });

@@ -58,6 +58,12 @@ const CONFIG = {
     fuente: 'Norma E.030 Diseño Sismorresistente 2026 (MVCS), Anexo II; límites distritales del INEI vía GEOCATMIN',
   },
 
+  // Precio de OFERTA por m² del distrito (Aptología, CC BY 4.0): archivo congelado con scripts/descargar-precios.mjs.
+  // Es INFORMATIVO: nunca cumple / no cumple ni entra en un puntaje. La fuente, la licencia y el periodo viajan en el propio archivo.
+  precios: {
+    jsonUrl: 'data/precios_m2_distrito.json',
+  },
+
   // Peligros geológicos registrados: archivo local generado con scripts/descargar-peligros.mjs.
   peligros: {
     geojsonUrl: 'data/peligros_aqp.geojson',
@@ -136,5 +142,15 @@ const CONFIG = {
     },
     fuente: 'OpenStreetMap (ODbL)',
     respaldoRadioM: 5000,
+  },
+
+  // Líneas de transporte público (recorridos y paradas de SmartBus), congeladas con scripts/descargar-rutas-smartbus.mjs. Se usan con
+  // autorización verbal de SmartBus; la confirmación escrita está pendiente. La distancia para decir que una línea «pasa cerca» es
+  // la misma de `umbrales.transporte` (convención del proyecto, no una norma).
+  rutas: {
+    geojsonUrl: 'data/rutas_smartbus.geojson',
+    fuente: 'SmartBus (smartbus.app)',
+    atribucion: 'Rutas: SmartBus (smartbus.app)',
+    permiso: 'autorización verbal de SmartBus; confirmación escrita pendiente',
   },
 };

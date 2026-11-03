@@ -1,9 +1,10 @@
 /**
- * tour.js — Contenido y lógica del recorrido guiado de la primera visita (sin DOM, sin red).
+ * tour.js — Contenido y lógica de la guía breve que sigue al Inicio (sin DOM, sin red).
  *
- * El recorrido explica qué hace y qué NO hace la herramienta, cómo elegir un punto, cómo leer una tarjeta, cómo usar
- * el asistente y cómo comparar puntos. Se muestra solo la primera vez, se puede omitir y se vuelve a abrir con el botón
- * «¿Cómo funciona?». Todo el texto vive aquí para que se pueda revisar y probar (test/tour.spec.ts) sin abrir la página.
+ * La guía explica qué hace y qué NO hace la herramienta, cómo usar el chat (lo principal), cómo ver en el mapa las cosas
+ * reales (colegios, parques, zonas, quebradas, sismos), cómo buscar por punto (vía secundaria), cómo leer una tarjeta y cómo comparar puntos. Es el segundo momento de
+ * la visita, después del Inicio (recorrido.js); se puede omitir y se vuelve a abrir con el botón «¿Cómo funciona?».
+ * Todo el texto vive aquí para que se pueda revisar y probar (test/tour.spec.ts) sin abrir la página.
  *
  *   PASOS[i] = { id, titulo, intro, bloques: [{ titulo?, items: [texto…] }], muestra? }
  *   muestra: 'estados' dibuja los tres estados de ejemplo (CUMPLE, NO CUMPLE, SIN DATO) en la vista.
@@ -17,13 +18,13 @@ const Tour = (() => {
     {
       id: 'alcance',
       titulo: 'Qué hace y qué no hace',
-      intro: 'GeoVerificador muestra, con datos públicos, qué zonificación tiene un predio de Arequipa y qué servicios hay cerca. Cada variable se evalúa por separado.',
+      intro: 'GeoVerificador muestra, con datos públicos, qué zonificación tiene una zona de Arequipa y qué servicios hay cerca, medidos contra lo que tú pidas. Cada variable se evalúa por separado.',
       bloques: [
         {
           titulo: 'Qué hace',
           items: [
-            'Ubica el punto en el plano de zonificación del PDM 2016-2025.',
-            'Mide la distancia al establecimiento de salud, los colegios, el paradero y el área verde más cercanos.',
+            'Busca zonas que cumplan lo que te importa (colegio, salud, transporte, área verde, tipo de zona) y las muestra en el mapa.',
+            'Ubica un punto en el plano de zonificación del PDM 2016-2025 y mide la distancia a la salud, los colegios, el paradero y el área verde más cercanos.',
             'Dice de dónde sale cada dato, de qué fecha es y qué no cubre.',
           ],
         },
@@ -39,9 +40,39 @@ const Tour = (() => {
       ],
     },
     {
+      id: 'asistente',
+      titulo: 'Conversa con el asistente',
+      intro: 'El chat es lo principal: con el modo Gemini, lo que escribes se envía al proveedor del modelo para entender tu frase, y con el modo reglas no se envía a ningún modelo; en ambos casos los datos los calcula la herramienta, así que el asistente no inventa.',
+      bloques: [
+        {
+          items: [
+            'Escribe una frase, por ejemplo «¿cuántos colegios hay en Paucarpata?», «quiero vivir en Paucarpata» o «busco cerca de un colegio y un parque», o arma la búsqueda sin escribir con los menús y las búsquedas rápidas.',
+            'Cada respuesta trae un apartado «Por qué, fuente y límites» que puedes abrir.',
+            'Cuando buscas, te digo en qué sectores se cumple todo lo que pediste. Los numero solo para ubicarlos: no hay ranking ni «mejor zona», porque eso depende de lo que te importe.',
+            'No sabe de seguridad, precios ni ruido, y lo dice en vez de responder a medias.',
+            'Puedes ampliar el chat o arrastrar el divisor para cambiar su ancho.',
+          ],
+        },
+      ],
+    },
+    {
+      id: 'pintar',
+      titulo: 'Mira en el mapa lo que hay de verdad',
+      intro: 'Sobre el mapa está «Ver en el mapa:». Elige qué quieres ver y se dibujan los colegios, los parques, las zonas, las quebradas o los sismos tal como están en los datos.',
+      bloques: [
+        {
+          items: [
+            'Cada cosa se ve con su forma: los colegios con una letra por nivel (inicial, primaria, secundaria), los parques rellenos, las quebradas como líneas y los sismos como círculos más grandes cuanto mayor la magnitud.',
+            'Una búsqueda del chat dibuja lo que pediste y resalta los sectores donde se cumple todo a la vez; lo que no cumple no se dibuja.',
+            'La leyenda dice en una línea qué es cada cosa y de qué fuente sale. No hay puntaje ni ranking de zonas: el mapa solo muestra lo que pediste. Con «Quitar del mapa» lo limpias.',
+          ],
+        },
+      ],
+    },
+    {
       id: 'punto',
-      titulo: 'Cómo elegir un punto',
-      intro: 'La consulta tiene tres pasos: ubicar, confirmar y leer el reporte.',
+      titulo: 'Buscar por punto (opcional)',
+      intro: 'También puedes revisar un punto concreto con «Buscar por punto», en la barra superior. Es una vía secundaria: el chat sigue siendo lo principal.',
       bloques: [
         {
           items: [
@@ -55,7 +86,7 @@ const Tour = (() => {
     {
       id: 'tarjetas',
       titulo: 'Cómo leer cada tarjeta',
-      intro: 'Cada servicio y cada dato del entorno tiene una tarjeta con su estado. Tócala para abrirla y ver el detalle.',
+      intro: 'En el reporte de un punto, cada servicio y cada dato del entorno tiene una tarjeta con su estado. Tócala para abrirla y ver el detalle.',
       muestra: 'estados',
       bloques: [
         {
@@ -66,21 +97,6 @@ const Tour = (() => {
             'INFORMATIVO: dato sin umbral oficial, como la distancia a una quebrada. Se muestra sin decir cumple o no cumple, salvo que tú fijes tu propio umbral en «Mis umbrales».',
             'Colegio muestra PARCIAL cuando cumple en algunos niveles (inicial, primaria, secundaria) pero no en todos.',
             'Al abrir una tarjeta ves el umbral y de dónde sale, la fuente, la fecha del dato, el método y lo que el dato no cubre.',
-          ],
-        },
-      ],
-    },
-    {
-      id: 'asistente',
-      titulo: 'Cómo usar el asistente',
-      intro: 'El botón «Asistente» responde sobre tu punto y busca zonas según lo que te importa. No usa un modelo de lenguaje ni envía lo que escribes: aplica reglas sobre los mismos datos de la ficha, así que no inventa.',
-      bloques: [
-        {
-          items: [
-            'Escribe una frase, por ejemplo «busco cerca de un colegio y un parque», o arma la búsqueda con los menús, sin escribir.',
-            'Cada respuesta trae un apartado «Por qué, fuente y límites» que puedes abrir.',
-            'Los porcentajes son la parte del suelo habitable de un distrito que cumple lo pedido. No son una probabilidad ni una recomendación.',
-            'No sabe de seguridad, precios ni ruido, y lo dice en vez de responder a medias.',
           ],
         },
       ],
@@ -109,7 +125,7 @@ const Tour = (() => {
           items: [
             'En el reporte encontrarás «Verificaciones recomendadas antes de comprar»: certificados municipales, partida y cargas en SUNARP, servicios básicos y peligros.',
             'Esos documentos sí tienen valor legal o aportan información que esta herramienta no tiene.',
-            'Puedes volver a este recorrido cuando quieras con «¿Cómo funciona?».',
+            'Puedes volver a esta guía cuando quieras con «¿Cómo funciona?».',
           ],
         },
       ],

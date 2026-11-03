@@ -65,3 +65,6 @@ qwen-image-ui/
 
 .env*
 !.env.example
+
+# Respuestas crudas de SmartBus (scripts/descargar-rutas-smartbus.mjs)
+/.cache-smartbus/

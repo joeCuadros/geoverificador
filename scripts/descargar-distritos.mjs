@@ -10,6 +10,11 @@
  *
  * Decisiones:
  *  - Se consulta por la caja de Arequipa metropolitana (la misma de CONFIG.viewbox) y se guardan todos los distritos que la tocan.
+ *  - Alcance verificado: el ámbito del PDM Arequipa 2016-2025 (memoria, cap. I, 5.1.2) son 21 distritos (Alto Selva Alegre, Arequipa,
+ *    Cayma, Cerro Colorado, Characato, Jacobo Hunter, José Luis Bustamante y Rivero, Mariano Melgar, Miraflores, Mollebaya, Paucarpata,
+ *    Sabandía, Sachaca, Socabaya, Tiabaya, Uchumayo, Yanahuara, Yura, Quequeña, Yarabamba y Chiguata) y todos están en la caja de abajo.
+ *    Quedan fuera de la caja, y del archivo, los de la provincia que no son parte de Arequipa Metropolitana: Vítor y los tres de Siguas
+ *    (San Juan, Santa Isabel y Santa Rita). El chat los reconoce por su nombre y dice que no están en los datos (Distritos.SIN_DATOS).
  *  - El script falla si algún distrito de la provincia de Arequipa no aparece en el Anexo II de la E.030 transcrito:
  *    así nunca queda un distrito sin zona sísmica asignada por error.
  */

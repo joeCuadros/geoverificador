@@ -1,0 +1,50 @@
+{
+  "fuente": "Aptología (aptologia.com), «Vivienda en Arequipa: precio por m², arriendo, habitaciones y rentabilidad (octubre 2026)»",
+  "url": "https://github.com/elbroker/aptologia-datos/tree/main/estudios/vivienda-arequipa-por-distrito-2026",
+  "url_conjunto_de_datos": "https://huggingface.co/datasets/aptologia/vivienda-arequipa-por-distrito-2026",
+  "url_descarga": "https://huggingface.co/datasets/aptologia/vivienda-arequipa-por-distrito-2026/resolve/main/data/vivienda_arequipa_por_distrito_2026_datos.csv",
+  "url_condiciones": "https://www.aptologia.com/datos-abiertos",
+  "licencia": "CC BY 4.0",
+  "licencia_url": "https://creativecommons.org/licenses/by/4.0/",
+  "atribucion": "Datos: Aptologia",
+  "cita": "Pinzón Pineda, D. M. (2026). Vivienda en Arequipa: precio por m², arriendo, habitaciones y rentabilidad (octubre 2026). Aptología (aptologia.com).",
+  "fecha_descarga": "2026-11-03",
+  "periodo": {
+    "desde": "2026-10-11",
+    "hasta": "2026-10-18",
+    "corte": "2026-10-18"
+  },
+  "tipo": "precio de oferta (avisos), no de cierre",
+  "moneda": "PEN",
+  "unidades": {
+    "venta_m2": "soles (S/) por m², mediana de departamentos en venta",
+    "arriendo_mensual": "soles (S/) por mes, mediana de departamentos en arriendo, sin administración ni gastos comunes"
+  },
+  "estadistico": "mediana",
+  "muestra_minima": 30,
+  "n_avisos": {
+    "venta": 273,
+    "arriendo": 0
+  },
+  "modificaciones": "Se filtraron los distritos de Arequipa Metropolitana presentes en distritos_aqp.geojson, se normalizó el nombre del distrito y los valores se redondearon a soles enteros.",
+  "distritos": {
+    "CAYMA": {
+      "venta_m2": 4905,
+      "avisos_venta": 118,
+      "arriendo_mensual": null,
+      "avisos_arriendo": null
+    },
+    "YANAHUARA": {
+      "venta_m2": 4765,
+      "avisos_venta": 47,
+      "arriendo_mensual": null,
+      "avisos_arriendo": null
+    },
+    "CERRO COLORADO": {
+      "venta_m2": 4390,
+      "avisos_venta": 108,
+      "arriendo_mensual": null,
+      "avisos_arriendo": null
+    }
+  }
+}

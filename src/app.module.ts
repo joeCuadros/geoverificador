@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { createObserveModule } from '@nestjs/observe';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { AuthController } from './auth.controller';
 import { ChatController } from './chat.controller';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
@@ -16,7 +17,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
       serviceId: 'geoverificador',
     }),
   ],
-  controllers: [AppController, ChatController],
+  controllers: [AppController, ChatController, AuthController],
   providers: [AppService],
 })
 export class AppModule {}

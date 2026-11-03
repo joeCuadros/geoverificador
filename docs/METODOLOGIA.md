@@ -1,6 +1,6 @@
 # GeoVerificador — Metodología y trazabilidad
 
-> **Alcance vigente: 5 variables** (zonificación vigente, zonificación proyectada, salud, educación por nivel, transporte y área verde; ver §6 y §6b). Los capítulos de desastre, seguridad y gestión de riesgos (§4, §5, §10) describen módulos que siguen en el código pero están ocultos (`CONFIG.modulos`; se ven con `?modulos=todos`).
+> **Alcance vigente: 5 variables** (zonificación vigente, zonificación proyectada, salud, educación por nivel, transporte y área verde; ver §6, §6b y §6c). Los capítulos de desastre, seguridad y gestión de riesgos (§4, §5, §10) describen módulos que siguen en el código pero están ocultos (`CONFIG.modulos`; se ven con `?modulos=todos`).
 >
 > Cada dato que muestra la aplicación tiene aquí su origen, su transformación, la decisión que lo justifica y su límite.
 > Lo que **no** se pudo comprobar está marcado como tal. Cifras consultadas el 2026-10-12 y, para el peligro sísmico y la gestión de riesgos, el 2026-10-13.
@@ -226,6 +226,45 @@ Descarga: `node scripts/descargar-delitos.mjs` → `public/data/delitos_aqp.geoj
 - **Zonificación proyectada.** Solo un aviso de texto sobre el estado del PDM nuevo, con su fuente y fecha, tomado de `CONFIG.estadoPDM`. Si ese valor es `null` o le falta fuente o fecha, no se muestra nada (`Calculos.avisoPDMProyectado`). La fuente actual es una nota de prensa (Diario Correo, 2026-10-24), no un documento oficial. No hay mapa de la zonificación proyectada.
 - **Artículo del Reglamento.** La tabla de reglas no guarda el artículo de cada parámetro; la ficha cita el Título III del Reglamento y mostrará el artículo si una regla trae el campo opcional `articulo`.
 
+## 6c. Líneas de transporte (SmartBus)
+
+La variable V4 sigue siendo el **paradero más cercano de OpenStreetMap** (§6). Además, la tarjeta «Transporte» muestra **qué líneas pasan cerca**, con una fuente distinta: los recorridos que publica SmartBus (smartbus.app), una empresa privada de Arequipa. Las dos fuentes no se mezclan: la tarjeta las rotula por separado.
+
+**Permiso.** Los datos se usan con **autorización verbal de SmartBus; la confirmación escrita está pendiente**. Esa frase viaja en el archivo (`metadata.permiso`) y aparece en la ficha, el informe y el asistente. Mientras no haya confirmación escrita, el archivo es «datos con permiso verbal»: no debe redistribuirse como si fuera abierto.
+
+**De dónde salen los datos (sin autenticación, los mismos que usa el mapa de la página para cualquier visitante).** Se averiguó leyendo el JavaScript público de https://smartbus.app/pe/arequipa/c2: el mapa llama a `/smartbus/{país}/{ciudad}/routes`, `/routes/{id}` y `/routes-geo`.
+
+| Endpoint (GET, JSON) | Qué trae |
+|---|---|
+| `https://smartbus.app/smartbus/pe/arequipa/routes` | Lista de rutas: id, nombre corto y largo («Cettar : Ciudad Municipal → Terminal Terrestre»), empresa en `agency.name` («C2 - Cono Norte»), color y número de paradas |
+| `https://smartbus.app/smartbus/pe/arequipa/routes/{id}` | Detalle de una ruta: paradas `{ nombre, lat, lng, sequence }` y trazado `geometry` `[[lat, lng], …]` |
+| `/routes-geo` | Todos los trazados en una sola respuesta (sin paradas); no se usa |
+
+`robots.txt` de smartbus.app declara `User-agent: * / Allow: /`. El script lo vuelve a leer y se detiene si deja de permitirlo.
+
+**Cómo se descarga** (`pnpm datos:rutas`, `scripts/descargar-rutas-smartbus.mjs`): solicitudes HTTP simples con un User-Agent honesto («GeoVerificador/1.0 (datos con permiso de SmartBus)»), sin suplantar un navegador, sin saltar captchas y sin tokens; al menos 1,1 s entre solicitudes; las respuestas crudas quedan en `.cache-smartbus/` (ignorada por git). Si un endpoint pide inicio de sesión, responde 401/403/429, redirige o muestra una verificación anti-bot, el script **se detiene** sin insistir. Valida el resultado (números finitos, todo dentro de Arequipa, rutas y paradas completas) y, si algo falla, **no toca el archivo existente**. Salida: `public/data/rutas_smartbus.geojson`.
+
+**Qué trae el archivo.** Un `LineString` (o `MultiLineString`) por línea, empresa y sentido (`linea`, `empresa`, `ramal`, `nombre`, `sentido`, `id_ruta`, `fuente`, `url`) y un `Point` por parada (`nombre`, `linea`, `ramal`, `orden`, `id_ruta`). Descarga del 2026-11-03: **12 líneas** (C2 a C11, Albotran y Chiguata), **126 ramales**, **241 recorridos** (uno por sentido), **9 301 paradas** y 122 574 vértices. `metadata` trae la fuente, el permiso, la atribución («Rutas: SmartBus (smartbus.app)»), la fecha de descarga y los conteos.
+
+**Decisiones.**
+- La línea y la empresa salen de `agency.name` («C2 - Cono Norte» → línea C2, empresa Cono Norte). Lo que SmartBus llama «ruta» (por ejemplo «Cettar») es un **ramal** de esa línea. Albotran y Chiguata no tienen código: la línea lleva su nombre.
+- SmartBus entrega cada trazado como tramos pegados, y a veces hay saltos entre tramos consecutivos. Un salto de más de 300 m (el 99,7 % de los segmentos mide menos) no se dibuja como calle: el trazado se parte ahí y queda como `MultiLineString` (102 de los 241 recorridos). Así la distancia nunca se mide contra un tramo que no existe.
+- Las paradas se publican con nombres numerados («Cettar - 12»), sin el nombre de la calle; se muestran tal cual.
+
+**Qué se calcula** (`public/js/rutas.js`, sin DOM ni red).
+- *Líneas cerca de un punto:* la distancia del punto a la polilínea de cada recorrido (plano local, la misma de las quebradas, `Calculos.distanciaALineaM`) y, por línea, la distancia mínima, sus ramales y la **parada más cercana** (haversine). Se listan las líneas a **400 m o menos** (`CONFIG.umbrales.transporte`, **convención del proyecto**, no una norma; la ficha lo rotula así).
+- *Líneas que cruzan un distrito:* una línea cuenta si algún punto de su trazado (densificado a tramos de 100 m) cae dentro del polígono del distrito (límites de GEOCATMIN); se informan también cuántas paradas tiene dentro. Es una aproximación: un trazado que solo roza una esquina del distrito podría no contarse.
+- Dónde se ve: tarjeta «Transporte» de la ficha, fila de transporte de «Comparar puntos», sección «Transporte» del informe PDF y el asistente («¿qué buses pasan por aquí?», «¿qué líneas pasan por Paucarpata?»; con Gemini la intención es `rutas` y el campo `distrito`, validados igual que el resto; el modelo solo nombra el distrito y las líneas salen siempre del motor).
+
+**Qué no cubre.**
+- Son los recorridos **tal como SmartBus los publicó en la fecha de descarga**; los datos no se actualizan solos.
+- **No hay frecuencias ni horarios**, ni si el servicio está operando hoy; una línea que «pasa» no garantiza que pase cuando la persona la necesite.
+- **Un cambio de ruta por tramos** (obras, desvíos, ajustes de la empresa) puede no estar reflejado. Lo que SmartBus no publica no aparece.
+- La distancia es **al trazado**, no al lugar donde se puede subir, y en línea recta, no a pie.
+- Los nombres de las paradas son números de orden, no calles ni referencias.
+
+**Verificación.** `test/rutas.spec.ts` (módulo con fixtures: distancias a mano, hueco entre tramos, cruces de distrito, orden de líneas), `test/rutas-integracion.spec.ts` (comparación e informe), `test/asistente-rutas.spec.ts` (reglas, respuestas, contrato con Gemini) y `scripts/verificar-datos.mjs`, sección D: integridad del archivo, conteos que cuadran con los metadatos, ningún segmento de más de 300 m, paradas sobre el trazado de su ruta, las líneas a 400 m de 200 puntos frente a la distancia punto-segmento sobre la esfera (fuerza bruta) y las líneas de 6 distritos frente a un barrido cada 20 m con número de vueltas.
+
 ## 7. Trazabilidad: de dónde sale cada cifra de la pantalla
 
 | Lo que se ve | Cómo se obtiene | Archivo / código |
@@ -241,6 +280,7 @@ Descarga: `node scripts/descargar-delitos.mjs` → `public/data/delitos_aqp.geoj
 | Periodo y cobertura | Regla de cobertura sobre `metadata.cobertura` | `Delitos.load`, `metadata.cobertura` |
 | Mapa de calor | Densidad gaussiana (σ 200 m, celdas 100 m) | `Delitos.capa` |
 | Salud, educación por nivel, transporte y área verde (estado, distancia, nombre) | Más cercano por haversine y umbral; área geodésica y distancia al borde en áreas verdes | `calculos.js`, `equipamiento.js`, `data/equipamiento/*.geojson` |
+| «Líneas que pasan a ≤400 m», trazado y parada más cercana | Distancia punto → polilínea de cada recorrido, agrupada por línea; parada más cercana por haversine | `rutas.js`, `data/rutas_smartbus.geojson` (SmartBus, permiso verbal) |
 | Aviso de borde de zona | Otra zona a ≤ 20 m del punto | `Calculos.alertaBorde`, `zonificacion.js` |
 | Aviso del PDM proyectado | Texto de `CONFIG.estadoPDM` (solo con fuente y fecha) | `config.js`, `calculos.js` |
 | Distrito, zona sísmica y Z | Punto-en-polígono sobre los límites del INEI; zona y Z de la E.030 | `distritos.js`, `distritos_aqp.geojson`, `zonas_sismicas_e030.json` |
@@ -251,6 +291,7 @@ Descarga: `node scripts/descargar-delitos.mjs` → `public/data/delitos_aqp.geoj
 | Quebradas y cauces: nombre, distancia, estado INFORMATIVO | Distancia a la línea más cercana de la red de la ANA; el estado solo cambia con el umbral de «Mis umbrales» | `calculos.js` (`evaluarCauces`), `contexto.js`, `umbrales.js`, `quebradas_aqp.geojson` |
 | Contexto de riesgo: peligros geológicos a 500 m | Conteo con haversine sobre el inventario de INGEMMET; siempre INFORMATIVO | `contexto.js`, `peligros.js`, `peligros_aqp.geojson` |
 | Contexto de riesgo: sismos a 100 km | Conteo con haversine sobre los sismos reportados por el IGP en el periodo del archivo; siempre INFORMATIVO | `calculos.js` (`resumirSismos`), `contexto.js`, `sismos_igp.geojson` |
+| Precio de oferta por m² del distrito | Se busca el distrito del punto (punto-en-polígono) en el archivo congelado de Aptología; se copia la mediana publicada, sin cálculo | `precios.js` (`Precios.buscar`), `precios_m2_distrito.json`, `distritos.js` |
 | Tabla de «Comparar puntos» | Instantánea de cada punto guardado; prioridades de la persona; sin puntaje | `comparar.js`, `comparar-ui.js` |
 
 Las filas de peligros (módulo), zona sísmica, denuncias y riesgos corresponden a los módulos fuera de alcance, que se ven con `?modulos=todos`. Los peligros geológicos del contexto de riesgo (§12) sí se ven siempre, rotulados como informativos.
@@ -277,8 +318,9 @@ Las fuentes públicas cambian: al volver a descargar, las cifras de este documen
 
 - **Quebradas y huaicos.** La red de la ANA no incluye todas las quebradas urbanas y no es un mapa de peligro (§12). La faja marginal no está delimitada en la ficha. Las fuentes que sí delimitan peligro (CENEPRED/SIGRID, susceptibilidad de INGEMMET) no se pudieron consumir (ver [`INVESTIGACION-VARIABLES.md`](INVESTIGACION-VARIABLES.md), tabla A) y se remiten como verificación a hacer.
 - Peligro volcánico (Misti), licuación y amplificación por el suelo del predio, y tsunami. El peligro sísmico solo está a escala de distrito (zona E.030).
-- Precio del suelo, rentabilidad o demanda: no se relaciona ningún factor con el valor de un predio. Eso exigiría datos de precios y es un trabajo aparte.
+- Precio del suelo, rentabilidad o demanda: no se relaciona ningún factor con el valor de un predio. Lo único que hay es el precio de **oferta** por m² promedio de tres distritos (§13), informativo y sin comparar con nada.
 - Calidad de la construcción, servicios básicos (agua, desagüe, luz) y situación legal del predio (títulos, cargas).
+- **Transporte como servicio.** Las líneas son los recorridos que SmartBus publicó en la fecha de descarga: sin frecuencias ni horarios, sin saber si hoy operan, y un cambio de ruta por tramos puede no estar reflejado (§6c).
 - Planes urbanos posteriores a 2016.
 
 ## 10. Gestión de riesgos del predio (registro de riesgos)
@@ -347,8 +389,12 @@ Ante cualquier fallo se usa el intérprete de reglas (palabras clave sin tildes 
 | Construir | «¿cuánto puedo construir en un lote de 200 m²?» | `Zonificacion.potencial`, el mismo cálculo de la ficha; no calcula en zonas condicionadas ni no construibles |
 | PDM nuevo | «¿cambiará la zonificación?» | El aviso de `CONFIG.estadoPDM` con su fuente y fecha, y aclara que no hay mapa |
 | Fuentes | «¿de dónde salen los datos?» | Fuentes y umbrales |
-| Buscar zonas | «busco cerca de un colegio y un parque, lo más importante es el parque» | Ranking por distrito (ver abajo) |
-| Sin datos | «¿es seguro?», «algo barato» | Dice que no tiene seguridad ni precios; no responde a medias |
+| Buscar zonas | «busco cerca de un colegio y un parque», «busco en Paucarpata un sector con colegio y parque cerca» | Sectores donde se cumple todo a la vez, sin ranking (ver abajo) |
+| Contar en un distrito | «¿cuántos colegios hay en Paucarpata?» | «En Paucarpata hay N colegios: a inicial, b primaria, c secundaria (OpenStreetMap, fecha; puede faltar alguno)» y los muestra en el mapa |
+| Perfil de un distrito | «quiero vivir en Paucarpata», «la mejor zona para vivir en Paucarpata» | Resumen de ese distrito y la pregunta «¿Qué es lo primero para ti…?» con botones |
+| «La mejor zona» sin distrito | «la mejor zona para vivir» | Explica que no elige una «mejor» y pregunta qué importa |
+| Precio del distrito | «¿cuánto cuesta el m² en Cayma?», «precio por metro cuadrado», «¿qué distrito es el más caro?» | El precio de oferta por m² de Aptología con avisos, periodo y atribución (§13); sin cifra para el distrito, lo dice |
+| Sin datos | «¿es seguro?», «precio de esta casa», «alquiler en Cayma», «una zona barata» | Dice que no tiene seguridad ni el precio de un inmueble o alquiler en particular (solo promedios de oferta por distrito); no responde a medias |
 
 **Criterios de búsqueda y sus umbrales.**
 
@@ -369,21 +415,33 @@ Los umbrales de campiña, comercial y centro histórico son convenciones del pro
 
 **Cómo se busca.**
 
-1. Se arma una cuadrícula de celdas de 250 m (`CONFIG.asistente.pasoCeldaM`) cuyo centro cae en una zona **construible** del plano (o también condicionada, si se pide). Si dos zonas se superponen gana la última, como en el plano.
-2. En cada celda se evalúa cada criterio con las funciones de `Calculos` (haversine y área geodésica) sobre el OpenStreetMap congelado.
-3. Se agrupa por distrito (`Distritos.nombreDe`). Un distrito con menos de 8 celdas no se lista: la cifra sería engañosa.
-4. Por distrito se informa el **porcentaje de celdas que cumple todo** y la **coincidencia ponderada**, el promedio de la fracción de criterios cumplidos con peso 2 para los prioritarios y 1 para el resto. El doble peso es una **convención del asistente**: no hay base para otro valor.
-5. Cada distrito trae su mejor celda (más puntaje y, a igual puntaje, la que cumple con más holgura) para verla en el mapa o consultarla con la ficha completa.
+1. Se arma una cuadrícula de celdas de 250 m (`CONFIG.asistente.pasoCeldaM`) cuyo centro cae en una zona **construible** del plano (o también condicionada, si se pide). Si dos zonas se superponen gana la última, como en el plano. La cuadrícula es un **andamio interno**: nunca se muestra.
+2. En cada celda se evalúa cada criterio con las funciones de `Calculos` (haversine y área geodésica) sobre el OpenStreetMap congelado. Si la persona nombró un distrito, solo se evalúan las celdas de ese distrito.
+3. Las celdas donde se cumple **todo a la vez** se juntan en **sectores**: zonas continuas (las celdas que se tocan, también por una esquina; `public/js/sectores.js`). El borde de cada sector es la unión de sus celdas, suavizada. Un sector de una sola celda no se muestra si hay otros más grandes.
+4. Cada sector se nombra con el **elemento con nombre más cercano** (colegio, parque, posta o paradero, a 500 m o menos; si la persona pidió un tipo, gana el de ese tipo). Si no hay ninguno con nombre, el sector queda sin nombre: no se inventan nombres ni calles, porque los datos no traen calles.
+5. La respuesta dice, por ejemplo, «Encontré 3 sectores de Paucarpata donde tienes a la vez un colegio inicial a menos de 500 m y un parque a menos de 300 m», con cada sector, su tamaño aproximado en hectáreas y lo que hay en su centro, y los botones «Ver en el mapa» y «Consultar este punto».
 
-**Qué NO es.** No es una probabilidad ni una recomendación: es la parte del suelo habitable de un distrito que cumple lo que se pidió. La resolución es de 250 m. Hereda todos los límites de la ficha (distancia en línea recta, OpenStreetMap incompleto, plano 2016-2025). La palabra «probabilidad» no aparece en ninguna cifra y el texto aclara que no lo es.
+**Sin ranking, salvo que se pida.** Ya no hay «% del suelo que cumple» ni «coincidencia ponderada»: eran cifras difíciles de entender y de usar. Los sectores se numeran solo para ubicarlos y se ordenan del más extenso al más pequeño. Solo si la persona marca una prioridad («lo más importante es el parque») se ordenan por cercanía a eso, y el texto lo dice. Si no hay sectores, el texto dice qué criterio limita más y ofrece quitarlo.
 
-**Ajustes sobre la búsqueda anterior.** «agrega transporte», «quita el parque», «prioriza el colegio», «incluye zonas condicionales». La cuadrícula se reutiliza entre ajustes porque no depende de los criterios.
+**Distritos.** Un distrito se reconoce por su nombre sin importar tildes, mayúsculas ni errores de tipeo razonables (`Distritos.buscarNombre`: distancia de edición proporcional al largo del nombre, con prueba contra palabras comunes para evitar falsos positivos). «Arequipa» a secas es la ciudad; el distrito se pide con «cercado» o «distrito de Arequipa». El archivo de límites trae 25 distritos, entre ellos los 21 del ámbito del PDM Arequipa 2016-2025 (memoria, cap. I, 5.1.2: Alto Selva Alegre, Arequipa, Cayma, Cerro Colorado, Characato, Jacobo Hunter, José Luis Bustamante y Rivero, Mariano Melgar, Miraflores, Mollebaya, Paucarpata, Sabandía, Sachaca, Socabaya, Tiabaya, Uchumayo, Yanahuara, Yura, Quequeña, Yarabamba y Chiguata). Los cuatro distritos de la provincia que no están en el archivo (Vítor y los tres de Siguas) no forman parte de Arequipa Metropolitana; el chat los reconoce y dice que no están en los datos.
+
+**Contar y perfil de un distrito.** «¿Cuántos colegios hay en Paucarpata?» cuenta los elementos de OpenStreetMap cuyo punto cae dentro del límite del distrito (`public/js/entidades.js`; un parque cuenta por el centro de su caja). Un colegio con varios niveles suma en cada uno, y los que no declaran su nivel se cuentan como primaria y secundaria (regla de `Calculos.nivelesEducativos`); el texto lo aclara. El perfil («quiero vivir en Paucarpata») agrega cómo se reparte la zonificación (puntos cada 300 m dentro del distrito, por tipo principal de zona) y qué cauces de la red de la ANA lo cruzan, y termina preguntando qué es lo primero para la persona, con botones que buscan **dentro de ese distrito**. «La mejor zona» sin distrito no elige una: explica que depende de lo que importe y pregunta qué importa. Si hay datos, el perfil suma dos líneas más: las **líneas de SmartBus que cruzan el distrito** (§6c) y el **precio de oferta por m²** de Aptología (§13). El precio solo existe para los distritos con cifra publicada (hoy tres); en los demás se omite, sin valores estimados.
+
+**Mapa por entidades.** El mapa dibuja lo que existe, no celdas (`public/js/capas.js` decide, `public/js/capas-ui.js` dibuja): colegios con un icono por nivel (inicial círculo, primaria cuadrado, secundaria hexágono) y, si son pocos, un círculo tenue con la distancia de referencia; establecimientos de salud y paraderos con su círculo de 1000 m y 400 m si son pocos; parques como polígonos verdes; solo las zonas del plano del tipo pedido (residencial, tranquila, campiña, comercial, centro histórico); quebradas como líneas; sismos como círculos de 3 a 16 px según la magnitud. En una búsqueda se dibujan las entidades que hacen que cada sector cumpla y **una sola región resaltada**, los sectores; lo que no cumple no se pinta. La leyenda explica cada capa en una línea. Con muchos puntos (más de 350) se usan círculos de lienzo en vez de iconos. Con las **líneas de bus** (preguntas sobre buses) se dibujan los recorridos de SmartBus, **un color por línea** (el mismo siempre) con una etiqueta con su nombre y una fila de leyenda por línea; con un punto elegido se dibuja además la parada más cercana de cada línea. El archivo de recorridos (4,9 MB) se baja solo cuando hay líneas que dibujar.
+
+**Qué NO es.** No es una probabilidad ni una recomendación ni un ranking de zonas. La resolución es de 250 m: los bordes de un sector son aproximados y no distinguen cuadras. Hereda todos los límites de la ficha (distancia en línea recta, OpenStreetMap incompleto, plano 2016-2025).
+
+**Líneas de transporte.** «¿Qué buses pasan por aquí?» y «¿qué líneas pasan por Paucarpata?» se responden con los recorridos de SmartBus (§6c), no con el criterio «transporte» de las búsquedas. Sobre el punto usa las líneas a 400 m o menos de la ficha; con un distrito (no necesita punto), las líneas cuyo trazado entra en él. El distrito se reconoce con el mismo buscador de nombres que «contar», «perfil» y las búsquedas (tildes, mayúsculas y errores de tipeo); si el nombre no es un distrito de la provincia, o es uno que no está en los datos (Vítor, Siguas), lo dice en vez de adivinar. El modelo (Gemini) usa el mismo campo `distrito`, validado con la misma regla y resuelto con el mismo buscador. Cita siempre la fuente, el permiso verbal con confirmación escrita pendiente y que no hay frecuencias ni horarios.
+
+**Resumen del punto en llano.** Al consultar un punto, el chat publica un resumen corto (`public/js/resumen.js`) con lo que la ficha ya calculó: dónde estás y qué se puede construir, qué tienes cerca, qué queda más lejos de lo recomendado (con la distancia de referencia) y el cauce más cercano. Trae los botones «Ver detalle técnico», «Guardar para comparar» y «¿Qué debo verificar antes de comprar?». La ficha empieza con las mismas tres líneas y deja las fuentes, el método y los límites en secciones plegadas (no se quitó ningún dato). Cuando hay datos de SmartBus agrega una frase como «Pasan 2 líneas a menos de 400 m: C2 (Cono Norte), C5 (EtraBus)»; si ninguna pasa tan cerca, lo dice, y si no se pudieron leer, no dice nada.
+
+**Ajustes sobre la búsqueda anterior.** «agrega transporte», «quita el parque», «prioriza el colegio», «incluye zonas condicionales». La cuadrícula se reutiliza entre ajustes porque no depende de los criterios; el distrito de la búsqueda anterior se conserva.
 
 **Verificación.**
 
-- `test/asistente.spec.ts`: 63 pruebas de la lógica (interpretación, evaluación de celdas, búsqueda, respuestas y textos).
-- `scripts/verificar-datos.mjs`, sección C, con los datos reales: la zona de 300 celdas al azar coincide con `Zonificacion.lookup`; las distancias y veredictos de salud, transporte e inicial en 120 celdas coinciden con una fuerza bruta con la ley esférica de los cosenos; las áreas vienen ordenadas, con porcentajes entre 0 y 100, y la mejor celda de cada una cae en su distrito; y los tiempos (con los datos reales, la primera búsqueda tarda unos 0,7 s y un ajuste con la cuadrícula ya calculada, unos 0,3 s).
-- **Lo que no se verificó:** que el ranking refleje lo que una persona consideraría mejor; no hay una prueba con usuarios del chat. Tampoco se validó la comprensión del lenguaje más allá de los casos de prueba: una frase fuera de las reglas se reconoce como «no entendí».
+- Pruebas de lógica (`test/asistente*.spec.ts`, `distritos`, `entidades`, `sectores`, `capas`, `resumen`, `transporte`): interpretación con y sin distrito (incluida la frase «quiero vivir en pauccarpata cuantos colegios hay ahi»), equivalencia entre el intérprete de reglas y el esquema del modelo, conteos, sectores y su contorno, capas del mapa y resumen del punto.
+- `scripts/verificar-datos.mjs`, sección C, con los datos reales: la zona de 300 celdas al azar coincide con `Zonificacion.lookup`; las distancias y veredictos de salud, transporte e inicial en 120 celdas coinciden con una fuerza bruta con la ley esférica de los cosenos; los colegios por distrito suman como máximo el total (ninguno se cuenta en dos distritos); Paucarpata tiene colegios, salud, paraderos y parques; una búsqueda dentro de Paucarpata solo devuelve sectores de Paucarpata y su texto no habla de suelo ni de celdas; y los tiempos.
+- **Lo que no se verificó:** que los sectores coincidan con lo que una persona consideraría un buen lugar para vivir ni que los nombres de los sectores ayuden a ubicarlos; no hay una prueba con usuarios del chat. Tampoco se validó la comprensión del lenguaje más allá de los casos de prueba: una frase fuera de las reglas se reconoce como «no entendí».
 
 ## 12. Quebradas y cauces, y contexto de riesgo (informativo)
 
@@ -422,3 +480,19 @@ El mismo inventario de §4, ahora visible siempre dentro de «Contexto de riesgo
 - `test/contexto.spec.ts` (distancia a líneas, estado INFORMATIVO / «según tu umbral», conteo de sismos, almacenamiento de umbrales), `test/comparar.spec.ts` (filas informativas, umbral, dominancia) y `test/asistente-riesgo.spec.ts` (preguntas, búsqueda «lejos de quebradas», textos con fuente y límites).
 - `scripts/verificar-datos.mjs`: integridad de `quebradas_aqp.geojson` y `sismos_igp.geojson` (formato, metadatos, conteos que cuadran, periodo y recuadro), distancia a la red frente a un método independiente, conteos de sismos y peligros frente a un recuento por ley esférica de los cosenos, y que sin archivos las tres variables queden en SIN DATO.
 - **Lo que no se verificó:** que la red de la ANA coincida con el terreno real (no se contrastó con imágenes ni con los informes de INGEMMET), que el sentido de «cerca» de una quebrada coincida con el peligro real de huaico, ni los datos de CENEPRED/SIGRID (`sig.cenepred.gob.pe` no respondió desde la red de prueba).
+
+## 13. Precio de oferta por m² del distrito (informativo)
+
+**Regla común.** Es un dato de contexto, igual que §12: no hay umbral que diga si un precio es alto o bajo, así que su estado es **INFORMATIVO** (o **SIN DATO** con su causa). Nunca produce CUMPLE / NO CUMPLE, nunca es una prioridad de «Comparar puntos» y nunca entra en un puntaje.
+
+- **Fuente y licencia.** Aptología (Daniel Mauricio Pinzón Pineda), estudio «Vivienda en Arequipa: precio por m², arriendo, habitaciones y rentabilidad (octubre 2026)». Datos abiertos bajo [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Verificado el 2026-11-03: la ficha del conjunto de datos declara `license: cc-by-4.0` (<https://huggingface.co/datasets/aptologia/vivienda-arequipa-por-distrito-2026>), y la página de condiciones de la fuente (<https://www.aptologia.com/datos-abiertos>) dice que los datos, CSV y gráficas se publican bajo Creative Commons Atribución 4.0 Internacional, que no se requiere inicio de sesión ni llave de API, y pide la atribución «Datos: Aptologia» con un enlace visible a la página de origen del dato. La fuente canónica del estudio está en <https://github.com/elbroker/aptologia-datos/tree/main/estudios/vivienda-arequipa-por-distrito-2026>. La descarga es una solicitud HTTP simple a un CSV público; no se eludió ninguna protección.
+- **Qué mide.** La **mediana del precio pedido por m²** de departamentos en venta, por distrito, a partir de avisos de portales inmobiliarios vistos del 11 al 18 de octubre de 2026 (corte del 18 de octubre), deduplicados entre portales y recortados al percentil 1-99. Es precio de **oferta** (lo que se pide en el aviso), **no de cierre**. Se publica solo con al menos 30 avisos por distrito; el arriendo no alcanza esa muestra en ningún distrito de Arequipa.
+- **Cobertura real.** De los 25 distritos del GeoJSON, **3 tienen cifra**: Cayma (S/ 4 905/m², 118 avisos), Yanahuara (S/ 4 765/m², 47 avisos) y Cerro Colorado (S/ 4 390/m², 108 avisos); 273 avisos de venta en total. Para los otros 22 el resultado es SIN DATO con la causa («la fuente solo publica cifras con al menos 30 avisos»); no se estima ni se interpola.
+- **Descarga.** `node scripts/descargar-precios.mjs` → `public/data/precios_m2_distrito.json`. El script exige que la ficha del conjunto declare CC BY 4.0 (si no, no escribe nada), normaliza el nombre del distrito (sin tildes, en mayúsculas, con alias como «José Luis Bustamante») para que coincida con `distritos_aqp.geojson`, redondea a soles enteros y guarda en el JSON: fuente, URLs, licencia, texto de atribución, cita, fecha de descarga, periodo de los datos, tipo («precio de oferta (avisos), no de cierre»), moneda (PEN), unidades, estadístico, muestra mínima y número de avisos. Si la descarga falla se conserva el archivo anterior.
+- **Cálculo.** Ninguno: `Precios.buscar(datos, distrito)` (`public/js/precios.js`) busca el distrito del punto y devuelve la cifra publicada; es una función pura con `test/precios.spec.ts`.
+- **En la ficha.** Sección «Precio de referencia del distrito»: tarjeta desplegable «Precio de oferta del distrito» con la cifra, el número de avisos, el periodo, el enlace *Datos: Aptologia*, la licencia y «Qué no cubre» (precios pedidos y no de cierre; mediana del distrito y no el precio de este inmueble; solo departamentos y distritos con al menos 30 avisos; periodo corto, sin tendencia). La atribución también figura en «Fuentes de datos».
+- **En «Comparar puntos».** Fila informativa «Precio de oferta del distrito (por m²)» en un bloque aparte, rotulado como promedio del distrito y no del inmueble. Dos puntos del mismo distrito muestran la misma cifra. Los puntos guardados antes de existir la fila aparecen como SIN DATO.
+- **En el PDF.** Sección «Precio de oferta del distrito (informativo)» con la cifra, el periodo, la atribución, la licencia y lo que no cubre, una fila en el resumen y una limitación.
+- **En el asistente.** «¿Cuánto cuesta el m² en X?» se responde con esta cifra (reglas: intención `precio`; Gemini: intención `precio_distrito` con el distrito validado contra la lista de 25). El texto dice que es oferta y no cierre, el promedio del distrito, el periodo y la atribución; sin cifra para el distrito, lo dice y nombra los que sí tienen. **El precio de «esta casa», de un terreno, un alquiler o una búsqueda por precio sigue fuera de alcance** y la respuesta dice que solo se conocen promedios de oferta por m² de algunos distritos.
+- **Verificación.** `test/precios.spec.ts`, `test/asistente-precio.spec.ts`, las secciones nuevas de `test/comparar.spec.ts`, `test/reporte.spec.ts` y `test/asistente-llm.spec.ts`, y las comprobaciones «Precios» de `scripts/verificar-datos.mjs` (metadatos y atribución, fechas, rotulado de oferta, nombres iguales a los del GeoJSON, rangos y muestra mínima, suma de avisos, SIN DATO en un distrito sin cifra).
+- **Lo que no se verificó.** Que los avisos reflejen el mercado real (solo se contrastó que las tres cifras coincidan con las publicadas por Aptología) ni la calidad del recorte de valores atípicos de la fuente. TuLugar publica otro índice (USD 1 441/m² para Arequipa) con una muestra pequeña; no se usa porque su licencia no permite rehospedar el conjunto de datos.

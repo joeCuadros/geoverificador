@@ -11,6 +11,7 @@
 const Equipamiento = (() => {
   const NIVELES = ['inicial', 'primaria', 'secundaria'];
   const archivos = new Map(); // categoría → promesa con los datos congelados
+  let indiceRutas = null;      // promesa con las rutas de SmartBus ya indexadas (Rutas.indexar)
 
   // ------------------------------------------------------------- Carga de datos
 
@@ -50,6 +51,37 @@ const Equipamiento = (() => {
 
   async function cargar(categoria, punto) {
     return (await archivo(categoria)) || enVivo(categoria, punto);
+  }
+
+  /** Rutas de SmartBus (archivo congelado): se leen una sola vez y, si falla, la próxima consulta lo reintenta. */
+  function cargarRutas() {
+    if (!indiceRutas) {
+      indiceRutas = (async () => {
+        const res = await fetch(CONFIG.rutas.geojsonUrl);
+        if (!res.ok) throw new Error(`No se encontró el archivo de rutas (HTTP ${res.status}).`);
+        const fc = await res.json();
+        if (!fc || !Array.isArray(fc.features)) throw new Error('El archivo de rutas no es un GeoJSON válido.');
+        return Rutas.indexar(fc);
+      })().catch((err) => {
+        indiceRutas = null;
+        throw err;
+      });
+    }
+    return indiceRutas;
+  }
+
+  /**
+   * Líneas que pasan cerca del punto (a la misma distancia de referencia del paradero). Nunca rechaza: si el archivo falta,
+   * devuelve { error } y la ficha sigue mostrando el paradero más cercano.
+   */
+  async function lineasCerca(punto) {
+    const u = CONFIG.umbrales.transporte;
+    try {
+      return Rutas.cerca(await cargarRutas(), punto.lat, punto.lon, u);
+    } catch (err) {
+      console.error('[Equipamiento] rutas', err);
+      return { error: err.message, distanciaM: u, lineas: [], rutas: 0, fuente: CONFIG.rutas.fuente, fecha: null, permiso: CONFIG.rutas.permiso, atribucion: CONFIG.rutas.atribucion };
+    }
   }
 
   // ------------------------------------------------------------------ Cálculo
@@ -146,17 +178,20 @@ const Equipamiento = (() => {
   /**
    * Evalúa las cuatro variables del equipamiento para el punto.
    * Devuelve { salud, educacion: { inicial, primaria, secundaria }, transporte, areaVerde }.
+   * `transporte.rutas` agrega las líneas de SmartBus que pasan a ≤ CONFIG.umbrales.transporte del punto (Rutas.cerca): el paradero
+   * de OpenStreetMap y los recorridos de SmartBus son dos fuentes distintas y no se mezclan.
    */
   async function evaluar(lat, lon) {
     const punto = { lat, lon };
     const u = CONFIG.umbrales;
-    const [s, e, t, v] = await Promise.all([
+    const [s, e, t, v, rutas] = await Promise.all([
       variable('salud', punto, salud, (m) => sinDato(m, u.salud)),
       variable('educacion', punto, educacion, (m) => Object.fromEntries(NIVELES.map((n) => [n, sinDato(m, u.educacion[n])]))),
       variable('transporte', punto, transporte, (m) => sinDato(m, u.transporte)),
       variable('areasVerdes', punto, areaVerde, (m) => ({ ...sinDato(m, u.areaVerde.distanciaM), areaM2: null, cumple1ha: false })),
+      lineasCerca(punto),
     ]);
-    return { salud: s, educacion: e, transporte: t, areaVerde: v };
+    return { salud: s, educacion: e, transporte: { ...t, rutas }, areaVerde: v };
   }
 
   /**
@@ -170,5 +205,5 @@ const Equipamiento = (() => {
     return Object.fromEntries(categorias.map((c, i) => [c, lista[i]]));
   }
 
-  return { NIVELES, evaluar, datosCongelados };
+  return { NIVELES, evaluar, datosCongelados, indiceRutas: cargarRutas };
 })();

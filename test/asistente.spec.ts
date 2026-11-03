@@ -523,18 +523,15 @@ describe('Asistente.formatearBusqueda', () => {
     puntos: [{ lat: P.lat, lon: P.lon, distrito: 'CAYMA', zona: 'RDB', puntajePct: 100, detalle: { colegio: { cumple: true, distanciaM: 200, nombre: 'Colegio Uno' }, areaVerde: { cumple: true, distanciaM: 120, nombre: 'Parque A' } } }],
   };
 
-  it('lista las áreas con su porcentaje, no lo llama probabilidad y aclara que no lo es', () => {
+  it('no habla de porcentajes ni de probabilidad: habla de sectores', () => {
     const f = Asistente.formatearBusqueda(resultado, { aproximados: [], temaNoSoportado: null, radioGlobalM: null });
-    expect(f.filas[0].titulo).toBe('Cayma');
-    expect(f.filas[0].detalle).toMatch(/62 %/);
-    expect(JSON.stringify(f.filas)).not.toMatch(/probabilidad/i);
-    expect(f.texto).toMatch(/no son una probabilidad/i);
+    expect(f.texto).toMatch(/sector/i);
+    expect(f.texto).not.toMatch(/%|probabilidad|ponderad/i);
   });
 
-  it('explica cómo se calculó y deja claro que es referencial', () => {
+  it('deja claro que es referencial', () => {
     const f = Asistente.formatearBusqueda(resultado, { aproximados: [], temaNoSoportado: null, radioGlobalM: null });
     expect(f.texto).toMatch(/referencial/i);
-    expect(f.texto).toMatch(/1[ ,.]?200/);
   });
 
   it('declara las aproximaciones y los temas sin datos', () => {
@@ -542,7 +539,7 @@ describe('Asistente.formatearBusqueda', () => {
     expect(f.texto).toMatch(/tranquil/i);
     expect(f.texto).toMatch(/aproxim/i);
     expect(f.texto).toMatch(/seguridad/i);
-    expect(f.texto).toMatch(/1000 m/); // los umbrales se dicen siempre en metros, como en la ficha
+    expect(f.texto).toMatch(/1 km/); // la distancia que dio la persona se repite en palabras llanas
   });
 
   it('el aviso de aproximación concuerda en número y solo menciona los datos que faltan de lo pedido', () => {

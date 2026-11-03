@@ -15,6 +15,7 @@
  */
 const Comparar = (() => {
   const C = typeof Calculos !== 'undefined' ? Calculos : require('./calculos.js'); // eslint-disable-line no-undef
+  const RT = typeof Rutas !== 'undefined' ? Rutas : require('./rutas.js'); // eslint-disable-line no-undef
 
   const MAX_CANDIDATOS = 3;
   const CLAVE_PRIORIDADES = 'geoverificador.prioridades';
@@ -32,6 +33,9 @@ const Comparar = (() => {
     { id: 'quebradas', titulo: 'Quebradas y cauces', ayuda: 'A la distancia mínima de una quebrada o río que fijes en «Mis umbrales». Sin tu umbral solo es informativo' },
   ];
   const IDS = VARIABLES.map((v) => v.id);
+  /** Filas informativas de mercado: precio de oferta del distrito (Aptología). Nunca prioridad, cumple ni puntaje. */
+  const MERCADO = [{ id: 'precio', titulo: 'Precio de oferta del distrito (por m²)' }];
+  const P = typeof Precios !== 'undefined' ? Precios : require('./precios.js'); // eslint-disable-line no-undef
   /** Filas informativas de la tabla: contexto, nunca prioridad. */
   const CONTEXTO = [
     { id: 'peligros', titulo: 'Peligros geológicos registrados' },
@@ -67,6 +71,13 @@ const Comparar = (() => {
     umbralM: r && esNumero(r.umbralM) ? r.umbralM : null,
     nombre: r && esTexto(r.nombre) ? r.nombre : null,
   });
+
+  /** Líneas de SmartBus del punto, solo lo que se muestra (null si no se calcularon o fallaron: nunca se inventan). */
+  function lineasDe(transporte) {
+    const r = transporte && transporte.rutas;
+    if (!r || r.error || !Array.isArray(r.lineas) || !esNumero(r.distanciaM)) return null;
+    return { distanciaM: r.distanciaM, lineas: r.lineas.map((l) => ({ linea: l.linea, empresas: l.empresas })), fecha: esTexto(r.fecha) ? r.fecha : null };
+  }
 
   function variableZonificacion(zona) {
     if (!zona) return { estado: 'SIN DATO', texto: 'Fuera del área zonificada', codigo: null, nombre: null, bordeM: null };
@@ -110,16 +121,34 @@ const Comparar = (() => {
     hasta: s && esTexto(s.hasta) ? s.hasta : null,
   });
 
+  // Precio de oferta del distrito (resultado de Precios.buscar): solo lo necesario para la fila, sin decidir nada.
+  function variablePrecio(p) {
+    const venta = p && p.estado === 'INFORMATIVO' && p.precioM2 && esNumero(p.precioM2.venta) ? p.precioM2.venta : null;
+    if (venta === null) {
+      return { estado: 'SIN DATO', distrito: p && esTexto(p.distrito) ? p.distrito : null, ventaM2: null, nAvisos: null, corte: null, url: null, causa: p && esTexto(p.causa) ? p.causa : null };
+    }
+    return {
+      estado: 'INFORMATIVO',
+      distrito: esTexto(p.distrito) ? p.distrito : null,
+      ventaM2: venta,
+      nAvisos: p.nAvisos && esNumero(p.nAvisos.venta) ? p.nAvisos.venta : null,
+      corte: p.periodo && esTexto(p.periodo.corte) ? p.periodo.corte : null,
+      url: esTexto(p.url) ? p.url : null,
+      causa: null,
+    };
+  }
+
   /**
    * Instantánea de un punto con lo que la ficha ya calculó.
    *   entrada: { lat, lon, etiqueta, distrito, zona, entorno, cauce, contexto }
    *     entorno  = resultado de Equipamiento.evaluar
    *     cauce    = resultado de Contexto.quebradas (si falta, la variable queda SIN DATO)
    *     contexto = { peligros, sismos } de Contexto (si faltan, esas filas quedan SIN DATO)
+   *     precio   = resultado de Precios.buscar (si falta, la fila de precio queda SIN DATO)
    * Devuelve null si falta lo mínimo (coordenadas o el entorno), para no guardar un punto a medias.
    */
   function crearCandidato(entrada) {
-    const { lat, lon, etiqueta = '', distrito = '', zona = null, entorno = null, cauce = null, contexto = null } = entrada || {};
+    const { lat, lon, etiqueta = '', distrito = '', zona = null, entorno = null, cauce = null, contexto = null, precio = null } = entrada || {};
     if (!esNumero(lat) || !esNumero(lon) || !entorno || !entorno.educacion) return null;
     const niveles = Object.fromEntries(NIVELES.map((n) => [n, servicio(entorno.educacion[n])]));
     return {
@@ -133,11 +162,12 @@ const Comparar = (() => {
         zonificacion: variableZonificacion(zona),
         salud: servicio(entorno.salud),
         educacion: { estado: estadoEducacion(niveles), niveles },
-        transporte: servicio(entorno.transporte),
+        transporte: { ...servicio(entorno.transporte), rutas: lineasDe(entorno.transporte) },
         areaVerde: servicio(entorno.areaVerde),
         quebradas: variableQuebradas(cauce),
       },
       contexto: { peligros: contextoPeligros(contexto && contexto.peligros), sismos: contextoSismos(contexto && contexto.sismos) },
+      precio: variablePrecio(precio),
     };
   }
 
@@ -268,7 +298,11 @@ const Comparar = (() => {
         partes: NIVELES.map((n) => ({ etiqueta: n.charAt(0).toUpperCase() + n.slice(1), estado: v.niveles[n].estado, texto: linea(v.niveles[n]) })),
       };
     }
-    return { estado: v.estado, partes: [{ texto: linea(v) }] };
+    const partes = [{ texto: linea(v) }];
+    if (id === 'transporte' && v.rutas) {
+      partes.push({ texto: v.rutas.lineas.length ? `Líneas a ${fmtRef(v.rutas.distanciaM)} o menos: ${RT.listaTexto(v.rutas.lineas, 6)}` : `Ninguna línea de SmartBus a ${fmtRef(v.rutas.distanciaM)} o menos` });
+    }
+    return { estado: v.estado, partes };
   }
 
   /** Filas de contexto (peligros y sismos): estado INFORMATIVO o SIN DATO y líneas de texto. Nunca son prioridad. */
@@ -283,6 +317,23 @@ const Comparar = (() => {
     const partes = [{ texto: `${v.total} sismo${v.total === 1 ? '' : 's'} a ${v.radioM / 1000} km o menos (en línea recta)` }];
     if (v.magnitudMaxima !== null) partes.push({ texto: `Magnitud máxima: ${String(v.magnitudMaxima).replace('.', ',')}` });
     if (v.desde && v.hasta) partes.push({ texto: `Periodo: ${v.desde} a ${v.hasta}` });
+    return { estado: 'INFORMATIVO', partes };
+  }
+
+  /**
+   * Fila de mercado (precio de oferta del distrito): INFORMATIVO o SIN DATO, nunca CUMPLE / NO CUMPLE. Dos puntos del mismo
+   * distrito muestran la misma cifra: es el promedio del distrito, no el precio del inmueble. Los puntos guardados antes de
+   * existir esta fila no tienen `precio` y quedan SIN DATO.
+   */
+  function celdaMercado(candidato) {
+    const v = candidato.precio;
+    if (!v || v.estado !== 'INFORMATIVO' || !esNumero(v.ventaM2)) {
+      return { estado: 'SIN DATO', partes: [{ texto: v && v.causa ? `Sin dato: ${v.causa}` : 'Sin dato' }] };
+    }
+    const partes = [{ texto: `${P.formatearSoles(v.ventaM2)} por m² (mediana de oferta en venta)` }];
+    partes.push({ texto: `Mediana de ${candidato.distrito || 'el distrito'}, no de este inmueble${v.nAvisos !== null ? ` · ${v.nAvisos} avisos` : ''}` });
+    if (v.corte) partes.push({ texto: `Datos con corte al ${P.fechaLarga(v.corte)}` });
+    partes.push({ texto: 'Datos: Aptologia (CC BY 4.0)', url: v.url });
     return { estado: 'INFORMATIVO', partes };
   }
 
@@ -307,6 +358,12 @@ const Comparar = (() => {
         titulo: v.titulo,
         prioritaria: false,
         celdas: lista.map((c) => ({ candidatoId: c.id, ...celdaContexto(c, v.id), mejor: false })),
+      })),
+      mercado: MERCADO.map((v) => ({
+        id: v.id,
+        titulo: v.titulo,
+        prioritaria: false,
+        celdas: lista.map((c) => ({ candidatoId: c.id, ...celdaMercado(c), mejor: false })),
       })),
     };
   }
@@ -359,9 +416,9 @@ const Comparar = (() => {
   }
 
   return {
-    MAX_CANDIDATOS, VARIABLES, CONTEXTO, NIVELES, CLAVE_PRIORIDADES, CLAVE_CANDIDATOS,
+    MAX_CANDIDATOS, VARIABLES, CONTEXTO, MERCADO, NIVELES, CLAVE_PRIORIDADES, CLAVE_CANDIDATOS,
     estadoEducacion, crearCandidato, conUmbrales, agregar, quitar, estaGuardado,
-    normalizarPrioridades, alternar, evaluarPrioridades, quienesCumplen, dominancias, celda, celdaContexto, filas, fmtDist,
+    normalizarPrioridades, alternar, evaluarPrioridades, quienesCumplen, dominancias, celda, celdaContexto, celdaMercado, filas, fmtDist,
     leerPrioridades, guardarPrioridades, leerCandidatos, guardarCandidatos,
   };
 })();

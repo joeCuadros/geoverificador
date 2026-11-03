@@ -14,6 +14,7 @@ const AsistenteLLM = (() => {
   // Se resuelve al usarlo: el servidor valida y verifica sin necesitar el motor de búsqueda.
   const motor = () => (typeof Asistente !== 'undefined' ? Asistente : require('./asistente.js')); // eslint-disable-line no-undef
 
+
   const esObjeto = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
   const esNumero = (n) => typeof n === 'number' && Number.isFinite(n);
   const ausente = (v) => v === undefined || v === null;
@@ -21,18 +22,21 @@ const AsistenteLLM = (() => {
   // ------------------------------------------------------------------ Esquema
 
   const INTENCIONES = [
-    'buscar', 'zona', 'construir', 'cambio_zonificacion', 'resumen', 'quebradas', 'sismos', 'peligros', 'servicio_cercano',
-    'fuentes', 'ayuda', 'saludo', 'fuera_de_alcance', 'desconocido',
+    'buscar', 'zona', 'construir', 'cambio_zonificacion', 'resumen', 'quebradas', 'sismos', 'peligros', 'servicio_cercano', 'rutas', 'precio_distrito',
+    'fuentes', 'ayuda', 'saludo', 'fuera_de_alcance', 'desconocido', 'contar_en_distrito', 'perfil_distrito', 'mejor_zona',
   ];
   const CRITERIOS = ['salud', 'colegio', 'inicial', 'primaria', 'secundaria', 'transporte', 'areaVerde', 'campina', 'residencial', 'tranquilo', 'comercial', 'historico', 'lejosQuebrada'];
   const SERVICIOS = ['salud', 'colegio', 'inicial', 'primaria', 'secundaria', 'transporte', 'areaVerde'];
   const MODOS = ['nuevo', 'agregar', 'quitar', 'priorizar'];
   const TEMAS = ['seguridad', 'precio', 'ruido'];
-  const CAMPOS = ['intencion', 'criterios', 'prioridades', 'distancias', 'radioM', 'lejosQuebradaM', 'incluirCondicional', 'cercaDeMiPunto', 'modo', 'loteM2', 'tema'];
+  const CAMPOS = ['intencion', 'criterios', 'prioridades', 'distancias', 'radioM', 'lejosQuebradaM', 'incluirCondicional', 'cercaDeMiPunto', 'modo', 'loteM2', 'tema', 'distrito'];
 
   // Rangos a los que se ajustan las distancias y el lote (en metros y m²). Un valor fuera de rango se recorta, no se rechaza.
   const RANGOS = { radioM: [100, 5000], lejosQuebradaM: [50, 5000], distanciaM: [50, 5000], loteM2: [10, 100000] };
   const MAX_ITEMS = 12;
+  const MAX_DISTRITO = 60;
+  // Un nombre de distrito: letras (con tildes), espacios y algún signo de nombres propios. Nada que parezca una instrucción.
+  const FORMA_DISTRITO = /^[\p{L}\p{M} .'’-]{2,60}$/u;
 
   /** Declaración de la única función que el modelo puede llamar (formato functionDeclarations de la API de Gemini). */
   const HERRAMIENTA = {
@@ -44,7 +48,7 @@ const AsistenteLLM = (() => {
         intencion: {
           type: 'string',
           enum: INTENCIONES,
-          description: 'buscar = encontrar zonas de la ciudad por lo que importa a la persona; zona = qué zona es su punto; construir = cuánto se puede construir en su punto; cambio_zonificacion = si el plan nuevo cambiará la zonificación; resumen = resumen/ficha del punto; quebradas, sismos, peligros = contexto de riesgo del punto; servicio_cercano = si hay un servicio cerca de su punto; fuentes = de dónde salen los datos; ayuda; saludo; fuera_de_alcance = solo seguridad, precios o ruido; desconocido = no se entiende o no tiene relación.',
+          description: 'buscar = encontrar zonas de la ciudad por lo que importa a la persona; zona = qué zona es su punto; construir = cuánto se puede construir en su punto; cambio_zonificacion = si el plan nuevo cambiará la zonificación; resumen = resumen/ficha del punto; quebradas, sismos, peligros = contexto de riesgo del punto; servicio_cercano = si hay un servicio cerca de su punto; precio_distrito = precio de oferta por m² promedio de un distrito (por ejemplo «cuánto cuesta el m² en Cayma»); rutas = qué líneas de bus o combi pasan cerca de su punto o por un distrito (distrito = el distrito; vacío si pregunta por su punto); fuentes = de dónde salen los datos; ayuda; saludo; fuera_de_alcance = solo seguridad, ruido, el precio de una casa o terreno en particular, alquileres o búsquedas por precio; contar_en_distrito = cuántos colegios, postas, paraderos o parques hay en un distrito (criterios = lo que se cuenta, distrito = el distrito); perfil_distrito = la persona habla de un distrito sin pedir algo concreto («quiero vivir en Paucarpata», «cómo es Cayma»); mejor_zona = pide la mejor zona o dónde vivir sin nombrar un distrito ni decir qué le importa; desconocido = no se entiende o no tiene relación.',
         },
         criterios: {
           type: 'array',
@@ -78,10 +82,14 @@ const AsistenteLLM = (() => {
           description: 'nuevo (por defecto) = búsqueda nueva. agregar, quitar o priorizar = ajuste de la búsqueda anterior («agrega transporte», «quita el parque», «prioriza el colegio»); solo si ya hubo una búsqueda.',
         },
         loteM2: { type: 'number', description: 'Área del lote en m² cuando la persona la menciona (intencion construir).' },
+        distrito: {
+          type: 'string',
+          description: 'Nombre del distrito de la provincia de Arequipa que la persona nombra, tal como lo escribió (con sus errores de tipeo): nunca lo corrijas ni inventes uno. Obligatorio en contar_en_distrito y perfil_distrito; en rutas y precio_distrito solo si nombra un distrito (vacío si habla de su punto: «por aquí», «cerca de mí»); en buscar solo si pide buscar dentro de un distrito.',
+        },
         tema: {
           type: 'string',
           enum: TEMAS,
-          description: 'Si la persona menciona seguridad, precios o ruido (datos que el asistente no tiene), el tema; también en una búsqueda que lo incluye.',
+          description: 'Si la persona menciona seguridad, ruido o el precio de un inmueble concreto, un alquiler o zonas por precio (datos que el asistente no tiene), el tema; también en una búsqueda que lo incluye.',
         },
       },
       required: ['intencion'],
@@ -103,6 +111,15 @@ const AsistenteLLM = (() => {
       if (!lista.includes(x)) lista.push(x);
     }
     return { lista };
+  }
+
+  function leerDistrito(v) {
+    if (ausente(v)) return { valor: null };
+    if (typeof v !== 'string') return { error: 'distrito_no_es_texto' };
+    const t = v.trim();
+    if (t === '') return { error: 'distrito_vacio' };
+    if (t.length > MAX_DISTRITO || !FORMA_DISTRITO.test(t)) return { error: 'distrito_invalido' };
+    return { valor: t };
   }
 
   function leerNumero(v, rango, campo) {
@@ -136,6 +153,8 @@ const AsistenteLLM = (() => {
     if (!ausente(args.cercaDeMiPunto) && typeof args.cercaDeMiPunto !== 'boolean') return rechazo('cercaDeMiPunto_no_es_booleano');
     if (!ausente(args.modo) && !MODOS.includes(args.modo)) return rechazo('modo_invalido');
     if (!ausente(args.tema) && !TEMAS.includes(args.tema)) return rechazo('tema_invalido');
+    const distrito = leerDistrito(args.distrito);
+    if (distrito.error) return rechazo(distrito.error);
 
     let distancias = [];
     if (!ausente(args.distancias)) {
@@ -159,6 +178,7 @@ const AsistenteLLM = (() => {
       modo: args.modo || 'nuevo',
       loteM2: lote.valor,
       tema: args.tema || null,
+      distrito: distrito.valor,
     };
 
     if (spec.intencion === 'buscar') {
@@ -175,12 +195,22 @@ const AsistenteLLM = (() => {
     }
 
     // Las demás intenciones no usan los campos de búsqueda: se vacían para que no se cuelen.
-    const limpio = { ...spec, criterios: [], prioridades: [], distancias: [], radioM: null, lejosQuebradaM: null, incluirCondicional: false, cercaDeMiPunto: false, modo: 'nuevo' };
+    const limpio = { ...spec, criterios: [], prioridades: [], distancias: [], radioM: null, lejosQuebradaM: null, incluirCondicional: false, cercaDeMiPunto: false, modo: 'nuevo', distrito: null };
+    if (spec.intencion === 'rutas') limpio.distrito = spec.distrito;
+    if (spec.intencion === 'contar_en_distrito' || spec.intencion === 'perfil_distrito') {
+      if (spec.distrito === null) return rechazo('distrito_ausente');
+      limpio.distrito = spec.distrito;
+    }
+    if (spec.intencion === 'contar_en_distrito') {
+      limpio.criterios = spec.criterios.filter((c) => SERVICIOS.includes(c));
+      if (limpio.criterios.length === 0) return rechazo('contar_sin_criterios');
+    }
     if (spec.intencion === 'servicio_cercano') {
       limpio.criterios = spec.criterios.filter((c) => SERVICIOS.includes(c));
       if (limpio.criterios.length === 0) return rechazo('servicio_sin_criterios');
     }
     if (spec.intencion !== 'construir') limpio.loteM2 = null;
+    if (spec.intencion === 'precio_distrito') limpio.distrito = spec.distrito; // vacío = el distrito de su punto
     if (spec.intencion === 'fuera_de_alcance' && !spec.tema) return rechazo('fuera_de_alcance_sin_tema');
     return { ok: true, spec: limpio };
   }
@@ -208,8 +238,15 @@ const AsistenteLLM = (() => {
 
   const TIPO_DE_INTENCION = {
     zona: 'zona', construir: 'construir', cambio_zonificacion: 'pdm', resumen: 'ficha', quebradas: 'quebrada', sismos: 'sismos',
-    peligros: 'peligros', fuentes: 'fuentes', ayuda: 'ayuda', saludo: 'saludo',
+    peligros: 'peligros', fuentes: 'fuentes', ayuda: 'ayuda', saludo: 'saludo', mejor_zona: 'mejor_zona', precio_distrito: 'precio',
   };
+  const distritos = () => (typeof Distritos !== 'undefined' ? Distritos : require('./distritos.js')); // eslint-disable-line no-undef
+
+  /** El distrito que dijo el modelo, resuelto con el mismo buscador de nombres que usan las reglas. null si no es un distrito de la provincia. */
+  function resolverDistrito(texto) {
+    const r = distritos().buscarNombre(texto, { admitirCiudad: true });
+    return r ? { distrito: r.distrito, distritoFuera: !r.enDatos } : null;
+  }
 
   /**
    * Convierte una consulta ya validada en la intención que entiende el motor (la misma estructura de Asistente.interpretar).
@@ -219,7 +256,16 @@ const AsistenteLLM = (() => {
     const A = motor();
     const vacia = A.interpretar('');
     if (spec.intencion === 'desconocido') return vacia;
+    if (spec.intencion === 'mejor_zona') return { ...vacia, tipo: 'mejor_zona' };
+    const conDistrito = ['contar_en_distrito', 'perfil_distrito'].includes(spec.intencion) || (['rutas', 'precio_distrito'].includes(spec.intencion) && spec.distrito) || (spec.intencion === 'buscar' && spec.distrito);
+    const dis = conDistrito ? resolverDistrito(spec.distrito) : null;
+    if (conDistrito && !dis) return { ...vacia, tipo: 'distrito_desconocido', distritoTexto: spec.distrito };
+    if (spec.intencion === 'perfil_distrito') return { ...vacia, tipo: 'perfil', ...dis };
+    if (spec.intencion === 'contar_en_distrito') {
+      return { ...vacia, tipo: 'contar', criterios: spec.criterios.map((id) => ({ id, umbralM: null, prioridad: 1 })), ...dis };
+    }
     if (spec.intencion === 'fuera_de_alcance') return { ...vacia, tipo: 'no_soportado', temaNoSoportado: spec.tema };
+    if (spec.intencion === 'rutas') return { ...vacia, tipo: 'rutas', ...(dis || {}) };
     if (spec.intencion === 'servicio_cercano') {
       return { ...vacia, tipo: 'servicio', criterios: spec.criterios.map((id) => ({ id, umbralM: null, prioridad: 1 })) };
     }
@@ -239,9 +285,14 @@ const AsistenteLLM = (() => {
         const c = q.criterios.find((x) => x.id === d.criterio);
         if (c) c.umbralM = d.metros;
       });
-      return { ...q, modo, temaNoSoportado: spec.tema };
+      return { ...q, modo, temaNoSoportado: spec.tema, ...(dis || {}) };
     }
-    return { ...vacia, tipo: TIPO_DE_INTENCION[spec.intencion] || 'desconocido', lote: spec.intencion === 'construir' ? spec.loteM2 : null };
+    return {
+      ...vacia,
+      tipo: TIPO_DE_INTENCION[spec.intencion] || 'desconocido',
+      lote: spec.intencion === 'construir' ? spec.loteM2 : null,
+      ...(spec.intencion === 'precio_distrito' ? dis || {} : {}),
+    };
   }
 
   /**
@@ -426,10 +477,31 @@ const AsistenteLLM = (() => {
     }
   }
 
+  /**
+   * Lo que la vista dice del modo del chat y de qué se envía adónde. Solo «gemini» afirma que el texto llega al proveedor
+   * del modelo; cualquier otro valor se trata como reglas, para no prometer lo que no se sabe.
+   */
+  function textoModo(modo) {
+    if (modo === 'gemini') {
+      return {
+        modo: 'gemini',
+        etiqueta: 'Modo: Gemini',
+        ayuda: 'Gemini interpreta tu frase y redacta la respuesta; los datos, distancias y estados los calcula siempre el motor de la ficha.',
+        privacidad: 'Lo que escribes aquí se envía al proveedor del modelo (Gemini) para entender tu frase. No escribas tu dirección.',
+      };
+    }
+    return {
+      modo: 'reglas',
+      etiqueta: 'Modo: reglas',
+      ayuda: 'El asistente entiende tu frase con reglas fijas, sin IA. Entiende menos frases, pero los datos son los mismos de la ficha.',
+      privacidad: 'En modo reglas lo que escribes no se envía a ningún modelo.',
+    };
+  }
+
   return {
     HERRAMIENTA, INTENCIONES, CRITERIOS, MODOS, TEMAS, RANGOS, MAX_MENSAJE, MAX_TURNOS, MAX_TEXTO,
     validarSpec, sanitizarEstado, sanitizarHistorial, aIntencion, elegirIntencion, verificarTexto, limpiarTexto,
-    clasificarRespuesta, interpretar, redactar, disponible,
+    clasificarRespuesta, interpretar, redactar, disponible, textoModo,
   };
 })();
 

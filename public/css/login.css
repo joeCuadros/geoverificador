@@ -1,0 +1,64 @@
+/* ==========================================================================
+   Página de acceso opcional (login.html). Reutiliza los tokens, las fuentes y los controles de styles.css;
+   aquí solo viven la composición de la tarjeta y los mensajes.
+   ========================================================================== */
+
+body.pagina-login { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; background: var(--bg) var(--trama); }
+
+/* La marca de la barra es un enlace a la consulta. */
+.marca-enlace { color: inherit; text-decoration: none; border-radius: 10px; }
+.marca-nombre { font: 600 1.25rem/1.1 var(--font-display); letter-spacing: -.005em; }
+
+.login { flex: 1 1 auto; display: grid; justify-items: center; align-content: start; padding: 28px 16px 48px; }
+.login:focus { outline: none; }
+.login-tarjeta {
+  width: min(100%, 520px); padding: 28px 24px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow);
+}
+.login-sobre { margin: 0 0 6px; font-size: .8125rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.login-tarjeta h1 { font: 600 1.75rem/1.15 var(--font-display); letter-spacing: -.01em; margin-bottom: 10px; }
+.login-tarjeta h1:focus-visible { outline: none; } /* solo recibe el foco para que el lector de pantalla lo lea */
+.login .promesa { max-width: 44ch; margin-bottom: 18px; }
+
+/* Enlaces con aspecto de botón (en styles.css .primary y .secondary se pensaron para <button>). */
+.login a.primary, .login a.secondary { text-decoration: none; }
+.login-acciones { display: grid; gap: 10px; margin: 0 0 22px; }
+.login-acciones .primary, .login-acciones .secondary { width: 100%; }
+.login-google[aria-disabled="true"] { opacity: .6; cursor: not-allowed; }
+.login-google[aria-busy="true"] { cursor: progress; }
+.login-sesion-texto { margin: 0; font-size: 1.0625rem; color: var(--ink-2); overflow-wrap: anywhere; }
+.login-sesion-texto strong { font-family: var(--font-display); font-weight: 650; color: var(--ink); }
+
+/* Mensajes: siempre con icono y texto, nunca solo color. */
+.login-aviso {
+  display: flex; align-items: flex-start; gap: 10px; margin: 0 0 16px; padding: 12px 14px;
+  border: 1.5px solid var(--tinta-soft-line); border-radius: var(--radius-sm); background: var(--tinta-soft); color: var(--ink);
+}
+.login-aviso .ico { margin-top: 2px; color: var(--tinta); }
+.login-aviso p { margin: 0; }
+.login-aviso.error { background: var(--no-bg); border-color: var(--no-line); }
+.login-aviso.error .ico { color: var(--no); }
+.login-aviso.error p { color: var(--no); font-weight: 600; }
+
+/* Nota de privacidad */
+.login-privacidad { padding-top: 16px; border-top: 1px solid var(--line-strong); }
+.login-privacidad h2 { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font: 650 1rem/1.3 var(--font-ui); }
+.login-privacidad .ico { color: var(--tinta); }
+.login-privacidad ul { margin: 0; padding-left: 1.2rem; color: var(--ink-2); font-size: .9375rem; }
+.login-privacidad li { margin-bottom: .4rem; }
+.login-privacidad li:last-child { margin-bottom: 0; }
+
+.login-sin-js { max-width: 520px; margin: 0 auto; padding: 0 16px 24px; text-align: center; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .login-tarjeta { animation: login-entra .32s cubic-bezier(.22, 1, .36, 1); }
+  @keyframes login-entra { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+}
+@media (prefers-reduced-motion: reduce) {
+  .login *, .login *::before, .login *::after { transition: none !important; animation: none !important; }
+}
+@media (max-width: 420px) {
+  .login { padding: 16px 12px 32px; }
+  .login-tarjeta { padding: 22px 16px; }
+  .login-tarjeta h1 { font-size: 1.5rem; }
+}

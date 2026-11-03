@@ -7,10 +7,12 @@
  * Los módulos fuera de alcance (peligros, zona sísmica, denuncias y registro de riesgos) siguen en el código pero se
  * ocultan con CONFIG.modulos; `?modulos=todos` en la URL los vuelve a mostrar.
  *
- * La pantalla sigue 3 pasos (ver onboarding.js): 1 ubicar el predio, 2 confirmar el punto y 3 leer el reporte.
- * El primer paso es la propia pantalla de inicio. La primera visita abre un recorrido guiado que se puede omitir y que se
- * vuelve a abrir con «¿Cómo funciona?» (tour.js, tour-ui.js). Cada servicio es una tarjeta desplegable; «Comparar puntos»
- * (comparar.js, comparar-ui.js) y las verificaciones antes de comprar (verificaciones.js) completan la ayuda a decidir.
+ * El recorrido de la visita es Inicio, guía breve y chat (recorrido.js, espacio-ui.js, tour.js, tour-ui.js). El chat es lo
+ * principal (asistente-ui.js) y el mapa dibuja las entidades reales de lo que se pide: colegios, parques, zonas, quebradas, sismos y los sectores encontrados (capas.js, capas-ui.js).
+ * La consulta de un punto es secundaria y vive en el panel «Buscar por punto», oculto por defecto; sigue 3 pasos (ver
+ * onboarding.js): 1 ubicar el predio, 2 confirmar el punto y 3 leer el reporte. Cada servicio es una tarjeta desplegable;
+ * «Comparar puntos» (comparar.js, comparar-ui.js) y las verificaciones antes de comprar (verificaciones.js) completan la
+ * ayuda a decidir.
  */
 (() => {
   'use strict';
@@ -58,6 +60,8 @@
     cauce: null,         // resultado de Contexto.quebradas para el punto actual (INFORMATIVO, o según el umbral de la persona)
     contextoRiesgo: null, // { peligros, sismos } de Contexto: contexto informativo, no una evaluación
     contextoSeq: 0,      // descarta respuestas de un punto anterior
+    precio: null,        // resultado de Precios.buscar para el distrito del punto (INFORMATIVO o SIN DATO; nunca cumple / no cumple)
+    precioSeq: 0,        // descarta respuestas de un punto anterior
   };
 
   // ------------------------------------------------------------------ Mapa
@@ -115,7 +119,7 @@
     $('layers-body').hidden = !open;
   }
   $('layers-toggle').addEventListener('click', () => setLayersOpen($('layers-body').hidden));
-  if (window.matchMedia('(max-width: 899px)').matches) setLayersOpen(false);
+  if (window.matchMedia('(max-width: 1199px)').matches) setLayersOpen(false);
 
   $('probar').addEventListener('click', () => {
     colocarPunto(CONFIG.center[0], CONFIG.center[1], { etiqueta: 'Plaza de Armas de Arequipa', vista: 17 });
@@ -145,6 +149,7 @@
     quebradas: { titulo: 'Quebradas y cauces', icono: 'quebrada' },
     peligros: { titulo: 'Peligros geológicos registrados', icono: 'aviso' },
     sismos: { titulo: 'Sismos recientes (IGP)', icono: 'sismo' },
+    precio: { titulo: 'Precio de oferta del distrito', icono: 'precio' },
   };
   const colorMapa = (nombre) => getComputedStyle(document.documentElement).getPropertyValue(nombre).trim() || '#1c3a6b';
   const sinMovimiento = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -179,12 +184,6 @@
     $('resultado').hidden = nuevo.paso !== 'reporte';
     $('mover-panel').hidden = !nuevo.moviendo;
     $('btn-mover').setAttribute('aria-expanded', String(nuevo.moviendo));
-    const actual = Onboarding.numeroDePaso(nuevo.paso);
-    document.querySelectorAll('.stepper li').forEach((li) => {
-      const n = Onboarding.numeroDePaso(li.dataset.paso);
-      if (n === actual) li.setAttribute('aria-current', 'step'); else li.removeAttribute('aria-current');
-      li.classList.toggle('hecho', n < actual);
-    });
     // Solo se arrastra el marcador mientras se confirma el punto.
     if (state.pointMarker) {
       if (nuevo.paso === 'confirmar') state.pointMarker.dragging.enable(); else state.pointMarker.dragging.disable();
@@ -253,6 +252,7 @@
   // Elige o mueve el punto (paso 1 o 2). En el reporte el mapa no cambia el punto: eso se hace con «Cambiar».
   function colocarPunto(lat, lon, { etiqueta = null, vista = null, aviso = '', conservarMover = false } = {}) {
     if (state.flujo.paso === 'reporte') return;
+    EspacioUI.abrirPunto({ foco: false }); // elegir un punto abre «Buscar por punto» (si ya estaba abierto, no hace nada)
     state.point = { lat, lon };
     if (etiqueta !== null) {
       state.etiqueta = etiqueta;
@@ -301,7 +301,11 @@
   });
   $('btn-mover').addEventListener('click', () => aplicarFlujo(Onboarding.transicion(state.flujo, 'mover'), { foco: false }));
 
-  map.on('click', (e) => colocarPunto(e.latlng.lat, e.latlng.lng));
+  // Tocar el mapa abre el panel «Buscar por punto». Con el reporte abierto el punto no cambia: se cambia con «Cambiar».
+  map.on('click', (e) => {
+    if (state.flujo.paso === 'reporte') { EspacioUI.abrirPunto(); return; }
+    colocarPunto(e.latlng.lat, e.latlng.lng);
+  });
 
   // «Sí, verificar»: pasa al reporte y lanza todas las consultas locales.
   $('btn-verificar').addEventListener('click', () => {
@@ -314,11 +318,13 @@
   function consultar() {
     const { lat, lon } = state.point;
     state.anunciado = false;
+    state.resumenChat = null;
     drawCircle();
     updateZona();
     if (MODULOS.riesgos) state.evaluacion = Riesgos.leerEvaluacion(lat, lon);
     updateEntorno();
     updateContexto();
+    updatePrecio();
     if (MODULOS.desastre) updatePeligro();
     if (state.distritoStatus === 'none' || state.distritoStatus === 'error') updateDistrito();
     if (MODULOS.seguridad) updateDelito();
@@ -702,6 +708,28 @@
       state.anunciado = true;
       anunciar(textoResumen());
     }
+    resumenLlano();
+  }
+
+  // Resumen en palabras de todos los días: encabeza la ficha y se publica una vez en el chat (resumen.js). Espera a tener
+  // la zona, los servicios, el distrito y el cauce más cercano; no calcula nada nuevo.
+  function resumenLlano() {
+    const listo = state.zonaStatus !== 'none' && state.zonaStatus !== 'loading' && state.entorno && state.cauce
+      && state.distritoStatus !== 'none' && state.distritoStatus !== 'loading';
+    if (!state.point || !listo) return;
+    const r = Resumen.punto({
+      distrito: state.distritoStatus === 'ok' ? state.distrito.distrito : null,
+      zona: state.zonaStatus === 'ok' ? state.zona : null,
+      entorno: state.entorno,
+      cauce: state.cauce,
+    });
+    $('ficha-resumen-lineas').innerHTML = r.lineas.map((l) => `<p>${esc(l)}</p>`).join('');
+    $('ficha-resumen').hidden = false;
+    const clave = `${state.point.lat},${state.point.lon}`;
+    if (state.resumenChat !== clave) {
+      state.resumenChat = clave;
+      AsistenteUI.publicarPunto({ ...r, etiqueta: state.etiqueta });
+    }
   }
 
   // ------------------------------------------------------------ Gestión de riesgos
@@ -1061,7 +1089,8 @@
   const QUE_NO_CUBRE = {
     salud: 'Solo cuenta lo mapeado en OpenStreetMap con etiquetas de salud. No dice si atiende emergencias, su horario ni su categoría, y la distancia es en línea recta, no recorrido a pie.',
     educacion: 'OpenStreetMap casi no etiqueta el nivel: un colegio sin nivel se toma como candidato a primaria y secundaria, y los jardines cuentan como inicial. No dice si es público o privado, ni si hay vacantes.',
-    transporte: 'Un paradero no es un servicio: no hay rutas, horarios ni frecuencias, y las paradas informales (combis, micros) rara vez están completas.',
+    transporte: 'Un paradero no es un servicio: el de OpenStreetMap no dice qué líneas lo usan, su horario ni su frecuencia, y las paradas informales (combis, micros) rara vez están completas.',
+    rutas: 'Son los recorridos que SmartBus publicó en la fecha indicada, no un servicio garantizado: no traen frecuencias ni horarios, y un cambio de ruta por tramos puede no estar reflejado. La distancia es al trazado, no a donde se puede subir. Una línea de otra empresa que SmartBus no publica no aparece.',
     areaVerde: `Solo cuenta polígonos cerrados en OpenStreetMap de al menos ${fmtNum(CONFIG.umbrales.areaVerde.areaMinM2)} m²; una plaza mapeada de otra forma no cuenta. No dice si el acceso es público ni cómo está mantenida.`,
   };
 
@@ -1072,6 +1101,32 @@
       <div><dt>Fecha de los datos</dt><dd>${esc(fmtFechaDato(r.fecha))}</dd></div>
       ${metodo ? `<div><dt>Método</dt><dd>${esc(r.metodo)}</dd></div>` : ''}
       <div><dt>Qué no cubre</dt><dd>${esc(noCubre)}</dd></div>
+    </dl>`;
+  }
+
+  // Líneas de SmartBus que pasan cerca del punto (Rutas.cerca): otra fuente distinta del paradero de OpenStreetMap.
+  function bloqueRutas(t) {
+    const r = t && t.rutas;
+    if (!r) return '';
+    if (r.error) return `<div class="var-rutas"><p class="zon-msg error"><strong>No se pudieron cargar las líneas.</strong> ${esc(r.error)}</p></div>`;
+    const ref = fmtUmbral(r.distanciaM);
+    const nota = `<p class="var-meta">Fuente: ${esc(r.fuente)}, recorridos del ${esc(fmtFechaDato(r.fecha))}. Distancia de referencia de ${ref}: ${esc(CONFIG.fuentesUmbral.transporte.toLowerCase())}.</p>`;
+    if (!r.lineas.length) return `<div class="var-rutas"><p class="var-rutas-t"><strong>Líneas que pasan a ≤${ref}:</strong> ninguna en los recorridos publicados por SmartBus.</p>${nota}</div>`;
+    const items = r.lineas.map((l) => {
+      const ramales = [...new Set(l.ramales.map((x) => x.ramal))];
+      const parada = l.parada ? ` · parada más cercana «${esc(l.parada.nombre)}» a ${fmtDist(l.parada.distanciaM)}` : '';
+      return `<li><strong>${esc(Rutas.etiquetaLinea(l))}</strong><span class="var-meta">trazado a ${fmtDist(l.distanciaM)}${parada} · ${esc(ramales.slice(0, 4).join(', '))}${ramales.length > 4 ? ` y ${ramales.length - 4} más` : ''}</span></li>`;
+    }).join('');
+    return `<div class="var-rutas"><p class="var-rutas-t"><strong>Líneas que pasan a ≤${ref}:</strong> ${esc(Rutas.listaTexto(r.lineas))}</p><ul class="var-rutas-lista">${items}</ul>${nota}</div>`;
+  }
+
+  function detalleRutas(r) {
+    if (!r || r.error) return '';
+    return `<dl class="var-detalle">
+      <div><dt>Fuente de las líneas</dt><dd>${esc(r.fuente)}. Datos usados con ${esc(r.permiso || CONFIG.rutas.permiso)}.</dd></div>
+      <div><dt>Fecha de los datos</dt><dd>${esc(fmtFechaDato(r.fecha))} (descarga)</dd></div>
+      <div><dt>Método</dt><dd>Distancia en línea recta del punto al trazado de cada recorrido (plano local, como el resto de distancias). Se agrupan los recorridos de ida y vuelta por línea. Referencia: ${fmtUmbral(r.distanciaM)}.</dd></div>
+      <div><dt>Qué no cubre</dt><dd>${esc(QUE_NO_CUBRE.rutas)}</dd></div>
     </dl>`;
   }
 
@@ -1121,8 +1176,10 @@
     const educacion = tarjetaVariable(VARIABLES.educacion, estadoEdu, resumenEdu,
       `<div class="var-niveles">${niveles}</div>${detalleDato(e.educacion.inicial, QUE_NO_CUBRE.educacion, { metodo: false })}`, textoEdu);
 
-    const transporte = tarjetaVariable(VARIABLES.transporte, e.transporte.estado, lineaResumen(e.transporte),
-      datoPrincipal(e.transporte) + explicacion(e.transporte, 'paraderos') + etiq(e.transporte) + detalleDato(e.transporte, QUE_NO_CUBRE.transporte));
+    const rutas = e.transporte.rutas;
+    const resumenTransporte = lineaResumen(e.transporte) + (rutas && !rutas.error ? ` · ${rutas.lineas.length} ${rutas.lineas.length === 1 ? 'línea' : 'líneas'} a ≤${fmtUmbral(rutas.distanciaM)}` : '');
+    const transporte = tarjetaVariable(VARIABLES.transporte, e.transporte.estado, resumenTransporte,
+      datoPrincipal(e.transporte) + explicacion(e.transporte, 'paraderos') + etiq(e.transporte) + bloqueRutas(e.transporte) + detalleDato(e.transporte, QUE_NO_CUBRE.transporte) + detalleRutas(rutas));
 
     const v = e.areaVerde;
     const u = CONFIG.umbrales.areaVerde;
@@ -1137,7 +1194,7 @@
     $('entorno').setAttribute('aria-busy', 'false');
     $('entorno-toggle').hidden = false;
     actualizarToggleTarjetas();
-    $('entorno-fuente').textContent = 'Distancias en línea recta, no recorrido a pie. OpenStreetMap es colaborativo: algo ausente puede existir. Las distancias de referencia de salud, paradero y borde de zona son convenciones del proyecto.';
+    $('entorno-fuente').textContent = 'Distancias en línea recta, no recorrido a pie. OpenStreetMap es colaborativo: algo ausente puede existir. Las distancias de referencia de salud, paradero y borde de zona son convenciones del proyecto. Las líneas de transporte son recorridos publicados por SmartBus, sin frecuencias ni horarios.';
   }
 
   // ------------------------------------------------------ Quebradas y cauces (ANA)
@@ -1310,6 +1367,74 @@
     renderResumen();
   }
 
+  // ------------------------------------------------------ Precio de oferta del distrito (Aptología, CC BY 4.0)
+  // Informativo: es el promedio de lo que piden los vendedores en el distrito, no el valor de este inmueble.
+  const QUE_NO_CUBRE_PRECIO = 'Son precios pedidos en avisos de venta, no de cierre ni una tasación. Es la mediana del distrito, no el precio de este inmueble: una vivienda concreta puede costar mucho más o menos según su estado, tamaño, piso y ubicación exacta. Solo cubre departamentos y los distritos con al menos 30 avisos; no hay cifra para casas ni terrenos. Refleja un periodo corto, así que no muestra tendencia.';
+
+  function tarjetaPrecio(p) {
+    if (p.estado === 'SIN DATO') {
+      return tarjetaVariable(VARIABLES.precio, 'SIN DATO', 'Sin dato de precio para este distrito', `<p class="zon-msg empty"><strong>Sin dato.</strong> ${esc(p.causa)}</p>
+        <dl class="var-detalle"><div><dt>Qué no cubre</dt><dd>${esc(QUE_NO_CUBRE_PRECIO)}</dd></div></dl>`);
+    }
+    const url = enlaceSeguro(p.url);
+    const atribucion = url ? `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(p.atribucion)}<span class="sr-only"> (se abre en una pestaña nueva)</span></a>` : esc(p.atribucion);
+    const venta = p.precioM2.venta;
+    const nombre = capitalizar(p.distrito);
+    const periodo = Precios.textoPeriodo(p.periodo);
+    const nAv = p.nAvisos.venta;
+    const resumen = `${Precios.formatearSoles(venta)} por m² · mediana de ${nAv} avisos de venta · oferta, no cierre`;
+    const arriendo = p.arriendoMensual !== null
+      ? `<p class="var-meta">Arriendo mensual (mediana, ${p.nAvisos.arriendo ?? '?'} avisos): ${esc(Precios.formatearSoles(p.arriendoMensual))} por mes, sin administración ni gastos comunes.</p>` : '';
+    const cuerpo = `<div class="var-dato">
+        <p class="var-dist">${esc(Precios.formatearSoles(venta))} <small>por m², precio de oferta en venta</small></p>
+        <p class="var-nombre">Distrito de ${esc(nombre)} · mediana de ${fmtNum(nAv)} avisos de departamentos · ${esc(periodo)}</p>
+        ${arriendo}
+        <p class="var-meta">${atribucion}</p>
+      </div>
+      <p class="var-explica"><strong>Informativo.</strong> Es lo que piden los vendedores en el distrito, no el valor de este inmueble. No dice si un precio es caro o barato, y no entra en tus prioridades ni en ningún puntaje.</p>
+      <dl class="var-detalle">
+        <div><dt>Fuente</dt><dd>${esc(p.fuente)}. Licencia ${esc(p.licencia)}</dd></div>
+        <div><dt>Fecha de los datos</dt><dd>${esc(periodo.charAt(0).toUpperCase() + periodo.slice(1))}. Datos congelados el ${esc(fmtFechaDato(p.fechaDescarga))}</dd></div>
+        <div><dt>Método</dt><dd>Mediana del precio pedido por m² de departamentos en venta, con avisos deduplicados entre portales y solo con área declarada. Aptología publica la cifra solo si el distrito tiene al menos ${esc(p.muestraMinima ?? 30)} avisos.</dd></div>
+        <div><dt>Qué no cubre</dt><dd>${esc(QUE_NO_CUBRE_PRECIO)}</dd></div>
+      </dl>`;
+    return tarjetaVariable(VARIABLES.precio, 'INFORMATIVO', resumen, cuerpo, 'Informativo');
+  }
+
+  function renderPrecio() {
+    const host = $('precio');
+    if (!state.precio) {
+      host.setAttribute('aria-busy', 'true');
+      host.innerHTML = '<p class="zon-msg loading"><span class="spinner"></span>Buscando el precio de oferta del distrito…</p>';
+      $('precio-fuente').textContent = '';
+      return;
+    }
+    const abierta = host.querySelector('details.var-card')?.open;
+    host.innerHTML = tarjetaPrecio(state.precio);
+    if (abierta) host.querySelector('details.var-card').open = true;
+    host.setAttribute('aria-busy', 'false');
+    $('precio-fuente').textContent = 'Informativo: precios de avisos, no de cierre, y promedio del distrito, no del inmueble. Solo hay cifra en los distritos con suficientes avisos.';
+  }
+
+  async function updatePrecio() {
+    const seq = ++state.precioSeq;
+    const { lat, lon } = state.point;
+    state.precio = null;
+    renderPrecio();
+    let resultado;
+    try {
+      const [d, datos] = await Promise.all([Distritos.lookup(lat, lon), Precios.load()]);
+      resultado = Precios.buscar(datos, d ? d.distrito : null);
+    } catch (err) {
+      console.error('[Precios] fallo', err);
+      resultado = { estado: 'SIN DATO', distrito: null, causa: `No se pudo leer el precio del distrito: ${err.message}`, motivo: 'sin_archivo' };
+    }
+    if (seq !== state.precioSeq) return; // la persona ya eligió otro punto
+    state.precio = resultado;
+    renderPrecio();
+    CompararUI.refrescar();
+  }
+
   // «Abrir todas» / «Cerrar todas» las tarjetas de servicios.
   const tarjetas = () => [...$('entorno').querySelectorAll('details.var-card')];
   function actualizarToggleTarjetas() {
@@ -1404,6 +1529,7 @@
       resumen.push(['Salud', linea(e.salud)]);
       Equipamiento.NIVELES.forEach((n) => resumen.push([`Educación ${n}`, linea(e.educacion[n])]));
       resumen.push(['Transporte', linea(e.transporte)]);
+      if (e.transporte.rutas && !e.transporte.rutas.error) resumen.push(['Líneas de transporte', Rutas.resumen(e.transporte.rutas, 12)]);
       resumen.push(['Área verde', linea(e.areaVerde)]);
     }
     const modulos = {};
@@ -1440,6 +1566,7 @@
       variables: e,
       cauce: state.cauce,                 // quebradas: INFORMATIVO, o cumple / no cumple según el umbral de la persona
       contextoRiesgo: state.contextoRiesgo, // peligros geológicos y sismos (informativo)
+      precio: state.precio,               // precio de oferta por m² del distrito (informativo, Aptología CC BY 4.0)
       verificaciones: { calculado: Verificaciones.CALCULADO, items: Verificaciones.ITEMS, aviso: Verificaciones.AVISO },
       umbrales: CONFIG.umbrales,
       fuentesUmbral: CONFIG.fuentesUmbral,
@@ -1468,6 +1595,7 @@
       educacion: state.entorno && state.entorno.educacion,
       transporte: state.entorno && state.entorno.transporte,
       area_verde: state.entorno && state.entorno.areaVerde && { ...state.entorno.areaVerde, forma: undefined },
+      precio_oferta_distrito: state.precio,
       umbrales: CONFIG.umbrales,
       fuentes_umbral: CONFIG.fuentesUmbral,
     };
@@ -1529,6 +1657,7 @@
   // ------------------------------------------------------------- Asistente de chat
   // «Consultar ese punto» desde el chat: deja el punto elegido y abre su reporte, como si se hubiera pulsado «Sí, verificar».
   function consultarPunto(lat, lon, etiqueta) {
+    EspacioUI.abrirPunto({ foco: false });
     if (state.flujo.paso === 'reporte') {
       limpiarMapa();
       aplicarFlujo(Onboarding.transicion(state.flujo, 'cambiar'), { foco: false });
@@ -1539,12 +1668,32 @@
     aplicarFlujo(nuevo);
     consultar();
   }
-  AsistenteUI.iniciar({ map, obtenerPunto: () => state.point, consultarPunto, umbrales: () => state.umbrales });
+  // El chat es lo principal. Dibuja en el mapa las entidades de cada búsqueda y de cada conteo (CapasUI) y puede pedir que se vea el mapa.
+  AsistenteUI.iniciar({
+    map,
+    obtenerPunto: () => state.point,
+    consultarPunto,
+    umbrales: () => state.umbrales,
+    mostrarMapa: () => EspacioUI.mostrarMapa(),
+    mapaVisible: () => EspacioUI.mapaVisible(),
+    alBuscar: (que) => CapasUI.mostrar(que),
+    verSector: (n) => CapasUI.enfocarSector(n),
+    abrirFicha: () => { EspacioUI.abrirPunto({ foco: false }); $('resultado').scrollIntoView({ block: 'start' }); },
+    abrirVerificaciones: () => { EspacioUI.abrirPunto({ foco: false }); $('verif-detalle').open = true; $('verif-detalle').scrollIntoView({ block: 'start' }); },
+    guardarParaComparar: () => {
+      const b = $('btn-guardar');
+      if (b.dataset.modo === 'guardar' && !b.disabled) { b.click(); return 'Guardé este punto para comparar. Puedes verlo junto con los otros en «Comparar».'; }
+      if (b.dataset.modo === 'quitar') return 'Este punto ya está guardado. Lo ves en «Comparar».';
+      return 'Todavía no puedo guardarlo: espera a que termine de calcular el punto o revisa si ya tienes el máximo de puntos guardados.';
+    },
+  });
+  CapasUI.iniciar({ map, datos: (opciones) => AsistenteUI.datosParaMapa(opciones), mapaVisible: () => EspacioUI.mapaVisible() });
+  EspacioUI.iniciar({ map, enfocarPunto: () => $(PASO_TITULO[state.flujo.paso]) });
 
   // ------------------------------------------------------------- Comparar puntos
   // Instantánea del punto actual con lo que la ficha ya calculó; null mientras la consulta no termina.
   function candidatoActual() {
-    if (!state.point || !state.entorno || !state.cauce || !state.contextoRiesgo || state.zonaStatus === 'loading' || state.zonaStatus === 'none') return null;
+    if (!state.point || !state.entorno || !state.cauce || !state.contextoRiesgo || !state.precio || state.zonaStatus === 'loading' || state.zonaStatus === 'none') return null;
     const distrito = state.distritoStatus === 'ok' ? capitalizar(state.distrito.distrito) : '';
     return Comparar.crearCandidato({
       lat: state.point.lat,
@@ -1555,6 +1704,7 @@
       entorno: state.entorno,
       cauce: state.cauce,
       contexto: state.contextoRiesgo,
+      precio: state.precio,
     });
   }
   CompararUI.iniciar({ punto: () => state.point, candidatoActual, umbrales: () => state.umbrales });
@@ -1575,8 +1725,13 @@
   $('verif-calculado').innerHTML = Verificaciones.CALCULADO.map((c) => `<li><strong>${esc(c.titulo)}.</strong> ${esc(c.texto)}</li>`).join('');
   $('verif-aviso').textContent = Verificaciones.AVISO;
 
-  TourUI.iniciar();
+  // Créditos: el periodo de los precios sale del propio archivo congelado. Si no carga, queda el texto genérico.
+  Precios.load().then((datos) => {
+    $('credito-precio').textContent = `${Precios.textoPeriodo(datos.periodo)}, descargado el ${Precios.fechaLarga(datos.fecha_descarga)}; solo distritos con al menos ${datos.muestra_minima} avisos`;
+  }).catch(() => {});
+
+  // La guía (TourUI) la inicia EspacioUI: va después del Inicio.
 
   // Ayuda para verificar desde la consola del navegador (F12)
-  window.osmDebug = { map, state, MODULOS, Calculos, Services, Zonificacion, Equipamiento, Peligros, Distritos, Riesgos, Delitos, Asistente };
+  window.osmDebug = { map, state, MODULOS, Calculos, Services, Zonificacion, Equipamiento, Peligros, Distritos, Riesgos, Delitos, Precios, Asistente, Entidades, Sectores, Capas, CapasUI, EspacioUI };
 })();
