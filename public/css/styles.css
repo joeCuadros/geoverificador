@@ -413,6 +413,10 @@ input[type="search"]:focus-visible, input[type="number"]:focus-visible, select:f
 .var-vacio { margin: 0; color: var(--ink-2); font-size: .9375rem; }
 .var-meta { margin: 0; font-size: .8125rem; line-height: 1.45; color: var(--muted); }
 .var-meta b { font-weight: 650; color: var(--ink-2); }
+.var-rutas { display: grid; gap: 6px; padding-top: 10px; border-top: 1px solid var(--line); }
+.var-rutas-t { margin: 0; font-size: .9375rem; color: var(--ink-2); }
+.var-rutas-lista { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.var-rutas-lista li { display: grid; gap: 1px; }
 .var-nivel { border-top: 1px solid var(--line); padding-top: 10px; display: grid; gap: 4px; }
 .var-nivel:first-of-type { border-top: 0; padding-top: 0; }
 .var-nivel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }

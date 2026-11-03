@@ -111,6 +111,14 @@ const Rutas = (() => {
     });
   }
 
+  // Quién publica los datos y bajo qué permiso: acompaña a todo resultado para que se muestre junto a él.
+  const citaDe = (indice) => ({
+    fuente: indice.metadata.fuente || FUENTE,
+    fecha: indice.metadata.fecha_descarga || null,
+    permiso: indice.metadata.permiso || null,
+    atribucion: indice.metadata.atribucion || ATRIBUCION,
+  });
+
   /**
    * Líneas cuyo recorrido pasa a `distanciaM` metros o menos del punto.
    * Devuelve { distanciaM, lineas, rutas, fuente, fecha } con `lineas` ordenadas de la más cercana a la más lejana:
@@ -128,7 +136,7 @@ const Rutas = (() => {
       if (d <= distanciaM) hits.push({ ruta, distanciaM: d });
     });
     const lineas = agruparPorLinea(hits, { lat, lon }, indice).sort((a, b) => a.distanciaM - b.distanciaM || compararLineas(a.linea, b.linea));
-    return { distanciaM, lineas, rutas: hits.length, fuente: indice.metadata.fuente || FUENTE, fecha: indice.metadata.fecha_descarga || null };
+    return { distanciaM, lineas, rutas: hits.length, ...citaDe(indice) };
   }
 
   // Puntos de un trazado con tramos de a lo más PASO_DENSIFICAR_M, para no perder un distrito que cae entre dos vértices.
@@ -165,7 +173,7 @@ const Rutas = (() => {
    */
   function cruzan(indice, geometria) {
     const polys = poligonosDe(geometria);
-    const out = { lineas: [], rutas: 0, fuente: indice.metadata.fuente || FUENTE, fecha: indice.metadata.fecha_descarga || null };
+    const out = { lineas: [], rutas: 0, ...citaDe(indice) };
     if (!polys.length) return out;
     const bb = bboxDePoligonos(polys);
     const dentroBbox = (x, y) => x >= bb[0] && x <= bb[2] && y >= bb[1] && y <= bb[3];

@@ -222,7 +222,7 @@ const CompararUI = (() => {
     }
     const fechas = [...new Set(candidatos.map((c) => c.fechaDatos).filter(Boolean))];
     $('comparar-fuente').textContent = hay
-      ? `Zonificación: plano del PDM Arequipa 2016-2025. Salud, colegios, paraderos y áreas verdes: OpenStreetMap${fechas.length ? `, datos del ${fechas.join(' y del ')}` : ''}. Quebradas: red hidrográfica de la ANA. Peligros geológicos: INGEMMET. Sismos: IGP. Distancias en línea recta. Esta tabla muestra lo que la herramienta calculó y es referencial; lo que tú debes comprobar (certificados, partida registral, servicios, peligros) está en «Verificaciones recomendadas antes de comprar», en el reporte.`
+      ? `Zonificación: plano del PDM Arequipa 2016-2025. Salud, colegios, paraderos y áreas verdes: OpenStreetMap${fechas.length ? `, datos del ${fechas.join(' y del ')}` : ''}. Líneas de transporte: recorridos de SmartBus (smartbus.app), sin frecuencias ni horarios. Quebradas: red hidrográfica de la ANA. Peligros geológicos: INGEMMET. Sismos: IGP. Distancias en línea recta. Esta tabla muestra lo que la herramienta calculó y es referencial; lo que tú debes comprobar (certificados, partida registral, servicios, peligros) está en «Verificaciones recomendadas antes de comprar», en el reporte.`
       : '';
   }
 
