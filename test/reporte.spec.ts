@@ -1,6 +1,6 @@
 /**
  * Pruebas de las funciones puras de public/js/reporte.js que arman el informe imprimible (PDF): quebradas y cauces,
- * contexto de riesgo, verificaciones antes de comprar y el orden de las secciones. No usan DOM: devuelven HTML como texto.
+ * contexto de riesgo, precio de oferta del distrito, verificaciones antes de comprar y el orden de las secciones. No usan DOM: devuelven HTML como texto.
  *
  * Lo que fijan: el estado INFORMATIVO se rotula como tal (y «según tu umbral» solo con el umbral de la persona), toda
  * distancia dice «en línea recta», el contexto no se presenta como evaluación, y las verificaciones separan lo que la
@@ -23,6 +23,12 @@ const sismos = (extra = {}) => ({
   estado: 'INFORMATIVO', radioM: 100000, total: 49, magnitudMaxima: 4.7, masReciente: '2026-10-11', desde: '2026-01-01', hasta: '2026-11-02',
   fuente: 'Sismos reportados, Instituto Geofísico del Perú (IGP)', fecha: '2026-11-02', ...extra,
 });
+const precio = (extra = {}) => ({
+  estado: 'INFORMATIVO', distrito: 'CAYMA', precioM2: { venta: 4905, alquiler: null }, arriendoMensual: null, moneda: 'PEN',
+  periodo: { desde: '2026-10-11', hasta: '2026-10-18', corte: '2026-10-18' }, nAvisos: { venta: 118, arriendo: null }, muestraMinima: 30,
+  tipo: 'precio de oferta (avisos), no de cierre', fuente: 'Aptología (aptologia.com)', url: 'https://example.org/estudio', licencia: 'CC BY 4.0',
+  atribucion: 'Datos: Aptologia', fechaDescarga: '2026-11-03', ...extra,
+});
 const verif = () => ({ calculado: Verificaciones.CALCULADO, items: Verificaciones.ITEMS, aviso: Verificaciones.AVISO });
 
 const base = (extra = {}) => ({
@@ -31,7 +37,7 @@ const base = (extra = {}) => ({
   variables: null, umbrales: { areaVerde: { areaMinM2: 5000, areaGrandeM2: 10000, distanciaM: 300 } },
   fuentesUmbral: { salud: 'x', educacion: 'x', transporte: 'x', areaVerde: 'x' }, modulos: {},
   fuentes: { zonificacion: 'Plano del PDM', peligros: 'p', distritos: 'd', delitos: 'e' },
-  cauce: cauce(), contextoRiesgo: { peligros: peligros(), sismos: sismos() }, verificaciones: verif(), ...extra,
+  cauce: cauce(), contextoRiesgo: { peligros: peligros(), sismos: sismos() }, precio: precio(), verificaciones: verif(), ...extra,
 });
 
 describe('Reporte.seccionQuebradas', () => {
@@ -133,6 +139,46 @@ describe('Reporte.seccionContexto', () => {
   });
 });
 
+describe('Reporte.seccionPrecio', () => {
+  it('muestra el precio por m² como INFORMATIVO, con distrito, avisos, periodo y atribución', () => {
+    const h = Reporte.seccionPrecio(base());
+    expect(h).toContain('INFORMATIVO');
+    expect(h).toContain('4 905');
+    expect(h).toContain('118');
+    expect(h).toContain('CAYMA');
+    expect(h).toContain('11 de octubre de 2026');
+    expect(h).toContain('Datos: Aptologia');
+    expect(h).toContain('CC BY 4.0');
+  });
+
+  it('dice lo que no cubre: oferta y no cierre, promedio del distrito y no del inmueble, y que no es un puntaje', () => {
+    const h = Reporte.seccionPrecio(base());
+    expect(h).toMatch(/no de cierre/);
+    expect(h).toMatch(/no el valor de este inmueble|no el precio de este inmueble/);
+    expect(h).toMatch(/ningún puntaje/);
+    expect(h).not.toMatch(/NO CUMPLE|>CUMPLE</);
+  });
+
+  it('sin cifra para el distrito queda SIN DATO con la causa', () => {
+    const h = Reporte.seccionPrecio(base({ precio: { estado: 'SIN DATO', distrito: 'YURA', causa: 'No hay cifra publicada para este distrito.', motivo: 'sin_muestra' } }));
+    expect(h).toContain('SIN DATO');
+    expect(h).toContain('No hay cifra publicada');
+    expect(h).not.toContain('INFORMATIVO');
+  });
+
+  it('sin el precio calculado lo dice', () => {
+    expect(Reporte.seccionPrecio(base({ precio: null }))).toMatch(/No se calculó el precio/);
+  });
+
+  it('entra al resumen como INFORMATIVO y su fuente lleva la atribución', () => {
+    const fila = Reporte.filasResumenExtra(base()).find(([k]: [string]) => k.startsWith('Precio de oferta'));
+    expect(fila[1]).toMatch(/^INFORMATIVO/);
+    const sec = Reporte.construirSecciones(base()).find((x: { titulo: string }) => x.titulo.startsWith('Precio de oferta'));
+    expect(sec.fuente).toContain('Datos: Aptologia');
+    expect(Reporte.limites(base()).join(' ')).toMatch(/precio de oferta/i);
+  });
+});
+
 describe('Reporte.seccionVerificaciones', () => {
   it('separa lo que la herramienta calculó de lo que la persona debe comprobar', () => {
     const h = Reporte.seccionVerificaciones(base());
@@ -178,7 +224,7 @@ describe('Reporte.filasResumenExtra', () => {
   it('agrega al resumen quebradas y contexto, con su estado y en línea recta', () => {
     const f = Reporte.filasResumenExtra(base());
     const txt = JSON.stringify(f);
-    expect(f.map((x: string[]) => x[0])).toEqual(['Quebradas y cauces', 'Peligros geológicos registrados (contexto)', 'Sismos recientes (contexto)']);
+    expect(f.map((x: string[]) => x[0])).toEqual(['Quebradas y cauces', 'Peligros geológicos registrados (contexto)', 'Sismos recientes (contexto)', 'Precio de oferta del distrito (informativo)']);
     expect(txt).toContain('INFORMATIVO');
     expect(txt).toContain('568 m en línea recta');
     expect(txt).toContain('2026-01-01');
@@ -190,7 +236,7 @@ describe('Reporte.filasResumenExtra', () => {
   });
 
   it('sin datos calculados no agrega filas', () => {
-    expect(Reporte.filasResumenExtra(base({ cauce: null, contextoRiesgo: null }))).toEqual([]);
+    expect(Reporte.filasResumenExtra(base({ cauce: null, contextoRiesgo: null, precio: null }))).toEqual([]);
   });
 });
 
@@ -200,7 +246,7 @@ describe('Reporte.construirSecciones', () => {
   it('incluye quebradas, contexto de riesgo y verificaciones, en ese orden tras las 5 variables', () => {
     expect(titulos(base())).toEqual([
       'Zonificación vigente y proyectada', 'Salud', 'Educación por nivel', 'Transporte', 'Área verde',
-      'Quebradas y cauces', 'Contexto de riesgo (informativo)', 'Verificaciones recomendadas antes de comprar',
+      'Quebradas y cauces', 'Contexto de riesgo (informativo)', 'Precio de oferta del distrito (informativo)', 'Verificaciones recomendadas antes de comprar',
     ]);
   });
 

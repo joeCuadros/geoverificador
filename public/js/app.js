@@ -58,6 +58,8 @@
     cauce: null,         // resultado de Contexto.quebradas para el punto actual (INFORMATIVO, o según el umbral de la persona)
     contextoRiesgo: null, // { peligros, sismos } de Contexto: contexto informativo, no una evaluación
     contextoSeq: 0,      // descarta respuestas de un punto anterior
+    precio: null,        // resultado de Precios.buscar para el distrito del punto (INFORMATIVO o SIN DATO; nunca cumple / no cumple)
+    precioSeq: 0,        // descarta respuestas de un punto anterior
   };
 
   // ------------------------------------------------------------------ Mapa
@@ -145,6 +147,7 @@
     quebradas: { titulo: 'Quebradas y cauces', icono: 'quebrada' },
     peligros: { titulo: 'Peligros geológicos registrados', icono: 'aviso' },
     sismos: { titulo: 'Sismos recientes (IGP)', icono: 'sismo' },
+    precio: { titulo: 'Precio de oferta del distrito', icono: 'precio' },
   };
   const colorMapa = (nombre) => getComputedStyle(document.documentElement).getPropertyValue(nombre).trim() || '#1c3a6b';
   const sinMovimiento = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -319,6 +322,7 @@
     if (MODULOS.riesgos) state.evaluacion = Riesgos.leerEvaluacion(lat, lon);
     updateEntorno();
     updateContexto();
+    updatePrecio();
     if (MODULOS.desastre) updatePeligro();
     if (state.distritoStatus === 'none' || state.distritoStatus === 'error') updateDistrito();
     if (MODULOS.seguridad) updateDelito();
@@ -1310,6 +1314,74 @@
     renderResumen();
   }
 
+  // ------------------------------------------------------ Precio de oferta del distrito (Aptología, CC BY 4.0)
+  // Informativo: es el promedio de lo que piden los vendedores en el distrito, no el valor de este inmueble.
+  const QUE_NO_CUBRE_PRECIO = 'Son precios pedidos en avisos de venta, no de cierre ni una tasación. Es la mediana del distrito, no el precio de este inmueble: una vivienda concreta puede costar mucho más o menos según su estado, tamaño, piso y ubicación exacta. Solo cubre departamentos y los distritos con al menos 30 avisos; no hay cifra para casas ni terrenos. Refleja un periodo corto, así que no muestra tendencia.';
+
+  function tarjetaPrecio(p) {
+    if (p.estado === 'SIN DATO') {
+      return tarjetaVariable(VARIABLES.precio, 'SIN DATO', 'Sin dato de precio para este distrito', `<p class="zon-msg empty"><strong>Sin dato.</strong> ${esc(p.causa)}</p>
+        <dl class="var-detalle"><div><dt>Qué no cubre</dt><dd>${esc(QUE_NO_CUBRE_PRECIO)}</dd></div></dl>`);
+    }
+    const url = enlaceSeguro(p.url);
+    const atribucion = url ? `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(p.atribucion)}<span class="sr-only"> (se abre en una pestaña nueva)</span></a>` : esc(p.atribucion);
+    const venta = p.precioM2.venta;
+    const nombre = capitalizar(p.distrito);
+    const periodo = Precios.textoPeriodo(p.periodo);
+    const nAv = p.nAvisos.venta;
+    const resumen = `${Precios.formatearSoles(venta)} por m² · mediana de ${nAv} avisos de venta · oferta, no cierre`;
+    const arriendo = p.arriendoMensual !== null
+      ? `<p class="var-meta">Arriendo mensual (mediana, ${p.nAvisos.arriendo ?? '?'} avisos): ${esc(Precios.formatearSoles(p.arriendoMensual))} por mes, sin administración ni gastos comunes.</p>` : '';
+    const cuerpo = `<div class="var-dato">
+        <p class="var-dist">${esc(Precios.formatearSoles(venta))} <small>por m², precio de oferta en venta</small></p>
+        <p class="var-nombre">Distrito de ${esc(nombre)} · mediana de ${fmtNum(nAv)} avisos de departamentos · ${esc(periodo)}</p>
+        ${arriendo}
+        <p class="var-meta">${atribucion}</p>
+      </div>
+      <p class="var-explica"><strong>Informativo.</strong> Es lo que piden los vendedores en el distrito, no el valor de este inmueble. No dice si un precio es caro o barato, y no entra en tus prioridades ni en ningún puntaje.</p>
+      <dl class="var-detalle">
+        <div><dt>Fuente</dt><dd>${esc(p.fuente)}. Licencia ${esc(p.licencia)}</dd></div>
+        <div><dt>Fecha de los datos</dt><dd>${esc(periodo.charAt(0).toUpperCase() + periodo.slice(1))}. Datos congelados el ${esc(fmtFechaDato(p.fechaDescarga))}</dd></div>
+        <div><dt>Método</dt><dd>Mediana del precio pedido por m² de departamentos en venta, con avisos deduplicados entre portales y solo con área declarada. Aptología publica la cifra solo si el distrito tiene al menos ${esc(p.muestraMinima ?? 30)} avisos.</dd></div>
+        <div><dt>Qué no cubre</dt><dd>${esc(QUE_NO_CUBRE_PRECIO)}</dd></div>
+      </dl>`;
+    return tarjetaVariable(VARIABLES.precio, 'INFORMATIVO', resumen, cuerpo, 'Informativo');
+  }
+
+  function renderPrecio() {
+    const host = $('precio');
+    if (!state.precio) {
+      host.setAttribute('aria-busy', 'true');
+      host.innerHTML = '<p class="zon-msg loading"><span class="spinner"></span>Buscando el precio de oferta del distrito…</p>';
+      $('precio-fuente').textContent = '';
+      return;
+    }
+    const abierta = host.querySelector('details.var-card')?.open;
+    host.innerHTML = tarjetaPrecio(state.precio);
+    if (abierta) host.querySelector('details.var-card').open = true;
+    host.setAttribute('aria-busy', 'false');
+    $('precio-fuente').textContent = 'Informativo: precios de avisos, no de cierre, y promedio del distrito, no del inmueble. Solo hay cifra en los distritos con suficientes avisos.';
+  }
+
+  async function updatePrecio() {
+    const seq = ++state.precioSeq;
+    const { lat, lon } = state.point;
+    state.precio = null;
+    renderPrecio();
+    let resultado;
+    try {
+      const [d, datos] = await Promise.all([Distritos.lookup(lat, lon), Precios.load()]);
+      resultado = Precios.buscar(datos, d ? d.distrito : null);
+    } catch (err) {
+      console.error('[Precios] fallo', err);
+      resultado = { estado: 'SIN DATO', distrito: null, causa: `No se pudo leer el precio del distrito: ${err.message}`, motivo: 'sin_archivo' };
+    }
+    if (seq !== state.precioSeq) return; // la persona ya eligió otro punto
+    state.precio = resultado;
+    renderPrecio();
+    CompararUI.refrescar();
+  }
+
   // «Abrir todas» / «Cerrar todas» las tarjetas de servicios.
   const tarjetas = () => [...$('entorno').querySelectorAll('details.var-card')];
   function actualizarToggleTarjetas() {
@@ -1440,6 +1512,7 @@
       variables: e,
       cauce: state.cauce,                 // quebradas: INFORMATIVO, o cumple / no cumple según el umbral de la persona
       contextoRiesgo: state.contextoRiesgo, // peligros geológicos y sismos (informativo)
+      precio: state.precio,               // precio de oferta por m² del distrito (informativo, Aptología CC BY 4.0)
       verificaciones: { calculado: Verificaciones.CALCULADO, items: Verificaciones.ITEMS, aviso: Verificaciones.AVISO },
       umbrales: CONFIG.umbrales,
       fuentesUmbral: CONFIG.fuentesUmbral,
@@ -1468,6 +1541,7 @@
       educacion: state.entorno && state.entorno.educacion,
       transporte: state.entorno && state.entorno.transporte,
       area_verde: state.entorno && state.entorno.areaVerde && { ...state.entorno.areaVerde, forma: undefined },
+      precio_oferta_distrito: state.precio,
       umbrales: CONFIG.umbrales,
       fuentes_umbral: CONFIG.fuentesUmbral,
     };
@@ -1544,7 +1618,7 @@
   // ------------------------------------------------------------- Comparar puntos
   // Instantánea del punto actual con lo que la ficha ya calculó; null mientras la consulta no termina.
   function candidatoActual() {
-    if (!state.point || !state.entorno || !state.cauce || !state.contextoRiesgo || state.zonaStatus === 'loading' || state.zonaStatus === 'none') return null;
+    if (!state.point || !state.entorno || !state.cauce || !state.contextoRiesgo || !state.precio || state.zonaStatus === 'loading' || state.zonaStatus === 'none') return null;
     const distrito = state.distritoStatus === 'ok' ? capitalizar(state.distrito.distrito) : '';
     return Comparar.crearCandidato({
       lat: state.point.lat,
@@ -1555,6 +1629,7 @@
       entorno: state.entorno,
       cauce: state.cauce,
       contexto: state.contextoRiesgo,
+      precio: state.precio,
     });
   }
   CompararUI.iniciar({ punto: () => state.point, candidatoActual, umbrales: () => state.umbrales });
@@ -1575,8 +1650,13 @@
   $('verif-calculado').innerHTML = Verificaciones.CALCULADO.map((c) => `<li><strong>${esc(c.titulo)}.</strong> ${esc(c.texto)}</li>`).join('');
   $('verif-aviso').textContent = Verificaciones.AVISO;
 
+  // Créditos: el periodo de los precios sale del propio archivo congelado. Si no carga, queda el texto genérico.
+  Precios.load().then((datos) => {
+    $('credito-precio').textContent = `${Precios.textoPeriodo(datos.periodo)}, descargado el ${Precios.fechaLarga(datos.fecha_descarga)}; solo distritos con al menos ${datos.muestra_minima} avisos`;
+  }).catch(() => {});
+
   TourUI.iniciar();
 
   // Ayuda para verificar desde la consola del navegador (F12)
-  window.osmDebug = { map, state, MODULOS, Calculos, Services, Zonificacion, Equipamiento, Peligros, Distritos, Riesgos, Delitos, Asistente };
+  window.osmDebug = { map, state, MODULOS, Calculos, Services, Zonificacion, Equipamiento, Peligros, Distritos, Riesgos, Delitos, Precios, Asistente };
 })();

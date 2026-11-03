@@ -58,6 +58,12 @@ const CONFIG = {
     fuente: 'Norma E.030 Diseño Sismorresistente 2026 (MVCS), Anexo II; límites distritales del INEI vía GEOCATMIN',
   },
 
+  // Precio de OFERTA por m² del distrito (Aptología, CC BY 4.0): archivo congelado con scripts/descargar-precios.mjs.
+  // Es INFORMATIVO: nunca cumple / no cumple ni entra en un puntaje. La fuente, la licencia y el periodo viajan en el propio archivo.
+  precios: {
+    jsonUrl: 'data/precios_m2_distrito.json',
+  },
+
   // Peligros geológicos registrados: archivo local generado con scripts/descargar-peligros.mjs.
   peligros: {
     geojsonUrl: 'data/peligros_aqp.geojson',

@@ -143,7 +143,8 @@ const CompararUI = (() => {
 
   // La tabla (escritorio) y las tarjetas (móvil, hasta 480 px) se dibujan con las mismas filas de Comparar.filas.
   function partesHtml(cel) {
-    return cel.partes.map((p) => `<p class="celda-parte">${p.etiqueta ? `${miniEstado(p.estado)}<span class="celda-nivel">${esc(p.etiqueta)}</span> ` : ''}${esc(p.texto)}</p>`).join('');
+    const texto = (p) => (p.url && /^https?:\/\//.test(p.url) ? `<a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.texto)}<span class="sr-only"> (se abre en una pestaña nueva)</span></a>` : esc(p.texto));
+    return cel.partes.map((p) => `<p class="celda-parte">${p.etiqueta ? `${miniEstado(p.estado)}<span class="celda-nivel">${esc(p.etiqueta)}</span> ` : ''}${texto(p)}</p>`).join('');
   }
 
   function celdaHtml(cel, prioritaria) {
@@ -151,7 +152,8 @@ const CompararUI = (() => {
   }
 
   const textoContexto = 'Contexto de riesgo (informativo): no es una evaluación ni cuenta para tus prioridades';
-  const tagPrio = () => `<span class="tag-prio">${icono('estrella')}Tu prioridad</span>`;
+  const textoMercado = 'Precio de oferta (informativo): promedio del distrito, no del inmueble; no cuenta para tus prioridades';
+  const tagPrio =() => `<span class="tag-prio">${icono('estrella')}Tu prioridad</span>`;
 
   function tablaHtml(f, evals, ganan) {
     const cabeceras = candidatos.map((c, i) => `<th scope="col" class="col-punto${ganan.has(c.id) ? ' mejor' : ''}">
@@ -168,13 +170,21 @@ const CompararUI = (() => {
         <th scope="row"><span class="var-nombre-fila">${esc(v.titulo)}</span></th>
         ${v.celdas.map((cel) => celdaHtml(cel, false)).join('')}
       </tr>`).join('');
+    const filasMercado = f.mercado.map((v) => `<tr class="fila-contexto">
+        <th scope="row"><span class="var-nombre-fila">${esc(v.titulo)}</span></th>
+        ${v.celdas.map((cel) => celdaHtml(cel, false)).join('')}
+      </tr>`).join('');
     return `<table class="tabla-comparar" style="--cols:${candidatos.length}">
-      <caption class="sr-only">Comparación de ${candidatos.length} ${candidatos.length === 1 ? 'punto' : 'puntos'}. Cada celda indica el estado, la distancia en línea recta y la distancia de referencia (ref.). Las últimas filas son contexto de riesgo informativo.</caption>
+      <caption class="sr-only">Comparación de ${candidatos.length} ${candidatos.length === 1 ? 'punto' : 'puntos'}. Cada celda indica el estado, la distancia en línea recta y la distancia de referencia (ref.). Las últimas filas son contexto de riesgo y precio de oferta del distrito, solo informativos.</caption>
       <thead><tr><td class="esquina"><span class="sr-only">Variable</span></td>${cabeceras}</tr></thead>
       <tbody>${filas}</tbody>
       <tbody class="contexto-filas">
         <tr class="sep"><th scope="colgroup" colspan="${candidatos.length + 1}">${textoContexto}</th></tr>
         ${filasContexto}
+      </tbody>
+      <tbody class="contexto-filas">
+        <tr class="sep"><th scope="colgroup" colspan="${candidatos.length + 1}">${textoMercado}</th></tr>
+        ${filasMercado}
       </tbody>
     </table>`;
   }
@@ -194,7 +204,8 @@ const CompararUI = (() => {
       </section>`;
     return `<h3 class="carta-sep">Puntos guardados</h3>${puntos}
       <h3 class="carta-sep">Comparación por variable</h3>${f.variables.map(tarjeta).join('')}
-      <h3 class="carta-sep">${textoContexto}</h3>${f.contexto.map(tarjeta).join('')}`;
+      <h3 class="carta-sep">${textoContexto}</h3>${f.contexto.map(tarjeta).join('')}
+      <h3 class="carta-sep">${textoMercado}</h3>${f.mercado.map(tarjeta).join('')}`;
   }
 
   function render() {
@@ -222,7 +233,7 @@ const CompararUI = (() => {
     }
     const fechas = [...new Set(candidatos.map((c) => c.fechaDatos).filter(Boolean))];
     $('comparar-fuente').textContent = hay
-      ? `Zonificación: plano del PDM Arequipa 2016-2025. Salud, colegios, paraderos y áreas verdes: OpenStreetMap${fechas.length ? `, datos del ${fechas.join(' y del ')}` : ''}. Quebradas: red hidrográfica de la ANA. Peligros geológicos: INGEMMET. Sismos: IGP. Distancias en línea recta. Esta tabla muestra lo que la herramienta calculó y es referencial; lo que tú debes comprobar (certificados, partida registral, servicios, peligros) está en «Verificaciones recomendadas antes de comprar», en el reporte.`
+      ? `Zonificación: plano del PDM Arequipa 2016-2025. Salud, colegios, paraderos y áreas verdes: OpenStreetMap${fechas.length ? `, datos del ${fechas.join(' y del ')}` : ''}. Quebradas: red hidrográfica de la ANA. Peligros geológicos: INGEMMET. Sismos: IGP. Precio de oferta del distrito: Aptología (CC BY 4.0), precios de avisos y no de cierre. Distancias en línea recta. Esta tabla muestra lo que la herramienta calculó y es referencial; lo que tú debes comprobar (certificados, partida registral, servicios, peligros) está en «Verificaciones recomendadas antes de comprar», en el reporte.`
       : '';
   }
 

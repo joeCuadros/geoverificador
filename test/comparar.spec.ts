@@ -491,3 +491,48 @@ describe('Comparar.filas', () => {
     expect(f.variables.every((x: { celdas: unknown[] }) => x.celdas.length === 0)).toBe(true);
   });
 });
+
+describe('Comparar: precio de oferta del distrito (fila informativa)', () => {
+  const precioCayma = {
+    estado: 'INFORMATIVO', distrito: 'CAYMA', precioM2: { venta: 4905, alquiler: null }, arriendoMensual: null,
+    periodo: { corte: '2026-10-18' }, nAvisos: { venta: 118, arriendo: null }, url: 'https://example.org/estudio',
+  };
+
+  it('guarda el precio del distrito en el candidato sin tocar las variables ni las prioridades', () => {
+    const c = crear({ precio: precioCayma });
+    expect(c.precio).toMatchObject({ estado: 'INFORMATIVO', ventaM2: 4905, nAvisos: 118, corte: '2026-10-18' });
+    expect(Object.keys(c.variables)).toEqual(['zonificacion', 'salud', 'educacion', 'transporte', 'areaVerde', 'quebradas']);
+    expect(Comparar.VARIABLES.map((v: { id: string }) => v.id)).not.toContain('precio');
+  });
+
+  it('la fila es INFORMATIVO con precio, promedio del distrito, avisos, corte y atribución; nunca CUMPLE ni NO CUMPLE', () => {
+    const celda = Comparar.celdaMercado(crear({ distrito: 'Cayma', precio: precioCayma }));
+    expect(celda.estado).toBe('INFORMATIVO');
+    const texto = celda.partes.map((p: { texto: string }) => p.texto).join(' | ');
+    expect(texto).toContain('4 905');
+    expect(texto).toMatch(/no de este inmueble/);
+    expect(texto).toContain('118 avisos');
+    expect(texto).toContain('18 de octubre de 2026');
+    expect(celda.partes[celda.partes.length - 1]).toEqual({ texto: 'Datos: Aptologia (CC BY 4.0)', url: 'https://example.org/estudio' });
+    expect(['CUMPLE', 'NO CUMPLE']).not.toContain(celda.estado);
+  });
+
+  it('un distrito sin cifra o un punto sin precio queda SIN DATO con la causa', () => {
+    const sin = crear({ precio: { estado: 'SIN DATO', distrito: 'YURA', causa: 'La fuente no publica cifra para este distrito.' } });
+    expect(Comparar.celdaMercado(sin).estado).toBe('SIN DATO');
+    expect(Comparar.celdaMercado(sin).partes[0].texto).toContain('La fuente no publica cifra');
+    expect(Comparar.celdaMercado(crear()).estado).toBe('SIN DATO');
+    const viejo = { ...crear(), precio: undefined }; // punto guardado antes de existir la fila
+    expect(Comparar.celdaMercado(viejo).estado).toBe('SIN DATO');
+  });
+
+  it('filas() trae el bloque mercado aparte, sin prioridad, y un punto viejo guardado sigue siendo válido', () => {
+    const a = crear({ precio: precioCayma });
+    const f = Comparar.filas([a], []);
+    expect(f.mercado).toHaveLength(1);
+    expect(f.mercado[0]).toMatchObject({ id: 'precio', prioritaria: false });
+    expect(f.mercado[0].celdas[0].mejor).toBe(false);
+    const almacen = { getItem: () => JSON.stringify([{ ...a, precio: undefined }]), setItem: () => undefined };
+    expect(Comparar.leerCandidatos(almacen)).toHaveLength(1);
+  });
+});
