@@ -5,7 +5,7 @@ Resumen del estado técnico. El detalle de fuentes y límites está en [`METODOL
 ## Qué funciona
 
 - **Cinco variables por separado** con su fuente y umbral: zonificación vigente (V1a), aviso de zonificación proyectada (V1b), salud, educación por nivel, transporte y área verde. Los cálculos se hacen en el navegador, con archivos locales.
-- **Verificación automática:** 494 pruebas unitarias (`pnpm test`) y 104 comprobaciones de integridad y cálculo (`pnpm datos:verificar`), en la última corrida.
+- **Verificación automática:** 884 pruebas unitarias (`pnpm test`) y 118 comprobaciones de integridad y cálculo (`pnpm datos:verificar`), en la última corrida.
 - **Zonificación contrastada:** las reglas coinciden con el Reglamento y con la Memoria oficial (201 valores numéricos, ninguno faltante). Los polígonos se re-extrajeron del PDF del plano con 99,97 % de coincidencia en 13 255 puntos al azar.
 - **Equipamiento de OpenStreetMap** congelado en `public/data/equipamiento`, con la fecha de extracción y la atribución ODbL.
 - **Líneas de transporte de SmartBus** congeladas en `public/data/rutas_smartbus.geojson` (12 líneas, 241 recorridos, 9 301 paradas; descarga del 2026-11-03), visibles en la ficha, la comparación, el informe y el asistente. Se usan con **autorización verbal de SmartBus; la confirmación escrita está pendiente** (ver Pendiente). Son recorridos publicados: sin frecuencias ni horarios (METODOLOGIA §6c).
