@@ -46,6 +46,30 @@ El botón **Asistente** de la barra superior abre un chat que usa los mismos dat
 
 Las reglas y sus límites están en [`docs/METODOLOGIA.md`](docs/METODOLOGIA.md), §11.
 
+## Inicio de sesión opcional (Google)
+
+La aplicación funciona completa sin cuenta. Si el servidor tiene configurado Google como proveedor de identidad, la barra superior muestra una entrada discreta «Iniciar sesión» (o «Hola, nombre») que lleva a `login.html`, con un enlace «Continuar sin cuenta». Si falta la configuración o el sitio es estático, la entrada no aparece y nada más cambia.
+
+- **Cómo funciona:** OpenID Connect con código de autorización y PKCE (S256), `state` y `nonce`. El navegador va a Google, vuelve a `/api/auth/callback`, y el servidor canjea el código con el secreto del cliente y valida los reclamos del ID token (`iss`, `aud`, `exp`, `nonce`). No añade dependencias: usa `crypto` y `fetch` de Node.
+- **Qué lee y qué guarda:** pide solo `openid profile`. Guarda `sub` (identificador opaco) y `name`; no pide el correo ni la foto, y no guarda ningún token de Google. No hay base de datos ni almacén en el servidor.
+- **Sesión:** una cookie firmada con HMAC-SHA256 (`HttpOnly`, `SameSite=Lax`, `Secure` si `AUTH_BASE_URL` es https, con prefijo `__Host-` en ese caso) que dura 7 días. «Cerrar sesión» es un `POST` que solo acepta peticiones del mismo origen.
+- **Endpoints** (mismos en Vercel y en Nest; la lógica está en `api/_lib/auth.js`):
+  - `GET /api/auth/google` inicia el flujo.
+  - `GET /api/auth/callback` lo termina y abre la sesión.
+  - `GET /api/auth/me` devuelve `{ "autenticado": boolean, "nombre"?: string }`.
+  - `POST /api/auth/logout` cierra la sesión.
+  - Si falta cualquier variable, responden `503` con `{ "error": "no_configurado" }`.
+- **Variables de entorno** (solo en el servidor; nunca en el código ni en el navegador):
+  - `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET`: credenciales «ID de cliente de OAuth» (aplicación web) de Google Cloud Console.
+  - `AUTH_SESSION_SECRET`: secreto para firmar las cookies, de 32 caracteres o más. Por ejemplo: `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`. Cambiarlo cierra todas las sesiones.
+  - `AUTH_BASE_URL`: origen público de la aplicación, sin ruta ni barra final. Define el URI de redireccionamiento `${AUTH_BASE_URL}/api/auth/callback`. Debe ser https, salvo `http://localhost` o `http://127.0.0.1` en local.
+- **URIs de redireccionamiento autorizados** (Google Cloud Console → Credenciales → tu cliente OAuth):
+  - Local: `http://localhost:3000/api/auth/callback` (con `AUTH_BASE_URL=http://localhost:3000`).
+  - Producción: `https://geoverificador-nine.vercel.app/api/auth/callback` (con `AUTH_BASE_URL=https://geoverificador-nine.vercel.app`).
+  - La pantalla de consentimiento solo necesita los alcances `openid` y `profile`.
+- **Local:** añade las cuatro variables a `.env.local` (git lo ignora) y ejecuta `pnpm start`.
+- **Vercel:** Project → Settings → Environment Variables. Las funciones están en `api/auth/*.js`. Los despliegues de vista previa tienen otro dominio: no coincide con `AUTH_BASE_URL`, así que el inicio de sesión solo funciona en el dominio registrado.
+
 ## Ayudas para decidir
 
 - **Recorrido guiado.** La primera visita abre un recorrido de 6 pasos (qué hace y qué no hace la herramienta, cómo elegir un punto, cómo leer una tarjeta, el asistente, comparar puntos y las verificaciones antes de comprar). Se puede omitir y se vuelve a abrir con «¿Cómo funciona?». Con `?tour=no` en la URL no se abre solo. Contenido en `public/js/tour.js`.
@@ -114,7 +138,7 @@ Los datos ya descargados están en el repositorio: solo es necesario regenerarlo
 ## Integración continua y despliegue
 
 - `.github/workflows/ci.yml` se ejecuta en cada `push` y `pull_request`: instala con `pnpm install --frozen-lockfile`, y corre `lint`, `test`, `build` y `datos:verificar`. No usa red para las pruebas.
-- El sitio se despliega en Vercel como sitio estático (`vercel.json` publica `public/` sin instalación ni build). La versión desplegada no incluye `GET /api` ni el servidor de Nest.
+- El sitio se despliega en Vercel como sitio estático (`vercel.json` publica `public/` sin instalación ni build) más las funciones de `api/` (`api/chat.js` y `api/auth/*.js`). La versión desplegada no incluye `GET /api` ni el servidor de Nest.
 
 ## Datos y licencias
 

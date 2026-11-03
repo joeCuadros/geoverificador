@@ -9,6 +9,10 @@
     "api/chat.js": {
       "maxDuration": 20,
       "includeFiles": "public/js/{asistente-llm,asistente,calculos}.js"
+    },
+    "api/auth/*.js": {
+      "maxDuration": 15,
+      "includeFiles": "api/_lib/auth.js"
     }
   }
 }
