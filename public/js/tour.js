@@ -1,8 +1,8 @@
 /**
  * tour.js — Contenido y lógica de la guía breve que sigue al Inicio (sin DOM, sin red).
  *
- * La guía explica qué hace y qué NO hace la herramienta, cómo usar el chat (lo principal), cómo pintar el mapa por un
- * criterio, cómo buscar por punto (vía secundaria), cómo leer una tarjeta y cómo comparar puntos. Es el segundo momento de
+ * La guía explica qué hace y qué NO hace la herramienta, cómo usar el chat (lo principal), cómo ver en el mapa las cosas
+ * reales (colegios, parques, zonas, quebradas, sismos), cómo buscar por punto (vía secundaria), cómo leer una tarjeta y cómo comparar puntos. Es el segundo momento de
  * la visita, después del Inicio (recorrido.js); se puede omitir y se vuelve a abrir con el botón «¿Cómo funciona?».
  * Todo el texto vive aquí para que se pueda revisar y probar (test/tour.spec.ts) sin abrir la página.
  *
@@ -46,9 +46,9 @@ const Tour = (() => {
       bloques: [
         {
           items: [
-            'Escribe una frase, por ejemplo «busco cerca de un colegio y un parque», o arma la búsqueda sin escribir con los menús y las búsquedas rápidas.',
+            'Escribe una frase, por ejemplo «¿cuántos colegios hay en Paucarpata?», «quiero vivir en Paucarpata» o «busco cerca de un colegio y un parque», o arma la búsqueda sin escribir con los menús y las búsquedas rápidas.',
             'Cada respuesta trae un apartado «Por qué, fuente y límites» que puedes abrir.',
-            'Los porcentajes son la parte del suelo habitable de un distrito que cumple lo pedido. No son una probabilidad ni una recomendación.',
+            'Cuando buscas, te digo en qué sectores se cumple todo lo que pediste. Los numero solo para ubicarlos: no hay ranking ni «mejor zona», porque eso depende de lo que te importe.',
             'No sabe de seguridad, precios ni ruido, y lo dice en vez de responder a medias.',
             'Puedes ampliar el chat o arrastrar el divisor para cambiar su ancho.',
           ],
@@ -57,15 +57,14 @@ const Tour = (() => {
     },
     {
       id: 'pintar',
-      titulo: 'Pinta el mapa por lo que te importa',
-      intro: 'Sobre el mapa está «Pintar el mapa por:». Elige un criterio y las celdas se pintan según cumplan, no cumplan o no tengan dato.',
+      titulo: 'Mira en el mapa lo que hay de verdad',
+      intro: 'Sobre el mapa está «Ver en el mapa:». Elige qué quieres ver y se dibujan los colegios, los parques, las zonas, las quebradas o los sismos tal como están en los datos.',
       bloques: [
         {
           items: [
-            'Cumple, no cumple y sin dato se distinguen por icono, texto y trama, no solo por color.',
-            'Si eliges varios criterios se pinta la intersección: solo cumplen las celdas que cumplen todos.',
-            'La leyenda dice el umbral y la fuente de cada criterio y cuántas celdas cumplen. Una búsqueda del chat pinta el mismo resultado.',
-            'No hay puntaje ni ranking de zonas: el mapa solo muestra lo que pediste. Con «Quitar colores» lo limpias.',
+            'Cada cosa se ve con su forma: los colegios con una letra por nivel (inicial, primaria, secundaria), los parques rellenos, las quebradas como líneas y los sismos como círculos más grandes cuanto mayor la magnitud.',
+            'Una búsqueda del chat dibuja lo que pediste y resalta los sectores donde se cumple todo a la vez; lo que no cumple no se dibuja.',
+            'La leyenda dice en una línea qué es cada cosa y de qué fuente sale. No hay puntaje ni ranking de zonas: el mapa solo muestra lo que pediste. Con «Quitar del mapa» lo limpias.',
           ],
         },
       ],

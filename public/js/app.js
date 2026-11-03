@@ -8,7 +8,7 @@
  * ocultan con CONFIG.modulos; `?modulos=todos` en la URL los vuelve a mostrar.
  *
  * El recorrido de la visita es Inicio, guía breve y chat (recorrido.js, espacio-ui.js, tour.js, tour-ui.js). El chat es lo
- * principal (asistente-ui.js) y el mapa se pinta por el criterio que la persona elige (pintado.js, pintado-ui.js).
+ * principal (asistente-ui.js) y el mapa dibuja las entidades reales de lo que se pide: colegios, parques, zonas, quebradas, sismos y los sectores encontrados (capas.js, capas-ui.js).
  * La consulta de un punto es secundaria y vive en el panel «Buscar por punto», oculto por defecto; sigue 3 pasos (ver
  * onboarding.js): 1 ubicar el predio, 2 confirmar el punto y 3 leer el reporte. Cada servicio es una tarjeta desplegable;
  * «Comparar puntos» (comparar.js, comparar-ui.js) y las verificaciones antes de comprar (verificaciones.js) completan la
@@ -1541,7 +1541,7 @@
     aplicarFlujo(nuevo);
     consultar();
   }
-  // El chat es lo principal. Pinta el mapa con el resultado de cada búsqueda (PintadoUI) y puede pedir que se vea el mapa.
+  // El chat es lo principal. Dibuja en el mapa las entidades de cada búsqueda y de cada conteo (CapasUI) y puede pedir que se vea el mapa.
   AsistenteUI.iniciar({
     map,
     obtenerPunto: () => state.point,
@@ -1549,10 +1549,10 @@
     umbrales: () => state.umbrales,
     mostrarMapa: () => EspacioUI.mostrarMapa(),
     mapaVisible: () => EspacioUI.mapaVisible(),
-    alBuscar: (busqueda) => PintadoUI.aplicarBusqueda(busqueda),
-    alCambiarFormulario: () => PintadoUI.refrescarChips(),
+    alBuscar: (que) => CapasUI.mostrar(que),
+    verSector: (n) => CapasUI.enfocarSector(n),
   });
-  PintadoUI.iniciar({ map, datos: (opciones) => AsistenteUI.datosParaPintar(opciones), distanciaQuebradaM: () => AsistenteUI.distanciaQuebradaM() });
+  CapasUI.iniciar({ map, datos: () => AsistenteUI.datosParaMapa(), mapaVisible: () => EspacioUI.mapaVisible() });
   EspacioUI.iniciar({ map, enfocarPunto: () => $(PASO_TITULO[state.flujo.paso]) });
 
   // ------------------------------------------------------------- Comparar puntos
@@ -1592,5 +1592,5 @@
   // La guía (TourUI) la inicia EspacioUI: va después del Inicio.
 
   // Ayuda para verificar desde la consola del navegador (F12)
-  window.osmDebug = { map, state, MODULOS, Calculos, Services, Zonificacion, Equipamiento, Peligros, Distritos, Riesgos, Delitos, Asistente, Pintado, PintadoUI, EspacioUI };
+  window.osmDebug = { map, state, MODULOS, Calculos, Services, Zonificacion, Equipamiento, Peligros, Distritos, Riesgos, Delitos, Asistente, Entidades, Sectores, Capas, CapasUI, EspacioUI };
 })();

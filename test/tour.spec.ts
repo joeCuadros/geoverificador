@@ -48,7 +48,7 @@ describe('Tour.PASOS', () => {
 
   it('explica el asistente y que no inventa', () => {
     const t = texto(paso('asistente'));
-    ['no inventa', 'por qué, fuente y límites', 'no son una probabilidad'].forEach((f) => expect(t).toContain(f));
+    ['no inventa', 'por qué, fuente y límites', 'no hay ranking'].forEach((f) => expect(t).toContain(f));
   });
 
   // Copy cambiado a propósito: antes decía que el asistente «no usa un modelo de lenguaje ni envía lo que escribes»,
@@ -69,9 +69,10 @@ describe('Tour.PASOS', () => {
     expect(ids.indexOf('asistente')).toBeLessThan(ids.indexOf('punto'));
   });
 
-  it('explica cómo pintar el mapa por un criterio, con su leyenda y sin «mejor zona»', () => {
+  it('explica cómo ver en el mapa las cosas reales, con su leyenda y sin «mejor zona»', () => {
     const t = texto(paso('pintar'));
-    ['pintar el mapa', 'cumple', 'no cumple', 'sin dato', 'quitar colores', 'umbral', 'fuente'].forEach((f) => expect(t).toContain(f));
+    ['ver en el mapa', 'colegios', 'quebradas', 'sismos', 'sectores donde se cumple todo', 'quitar del mapa', 'fuente'].forEach((f) => expect(t).toContain(f));
+    expect(t).not.toMatch(/celda|se pinta|pintan/);
     expect(t).not.toMatch(/la mejor zona|recomendamos/);
   });
 

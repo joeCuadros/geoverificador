@@ -14,6 +14,7 @@ const config: Config = {
   moduleFileExtensions: ['js', 'json', 'ts'],
   rootDir: '.',
   testRegex: '.*\\.spec\\.ts$',
+  testPathIgnorePatterns: ['/node_modules/', '/\\.claude/'], // copias de trabajo de otros agentes no son parte de este proyecto
   transform: {
     '^.+\\.(t|j)s$': 'ts-jest',
   },

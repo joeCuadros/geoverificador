@@ -1,5 +1,5 @@
 /**
- * asistente-ui.js — Vista de chat del asistente: panel, mensajes, menús para armar una búsqueda y marcadores en el mapa.
+ * asistente-ui.js — Vista de chat del asistente: panel, mensajes y menús para armar una búsqueda; los sectores y las entidades se dibujan con capas-ui.js.
  *
  * Toda la lógica (entender el texto, responder, buscar zonas, armar la consulta desde los menús, explicar cada respuesta)
  * está en asistente.js. Aquí solo se conecta con la página: lee los mismos datos que la ficha (Zonificacion,
@@ -15,14 +15,12 @@ const AsistenteUI = (() => {
   const MAX_MENSAJES = 60;
   const NIVELES = ['inicial', 'primaria', 'secundaria'];
 
-  let api = null; // { map, obtenerPunto, consultarPunto, umbrales, mostrarMapa, mapaVisible, alBuscar, alCambiarFormulario }
+  let api = null; // { map, obtenerPunto, consultarPunto, umbrales, mostrarMapa, mapaVisible, alBuscar, verSector }
   let ultimaBusqueda = null; // { criterios, radioGlobalM, incluirCondicional } para «agrega…», «quita…», «prioriza…»
-  let capaMapa = null;
   let preparado = null; // promesa con los datos ya ordenados para buscar
   let cacheContexto = null; // { clave, ctx } del último punto consultado
   let ocupado = false;
   let saludado = false;
-  let limitesPendientes = null; // límites de la última búsqueda dibujada mientras el mapa no estaba a la vista
   let promesaModo = null;
   // Language model: null = not checked yet, true = /api/chat has Gemini, false = rules only (no key or static site).
   let llmDisponible = null;
@@ -92,19 +90,26 @@ const AsistenteUI = (() => {
     return cuerpo ? `<details class="chat-mas"><summary>Por qué, fuente y límites</summary><div class="chat-mas-cuerpo">${cuerpo}</div></details>` : '';
   }
 
+  /** Un sector de la búsqueda: su nombre, de qué tamaño es, lo que hay en su centro y los botones «Ver en el mapa» y «Consultar este punto». */
   function filaHtml(f, i) {
-    const pct = Number.isFinite(f.pctCumpleTodo) ? `${Math.round(f.pctCumpleTodo)} % del suelo cumple todo` : '';
     const acciones = f.mejor
       ? `<div class="chat-acc">
-          <button type="button" class="ghost" data-accion="ver" data-lat="${f.mejor.lat}" data-lon="${f.mejor.lon}" data-i="${i + 1}">Ver en el mapa</button>
-          <button type="button" class="ghost" data-accion="consultar" data-lat="${f.mejor.lat}" data-lon="${f.mejor.lon}" data-nombre="${esc(f.titulo)}">Consultar ese punto</button>
+          <button type="button" class="ghost" data-accion="ver" data-lat="${f.mejor.lat}" data-lon="${f.mejor.lon}" data-n="${f.n}">Ver en el mapa</button>
+          <button type="button" class="ghost" data-accion="consultar" data-lat="${f.mejor.lat}" data-lon="${f.mejor.lon}" data-nombre="${esc(f.titulo)}">Consultar este punto</button>
         </div>`
       : '';
     return `<li class="chat-fila"><details class="chat-distrito"${i === 0 ? ' open' : ''}>
-      <summary><span class="chat-fila-n" aria-hidden="true">${i + 1}</span><span class="chat-fila-t"><strong>${esc(f.titulo)}</strong>${pct ? `<span class="chat-fila-pct">${esc(pct)}</span>` : ''}</span></summary>
-      <div class="chat-fila-cuerpo"><span class="chat-fila-det">${esc(f.detalle)}</span><small>${esc(f.nota)}</small>${acciones}</div>
+      <summary><span class="chat-fila-n" aria-hidden="true">${f.n}</span><span class="chat-fila-t"><strong>${esc(f.titulo)}</strong><span class="chat-fila-pct">${esc(f.detalle)}</span></span></summary>
+      <div class="chat-fila-cuerpo">${f.nota ? `<span class="chat-fila-det">${esc(f.nota)}</span>` : ''}${acciones}</div>
     </details></li>`;
   }
+
+  /** Un botón de sugerencia: un texto, o { etiqueta, texto } cuando lo que se ve es más corto que lo que se envía. */
+  const botonSugerencia = (s) => {
+    const texto = typeof s === 'string' ? s : s.texto;
+    const etiqueta = typeof s === 'string' ? s : s.etiqueta;
+    return `<button type="button" class="ghost" data-accion="sugerir" data-texto="${esc(texto)}">${esc(etiqueta)}</button>`;
+  };
 
   /** Agrega un mensaje al registro. Devuelve el elemento (para poder quitar el aviso de «buscando»). */
   function mensaje(rol, { texto, filas = [], sugerencias = [], espera = false, explicacion = null, detalle = [], verMapa = false }) {
@@ -114,8 +119,8 @@ const AsistenteUI = (() => {
     if (espera) el.dataset.espera = 'true';
     const quien = rol === 'usuario' ? 'Tú: ' : 'Asistente: ';
     el.innerHTML = `<span class="sr-only">${quien}</span><div class="chat-burbuja">${rol === 'usuario' ? `<p>${esc(texto)}</p>` : textoAHtml(texto)}${filas.length ? `<ol class="chat-filas">${filas.map(filaHtml).join('')}</ol>` : ''}${masHtml(explicacion, detalle)}</div>`
-      + (verMapa ? '<div class="chat-acc chat-ver-mapa"><button type="button" class="ghost" data-accion="mapa">Ver el mapa pintado</button></div>' : '')
-      + (sugerencias.length ? `<div class="chat-sug" role="group" aria-label="Sugerencias">${sugerencias.map((s) => `<button type="button" class="ghost" data-accion="sugerir" data-texto="${esc(s)}">${esc(s)}</button>`).join('')}</div>` : '');
+      + (verMapa ? '<div class="chat-acc chat-ver-mapa"><button type="button" class="ghost" data-accion="mapa">Ver el mapa</button></div>' : '')
+      + (sugerencias.length ? `<div class="chat-sug" role="group" aria-label="Sugerencias">${sugerencias.map(botonSugerencia).join('')}</div>` : '');
     log.appendChild(el);
     while (log.children.length > MAX_MENSAJES) log.removeChild(log.firstChild);
     log.scrollTop = log.scrollHeight;
@@ -155,44 +160,30 @@ const AsistenteUI = (() => {
           salud: congelados.salud.features, educacion: congelados.educacion.features, transporte: congelados.transporte.features, areasVerdes: congelados.areasVerdes.features,
           cauces: cauces ? cauces.lista : [],
         }, zonas, umbrales());
-        return { zonas, datos, fecha: congelados.salud.fecha, hayCauces: Boolean(cauces) };
+        return { zonas, datos, fecha: congelados.salud.fecha, hayCauces: Boolean(cauces), cauces: cauces ? cauces.lista : null };
       })().catch((err) => { preparado = null; throw err; });
     }
     return preparado;
   }
 
-  function dibujar(areas, criterios) {
-    capaMapa.clearLayers();
-    const puntos = areas.filter((a) => a.mejor);
-    puntos.forEach((a, i) => {
-      const icono = L.divIcon({ className: 'chat-marcador', html: `<span>${i + 1}</span>`, iconSize: [30, 30], iconAnchor: [15, 15] });
-      const lineas = criterios.map((c) => {
-        const d = a.mejor.detalle[c.id];
-        return `${esc(Asistente.CRITERIOS[c.id].etiqueta.split(' (')[0])}: ${d.cumple ? 'cumple' : 'no cumple'}${d.distanciaM !== null ? ` (${esc(Asistente.fmtDist(d.distanciaM))})` : ''}`;
-      });
-      L.marker([a.mejor.lat, a.mejor.lon], { icon: icono, title: `${i + 1}. ${Asistente.titulo(a.nombre)}`, keyboard: false })
-        .bindPopup(`<strong>${i + 1}. ${esc(Asistente.titulo(a.nombre))}</strong><br>Zona ${esc(a.mejor.zona)}<br>${lineas.join('<br>')}`)
-        .addTo(capaMapa);
-    });
-    if (puntos.length) {
-      const limites = L.latLngBounds(puntos.map((a) => [a.mejor.lat, a.mejor.lon])).pad(0.3);
-      api.map.fitBounds(limites, { maxZoom: 14, animate: false });
-      // Si el mapa no está a la vista (chat ampliado o móvil), se vuelve a encuadrar cuando se muestre.
-      limitesPendientes = api.mapaVisible && !api.mapaVisible() ? limites : null;
-    }
+  /** Los datos ya ordenados para dibujar entidades en el mapa (capas-ui.js). Los sismos son opcionales: sin archivo, la capa lo dice. */
+  async function datosParaMapa() {
+    const { zonas, datos, fecha, cauces } = await preparar();
+    let sismos = null;
+    try { sismos = Capas.sismosDeFeatures(await Contexto.sismosCrudos()); } catch (_) { sismos = null; }
+    return { datos, zonas, cauces, sismos, umbrales: umbrales(), fecha };
   }
 
-  /** Al volver a ver el mapa: si una búsqueda se dibujó con el mapa oculto, se encuadra de nuevo con su tamaño real. */
-  function reajustarVista() {
-    if (!limitesPendientes) return;
-    api.map.fitBounds(limitesPendientes, { maxZoom: 14, animate: false });
-    limitesPendientes = null;
-  }
-
-  /** La cuadrícula y los datos ya preparados, para pintar el mapa por un criterio (pintado-ui.js). */
-  async function datosParaPintar({ incluirCondicional = false } = {}) {
-    const { zonas, datos, fecha } = await preparar();
-    return { celdas: celdasDe(zonas, incluirCondicional), datos, umbrales: umbrales(), fecha };
+  /** Lo que el chat necesita para hablar de un distrito: sus polígonos, el conteo o el perfil y la fecha de los datos. */
+  async function contextoDistrito(intencion) {
+    const base = { estadoPDM: CONFIG.estadoPDM, potencial: Zonificacion.potencial, punto: api.obtenerPunto(), distritoTitulo: Distritos.titulo(intencion.distrito) };
+    if (intencion.distritoFuera) return base;
+    await Distritos.load();
+    const { zonas, datos, fecha, cauces } = await preparar();
+    const polys = Distritos.poligonos(intencion.distrito);
+    const opciones = { areaMinM2: CONFIG.umbrales.areaVerde.areaMinM2 };
+    if (intencion.tipo === 'contar') return { ...base, fecha, conteo: Entidades.contar(datos, polys, opciones) };
+    return { ...base, fecha, perfil: Entidades.perfil(datos, zonas, cauces, polys, { ...opciones, pasoM: 300 }) };
   }
 
   /** Distancia mínima a quebradas que dio la persona (menú o frase), o null: solo con ella existe el criterio «lejos de quebradas». */
@@ -224,8 +215,13 @@ const AsistenteUI = (() => {
     const radioGlobalM = limitar ? null : (intencion.radioGlobalM ?? (anterior ? anterior.radioGlobalM : null));
     const radioAreaM = limitar ? (intencion.radioGlobalM ?? CONFIG.asistente.radioAreaM) : null;
     const incluirCondicional = Boolean(intencion.incluirCondicional || (anterior && anterior.incluirCondicional));
+    const distrito = intencion.distrito || (anterior ? anterior.distrito : null) || null; // «agrega transporte» sigue dentro del mismo distrito
+    if (distrito && intencion.distritoFuera) {
+      mensaje('asistente', { texto: Asistente.textoDistritoFuera(Distritos.titulo(distrito)), sugerencias: Asistente.SUGERENCIAS_BASE, explicacion: Asistente.explicar('desconocido') });
+      return;
+    }
 
-    const espera = mensaje('asistente', { texto: 'Buscando zonas con los datos de la ficha…', espera: true });
+    const espera = mensaje('asistente', { texto: 'Buscando sectores con los datos de la ficha…', espera: true });
     try {
       const { zonas, datos, fecha, hayCauces } = await preparar();
       if (!hayCauces && criterios.some((c) => c.id === 'lejosQuebrada')) {
@@ -234,35 +230,34 @@ const AsistenteUI = (() => {
         return;
       }
       await pausa(30); // deja pintar el aviso antes del cálculo
+      await Distritos.load();
       const resultado = Asistente.buscar({
-        criterios, zonas, datos, umbrales: umbrales(), distritoDe: (la, lo) => Distritos.nombreDe(la, lo),
+        criterios, zonas, datos, umbrales: umbrales(), distritoDe: (la, lo) => Distritos.nombreDe(la, lo), distrito,
         pasoM: CONFIG.asistente.pasoCeldaM, minCeldas: CONFIG.asistente.minCeldasArea, maxPuntos: CONFIG.asistente.maxPuntos, separacionM: CONFIG.asistente.separacionPuntosM,
         centro: limitar ? punto : null, radioM: radioAreaM, incluirCondicional, radioGlobalM, celdas: celdasDe(zonas, incluirCondicional),
       });
       const aproximados = criterios.map((c) => c.id).filter((id) => Asistente.CRITERIOS[id].aproximado);
-      const f = Asistente.formatearBusqueda(resultado, { aproximados, temaNoSoportado: intencion.temaNoSoportado, radioGlobalM });
+      const f = Asistente.formatearBusqueda(resultado, { aproximados, temaNoSoportado: intencion.temaNoSoportado, radioGlobalM, datos, distrito: distrito ? Distritos.titulo(distrito) : null });
       const notas = [];
-      if (limitar) notas.push(`Solo miré celdas a ${Asistente.fmtDist(radioAreaM)} o menos de tu punto.`);
+      if (limitar) notas.push(`Solo miré a ${Asistente.fmtDist(radioAreaM)} o menos de tu punto.`);
       else if (intencion.limitarAlPunto) notas.push('Todavía no elegiste un punto, así que busqué en toda la ciudad.');
       if (incluirCondicional) notas.push('Incluí zonas condicionadas, donde lo que se puede construir depende de la zona vecina o de un plan específico.');
       notas.push(`Datos de OpenStreetMap del ${fecha || 'sin fecha'}. Distancias en línea recta.`);
 
-      ultimaBusqueda = { criterios, radioGlobalM, incluirCondicional };
+      ultimaBusqueda = { criterios, radioGlobalM, incluirCondicional, distrito };
       sincronizarFormulario(ultimaBusqueda);
       espera.remove();
-      const filas = f.filas.map((fila) => ({ ...fila, mejor: (resultado.areas.find((a) => a.nombre === fila.distrito) || {}).mejor }));
       // Lo esencial queda a la vista; cómo se calculó y los avisos de método van en «Por qué, fuente y límites».
       mensaje('asistente', {
         texto: `${f.lineas.principal.join('\n')}\n${notas.join('\n')}`,
-        filas,
+        filas: f.filas,
         sugerencias: f.sugerencias,
         explicacion: Asistente.explicar('buscar', { fecha, aproximados, cauce: criterios.some((c) => c.id === 'lejosQuebrada') }),
         detalle: f.lineas.detalle,
         verMapa: true,
       });
-      dibujar(resultado.areas.slice(0, filas.length), resultado.criterios);
-      // El mapa se pinta con el mismo resultado: los mismos criterios, distancias y zonas condicionales.
-      if (api.alBuscar) api.alBuscar({ criterios, radioGlobalM, incluirCondicional });
+      // El mapa muestra las entidades de lo que pediste y, resaltados, los sectores donde se cumple todo.
+      if (api.alBuscar) api.alBuscar({ capas: Capas.deCriterios(resultado.criterios), distrito, sectores: f.sectores });
     } catch (err) {
       espera.remove();
       console.error('[Asistente] búsqueda', err);
@@ -306,18 +301,27 @@ const AsistenteUI = (() => {
       const intencion = eleccion.intencion;
       if (intencion.tipo === 'buscar') await ejecutarBusqueda(intencion);
       else {
-        const ctx = ['ficha', 'servicio', 'zona', 'construir', 'quebrada', 'sismos', 'peligros'].includes(intencion.tipo) ? await contexto() : { estadoPDM: CONFIG.estadoPDM, potencial: Zonificacion.potencial, punto: api.obtenerPunto() };
+        const esDistrito = ['contar', 'perfil'].includes(intencion.tipo) && intencion.distrito;
+        const conPunto = ['ficha', 'servicio', 'zona', 'construir', 'quebrada', 'sismos', 'peligros'].includes(intencion.tipo);
+        const ctx = esDistrito ? await contextoDistrito(intencion) : conPunto ? await contexto() : { estadoPDM: CONFIG.estadoPDM, potencial: Zonificacion.potencial, punto: api.obtenerPunto() };
         const resp = Asistente.responder(intencion, ctx);
         let texto = resp.texto;
         // Gemini only rewords the deterministic answer; the text is verified (numbers, names, caveat) or discarded.
-        if (eleccion.origen === 'gemini' && texto) {
+        // The profile and the «what matters to you?» question keep their exact structure (buttons and closing question), so they are not reworded.
+        if (eleccion.origen === 'gemini' && texto && !['perfil', 'mejor_zona'].includes(intencion.tipo)) {
           const espera = mensaje('asistente', { texto: 'Redactando…', espera: true });
           const red = await AsistenteLLM.redactar({ pregunta: limpio, tipo: intencion.tipo, hechos: { texto } });
           espera.remove();
           if (red.modo === 'gemini' && red.texto) texto = red.texto;
         }
         recordar('asistente', texto);
-        mensaje('asistente', { ...resp, texto, explicacion: Asistente.explicar(intencion.tipo) });
+        mensaje('asistente', { ...resp, texto, explicacion: Asistente.explicar(intencion.tipo), verMapa: Boolean(resp.mapa) });
+        // «Cuántos colegios hay en X»: se dibujan esos colegios y se encuadra el distrito. El perfil solo marca el distrito.
+        if (resp.mapa && api.alBuscar) {
+          const nivelPedido = resp.mapa.capas.some((id) => Asistente.NIVELES_COLEGIO.includes(id));
+          const capas = Capas.deCriterios(resp.mapa.capas.map((id) => ({ id }))).map((c) => (c.id === 'colegios' && !nivelPedido ? { id: 'colegios' } : c)); // «colegios» a secas son todos los niveles
+          api.alBuscar({ capas, distrito: resp.mapa.distrito, sectores: [] });
+        }
       }
     } catch (err) {
       console.error('[Asistente]', err);
@@ -497,7 +501,6 @@ const AsistenteUI = (() => {
 
   function iniciar(opciones) {
     api = opciones;
-    capaMapa = L.layerGroup().addTo(api.map);
     iniciarConstructor();
 
     $('asistente-form').addEventListener('submit', (e) => {
@@ -521,13 +524,12 @@ const AsistenteUI = (() => {
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
       if (accion === 'ver') {
         if (api.mostrarMapa) api.mostrarMapa(); // en el móvil o con el chat ampliado el mapa no está a la vista
-        api.map.setView([lat, lon], 15, { animate: false });
-        limitesPendientes = null;
+        if (!(b.dataset.n && api.verSector && api.verSector(Number(b.dataset.n)))) api.map.setView([lat, lon], 15, { animate: false });
       } else if (accion === 'consultar') {
         api.consultarPunto(lat, lon, b.dataset.nombre ? `Punto en ${b.dataset.nombre}` : null);
       }
     });
   }
 
-  return { iniciar, activar, reajustarVista, datosParaPintar, distanciaQuebradaM };
+  return { iniciar, activar, datosParaMapa, distanciaQuebradaM };
 })();

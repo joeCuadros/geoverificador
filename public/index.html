@@ -541,12 +541,12 @@
 
     <!-- ============================================================ Mapa -->
     <section class="map-wrap" id="mapa-zona" aria-label="Mapa de zonas">
-      <!-- Pintar el mapa por el criterio elegido (pintado-ui.js): chips, quitar colores y leyenda. -->
+      <!-- Ver en el mapa las entidades reales de cada capa (capas-ui.js): chips, quitar del mapa y leyenda. -->
       <div class="pintar" id="pintar" role="group" aria-labelledby="pintar-t">
         <div class="pintar-fila">
-          <p class="pintar-t" id="pintar-t">Pintar el mapa por:</p>
+          <p class="pintar-t" id="pintar-t">Ver en el mapa:</p>
           <div class="pintar-chips" id="pintar-chips"></div>
-          <button type="button" id="pintar-quitar" class="secondary compacto pintar-quitar" hidden>Quitar colores</button>
+          <button type="button" id="pintar-quitar" class="secondary compacto pintar-quitar" hidden>Quitar del mapa</button>
         </div>
       </div>
       <p id="pintar-anuncio" class="sr-only" role="status" aria-live="polite"></p>
@@ -558,7 +558,6 @@
         <summary><span id="leyenda-resumen" class="leyenda-resumen"></span></summary>
         <div class="leyenda-cuerpo">
           <ul class="leyenda-estados" id="leyenda-estados"></ul>
-          <p class="leyenda-inter small" id="leyenda-inter" hidden>Con varios criterios se pinta la intersección: solo cumplen las celdas que cumplen todos.</p>
           <ul class="leyenda-filas" id="leyenda-filas"></ul>
           <p class="leyenda-pie small" id="leyenda-pie"></p>
         </div>
@@ -674,11 +673,13 @@
   <script src="js/reporte.js"></script>
   <script src="js/delitos.js"></script>
   <script src="js/asistente.js"></script>
+  <script src="js/entidades.js"></script>
+  <script src="js/sectores.js"></script>
+  <script src="js/capas.js"></script>
   <script src="js/asistente-llm.js"></script>
   <script src="js/disposicion.js"></script>
-  <script src="js/pintado.js"></script>
   <script src="js/asistente-ui.js"></script>
-  <script src="js/pintado-ui.js"></script>
+  <script src="js/capas-ui.js"></script>
   <script src="js/comparar-ui.js"></script>
   <script src="js/tour-ui.js"></script>
   <script src="js/espacio-ui.js"></script>

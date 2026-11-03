@@ -311,3 +311,11 @@ describe('Sectores sobre el resultado de buscar', () => {
     expect(Entidades.contar(datos, [[anillo(LAT0, LON0, 3000)]]).colegios.total).toBe(1);
   });
 });
+
+describe('Los sectores traen los centros de sus celdas para el mapa', () => {
+  it('cada sector entrega los puntos que lo componen', () => {
+    const f = Asistente.formatearBusqueda(buscarEn(criterios, { distrito: 'PAUCARPATA' }), { datos, distrito: 'Paucarpata' });
+    expect(f.sectores[0].centros.length).toBeGreaterThanOrEqual(2);
+    expect(f.sectores[0].centros[0]).toHaveLength(2);
+  });
+});

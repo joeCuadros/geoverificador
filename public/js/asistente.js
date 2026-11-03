@@ -1016,6 +1016,7 @@ const Asistente = (() => {
       const ids = criterios.map((c) => c.id);
       sectores = ordenados.map((s) => ({
         n: s.n, centro: s.centro, hectareas: s.hectareas, distrito: s.distrito, nombre: null, contorno: Sect().contorno(s.celdas, { pasoM: resultado.pasoM }),
+        centros: s.celdas.map((c) => [c.lat, c.lon]), // para dibujar solo las entidades que hacen cumplir al sector (capas.js)
       }));
       filas = ordenados.slice(0, max).map((s) => {
         const nom = meta.datos ? Sect().nombrar(s.centro, meta.datos, ids) : null;
@@ -1025,7 +1026,7 @@ const Asistente = (() => {
           titulo: `Sector ${s.n}${nom ? ` · cerca de ${nom.nombre}` : ''}`,
           distrito: s.distrito,
           orden: s.n,
-          detalle: `${hectareasEnFrase(s.hectareas)}${donde}${s.centro.zona ? ` · zona ${s.centro.zona}` : ''}`,
+          detalle: `${hectareasEnFrase(s.hectareas)}${donde}`,
           nota: notaDeSector(s.centroCelda, criterios),
           mejor: { lat: s.centro.lat, lon: s.centro.lon, zona: s.centro.zona },
           n: s.n,
@@ -1303,6 +1304,7 @@ const Asistente = (() => {
     describirCriterio,
     botonesDePrioridad,
     textoDistritoFuera,
+    NIVELES_COLEGIO: ['inicial', 'primaria', 'secundaria'],
     distanciaM,
     titulo,
     fmtDist,

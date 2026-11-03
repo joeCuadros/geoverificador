@@ -101,7 +101,7 @@ const EspacioUI = (() => {
     if (v.mapa) {
       requestAnimationFrame(() => {
         api.map.invalidateSize({ pan: false });
-        AsistenteUI.reajustarVista();
+        CapasUI.reajustarVista();
       });
     }
   }
