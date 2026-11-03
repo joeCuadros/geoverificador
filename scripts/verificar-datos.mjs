@@ -48,6 +48,7 @@ const distritos = json('data/distritos_aqp.geojson');
 const quebradas = json('data/quebradas_aqp.geojson');
 const sismos = json('data/sismos_igp.geojson');
 const e030 = json('data/zonas_sismicas_e030.json');
+const precios = json('data/precios_m2_distrito.json');
 const equipamiento = Object.fromEntries(['salud', 'educacion', 'transporte', 'areas_verdes'].map((n) => [n, json(`data/equipamiento/${n}.geojson`)]));
 
 // ------------------------------------------------------------------ A. Integridad
@@ -206,6 +207,26 @@ console.log('\n== A. Integridad de los archivos ==');
   }
   const sinSalud = equipamiento.salud.features.filter((x) => !(['hospital', 'clinic', 'doctors'].includes(x.properties.tags.amenity) || x.properties.tags.healthcare));
   comprobar('Equipamiento/salud: todo elemento tiene amenity=hospital|clinic|doctors o healthcare', sinSalud.length === 0);
+}
+
+// Precio de oferta por m² del distrito (Aptología, CC BY 4.0): congelado con scripts/descargar-precios.mjs
+{
+  const m = precios;
+  const nombres = distritos.features.map((x) => x.properties.distrito);
+  const filas = Object.entries(m.distritos || {});
+  comprobar('Precios: metadata con fuente, URL https, licencia CC BY 4.0 y la atribución «Datos: Aptologia»', !!m.fuente && /^https:\/\//.test(m.url || '') && m.licencia === 'CC BY 4.0' && m.atribucion === 'Datos: Aptologia', m.licencia);
+  comprobar('Precios: fecha de descarga y periodo (corte) con formato AAAA-MM-DD, y el corte no es posterior a la descarga', /^\d{4}-\d{2}-\d{2}$/.test(m.fecha_descarga || '') && /^\d{4}-\d{2}-\d{2}$/.test(m.periodo?.corte || '') && m.periodo.corte <= m.fecha_descarga, `corte ${m.periodo?.corte}, descarga ${m.fecha_descarga}`);
+  comprobar('Precios: se rotula como precio de oferta (no de cierre), en soles, con unidades y muestra mínima', /oferta/.test(m.tipo || '') && /no de cierre/.test(m.tipo || '') && m.moneda === 'PEN' && !!m.unidades?.venta_m2 && m.muestra_minima >= 1);
+  comprobar('Precios: hay al menos un distrito y cada uno está escrito como en distritos_aqp.geojson', filas.length > 0 && filas.every(([n]) => nombres.includes(n)), `${filas.length} distritos: ${filas.map(([n]) => n).join(', ')}`);
+  comprobar('Precios: cada precio por m² es positivo y razonable (S/ 500 a S/ 30 000) y cumple la muestra mínima de avisos', filas.every(([, d]) => (d.venta_m2 === null || (d.venta_m2 >= 500 && d.venta_m2 <= 30000 && d.avisos_venta >= m.muestra_minima)) && (d.arriendo_mensual === null || d.avisos_arriendo >= m.muestra_minima)));
+  comprobar('Precios: n_avisos.venta es la suma de los avisos de venta por distrito', m.n_avisos?.venta === filas.reduce((s, [, d]) => s + (d.avisos_venta || 0), 0), `${m.n_avisos?.venta}`);
+  const P = createRequire(import.meta.url)('../public/js/precios.js');
+  comprobar('Precios (módulo): cada distrito del archivo da INFORMATIVO y uno sin cifra da SIN DATO con su causa, sin inventar un precio', filas.every(([n]) => P.buscar(m, n).estado === 'INFORMATIVO') && (() => {
+    const sin = nombres.find((n) => !(n in m.distritos));
+    const r = P.buscar(m, sin);
+    return r.estado === 'SIN DATO' && !!r.causa && r.precioM2 === undefined;
+  })());
+  console.log(`INFO  Precios: ${filas.length} de ${nombres.length} distritos con cifra; ${m.fuente}; corte ${m.periodo?.corte}; descargado ${m.fecha_descarga}`);
 }
 
 // ------------------------------------------------- B. Corrección de los cálculos
@@ -528,6 +549,7 @@ const dentro = (x, y, anillos) => vueltas(x, y, anillos[0]) && !anillos.slice(1)
 // ------------------------------------------------- C. Asistente de chat
 console.log('\n== C. Asistente: búsqueda de zonas frente a un método independiente ==');
 {
+  vm.runInContext(leer('js/precios.js'), ctx, { filename: 'js/precios.js' }); // asistente.js lo usa para el precio por m² del distrito
   vm.runInContext(leer('js/asistente.js'), ctx, { filename: 'js/asistente.js' });
   const A = app('Asistente');
   const U = { ...CONFIG.umbrales, zona: CONFIG.asistente.umbralesZona };
