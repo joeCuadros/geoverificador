@@ -12,7 +12,8 @@ const Verificaciones = require('../public/js/verificaciones.js');
 
 const cauce = (extra = {}) => ({
   estado: 'INFORMATIVO', nombre: 'Río Chili', tipo: 'Río', distanciaM: 568, umbralM: null, segunUmbralUsuario: false,
-  fuente: 'Red hidrográfica (capa «Cuerpos de Agua»), Autoridad Nacional del Agua (ANA)', fecha: '2026-11-02',
+  fuente: 'Red hidrográfica (capa «Cuerpos de Agua»), Autoridad Nacional del Agua (ANA)', fecha: '2026-11-02', fuenteId: 'ANA', fuenteCorta: 'ANA', alias: [],
+  fuentes: [{ id: 'ANA', registros: 14 }, { id: 'IGP', registros: 231 }, { id: 'OSM', registros: 20 }], ausentes: [{ nombre: 'Cabreria', registros: 10 }],
   metodo: 'Distancia en línea recta hasta el tramo más cercano.', nombres: ['Río Chili', 'Quebrada El Cuico'], tramos: 14, elaboracion: 'Enero de 2018', ...extra,
 });
 const peligros = (extra = {}) => ({
@@ -60,17 +61,21 @@ describe('Reporte.seccionQuebradas', () => {
     expect(Reporte.seccionQuebradas(base({ cauce: cauce({ estado: 'CUMPLE', umbralM: 300, segunUmbralUsuario: true }) }))).toContain('CUMPLE');
   });
 
-  it('dice lo que no cubre: no es un mapa de peligro, la faja marginal y que la red no incluye todas las quebradas urbanas', () => {
+  it('dice lo que no cubre: no es un mapa de peligro, la faja marginal y que ninguna fuente es completa', () => {
     const h = Reporte.seccionQuebradas(base());
-    expect(h).toMatch(/no es un mapa de peligro/);
+    expect(h).toMatch(/mapa de peligro/);
     expect(h).toMatch(/faja marginal/);
-    expect(h).toMatch(/no incluye todas las quebradas urbanas/);
-    expect(h).toContain('Enero de 2018');
+    expect(h).toMatch(/ninguna fuente es completa/);
+    expect(h).toContain('ANA (14 tramos), IGP (231 tramos) y OpenStreetMap (20 tramos)');
   });
 
-  it('menciona la ausencia de Añashuayco o San Lázaro solo si de verdad no figuran en el archivo', () => {
-    expect(Reporte.seccionQuebradas(base())).toMatch(/no figuran Añashuayco ni San Lázaro/);
-    expect(Reporte.seccionQuebradas(base({ cauce: cauce({ nombres: ['Quebrada Añashuayco', 'Río Chili'] }) }))).toMatch(/no figura San Lázaro/);
+  it('nombra la fuente del cauce más cercano', () => {
+    expect(Reporte.seccionQuebradas(base({ cauce: cauce({ fuenteCorta: 'OpenStreetMap' }) }))).toContain('fuente: OpenStreetMap');
+  });
+
+  it('las quebradas que aún no figuran salen de los datos (ausentes), no de una lista fija', () => {
+    expect(Reporte.seccionQuebradas(base())).toContain('aún no figuran: Cabreria (10 registros de INGEMMET)');
+    expect(Reporte.seccionQuebradas(base({ cauce: cauce({ ausentes: [] }) }))).not.toContain('aún no figuran');
   });
 
   it('sin dato no inventa nada y muestra la causa', () => {
@@ -88,6 +93,102 @@ describe('Reporte.seccionQuebradas', () => {
     const h = Reporte.seccionQuebradas(base({ cauce: cauce({ nombre: '<img src=x onerror=alert(1)>' }) }));
     expect(h).not.toContain('<img');
     expect(h).toContain('&lt;img');
+  });
+});
+
+const volcan = (extra = {}) => ({
+  estado: 'INFORMATIVO', enZona: true, frase: 'Tu punto está en zona de peligro bajo por lahares del Misti, según el IGP.',
+  resumen: [{ tipo: 'lahar', nivel: 'bajo' }], lineas: [{ tipo: 'lahar', nivel: 'bajo', texto: 'Lahares: peligro bajo.' }],
+  fuente: 'Zonas de peligro volcánico del Misti, Instituto Geofísico del Perú (IGP)', fecha: '2026-11-03',
+  fechaDelMapa: 'Sin metadatos de fecha: el servicio no dice cuándo se elaboró', referencia: 'INGEMMET, Boletín Serie C n.° 100 (2025)', ...extra,
+});
+
+describe('Reporte: peligro volcánico del Misti en el contexto de riesgo', () => {
+  const conVolcan = (v: unknown) => base({ contextoRiesgo: { peligros: peligros(), sismos: sismos(), volcan: v } });
+
+  it('muestra la frase, el detalle por fenómeno y la fuente, como INFORMATIVO', () => {
+    const h = Reporte.seccionContexto(conVolcan(volcan()));
+    expect(h).toContain('Peligro volcánico del Misti');
+    expect(h).toContain('Tu punto está en zona de peligro bajo por lahares del Misti, según el IGP.');
+    expect(h).toContain('Lahares: peligro bajo.');
+    expect(h).toMatch(/INFORMATIVO/);
+  });
+
+  it('dice lo que no cubre: escala regional, sin fecha del mapa, no es evaluación ni dice si habrá erupción, y a quién consultar', () => {
+    const h = Reporte.seccionContexto(conVolcan(volcan()));
+    expect(h).toMatch(/escala regional/);
+    expect(h).toMatch(/Sin metadatos de fecha/);
+    expect(h).toMatch(/No es una evaluación de riesgo/);
+    expect(h).toMatch(/CENEPRED \(SIGRID\)/);
+    expect(h).toContain('Boletín Serie C n.° 100');
+  });
+
+  it('nunca dice cumple ni da un puntaje', () => {
+    expect(Reporte.seccionContexto(conVolcan(volcan()))).not.toMatch(/NO CUMPLE|>CUMPLE|puntaje/);
+  });
+
+  it('sin dato muestra la causa y no inventa nada', () => {
+    const h = Reporte.seccionContexto(conVolcan({ estado: 'SIN DATO', error: 'sin archivo' }));
+    expect(h).toContain('SIN DATO');
+    expect(h).toContain('sin archivo');
+  });
+
+  it('el resumen suma una fila informativa y la fuente se cita', () => {
+    const f = Reporte.filasResumenExtra(conVolcan(volcan())).find(([k]: [string]) => k.startsWith('Peligro volcánico'));
+    expect(f[1]).toBe('INFORMATIVO · en zona de peligro bajo por lahares (IGP)');
+    const s = Reporte.construirSecciones(conVolcan(volcan())).find((x: { titulo: string }) => x.titulo.startsWith('Contexto de riesgo'));
+    expect(s.fuente).toContain('Zonas de peligro volcánico del Misti');
+  });
+
+  it('fuera de las zonas el resumen lo dice sin afirmar que no haya peligro', () => {
+    const f = Reporte.filasResumenExtra(conVolcan(volcan({ enZona: false, resumen: [], lineas: [], frase: 'Tu punto no cae dentro de ninguna zona de peligro volcánico del Misti que mapeó el IGP. Eso no significa que no haya peligro.' }))).find(([k]: [string]) => k.startsWith('Peligro volcánico'));
+    expect(f[1]).toBe('INFORMATIVO · fuera de las zonas mapeadas por el IGP');
+  });
+});
+
+const cenepred = (extra = {}) => ({
+  estado: 'INFORMATIVO', distrito: 'SACHACA', titulo: 'Sachaca', ubigeo: '040117',
+  inundacion: { nivel: 'Muy alto', viviendas: 7926, instituciones_educativas: 50, establecimientos_salud: 6 },
+  movimientos_masa: { nivel: 'Alto', viviendas: 7926, instituciones_educativas: 23, establecimientos_salud: 3 },
+  frase: 'Según el CENEPRED, el distrito de Sachaca tiene riesgo muy alto ante inundaciones y alto ante movimientos en masa en un escenario El Niño (estimación por distrito, no del predio).',
+  lineas: [{ texto: 'Inundaciones: riesgo muy alto. En zonas de mayor susceptibilidad a inundaciones: 7 926 viviendas, 50 locales educativos y 6 establecimientos de salud.' }],
+  fuente: 'CENEPRED (SIGRID), escenario de riesgo ante El Niño 2026-2027', fecha: '2026-11-03', urlVisor: 'https://sigrid.cenepred.gob.pe/sigridv3/', ...extra,
+});
+
+describe('Reporte: riesgo del distrito ante El Niño (CENEPRED) en el contexto de riesgo', () => {
+  const conCen = (c: unknown) => base({ contextoRiesgo: { peligros: peligros(), sismos: sismos(), cenepred: c } });
+
+  it('muestra la frase, el detalle y la fuente, como INFORMATIVO', () => {
+    const h = Reporte.seccionContexto(conCen(cenepred()));
+    expect(h).toContain('Riesgo del distrito ante El Niño (CENEPRED)');
+    expect(h).toContain('Según el CENEPRED, el distrito de Sachaca tiene riesgo muy alto ante inundaciones');
+    expect(h).toContain('7 926 viviendas');
+    expect(h).toMatch(/INFORMATIVO/);
+  });
+
+  it('dice lo que no cubre: es del distrito, no del predio ni una predicción, y a quién consultar', () => {
+    const h = Reporte.seccionContexto(conCen(cenepred()));
+    expect(h).toMatch(/estimación por distrito, no una predicción ni una evaluación de este predio/);
+    expect(h).toMatch(/evaluación de riesgos de la municipalidad/);
+    expect(h).toContain('https://sigrid.cenepred.gob.pe/sigridv3/');
+  });
+
+  it('nunca dice cumple ni da un puntaje', () => {
+    expect(Reporte.seccionContexto(conCen(cenepred()))).not.toMatch(/NO CUMPLE|>CUMPLE|puntaje/);
+  });
+
+  it('sin dato muestra la causa; un informe anterior a esta variable no dice nada', () => {
+    const h = Reporte.seccionContexto(conCen({ estado: 'SIN DATO', error: 'sin archivo' }));
+    expect(h).toContain('SIN DATO');
+    expect(h).toContain('sin archivo');
+    expect(Reporte.seccionContexto(base({ contextoRiesgo: { peligros: peligros(), sismos: sismos() } }))).not.toContain('CENEPRED)');
+  });
+
+  it('el resumen suma una fila informativa y la fuente se cita', () => {
+    const f = Reporte.filasResumenExtra(conCen(cenepred())).find(([k]: [string]) => k.startsWith('Riesgo del distrito'));
+    expect(f[1]).toBe('INFORMATIVO · en Sachaca: inundaciones muy alto, movimientos en masa alto (estimación del distrito, no del predio)');
+    const s = Reporte.construirSecciones(conCen(cenepred())).find((x: { titulo: string }) => x.titulo.startsWith('Contexto de riesgo'));
+    expect(s.fuente).toContain('CENEPRED (SIGRID)');
   });
 });
 
@@ -270,7 +371,7 @@ describe('Reporte.construirSecciones', () => {
 describe('Reporte.limites', () => {
   it('menciona las quebradas, el contexto y que toda distancia es en línea recta', () => {
     const t = Reporte.limites(base()).join(' ');
-    expect(t).toMatch(/quebradas urbanas/);
+    expect(t).toMatch(/ninguna fuente es completa/);
     expect(t).toMatch(/INFORMATIVO/);
     expect(t).toMatch(/sismos/i);
     expect(t).toMatch(/línea recta/);

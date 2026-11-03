@@ -159,23 +159,26 @@ const Entidades = (() => {
   }
 
   /**
-   * Cauces (red hidrográfica de la ANA) que pasan por el distrito: los nombres sin repetir y cuántos tramos lo cruzan.
+   * Cauces (ANA, IGP y OpenStreetMap) que pasan por el distrito: los nombres sin repetir, cuántos tramos lo cruzan y de qué
+   * fuentes (`fuentes`: ids ANA, IGP, OSM, en ese orden; un archivo antiguo sin `fuente` cuenta como ANA).
    * Un tramo cruza si alguno de sus vértices cae dentro. Sin lista de cauces (archivo ausente) devuelve `sinDato`.
    */
   function caucesEnDistrito(cauces, polys) {
     if (!Array.isArray(cauces) || cauces.length === 0) return { nombres: [], total: 0, sinDato: true };
     const dentro = contenedor(polys);
     const nombres = new Set();
+    const fuentes = new Set();
     let total = 0;
     cauces.forEach((c) => {
       const g = c.geometry;
       const lineas = g && g.type === 'LineString' ? [g.coordinates] : g && g.type === 'MultiLineString' ? g.coordinates : [];
       if (lineas.some((l) => l.some(([x, y]) => dentro(y, x)))) {
         total += 1;
+        fuentes.add(c.fuente || 'ANA');
         if (c.nombre) nombres.add(c.nombre);
       }
     });
-    return { nombres: [...nombres], total };
+    return { nombres: [...nombres], total, fuentes: ['ANA', 'IGP', 'OSM'].filter((f) => fuentes.has(f)).map((id) => ({ id })) };
   }
 
   /** Todo lo que se cuenta de un distrito en su perfil: conteo, mezcla de zonas y cauces. */

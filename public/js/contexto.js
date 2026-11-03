@@ -1,9 +1,9 @@
 /**
- * contexto.js — Quebradas y cauces (ANA) y contexto de riesgo (peligros geológicos y sismos) para el punto elegido.
+ * contexto.js — Quebradas y cauces (ANA, IGP y OpenStreetMap) y contexto de riesgo (peligros geológicos y sismos) para el punto elegido.
  *
  * Lee archivos CONGELADOS de public/data (no consulta ningún servicio al elegir el punto) y calcula con las funciones puras
  * de calculos.js. Nada de esto es una evaluación de peligro:
- *   - Quebradas y cauces: distancia al cauce más cercano de la red hidrográfica de la ANA. No hay umbral normativo, así que
+ *   - Quebradas y cauces: distancia al cauce más cercano de la red unida de la ANA, el IGP y OpenStreetMap (cada tramo dice su fuente). No hay umbral normativo, así que
  *     el estado es INFORMATIVO salvo que la persona fije el suyo en «Mis umbrales» (entonces CUMPLE / NO CUMPLE según su umbral).
  *   - Peligros geológicos: inventario de eventos documentados de INGEMMET (el estado es siempre INFORMATIVO).
  *   - Sismos: sismos reportados por el IGP en el periodo que cubre el archivo; contexto reciente, no predicción.
@@ -42,33 +42,68 @@ const Contexto = (() => {
 
   // ------------------------------------------------------------ Quebradas y cauces
 
-  /** Cauces listos para medir; las tarjetas y el asistente comparten esta lista. */
+  /** Las fuentes del archivo de cauces. Un archivo antiguo, de una sola fuente, se trata como ANA. */
+  function fuentesDe(meta) {
+    if (Array.isArray(meta.fuentes) && meta.fuentes.length) return meta.fuentes;
+    return [{ id: 'ANA', fuente: meta.fuente, capa: meta.capa, descargado: meta.descargado, elaboracion: meta.elaboracion, atribucion: meta.atribucion, licencia: meta.licencia, escala: meta.escala, registros: meta.registros }];
+  }
+
+  /** Cauces listos para medir; las tarjetas y el asistente comparten esta lista. Cada cauce dice de qué fuente es. */
   async function cauces() {
     const { features, meta } = await archivo('quebradas');
     const lista = features
       .filter((f) => f.geometry && /LineString/.test(f.geometry.type))
-      .map((f) => ({ nombre: f.properties.nombre, tipo: f.properties.tipo, categoria: f.properties.categoria, cuenca: f.properties.cuenca, geometry: f.geometry }));
+      .map((f) => ({
+        nombre: f.properties.nombre, tipo: f.properties.tipo, categoria: f.properties.categoria, cuenca: f.properties.cuenca,
+        fuente: f.properties.fuente || 'ANA', alias: f.properties.alias || [], tambienEn: f.properties.tambienEn || [], geometry: f.geometry,
+      }));
     if (lista.length === 0) throw new Error('El archivo de quebradas no tiene cauces.');
-    return { lista, meta };
+    return { lista, meta, fuentes: fuentesDe(meta) };
   }
 
   /**
-   * Cauce más cercano al punto. Con \`umbralUsuarioM\` (de «Mis umbrales») da CUMPLE o NO CUMPLE según ese umbral; sin él,
-   * INFORMATIVO. Devuelve SIN DATO si el archivo falta.
+   * Cauce más cercano al punto, con su fuente (ANA, IGP u OpenStreetMap). Con `umbralUsuarioM` (de «Mis umbrales») da CUMPLE o
+   * NO CUMPLE según ese umbral; sin él, INFORMATIVO. Devuelve SIN DATO si el archivo falta.
    */
   async function quebradas(lat, lon, umbralUsuarioM = null) {
     const base = { fuente: CONFIG.quebradas.fuente };
     try {
-      const { lista, meta } = await cauces();
+      const { lista, meta, fuentes } = await cauces();
       const r = Calculos.evaluarCauces({ lat, lon }, lista, {
         umbralUsuarioM,
-        fuente: meta.fuente || base.fuente,
-        fecha: dia(meta.descargado),
-        metodo: 'Distancia en línea recta desde el punto hasta el tramo más cercano de la red hidrográfica de la ANA (distancia a la línea del mapa, no al cauce real ni a su faja marginal). Datos congelados.',
+        metodo: 'Distancia en línea recta desde el punto hasta el tramo más cercano de los cauces de la ANA, el IGP y OpenStreetMap (distancia a la línea del mapa, no al cauce real ni a su faja marginal). Datos congelados.',
       });
-      return { ...r, nombres: meta.nombres || [], elaboracion: meta.elaboracion || null, tramos: meta.registros };
+      const origen = fuentes.find((f) => f.id === r.fuenteId) || fuentes[0];
+      const faltan = await quebradasAusentes();
+      return {
+        ...r,
+        fuente: origen.fuente || base.fuente,
+        fecha: dia(origen.descargado),
+        elaboracion: origen.elaboracion || null,
+        licencia: origen.licencia || null,
+        nombres: meta.nombres || [],
+        tramos: meta.registros,
+        ausentes: faltan ? faltan.ausentes : [],
+        fuentes: fuentes.map((f) => ({ id: f.id, fuente: f.fuente, registros: f.registros, fecha: dia(f.descargado), elaboracion: f.elaboracion || null, licencia: f.licencia || null })),
+      };
     } catch (err) {
       return sinDato({ ...base, nombre: null, tipo: null, umbralM: null, segunUmbralUsuario: false, fecha: null, metodo: 'No se pudo obtener el dato.', error: err.message });
+    }
+  }
+
+  /**
+   * Qué quebradas conocidas NO están en el archivo de cauces: las que nombra el inventario de INGEMMET en 2 o más registros
+   * y las que citan los informes (CONFIG.quebradas.citadas), menos las que sí figuran. Se calcula con los datos congelados;
+   * si falta alguno, devuelve null (no se afirma nada).
+   */
+  async function quebradasAusentes() {
+    try {
+      const [{ meta, lista }, peligros] = await Promise.all([cauces(), archivo('peligros')]);
+      const nombresCauces = [...(meta.nombres || []), ...lista.flatMap((c) => c.alias.map((a) => a.nombre))];
+      const mencionadas = Calculos.quebradasMencionadas(peligros.features.map((f) => f.properties.sector));
+      return Calculos.quebradasAusentes({ mencionadas, citadas: CONFIG.quebradas.citadas || [], nombresCauces, maximo: 6 });
+    } catch (_) {
+      return null;
     }
   }
 
@@ -126,17 +161,85 @@ const Contexto = (() => {
     }
   }
 
+  // ------------------------------------------------------- Peligro volcánico del Misti
+
+  const V = () => (typeof Volcan !== 'undefined' ? Volcan : require('./volcan.js')); // eslint-disable-line no-undef
+  let zonasVolcan = null; // zonas indexadas (una sola vez)
+
+  /** Las zonas de peligro volcánico listas para consultar, con la metadata del archivo. Rechaza si el archivo falta. */
+  async function zonasVolcanicas() {
+    const { features, meta } = await archivo('volcan');
+    if (!zonasVolcan || zonasVolcan.features !== features) zonasVolcan = { features, zonas: V().indexar(features) };
+    if (zonasVolcan.zonas.length === 0) throw new Error('El archivo de peligro volcánico no tiene zonas.');
+    return { zonas: zonasVolcan.zonas, meta };
+  }
+
+  /**
+   * En qué zonas de peligro volcánico del Misti cae el punto (INFORMATIVO: nunca cumple ni puntaje). Cada fenómeno (lahares,
+   * flujos piroclásticos, lava, avalanchas, ceniza) trae su nivel más alto. Si el archivo falta, SIN DATO con la causa.
+   */
+  async function volcan(lat, lon) {
+    const base = { fuente: CONFIG.volcan.fuente };
+    try {
+      const { zonas, meta } = await zonasVolcanicas();
+      const items = V().enZonas(lat, lon, zonas);
+      const resumen = V().resumirPunto(items);
+      return {
+        estado: 'INFORMATIVO',
+        enZona: resumen.length > 0,
+        resumen,
+        detalle: items,
+        frase: V().frasePunto(resumen),
+        lineas: V().lineasPunto(resumen),
+        fuente: meta.fuente || base.fuente,
+        fecha: dia(meta.descargado),
+        referencia: meta.referencia || null,
+        fechaDelMapa: meta.fechaDelMapa || 'Sin metadatos de fecha',
+        metodo: 'Se busca en qué polígonos de peligro del IGP cae el punto (si cae en un hueco, queda fuera). Datos congelados.',
+      };
+    } catch (err) {
+      return sinDato({ ...base, enZona: false, resumen: [], detalle: [], frase: null, fecha: null, metodo: 'No se pudo obtener el dato.', error: err.message });
+    }
+  }
+
+  /** Las zonas y la metadata tal como están en el archivo, para dibujarlas en el mapa. Rechaza si el archivo falta. */
+  async function volcanCrudo() {
+    return zonasVolcanicas();
+  }
+
+  // ------------------------------------------------- Escenario de riesgo del CENEPRED ante El Niño (por distrito)
+
+  const Cen = () => (typeof Cenepred !== 'undefined' ? Cenepred : require('./cenepred.js')); // eslint-disable-line no-undef
+  const Dis = () => (typeof Distritos !== 'undefined' ? Distritos : require('./distritos.js')); // eslint-disable-line no-undef
+
+  /**
+   * El nivel de riesgo ante inundaciones y movimientos en masa que el CENEPRED estima para el DISTRITO del punto en un escenario El Niño
+   * (INFORMATIVO: nunca cumple ni puntaje; no es una evaluación del predio). Si el archivo falta o el punto no cae en un distrito de
+   * los datos, SIN DATO con la causa.
+   */
+  async function cenepred(lat, lon) {
+    const base = { fuente: CONFIG.cenepred.fuente };
+    try {
+      const [datos, d] = await Promise.all([Cen().load(), Dis().lookup(lat, lon)]);
+      const r = Cen().buscar(datos, d ? d.distrito : null);
+      if (r.estado !== 'INFORMATIVO') return { ...base, estado: 'SIN DATO', distrito: r.distrito, motivo: r.motivo, error: r.causa };
+      return { ...r, ...base, fuente: r.fuente || base.fuente, frase: Cen().frase(r), lineas: Cen().lineas(r), fecha: r.fechaDescarga, metodo: Cen().METODO };
+    } catch (err) {
+      return { ...base, estado: 'SIN DATO', distrito: null, motivo: 'sin_archivo', error: err.message };
+    }
+  }
+
   /** Los sismos del archivo congelado tal como vienen (GeoJSON), para dibujarlos en el mapa. Rechaza si el archivo falta. */
   async function sismosCrudos() {
     const { features } = await archivo('sismos');
     return features;
   }
 
-  /** Las tres variables para un punto: { quebradas, peligros, sismos } (ninguna rechaza). */
+  /** Las variables para un punto: { quebradas, peligros, sismos, volcan, cenepred } (ninguna rechaza). */
   async function evaluar(lat, lon, umbralUsuarioM = null) {
-    const [q, p, s] = await Promise.all([quebradas(lat, lon, umbralUsuarioM), peligros(lat, lon), sismos(lat, lon)]);
-    return { quebradas: q, peligros: p, sismos: s };
+    const [q, p, s, v, c] = await Promise.all([quebradas(lat, lon, umbralUsuarioM), peligros(lat, lon), sismos(lat, lon), volcan(lat, lon), cenepred(lat, lon)]);
+    return { quebradas: q, peligros: p, sismos: s, volcan: v, cenepred: c };
   }
 
-  return { cauces, quebradas, peligros, sismos, sismosCrudos, evaluar };
+  return { cauces, quebradas, quebradasAusentes, peligros, sismos, sismosCrudos, volcan, volcanCrudo, cenepred, evaluar };
 })();

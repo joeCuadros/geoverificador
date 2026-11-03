@@ -388,12 +388,81 @@ describe('Comparar: quebradas y cauces (INFORMATIVO salvo el umbral del usuario)
   });
 });
 
+describe('Comparar: peligro volcánico del Misti (informativo)', () => {
+  const volcan = { estado: 'INFORMATIVO', enZona: true, frase: 'Tu punto está en zona de peligro bajo por lahares del Misti, según el IGP.', resumen: [{ tipo: 'lahar', nivel: 'bajo' }] };
+
+  it('es una fila de contexto informativa: nunca prioridad, cumple ni puntaje', () => {
+    const c = crear({ cauce: cauce(180), contexto: { peligros: null, sismos: null, volcan } });
+    const f = Comparar.filas([c], []);
+    const fila = f.contexto.find((x: { id: string }) => x.id === 'volcan');
+    expect(fila.prioritaria).toBe(false);
+    expect(fila.celdas[0].estado).toBe('INFORMATIVO');
+    expect(fila.celdas[0].partes[0].texto).toBe('En zona de peligro bajo por lahares');
+    expect(fila.celdas[0].mejor).toBe(false);
+  });
+
+  it('fuera de las zonas lo dice sin afirmar que no haya peligro; sin dato queda SIN DATO', () => {
+    const fuera = crear({ cauce: cauce(180), contexto: { volcan: { ...volcan, enZona: false, resumen: [], frase: 'Tu punto no cae dentro de ninguna zona…' } } });
+    expect(Comparar.filas([fuera], []).contexto.find((x: { id: string }) => x.id === 'volcan').celdas[0].partes[0].texto).toBe('Fuera de las zonas mapeadas por el IGP');
+    const sin = crear({ cauce: cauce(180), contexto: { volcan: { estado: 'SIN DATO' } } });
+    expect(Comparar.filas([sin], []).contexto.find((x: { id: string }) => x.id === 'volcan').celdas[0].estado).toBe('SIN DATO');
+  });
+
+  it('un punto guardado antes de existir la fila sigue siendo válido y muestra «Sin dato»', () => {
+    const viejo = crear({ cauce: cauce(180) });
+    delete viejo.contexto.volcan;
+    const a = { getItem: (k: string) => store[k] ?? null, setItem: (k: string, v: string) => { store[k] = v; } };
+    const store: Record<string, string> = {};
+    Comparar.guardarCandidatos(a, [viejo]);
+    expect(Comparar.leerCandidatos(a)).toHaveLength(1);
+    expect(Comparar.filas([viejo], []).contexto.find((x: { id: string }) => x.id === 'volcan').celdas[0].estado).toBe('SIN DATO');
+  });
+});
+
+describe('Comparar: riesgo del distrito ante El Niño (CENEPRED, informativo)', () => {
+  const cenepred = { estado: 'INFORMATIVO', titulo: 'Sachaca', inundacion: { nivel: 'Muy alto' }, movimientos_masa: { nivel: 'Alto' } };
+  const fila = (cands: unknown[]) => Comparar.filas(cands, []).contexto.find((x: { id: string }) => x.id === 'cenepred');
+
+  it('es una fila de contexto informativa con los dos niveles y la aclaración de que es del distrito', () => {
+    const f = fila([crear({ cauce: cauce(180), contexto: { peligros: null, sismos: null, cenepred } })]);
+    expect(f.prioritaria).toBe(false);
+    expect(f.celdas[0].estado).toBe('INFORMATIVO');
+    expect(f.celdas[0].partes.map((p: { texto: string }) => p.texto)).toEqual([
+      'Inundaciones: muy alto', 'Movimientos en masa: alto', 'Estimación del distrito de Sachaca en un escenario El Niño; no es del predio',
+    ]);
+    expect(f.celdas[0].mejor).toBe(false);
+    expect(JSON.stringify(f)).not.toMatch(/NO CUMPLE|puntaje/);
+  });
+
+  it('sin dato, o con un nivel desconocido, queda SIN DATO', () => {
+    expect(fila([crear({ cauce: cauce(180), contexto: { cenepred: { estado: 'SIN DATO' } } })]).celdas[0].estado).toBe('SIN DATO');
+    expect(fila([crear({ cauce: cauce(180), contexto: { cenepred: { ...cenepred, inundacion: { nivel: 'Extremo' } } } })]).celdas[0].estado).toBe('SIN DATO');
+  });
+
+  it('un punto guardado antes de existir la fila sigue siendo válido y muestra «Sin dato»', () => {
+    const viejo = crear({ cauce: cauce(180) });
+    delete viejo.contexto.cenepred;
+    const store: Record<string, string> = {};
+    const a = { getItem: (k: string) => store[k] ?? null, setItem: (k: string, v: string) => { store[k] = v; } };
+    Comparar.guardarCandidatos(a, [viejo]);
+    expect(Comparar.leerCandidatos(a)).toHaveLength(1);
+    expect(fila([viejo]).celdas[0].estado).toBe('SIN DATO');
+  });
+});
+
+describe('Comparar: la fuente del cauce', () => {
+  it('la celda de quebradas nombra la fuente del cauce', () => {
+    const cel = Comparar.celda(crear({ cauce: cauce(50, { nombre: 'Quebrada Añashuayco', tipo: 'Quebrada', fuenteCorta: 'OpenStreetMap' }) }), 'quebradas');
+    expect(cel.partes[0].texto).toBe('Quebrada Añashuayco · 50 m en línea recta · fuente: OpenStreetMap');
+  });
+});
+
 describe('Comparar: contexto de riesgo (peligros geológicos y sismos), siempre informativo', () => {
   it('guarda el contexto con estado INFORMATIVO y nunca lo vuelve prioridad', () => {
     const c = crear({ contexto: ctxOk });
     expect(c.contexto.peligros).toMatchObject({ estado: 'INFORMATIVO', total: 3, radioM: 500, distanciaM: 120, tipo: 'Flujo de detritos' });
     expect(c.contexto.sismos).toMatchObject({ estado: 'INFORMATIVO', total: 12, radioM: 100000, magnitudMaxima: 4.8, desde: '2026-01-01', hasta: '2026-11-02' });
-    expect(Comparar.CONTEXTO.map((x: { id: string }) => x.id)).toEqual(['peligros', 'sismos']);
+    expect(Comparar.CONTEXTO.map((x: { id: string }) => x.id)).toEqual(['peligros', 'sismos', 'volcan', 'cenepred']);
     expect(Comparar.normalizarPrioridades(['peligros', 'sismos', 'salud'])).toEqual(['salud']);
   });
 
@@ -456,7 +525,7 @@ describe('Comparar.filas', () => {
     const b = crear({ cauce: cauce(100), contexto: ctxOk2 });
     const f = Comparar.filas([a, b], ['salud'], { quebradaMinM: 300 });
     expect(f.variables.map((x: { id: string }) => x.id)).toEqual(['zonificacion', 'salud', 'educacion', 'transporte', 'areaVerde', 'quebradas']);
-    expect(f.contexto.map((x: { id: string }) => x.id)).toEqual(['peligros', 'sismos']);
+    expect(f.contexto.map((x: { id: string }) => x.id)).toEqual(['peligros', 'sismos', 'volcan', 'cenepred']);
     [...f.variables, ...f.contexto].forEach((fila: { celdas: { candidatoId: string }[] }) => {
       expect(fila.celdas.map((c) => c.candidatoId)).toEqual([a.id, b.id]);
     });

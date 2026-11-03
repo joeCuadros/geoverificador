@@ -173,13 +173,13 @@ describe('Asistente.buscar con «lejos de quebradas»', () => {
     expect(() => Asistente.buscar({ ...base, criterios: [req(null)] })).toThrow(/distancia mínima/);
   });
 
-  it('el texto del resultado dice «a más de» y advierte los límites de la red de la ANA', () => {
+  it('el texto del resultado dice «a más de» y advierte los límites de los cauces', () => {
     const r = Asistente.buscar({ ...base, criterios: [req(300)] });
     const f = Asistente.formatearBusqueda(r, { aproximados: [], temaNoSoportado: null, radioGlobalM: null });
     expect(f.texto).toContain('a más de 300 m de una quebrada o río');
     expect(f.texto).not.toMatch(/a 300 m o menos/);
-    expect(f.texto).toMatch(/no incluye todas las quebradas urbanas/);
-    expect(f.texto).toMatch(/no es un mapa de peligro/);
+    expect(f.texto).toMatch(/no incluyen todas las quebradas urbanas/);
+    expect(f.texto).toMatch(/no son un mapa de peligro/);
     expect(f.texto).toMatch(/faja marginal/);
   });
 
@@ -190,7 +190,11 @@ describe('Asistente.buscar con «lejos de quebradas»', () => {
 
 describe('Asistente.responder: quebradas, sismos y peligros del punto', () => {
   const punto = { lat: P.lat, lon: P.lon };
-  const cauce = (extra = {}) => ({ estado: 'INFORMATIVO', nombre: 'Quebrada El Cuico', tipo: 'Quebrada', distanciaM: 180, umbralM: null, segunUmbralUsuario: false, ...extra });
+  const cauce = (extra = {}) => ({
+    estado: 'INFORMATIVO', nombre: 'Quebrada El Cuico', tipo: 'Quebrada', distanciaM: 180, umbralM: null, segunUmbralUsuario: false,
+    fuenteId: 'IGP', fuenteCorta: 'IGP', alias: [], fuentes: [{ id: 'ANA', registros: 14 }, { id: 'IGP', registros: 231 }, { id: 'OSM', registros: 20 }],
+    ausentes: [{ nombre: 'Cabreria', registros: 10 }, { nombre: 'Pajonal', registros: 4 }], ...extra,
+  });
   const sismos = (extra = {}) => ({ estado: 'INFORMATIVO', total: 12, radioM: 100000, magnitudMaxima: 4.8, desde: '2026-01-01', hasta: '2026-11-02', ...extra });
   const peligros = (extra = {}) => ({ estado: 'INFORMATIVO', total: 3, radioM: 500, distanciaM: 120, masCercano: { tipo: 'Flujos', subtipo: 'Flujo de detritos' }, ...extra });
 
@@ -204,10 +208,22 @@ describe('Asistente.responder: quebradas, sismos y peligros del punto', () => {
     expect(r.texto).toContain('Quebrada El Cuico');
     expect(r.texto).toContain('180 m en línea recta');
     expect(r.texto).toMatch(/No existe una distancia normativa/);
-    expect(r.texto).toMatch(/no incluye todas las quebradas urbanas/);
-    expect(r.texto).toMatch(/no es un mapa de peligro/);
+    expect(r.texto).toMatch(/ninguna fuente es completa/);
+    expect(r.texto).toMatch(/mapa de peligro/);
     expect(r.texto).toMatch(/Mis umbrales/);
     expect(r.texto).not.toMatch(/\bcumple\b/i);
+  });
+
+  it('quebrada nombra la fuente del cauce, las fuentes del archivo y lo que todavía no figura', () => {
+    const r = Asistente.responder({ tipo: 'quebrada', criterios: [] }, { punto, cauce: cauce() });
+    expect(r.texto).toContain('(fuente: IGP)');
+    expect(r.texto).toContain('ANA (14 tramos), IGP (231 tramos) y OpenStreetMap (20 tramos)');
+    expect(r.texto).toContain('todavía no figuran Cabreria (10 registros de INGEMMET), Pajonal (4 registros de INGEMMET)');
+  });
+
+  it('quebrada dice cómo más figura el cauce cuando otra fuente lo llama distinto', () => {
+    const r = Asistente.responder({ tipo: 'quebrada', criterios: [] }, { punto, cauce: cauce({ nombre: 'Quebrada Estanquillo', alias: [{ nombre: 'Quebrada Añashuayco', fuente: 'OSM' }] }) });
+    expect(r.texto).toContain('También figura como Quebrada Añashuayco.');
   });
 
   it('quebrada con el umbral del usuario dice «según tu umbral»', () => {
@@ -283,8 +299,8 @@ describe('Asistente.explicar: quebradas, sismos y peligros', () => {
     expect(t).toContain('no una predicción');
   });
 
-  it('una búsqueda con quebradas suma el límite de la red de la ANA', () => {
-    expect(JSON.stringify(Asistente.explicar('buscar', { cauce: true }))).toContain('no incluye todas las quebradas urbanas');
+  it('una búsqueda con quebradas suma el límite de los cauces', () => {
+    expect(JSON.stringify(Asistente.explicar('buscar', { cauce: true }))).toContain('faltan quebradas urbanas');
     expect(JSON.stringify(Asistente.explicar('buscar', {}))).not.toContain('quebradas urbanas');
   });
 });

@@ -403,13 +403,20 @@ const Calculos = (() => {
     return distanciaM >= umbralUsuarioM ? 'CUMPLE' : 'NO CUMPLE';
   }
 
-  const SIN_NOMBRE_ANA = 'Sin nombre en la ANA';
+  // Cómo se nombra cada fuente de cauces: «sin nombre en la ANA», y el nombre corto que acompaña a una cifra.
+  const FUENTES_CAUCE = {
+    ANA: { corta: 'ANA', sinNombre: 'Sin nombre en la ANA' },
+    IGP: { corta: 'IGP', sinNombre: 'Sin nombre en el IGP' },
+    OSM: { corta: 'OpenStreetMap', sinNombre: 'Sin nombre en OpenStreetMap' },
+  };
+  const fuenteCauce = (id) => FUENTES_CAUCE[id] || FUENTES_CAUCE.ANA;
 
   /**
    * Cauce más cercano al punto.
-   *   cauces:   [{ nombre, tipo, categoria, geometry }]   (geometry LineString o MultiLineString)
+   *   cauces:   [{ nombre, tipo, categoria, fuente: 'ANA' | 'IGP' | 'OSM', alias?, geometry }]   (geometry LineString o MultiLineString)
    *   opciones: { umbralUsuarioM?, fuente, fecha, metodo }
    * Sin cauces (archivo ausente o vacío) devuelve SIN DATO: que no haya datos no significa que no haya cauce.
+   * El resultado dice de qué fuente es el cauce (`fuenteId` y `fuenteCorta`): sin fuente, se supone la ANA.
    */
   function evaluarCauces(punto, cauces, opciones = {}) {
     const { umbralUsuarioM = null, fuente = null, fecha = null, metodo = null } = opciones;
@@ -421,15 +428,96 @@ const Calculos = (() => {
       if (d < mejorD) { mejor = c; mejorD = d; }
     }
     const base = { umbralM: umbral, segunUmbralUsuario: umbral !== null, fuente, fecha, metodo };
-    if (!mejor) return { estado: 'SIN DATO', nombre: null, tipo: null, categoria: null, distanciaM: null, ...base };
+    if (!mejor) return { estado: 'SIN DATO', nombre: null, tipo: null, categoria: null, fuenteId: null, fuenteCorta: null, alias: [], distanciaM: null, ...base };
+    const f = fuenteCauce(mejor.fuente);
     return {
       estado: clasificarCauce(mejorD, umbral),
-      nombre: mejor.nombre || SIN_NOMBRE_ANA,
+      nombre: mejor.nombre || f.sinNombre,
       tipo: mejor.tipo || null,
       categoria: mejor.categoria || null,
+      fuenteId: mejor.fuente || 'ANA',
+      fuenteCorta: f.corta,
+      alias: Array.isArray(mejor.alias) ? mejor.alias : [],
       distanciaM: mejorD,
       ...base,
     };
+  }
+
+  // Quebradas que se mencionan en los datos pero no figuran como cauce: se calculan, no se escriben a mano.
+  const sinTildesQ = (t) => String(t).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const PALABRAS_VACIAS_Q = new Set(['quebrada', 'qda', 'torrentera', 'rio', 'av', 'cuesta', 'el', 'la', 'las', 'los', 'de', 'del']);
+  const claveQuebrada = (n) => sinTildesQ(n).replace(/[^a-zñ ]/g, ' ').split(/\s+/).filter((w) => w && !PALABRAS_VACIAS_Q.has(w)).join(' ');
+  const mayusculaInicial = (t) => t.replace(/(^|\s)(\S)/g, (_, e, c) => e + c.toUpperCase());
+
+  /**
+   * Quebradas nombradas en textos libres (el campo `sector` del inventario de INGEMMET: «Quebrada San Lazaro (margen
+   * izquierda)», «TORRENTERA SAN LAZARO», «Qda. Matagente - Charcani»). Cuenta en cuántos textos aparece cada nombre y deja
+   * los que aparecen en `minRegistros` o más. Devuelve [{ nombre, clave, registros }] de más a menos mencionadas.
+   */
+  function quebradasMencionadas(textos, { minRegistros = 2 } = {}) {
+    const cuenta = new Map();
+    const RX = /\b(?:quebrada|qda\.?|torrentera)\s+((?:(?:de|del|la|las|los|el)\s+)*[a-zñ]+(?:\s+(?!(?:margen|tramo|afluente|sector|zona|de|del|y)\b)[a-zñ]+)?)/gi;
+    for (const t of textos || []) {
+      if (typeof t !== 'string') continue;
+      const norm = sinTildesQ(t);
+      const vistos = new Set();
+      let m;
+      RX.lastIndex = 0;
+      while ((m = RX.exec(norm))) {
+        const original = t.slice(m.index + m[0].length - m[1].length, m.index + m[0].length).trim();
+        const clave = claveQuebrada(original);
+        if (clave.length < 4 || vistos.has(clave)) continue;
+        vistos.add(clave);
+        const previo = cuenta.get(clave) || { nombre: mayusculaInicial(original.toLowerCase()), clave, registros: 0 };
+        previo.registros++;
+        cuenta.set(clave, previo);
+      }
+    }
+    return [...cuenta.values()].filter((x) => x.registros >= minRegistros).sort((a, b) => b.registros - a.registros || a.clave.localeCompare(b.clave));
+  }
+
+  /**
+   * Cuáles de las quebradas conocidas NO figuran entre los nombres de los cauces (nombres y alias).
+   *   mencionadas: de quebradasMencionadas; citadas: nombres que citan los informes (se suman, con registros 0 si no figuran).
+   * Una quebrada figura si su clave coincide con la de algún cauce (o una contiene a la otra, si tiene 5 letras o más).
+   * Devuelve { ausentes: [{ nombre, registros }], presentes: [nombre] }, ausentes de más a menos mencionadas.
+   */
+  function quebradasAusentes({ mencionadas = [], citadas = [], nombresCauces = [], maximo = 8 } = {}) {
+    const claves = (nombresCauces || []).map(claveQuebrada).filter(Boolean);
+    const figura = (clave) => claves.some((c) => c === clave || (clave.length >= 5 && (c.includes(clave) || (c.length >= 5 && clave.includes(c)))));
+    const todas = new Map();
+    for (const m of mencionadas) todas.set(m.clave || claveQuebrada(m.nombre), { nombre: m.nombre, registros: m.registros || 0 });
+    for (const n of citadas) { const k = claveQuebrada(n); if (k && !todas.has(k)) todas.set(k, { nombre: n, registros: 0 }); }
+    const presentes = [];
+    const ausentes = [];
+    for (const [k, v] of todas) (figura(k) ? presentes : ausentes).push(v);
+    ausentes.sort((a, b) => b.registros - a.registros || a.nombre.localeCompare(b.nombre, 'es'));
+    return { ausentes: ausentes.slice(0, maximo), presentes: presentes.map((v) => v.nombre), total: ausentes.length };
+  }
+
+  /** Nombre corto de una fuente de cauces (`{ id }` o el id): «ANA», «IGP», «OpenStreetMap». */
+  function nombreFuenteCauce(f) {
+    return fuenteCauce(f && typeof f === 'object' ? f.id : f).corta;
+  }
+
+  /** «ANA (14 tramos), IGP (231 tramos) y OpenStreetMap (20 tramos)»: de dónde salen los cauces del archivo. */
+  function textoFuentesCauces(fuentes) {
+    if (!Array.isArray(fuentes) || fuentes.length === 0) return 'la ANA';
+    const partes = (fuentes || [])
+      .filter((f) => f && esNumero(f.registros) && f.registros > 0)
+      .map((f) => `${fuenteCauce(f.id).corta} (${f.registros} ${f.registros === 1 ? 'tramo' : 'tramos'})`);
+    if (partes.length <= 1) return partes.join('');
+    return `${partes.slice(0, -1).join(', ')} y ${partes[partes.length - 1]}`;
+  }
+
+  /**
+   * Las quebradas conocidas que todavía no están en el archivo, para «Qué no cubre» (null si no hay ninguna que decir):
+   * «Cabreria (10 registros de INGEMMET), Pajonal (4 registros de INGEMMET)».
+   */
+  function textoQuebradasAusentes(ausentes) {
+    const lista = (ausentes || []).filter((a) => a && a.nombre);
+    if (lista.length === 0) return null;
+    return lista.map((a) => (a.registros > 0 ? `${a.nombre} (${a.registros} ${a.registros === 1 ? 'registro' : 'registros'} de INGEMMET)` : `${a.nombre} (la citan los informes de INGEMMET)`)).join(', ');
   }
 
   // ------------------------------------------------------ Contexto de riesgo
@@ -574,6 +662,11 @@ const Calculos = (() => {
     distanciaAGeometriaLineaM,
     clasificarCauce,
     evaluarCauces,
+    quebradasMencionadas,
+    quebradasAusentes,
+    textoFuentesCauces,
+    nombreFuenteCauce,
+    textoQuebradasAusentes,
     resumirCercanos,
     resumirSismos,
     areaAnilloM2,

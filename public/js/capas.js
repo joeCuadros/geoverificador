@@ -7,8 +7,12 @@
  *   paraderos   → los paraderos (círculo de 400 m si son pocos)
  *   parques     → los parques, como polígonos rellenos
  *   residencial, tranquilo, campina, comercial, historico → solo los polígonos de esas zonas del plano
- *   quebradas   → líneas (red hidrográfica de la ANA)
+ *   quebradas   → líneas (cauces de la ANA, el IGP y OpenStreetMap; cada tramo dice su fuente)
  *   sismos      → círculos pequeños, más grandes cuanto mayor la magnitud
+ *   volcan      → zonas de peligro volcánico del Misti (IGP): lahares, flujos piroclásticos, lava y avalanchas, coloreadas por nivel
+ *                 (alto, moderado, bajo) con una línea de leyenda por nivel. La ceniza cubre toda la ciudad y no se dibuja.
+ *   cenepred_inundacion, cenepred_mm → los distritos coloreados por su nivel de riesgo ante inundaciones o ante movimientos en masa en un escenario
+ *                 El Niño (CENEPRED), con una línea de leyenda por nivel. Es una estimación por distrito, no del predio. Se dibuja un fenómeno a la vez.
  *   lineas      → recorridos de bus de SmartBus (un color por línea) y, con un punto, la parada más cercana de cada una
  * Con una búsqueda se dibujan las entidades que hacen que cada sector cumpla, y UNA región resaltada: los sectores donde se
  * cumple todo lo que pidió. No se pinta lo que no cumple y no se ve la cuadrícula.
@@ -20,6 +24,9 @@ const Capas = (() => {
   const R = () => (typeof Rutas !== 'undefined' ? Rutas : require('./rutas.js')); // eslint-disable-line no-undef
   const E = () => (typeof Entidades !== 'undefined' ? Entidades : require('./entidades.js')); // eslint-disable-line no-undef
   const C = typeof Calculos !== 'undefined' ? Calculos : require('./calculos.js'); // eslint-disable-line no-undef
+  const V = () => (typeof Volcan !== 'undefined' ? Volcan : require('./volcan.js')); // eslint-disable-line no-undef
+  const Cen = () => (typeof Cenepred !== 'undefined' ? Cenepred : require('./cenepred.js')); // eslint-disable-line no-undef
+  const Dist = () => (typeof Distritos !== 'undefined' ? Distritos : require('./distritos.js')); // eslint-disable-line no-undef
   const M_POR_GRADO = (Math.PI / 180) * C.RADIO_TIERRA_M;
   const NIVELES = ['inicial', 'primaria', 'secundaria'];
 
@@ -36,6 +43,9 @@ const Capas = (() => {
     { id: 'historico', etiqueta: 'Centro histórico', grupo: 'zona' },
     { id: 'quebradas', etiqueta: 'Quebradas y ríos', grupo: 'riesgo' },
     { id: 'sismos', etiqueta: 'Sismos', grupo: 'riesgo' },
+    { id: 'volcan', etiqueta: 'Peligro volcánico (Misti)', grupo: 'riesgo' },
+    { id: 'cenepred_inundacion', etiqueta: 'Riesgo de inundación por distrito (CENEPRED)', grupo: 'riesgo' },
+    { id: 'cenepred_mm', etiqueta: 'Riesgo de movimientos en masa por distrito (CENEPRED)', grupo: 'riesgo' },
   ];
   const ZONAS = ['residencial', 'tranquilo', 'campina', 'comercial', 'historico'];
 
@@ -118,11 +128,13 @@ const Capas = (() => {
    *   capas:    [{ id, niveles?, umbralM?, umbralPorNivel? }] (ver deCriterios)
    *   datos:    Asistente.prepararDatos; zonas: Zonificacion.zonas(); cauces: [{ nombre, tipo, geometry }] o null; sismos: [{ lat, lon, magnitud, … }] o null
    *   area:     { polys } (un distrito), { bbox } o null (todo el mapa)
+   cenepred: el contenido de data/riesgo_cenepred_fen2027.json (y Distritos cargado para los límites); solo hace falta con una capa cenepred_inundacion o cenepred_mm
+   volcan:   las zonas de Volcan.indexar; solo hacen falta (y solo se cargan) con una capa { id: 'volcan', tipos?: ['lahar', …] }
    rutas:    el índice de Rutas.indexar; solo hace falta (y solo se carga) si hay una capa { id: 'lineas', nombres:[…], punto?}
    *   sectores: los de Asistente.formatearBusqueda (con `centros`); si hay, solo se dibujan las entidades que los hacen cumplir
-   * Devuelve { puntos, circulos, poligonos, lineas, sismos, sectores, lineasBus, paradasBus, leyenda, vacias, sinDatos, resumen, limites }.
+   * Devuelve { puntos, circulos, poligonos, lineas, sismos, peligroVolcan, riesgoDistritos, sectores, lineasBus, paradasBus, leyenda, vacias, sinDatos, resumen, limites }.
    */
-  function construir({ capas, datos, zonas, cauces, sismos, area = null, umbrales, sectores = null, rutas = null, maxCirculos = 12 }) {
+  function construir({ capas, datos, zonas, cauces, sismos, volcan = null, cenepred = null, area = null, umbrales, sectores = null, rutas = null, maxCirculos = 12 }) {
     const polys = area && area.polys ? area.polys : null;
     const cajaArea = polys ? bboxDePolys(polys) : area && area.bbox ? area.bbox : null;
     const dentroPoligonos = polys ? E().contenedor(polys) : null;
@@ -140,6 +152,8 @@ const Capas = (() => {
     const poligonos = [];
     const lineas = [];
     const sism = [];
+    const peligroVolcan = [];
+    const riesgoDistritos = [];
     let lineasBus = [];
     let paradasBus = [];
     let cajaLineas = null;
@@ -153,7 +167,7 @@ const Capas = (() => {
       colegios: ['colegio', 'colegios'], salud: ['establecimiento de salud', 'establecimientos de salud'], paraderos: ['paradero', 'paraderos'], parques: ['parque', 'parques'],
       residencial: ['zona residencial', 'zonas residenciales'], tranquilo: ['zona tranquila', 'zonas tranquilas'], campina: ['zona de campiña', 'zonas de campiña'],
       comercial: ['zona comercial', 'zonas comerciales'], historico: ['zona del centro histórico', 'zonas del centro histórico'],
-      quebradas: ['tramo de quebrada o río', 'tramos de quebradas y ríos'], sismos: ['sismo', 'sismos'], lineas: ['línea de bus', 'líneas de bus'], sectores: ['sector', 'sectores'],
+      quebradas: ['tramo de quebrada o río', 'tramos de quebradas y ríos'], sismos: ['sismo', 'sismos'], volcan: ['zona de peligro volcánico', 'zonas de peligro volcánico'], cenepred_inundacion: ['distrito coloreado por su riesgo ante inundaciones', 'distritos coloreados por su riesgo ante inundaciones'], cenepred_mm: ['distrito coloreado por su riesgo ante movimientos en masa', 'distritos coloreados por su riesgo ante movimientos en masa'], lineas: ['línea de bus', 'líneas de bus'], sectores: ['sector', 'sectores'],
     };
     const nombreDe = (capa, n) => NOMBRES[capa][n === 1 ? 0 : 1];
     const cuenta = (capa, n, texto) => {
@@ -227,8 +241,10 @@ const Capas = (() => {
       } else if (id === 'quebradas') {
         if (!Array.isArray(cauces) || cauces.length === 0) { sinDatos.push('quebradas'); return; }
         const elegidos = cauces.filter((q) => coordsDe(q.geometry).some(([x, y]) => enArea(y, x)));
-        elegidos.forEach((q) => lineas.push({ capa: 'quebradas', geometry: q.geometry, nombre: q.nombre, tipo: q.tipo, titulo: q.nombre || 'Cauce sin nombre', detalle: q.tipo || 'Red hidrográfica de la ANA' }));
-        cuenta('quebradas', elegidos.length, `Quebradas y ríos (red de la ANA): ${elegidos.length} ${elegidos.length === 1 ? 'tramo' : 'tramos'}`);
+        const fuenteDe = (q) => C.nombreFuenteCauce(q.fuente || 'ANA');
+        elegidos.forEach((q) => lineas.push({ capa: 'quebradas', geometry: q.geometry, nombre: q.nombre, tipo: q.tipo, fuente: q.fuente || 'ANA', titulo: q.nombre || 'Cauce sin nombre', detalle: `${q.tipo ? `${q.tipo} · ` : ''}Fuente: ${fuenteDe(q)}` }));
+        const porFuente = ['ANA', 'IGP', 'OSM'].map((id) => [id, elegidos.filter((q) => (q.fuente || 'ANA') === id).length]).filter(([, n]) => n > 0).map(([id, n]) => `${C.nombreFuenteCauce(id)} ${n}`);
+        cuenta('quebradas', elegidos.length, `Quebradas y ríos: ${elegidos.length} ${elegidos.length === 1 ? 'tramo' : 'tramos'}${porFuente.length ? ` (${porFuente.join(', ')})` : ''}`);
       } else if (id === 'lineas') {
         if (!rutas) { sinDatos.push('lineas'); return; }
         const m = R().paraMapa(rutas, capa.nombres || [], capa.punto || null);
@@ -239,6 +255,38 @@ const Capas = (() => {
         else cajaLineas = m.bbox;
         const etiquetas = m.trazos.map((t) => R().etiquetaLinea(t));
         cuenta('lineas', m.trazos.length, `Líneas de bus de SmartBus: ${etiquetas.join(', ')}${m.paradas.length ? `; con la parada más cercana de cada una (${m.paradas.length})` : ''}`);
+      } else if (id === 'volcan') {
+        if (!Array.isArray(volcan) || volcan.length === 0) { sinDatos.push('volcan'); return; }
+        const pedidos = (capa.tipos && capa.tipos.length ? capa.tipos : V().dibujables()).filter((t) => V().TIPOS[t] && V().TIPOS[t].mapa);
+        const zonasVol = volcan.filter((z) => pedidos.includes(z.tipo) && (!cajaArea || !(z.bbox[2] < cajaArea[0] || z.bbox[0] > cajaArea[2] || z.bbox[3] < cajaArea[1] || z.bbox[1] > cajaArea[3])));
+        // Del nivel más bajo al más alto: el más alto queda encima.
+        [...zonasVol].sort((a, b) => V().NIVELES.indexOf(a.nivel) - V().NIVELES.indexOf(b.nivel)).forEach((z) => peligroVolcan.push({
+          capa: 'volcan', tipo: z.tipo, nivel: z.nivel, geometry: z.geometry,
+          titulo: `${V().nombreTipo(z.tipo).charAt(0).toUpperCase()}${V().nombreTipo(z.tipo).slice(1)}: peligro ${z.nivel}`,
+          detalle: `Zona del IGP${z.detalle ? `. ${z.detalle}` : ''}. Mapa de escala regional, sin fecha de elaboración; no es una evaluación de riesgo.`,
+        }));
+        const filas = V().leyenda(zonasVol, { tipos: pedidos });
+        if (filas.length === 0) vacias.push('volcan');
+        filas.forEach((f) => leyenda.push({ capa: 'volcan', nivel: f.nivel, texto: f.texto, n: zonasVol.filter((z) => z.nivel === f.nivel && f.tipos.includes(z.tipo)).length }));
+      } else if (id === 'cenepred_inundacion' || id === 'cenepred_mm') {
+        if (riesgoDistritos.length) return; // un fenómeno a la vez: el segundo se pintaría encima del primero
+        const fen = id === 'cenepred_mm' ? 'movimientos_masa' : 'inundacion';
+        const nombreFen = Cen().FENOMENOS[fen].nombre;
+        const delArchivo = cenepred ? Cen().distritosPorFenomeno(cenepred, fen).map((d) => ({ d, f: Dist().feature(d.distrito) })).filter((x) => x.f) : [];
+        if (delArchivo.length === 0) { sinDatos.push('cenepred'); return; }
+        // Del nivel más bajo al más alto: el más alto queda encima.
+        [...delArchivo].sort((a, b) => Cen().NIVELES.indexOf(a.d.nivel) - Cen().NIVELES.indexOf(b.d.nivel)).forEach(({ d, f }) => {
+          const l = Cen().lineas(Cen().buscar(cenepred, d.ubigeo), { fenomenos: [fen] })[0];
+          riesgoDistritos.push({
+            capa: id, fenomeno: fen, nivel: d.nivel, distrito: d.distrito, ubigeo: d.ubigeo, geometry: f.geometry,
+            titulo: `${Dist().titulo(d.distrito)}: riesgo ${d.nivel.toLowerCase()} ante ${nombreFen}`,
+            detalle: `${l ? `${l.texto} ` : ''}Estimación por distrito para un escenario El Niño (CENEPRED); no es del predio.`,
+          });
+        });
+        [...Cen().porNivel(cenepred, fen)].reverse().forEach(({ nivel, n }) => { // del más alto al más bajo, como la leyenda del volcán
+          const nombres = delArchivo.filter((x) => x.d.nivel === nivel).map((x) => Dist().titulo(x.d.distrito));
+          leyenda.push({ capa: id, nivel, n, texto: `Riesgo ${nivel.toLowerCase()} ante ${nombreFen}: ${n} ${n === 1 ? 'distrito' : 'distritos'}${n <= 10 ? ` (${nombres.join(', ')})` : ''}` });
+        });
       } else if (id === 'sismos') {
         if (!Array.isArray(sismos)) { sinDatos.push('sismos'); return; }
         sismos.forEach((s) => sism.push({ ...s, radioPx: sismoRadioPx(s.magnitud) }));
@@ -260,17 +308,20 @@ const Capas = (() => {
     } else if (cajaArea) limites = cajaArea;
     else if (cajaLineas && valido(cajaLineas) && puntos.length === 0 && poligonos.length === 0) limites = cajaLineas;
     else {
-      const todos = [...puntos.map((p) => [p.lon, p.lat]), ...poligonos.flatMap((p) => coordsDe(p.geometry))];
+      const todos = [...puntos.map((p) => [p.lon, p.lat]), ...poligonos.flatMap((p) => coordsDe(p.geometry)), ...peligroVolcan.flatMap((p) => coordsDe(p.geometry)), ...riesgoDistritos.flatMap((p) => coordsDe(p.geometry))];
       limites = todos.length ? bboxDe(todos) : null;
     }
     if (limites && !valido(limites)) limites = null;
 
+    // Una capa puede tener varias líneas de leyenda (el peligro volcánico, una por nivel): el resumen las junta.
+    const porCapa = [];
+    leyenda.forEach((l) => { const p = porCapa.find((x) => x.capa === l.capa); if (p) p.n += l.n; else porCapa.push({ capa: l.capa, n: l.n }); });
     const resumen = !leyenda.length && !vacias.length && !sinDatos.length
       ? (cajaArea ? 'Marqué el distrito en el mapa. Elige arriba qué quieres ver dentro de él.' : '')
       : vacias.length && !leyenda.length
-      ? `En esta zona no hay ${vacias.map((v) => ({ colegios: 'colegios', salud: 'establecimientos de salud', paraderos: 'paraderos', parques: 'parques' }[v] || v)).join(' ni ')} en los datos.`
-      : `Muestro ${listaEs(leyenda.map((l) => `${l.n} ${nombreDe(l.capa, l.n)}`))}.${vacias.length ? ` No hay ${listaEs(vacias.map((v) => nombreDe(v, 2)))} en esta zona.` : ''}`;
-    return { puntos, circulos, poligonos, lineas, sismos: sism, sectores: regiones, lineasBus, paradasBus, leyenda, vacias, sinDatos, resumen, limites };
+      ? `En esta zona no hay ${vacias.map((v) => ({ colegios: 'colegios', salud: 'establecimientos de salud', paraderos: 'paraderos', parques: 'parques', volcan: 'zonas de peligro volcánico' }[v] || v)).join(' ni ')} en los datos.`
+      : `Muestro ${listaEs(porCapa.map((l) => `${l.n} ${nombreDe(l.capa, l.n)}`))}.${vacias.length ? ` No hay ${listaEs(vacias.map((v) => nombreDe(v, 2)))} en esta zona.` : ''}`;
+    return { puntos, circulos, poligonos, lineas, sismos: sism, peligroVolcan, riesgoDistritos, sectores: regiones, lineasBus, paradasBus, leyenda, vacias, sinDatos, resumen, limites };
   }
 
   /** Los sismos del archivo GeoJSON del IGP como lista simple { lat, lon, magnitud, fecha, profundidadKm, ref }; ignora lo que no es un punto con magnitud. */

@@ -47,8 +47,10 @@ const peligros = json('data/peligros_aqp.geojson');
 const distritos = json('data/distritos_aqp.geojson');
 const quebradas = json('data/quebradas_aqp.geojson');
 const sismos = json('data/sismos_igp.geojson');
+const volcan = json('data/peligro_volcanico_misti.geojson');
 const e030 = json('data/zonas_sismicas_e030.json');
 const precios = json('data/precios_m2_distrito.json');
+const riesgoCenepred = json('data/riesgo_cenepred_fen2027.json');
 const equipamiento = Object.fromEntries(['salud', 'educacion', 'transporte', 'areas_verdes'].map((n) => [n, json(`data/equipamiento/${n}.geojson`)]));
 
 // ------------------------------------------------------------------ A. Integridad
@@ -158,7 +160,7 @@ console.log('\n== A. Integridad de los archivos ==');
   comprobar('Distritos: todos tienen zona sísmica en la transcripción del Anexo II', sinZona.length === 0, sinZona.map((x) => x.properties.distrito).join(', '));
 }
 
-// Quebradas y cauces (ANA): red hidrográfica congelada con scripts/descargar-quebradas.mjs
+// Quebradas y cauces (ANA, IGP y OpenStreetMap): congelados con scripts/descargar-quebradas.mjs
 {
   const f = quebradas.features;
   const m = quebradas.metadata || {};
@@ -166,13 +168,43 @@ console.log('\n== A. Integridad de los archivos ==');
     const lineas = x.geometry?.type === 'LineString' ? [x.geometry.coordinates] : x.geometry?.type === 'MultiLineString' ? x.geometry.coordinates : null;
     return lineas && lineas.every((l) => l.length >= 2);
   }), `${f.length} tramos`);
-  comprobar('Quebradas: metadata con fuente (ANA), capa, fecha de extracción, elaboración, atribución y licencia', /Autoridad Nacional del Agua/.test(m.fuente || '') && /^https:\/\//.test(m.capa || '') && /^\d{4}-\d{2}-\d{2}T/.test(m.descargado || '') && !!m.elaboracion && !!m.atribucion && !!m.licencia, m.descargado);
+  const fuentes = m.fuentes || [];
+  const ID_FUENTES = ['ANA', 'IGP', 'OSM'];
+  comprobar('Quebradas: metadata.fuentes trae ANA, IGP y OpenStreetMap, cada una con nombre, capa, fecha de extracción, elaboración, atribución y licencia', ID_FUENTES.every((id) => {
+    const x = fuentes.find((y) => y.id === id);
+    return x && !!x.fuente && (!!x.capa || !!x.capas) && /^\d{4}-\d{2}-\d{2}T/.test(x.descargado || '') && !!x.elaboracion && !!x.atribucion && !!x.licencia;
+  }) && fuentes.length === 3, fuentes.map((x) => x.id).join(', '));
+  comprobar('Quebradas: la ANA se atribuye a la Autoridad Nacional del Agua, el IGP al Instituto Geofísico del Perú y OpenStreetMap lleva ODbL', /Autoridad Nacional del Agua/.test(fuentes.find((x) => x.id === 'ANA')?.fuente || '') && /Instituto Geofísico del Perú/.test(fuentes.find((x) => x.id === 'IGP')?.atribucion || '') && /ODbL/.test(fuentes.find((x) => x.id === 'OSM')?.licencia || ''));
+  comprobar('Quebradas: cada tramo dice su fuente (ANA, IGP u OSM)', f.every((x) => ID_FUENTES.includes(x.properties.fuente)));
+  const porFuente = Object.fromEntries(ID_FUENTES.map((id) => [id, f.filter((x) => x.properties.fuente === id).length]));
+  comprobar('Quebradas: el conteo de tramos por fuente coincide con metadata.fuentes[].registros y la suma con metadata.registros', ID_FUENTES.every((id) => porFuente[id] === fuentes.find((y) => y.id === id)?.registros) && porFuente.ANA + porFuente.IGP + porFuente.OSM === m.registros, JSON.stringify(porFuente));
+  comprobar('Quebradas: lo recibido de cada fuente cubre lo que se guardó más lo descartado como duplicado', fuentes.every((x) => x.recibidos >= x.registros + (x.duplicados || 0)), fuentes.map((x) => `${x.id} ${x.recibidos}/${x.registros}/${x.duplicados ?? 0}`).join(' · '));
+  comprobar('Quebradas: los tramos de IGP vienen de las capas Quebrada o RiosArequipa y los de OSM tienen el id de su vía', f.filter((x) => x.properties.fuente === 'IGP').every((x) => ['Quebrada', 'RiosArequipa'].includes(x.properties.capa)) && f.filter((x) => x.properties.fuente === 'OSM').every((x) => /^way\/\d+$/.test(x.properties.capa)));
   comprobar('Quebradas: metadata.registros coincide con el número de features y los ids son únicos', m.registros === f.length && new Set(f.map((x) => x.properties.id)).size === f.length);
-  const nombres = [...new Set(f.map((x) => x.properties.nombre).filter(Boolean))].sort();
-  comprobar('Quebradas: metadata.nombres lista exactamente los cursos del archivo', JSON.stringify(nombres) === JSON.stringify(m.nombres), nombres.join(', '));
+  const nombres = [...new Set(f.flatMap((x) => [x.properties.nombre, ...(x.properties.alias || []).map((a) => a.nombre)]).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'));
+  comprobar('Quebradas: metadata.nombres lista exactamente los cursos del archivo (nombres y alias)', JSON.stringify(nombres) === JSON.stringify(m.nombres), `${nombres.length} nombres`);
   const puntos = f.flatMap((x) => (x.geometry.type === 'LineString' ? x.geometry.coordinates : x.geometry.coordinates.flat()));
   comprobar('Quebradas: coordenadas dentro del departamento de Arequipa y alrededores (lon -73 a -70, lat -17,5 a -15,5)', puntos.every(([x, y]) => x > -73 && x < -70 && y > -17.5 && y < -15.5), `${puntos.length} vértices`);
-  console.log(`INFO  Quebradas: ${nombres.join(', ')} (red de ANA de escala nacional; no figuran Añashuayco ni San Lázaro: ${['añashuayco', 'san lázaro'].every((n) => !nombres.some((x) => x.toLowerCase().includes(n))) ? 'confirmado' : 'REVISAR'})`);
+  console.log(`INFO  Quebradas: ${nombres.join(', ')}`);
+  console.log(`INFO  Quebradas: Añashuayco ${nombres.some((x) => /añashuayco/i.test(x)) ? 'figura' : 'NO figura'}; San Lázaro ${nombres.some((x) => /san l[aá]zaro/i.test(x)) ? 'figura' : 'NO figura'}`);
+}
+
+// Peligro volcánico del Misti (IGP): congelado con scripts/descargar-peligro-volcanico.mjs
+{
+  const f = volcan.features;
+  const m = volcan.metadata || {};
+  const TIPOS = ['lahar', 'flujo_piroclastico', 'lava', 'avalancha', 'ceniza'];
+  const NIVELES = ['bajo', 'moderado', 'alto'];
+  const anillos = f.flatMap((x) => x.geometry.coordinates.flatMap((p) => p));
+  comprobar('Volcán: FeatureCollection con solo MultiPolygon, tipo y nivel conocidos, capa de origen y anillos cerrados de al menos 4 puntos', volcan.type === 'FeatureCollection' && f.length > 0 && f.every((x) => x.geometry?.type === 'MultiPolygon' && TIPOS.includes(x.properties.tipo) && NIVELES.includes(x.properties.nivel) && !!x.properties.capa && Number.isInteger(x.properties.capaId)) && anillos.every((r) => r.length >= 4 && r[0][0] === r[r.length - 1][0] && r[0][1] === r[r.length - 1][1]), `${f.length} polígonos`);
+  comprobar('Volcán: metadata con fuente (IGP), servicio https, fecha de extracción, licencia, referencia oficial (INGEMMET) y la aclaración «sin metadatos de fecha»', /Instituto Geofísico del Perú/.test(m.fuente || '') && /^https:/.test(m.servicio || '') && /^\d{4}-\d{2}-\d{2}T/.test(m.descargado || '') && !!m.licencia && /INGEMMET/.test(m.referencia || '') && /Sin metadatos de fecha/.test(m.fechaDelMapa || ''), m.descargado);
+  const porTipo = Object.fromEntries(TIPOS.map((t) => [t, f.filter((x) => x.properties.tipo === t).length]));
+  comprobar('Volcán: metadata.registros, porTipo y capas[].registros coinciden con los polígonos del archivo', m.registros === f.length && TIPOS.every((t) => (m.porTipo[t] || 0) === porTipo[t]) && m.capas.reduce((s, c) => s + c.registros, 0) === f.length && m.capas.every((c) => f.filter((x) => x.properties.capaId === c.id).length === c.registros), JSON.stringify(porTipo));
+  comprobar('Volcán: lahares, flujos piroclásticos, lava y avalanchas traen los tres niveles (alto, moderado y bajo)', ['lahar', 'flujo_piroclastico', 'lava', 'avalancha'].every((t) => NIVELES.every((n) => f.some((x) => x.properties.tipo === t && x.properties.nivel === n))));
+  const cerca = f.filter((x) => x.properties.tipo !== 'ceniza').flatMap((x) => x.geometry.coordinates.flatMap((p) => p[0]));
+  comprobar('Volcán: los polígonos de lahares, flujos, lava y avalanchas quedan cerca del Misti (lon -71,8 a -71,2; lat -16,7 a -16,1)', cerca.every(([x, y]) => x > -71.8 && x < -71.2 && y > -16.7 && y < -16.1), `${cerca.length} vértices`);
+  comprobar('Volcán: la ceniza dice su escenario y el espesor del depósito', f.filter((x) => x.properties.tipo === 'ceniza').every((x) => ['vulcaniana', 'subpliniana', 'pliniana'].includes(x.properties.escenario) && /cm|mm/.test(x.properties.deposito || '')));
+  console.log(`INFO  Volcán: ${f.length} polígonos (${TIPOS.map((t) => `${t} ${porTipo[t]}`).join(', ')}); ${m.fechaDelMapa}`);
 }
 
 // Sismos reportados (IGP): congelados con scripts/descargar-sismos.mjs
@@ -229,6 +261,27 @@ console.log('\n== A. Integridad de los archivos ==');
   console.log(`INFO  Precios: ${filas.length} de ${nombres.length} distritos con cifra; ${m.fuente}; corte ${m.periodo?.corte}; descargado ${m.fecha_descarga}`);
 }
 
+// Escenario de riesgo del CENEPRED ante El Niño 2026-2027 por distrito: congelado con scripts/descargar-riesgo-cenepred.mjs
+{
+  const m = riesgoCenepred;
+  const R = createRequire(import.meta.url)('./lib/riesgo-cenepred.js');
+  const C = createRequire(import.meta.url)('../public/js/cenepred.js');
+  const filas = Object.entries(m.distritos || {});
+  const porUbigeo = new Map(distritos.features.map((x) => [x.properties.ubigeo, x.properties.distrito]));
+  comprobar('CENEPRED: metadata con fuente, URL del servicio y del visor de SIGRID, estudio con URL https, fecha de descarga (AAAA-MM-DD) y la nota de escala distrital', !!m.fuente && /^https:\/\/sigrid\.cenepred\.gob\.pe\//.test(m.url || '') && /^https:\/\/sigrid\.cenepred\.gob\.pe\/sigridv3\/?$/.test(m.url_visor || '') && /^https:\/\//.test(m.estudio?.url || '') && /^\d{4}-\d{2}-\d{2}$/.test(m.fecha_descarga || '') && /distrital/i.test(m.nota || '') && /no es una evaluaci/i.test(m.nota || ''));
+  comprobar('CENEPRED: están los 25 distritos de distritos_aqp.geojson, emparejados por ubigeo y con el mismo nombre, y no hay otros', filas.length === porUbigeo.size && filas.length === 25 && filas.every(([u, d]) => porUbigeo.get(u) === d.distrito), `${filas.length} distritos`);
+  comprobar('CENEPRED: todos los niveles (inundación y movimientos en masa) están en el conjunto conocido: Bajo, Medio, Alto, Muy alto', filas.every(([, d]) => R.NIVELES.includes(d.inundacion?.nivel) && R.NIVELES.includes(d.movimientos_masa?.nivel)));
+  comprobar('CENEPRED: viviendas, locales educativos y establecimientos de salud son enteros no negativos', filas.every(([, d]) => [d.inundacion, d.movimientos_masa].every((b) => ['viviendas', 'instituciones_educativas', 'establecimientos_salud'].every((k) => Number.isInteger(b[k]) && b[k] >= 0))));
+  comprobar('CENEPRED: el resumen por nivel del archivo coincide con el conteo de los distritos', JSON.stringify(m.resumen_por_nivel) === JSON.stringify(R.resumenPorNivel(m.distritos)));
+  comprobar('CENEPRED (módulo): cada distrito da INFORMATIVO por ubigeo y por nombre, y uno que no está en los datos (Vítor) da SIN DATO con su causa, sin inventar un nivel', filas.every(([u, d]) => C.buscar(m, u).estado === 'INFORMATIVO' && C.buscar(m, d.distrito).ubigeo === u) && (() => {
+    const r = C.buscar(m, 'Vitor');
+    return r.estado === 'SIN DATO' && !!r.causa && r.inundacion === undefined;
+  })());
+  const resumen = R.resumenPorNivel(m.distritos);
+  const texto = (o) => R.NIVELES.map((n) => `${n} ${o[n]}`).join(', ');
+  console.log(`INFO  CENEPRED: inundación ${texto(resumen.inundacion)}; movimientos en masa ${texto(resumen.movimientos_masa)}; descargado ${m.fecha_descarga}`);
+}
+
 // ------------------------------------------------- B. Corrección de los cálculos
 console.log('\n== B. Cálculos del navegador frente a un método independiente ==');
 
@@ -244,7 +297,7 @@ const ctx = vm.createContext({
     }
   },
 });
-for (const f of ['js/config.js', 'js/calculos.js', 'js/rutas.js', 'js/geo.js', 'js/zonificacion.js', 'js/peligros.js', 'js/contexto.js', 'js/delitos.js', 'js/distritos.js', 'js/riesgos.js']) {
+for (const f of ['js/config.js', 'js/calculos.js', 'js/rutas.js', 'js/geo.js', 'js/zonificacion.js', 'js/peligros.js', 'js/volcan.js', 'js/cenepred.js', 'js/contexto.js', 'js/delitos.js', 'js/distritos.js', 'js/riesgos.js']) {
   vm.runInContext(leer(f), ctx, { filename: f });
 }
 const app = (expr) => vm.runInContext(expr, ctx);
@@ -453,7 +506,7 @@ const dentro = (x, y, anillos) => vueltas(x, y, anillos[0]) && !anillos.slice(1)
   const cosenos = (la1, lo1, la2, lo2) => R * Math.acos(Math.min(1, Math.sin(rad(la1)) * Math.sin(rad(la2)) + Math.cos(rad(la1)) * Math.cos(rad(la2)) * Math.cos(rad(lo2 - lo1))));
   // Cada línea se densifica a pasos de ~5 m: la distancia mínima a esos puntos tiene un error menor que ~3 m.
   const densas = [];
-  for (const x of quebradas.features) {
+  for (const [indice, x] of quebradas.features.entries()) {
     const lineas = x.geometry.type === 'LineString' ? [x.geometry.coordinates] : x.geometry.coordinates;
     for (const l of lineas) {
       for (let i = 1; i < l.length; i++) {
@@ -461,34 +514,138 @@ const dentro = (x, y, anillos) => vueltas(x, y, anillos[0]) && !anillos.slice(1)
         const [x1, y1] = l[i];
         const largo = cosenos(y0, x0, y1, x1);
         const n = Math.max(1, Math.ceil(largo / 5));
-        for (let k = 0; k <= n; k++) densas.push([y0 + ((y1 - y0) * k) / n, x0 + ((x1 - x0) * k) / n, x.properties.nombre]);
+        for (let k = 0; k <= n; k++) densas.push([y0 + ((y1 - y0) * k) / n, x0 + ((x1 - x0) * k) / n, x.properties.nombre, indice]);
       }
     }
   }
   let peorError = 0;
   let nombresOk = true;
   const probados = 60;
+  const lista = quebradas.features.map((x) => ({ nombre: x.properties.nombre, tipo: x.properties.tipo, fuente: x.properties.fuente, geometry: x.geometry }));
   for (let i = 0; i < probados; i++) {
     const la = -16.2 - azar() * 0.4;
     const lo = -71.75 + azar() * 0.4;
-    let mejor = Infinity;
-    let nombre = null;
-    for (const [pla, plo, nom] of densas) {
+    // Distancia mínima de cada tramo, por separado: dos tramos casi iguales pueden empatar y el nombre no distingue.
+    const minimas = new Map();
+    for (const [pla, plo, nom, idx] of densas) {
       const d = cosenos(la, lo, pla, plo);
-      if (d < mejor) { mejor = d; nombre = nom; }
+      if (d < (minimas.get(idx) ?? Infinity)) minimas.set(idx, d);
     }
-    const r = Calc.evaluarCauces({ lat: la, lon: lo }, quebradas.features.map((x) => ({ nombre: x.properties.nombre, tipo: x.properties.tipo, geometry: x.geometry })), {});
+    const mejor = Math.min(...minimas.values());
+    const r = Calc.evaluarCauces({ lat: la, lon: lo }, lista, {});
     peorError = Math.max(peorError, Math.abs(r.distanciaM - mejor));
-    if (r.nombre !== nombre) nombresOk = false;
+    // El cauce elegido debe ser uno de los que quedan a no más de 6 m del mejor (mismo nombre y misma fuente).
+    const elegidoOk = [...minimas].some(([idx, d]) => d <= mejor + 6 && (lista[idx].nombre || '') === (r.nombre.startsWith('Sin nombre') ? '' : r.nombre) && lista[idx].fuente === r.fuenteId);
+    if (!elegidoOk) nombresOk = false;
   }
   comprobar(`Quebradas: la distancia a la red coincide con un método independiente (${probados} puntos al azar; error máximo ${peorError.toFixed(1)} m)`, peorError < 6);
-  comprobar('Quebradas: el cauce más cercano es el mismo con ambos métodos', nombresOk);
+  comprobar('Quebradas: el cauce más cercano (nombre y fuente) es uno de los que el método independiente da como más cercanos', nombresOk);
   comprobar('Quebradas: sin umbral del usuario el estado es INFORMATIVO; con él, CUMPLE o NO CUMPLE (nunca un umbral por defecto)', (() => {
     const r0 = Calc.evaluarCauces({ lat: -16.399, lon: -71.537 }, quebradas.features.map((x) => ({ nombre: x.properties.nombre, geometry: x.geometry })), {});
     const c = Calc.evaluarCauces({ lat: -16.399, lon: -71.537 }, quebradas.features.map((x) => ({ nombre: x.properties.nombre, geometry: x.geometry })), { umbralUsuarioM: 1 });
     const n = Calc.evaluarCauces({ lat: -16.399, lon: -71.537 }, quebradas.features.map((x) => ({ nombre: x.properties.nombre, geometry: x.geometry })), { umbralUsuarioM: 50000 });
     return r0.estado === 'INFORMATIVO' && r0.umbralM === null && c.estado === 'CUMPLE' && n.estado === 'NO CUMPLE';
   })());
+}
+
+// B5b. Riesgo del distrito ante El Niño (CENEPRED): el módulo del navegador frente al distrito por número de vueltas y al archivo leído aquí.
+{
+  const Ctx = app('Contexto');
+  let malos = 0;
+  let conDato = 0;
+  let sinDistrito = 0;
+  for (let k = 0; k < 400; k++) {
+    const lat = sur + azar() * (norte - sur);
+    const lon = oeste + azar() * (este - oeste);
+    let ubigeo = null;
+    for (const f of distritos.features) {
+      const polis = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates;
+      if (polis.some((p) => dentro(lon, lat, p))) { ubigeo = f.properties.ubigeo; break; }
+    }
+    const r = await Ctx.cenepred(lat, lon);
+    if (ubigeo === null) {
+      sinDistrito++;
+      if (r.estado !== 'SIN DATO' || !r.error || r.inundacion !== undefined) malos++;
+      continue;
+    }
+    conDato++;
+    const e = riesgoCenepred.distritos[ubigeo];
+    if (r.estado !== 'INFORMATIVO' || r.ubigeo !== ubigeo || r.inundacion.nivel !== e.inundacion.nivel || r.movimientos_masa.nivel !== e.movimientos_masa.nivel || r.inundacion.viviendas !== e.inundacion.viviendas) malos++;
+  }
+  comprobar('CENEPRED (módulo): 400 puntos al azar dan el nivel del distrito que da el método independiente, y fuera de los distritos queda SIN DATO con su causa', malos === 0, `${malos} diferencias; ${conDato} dentro de un distrito, ${sinDistrito} fuera`);
+  const sachaca = await Ctx.cenepred(-16.4436, -71.5744);
+  comprobar('CENEPRED (módulo): un punto de Sachaca da INFORMATIVO, con la frase del distrito, la fuente y sin cumple ni puntaje', sachaca.estado === 'INFORMATIVO' && sachaca.distrito === 'SACHACA' && /^Según el CENEPRED, el distrito de Sachaca tiene riesgo muy alto ante inundaciones/.test(sachaca.frase) && /CENEPRED/.test(sachaca.fuente) && !/cumple|puntaje/i.test(JSON.stringify(sachaca)), sachaca.frase);
+}
+// B7a. Peligro volcánico: el módulo del navegador frente a un recuento independiente (número de vueltas, sin índice de cajas).
+{
+  const Vol = app('Volcan');
+  const Ctx = app('Contexto');
+  const RANGO = { bajo: 1, moderado: 2, alto: 3 };
+  // En un punto: el nivel más alto de cada fenómeno, calculado aquí con el método de las vueltas sobre el archivo crudo.
+  // Se descartan primero los polígonos cuya caja (mínimo y máximo de sus vértices, calculados aquí) no contiene el punto.
+  const cajas = volcan.features.map((x) => {
+    const pts = x.geometry.coordinates.flatMap((p) => p[0]);
+    return [Math.min(...pts.map((c) => c[0])), Math.min(...pts.map((c) => c[1])), Math.max(...pts.map((c) => c[0])), Math.max(...pts.map((c) => c[1]))];
+  });
+  const nivelesEn = (lat, lon) => {
+    const mejor = {};
+    volcan.features.forEach((x, i) => {
+      const t = x.properties.tipo;
+      const b = cajas[i];
+      if (lon < b[0] || lon > b[2] || lat < b[1] || lat > b[3]) return;
+      if (x.geometry.coordinates.some((p) => dentro(lon, lat, p)) && (!mejor[t] || RANGO[x.properties.nivel] > RANGO[mejor[t]])) mejor[t] = x.properties.nivel;
+    });
+    return mejor;
+  };
+  const zonas = Vol.indexar(volcan.features);
+  let distintos = 0;
+  let conZona = 0;
+  const detalles = [];
+  for (let k = 0; k < 400; k++) {
+    const lat = sur + azar() * (norte - sur);
+    const lon = oeste + azar() * (este - oeste);
+    const esperado = nivelesEn(lat, lon);
+    const obtenido = Object.fromEntries(Vol.resumirPunto(Vol.enZonas(lat, lon, zonas)).map((r) => [r.tipo, r.nivel]));
+    if (Object.keys(esperado).some((t) => t !== 'ceniza')) conZona++;
+    if (JSON.stringify(Object.entries(esperado).sort()) !== JSON.stringify(Object.entries(obtenido).sort())) { distintos++; if (detalles.length < 3) detalles.push(`${lat.toFixed(4)},${lon.toFixed(4)}`); }
+  }
+  comprobar('Volcán: 400 puntos al azar en Arequipa metropolitana dan el mismo nivel por fenómeno que el método independiente', distintos === 0, `${distintos} diferencias${detalles.length ? ` (${detalles.join('; ')})` : ''}; ${conZona} puntos en alguna zona de lahares, flujos, lava o avalanchas`);
+  // Un punto conocido: la cima del Misti.
+  const cima = Vol.resumirPunto(Vol.enZonas(-16.294, -71.409, zonas));
+  comprobar('Volcán: la cima del Misti cae en peligro alto de flujos piroclásticos y de avalanchas', cima.find((r) => r.tipo === 'flujo_piroclastico')?.nivel === 'alto' && cima.find((r) => r.tipo === 'avalancha')?.nivel === 'alto');
+  // El módulo Contexto.volcan devuelve lo mismo, informativo, con su fuente y sin cumple.
+  const v = await Ctx.volcan(-16.4256, -71.4944);
+  comprobar('Volcán (módulo): INFORMATIVO, con frase, fuente del IGP, referencia y fecha de los datos; nunca cumple ni puntaje', v.estado === 'INFORMATIVO' && /Instituto Geofísico/.test(v.fuente) && /INGEMMET/.test(v.referencia) && /Sin metadatos de fecha/.test(v.fechaDelMapa) && !/cumple|puntaje/i.test(JSON.stringify(v.frase) + JSON.stringify(v.lineas)), v.frase);
+  // Por distrito: Paucarpata y Cayma con una muestra cada 150 m (independiente) frente a la de 250 m del módulo (tolerancia de 4 puntos).
+  const mPorGrado = ((Math.PI / 180) * 6371008.8);
+  const porcentajes = (polys) => {
+    const bx = polys.flatMap((p) => p[0]);
+    const x0 = Math.min(...bx.map((c) => c[0])); const x1 = Math.max(...bx.map((c) => c[0]));
+    const y0 = Math.min(...bx.map((c) => c[1])); const y1 = Math.max(...bx.map((c) => c[1]));
+    const dl = 150 / mPorGrado;
+    const cuenta = { alto: 0, moderado: 0, bajo: 0, ninguno: 0 };
+    let n = 0;
+    for (let lat = y0 + dl / 2; lat < y1; lat += dl) {
+      const dlo = 150 / (mPorGrado * Math.cos(rad(lat)));
+      for (let lon = x0 + dlo / 2; lon < x1; lon += dlo) {
+        if (!polys.some((p) => dentro(lon, lat, p))) continue;
+        n++;
+        cuenta[nivelesEn(lat, lon).lahar || 'ninguno']++;
+      }
+    }
+    return Object.fromEntries(Object.entries(cuenta).map(([k, c]) => [k, (100 * c) / n]));
+  };
+  const resultados = [];
+  let distritosOk = true;
+  for (const nombre of ['PAUCARPATA', 'CAYMA']) {
+    const polys = Dis.poligonos(nombre);
+    const mio = Vol.porDistrito(zonas, polys, { pasoM: 250 }).porTipo.lahar;
+    const otro = porcentajes(polys);
+    const peor = Math.max(...Object.keys(otro).map((k) => Math.abs(mio[k] - otro[k])));
+    if (peor > 4) distritosOk = false;
+    resultados.push(`${nombre} alto ${mio.alto.toFixed(1)}/${otro.alto.toFixed(1)} moderado ${mio.moderado.toFixed(1)}/${otro.moderado.toFixed(1)} bajo ${mio.bajo.toFixed(1)}/${otro.bajo.toFixed(1)}`);
+  }
+  comprobar('Volcán: la parte de Paucarpata y de Cayma en cada nivel de lahares coincide (±4 puntos) con una muestra independiente cada 150 m', distritosOk, resultados.join(' · '));
 }
 
 // B7b. Contexto: el módulo del navegador da lo mismo que un conteo independiente y rotula lo que corresponde.
@@ -509,6 +666,17 @@ const dentro = (x, y, anillos) => vueltas(x, y, anillos[0]) && !anillos.slice(1)
   comprobar('Peligros (contexto): el conteo en el radio coincide con un recuento independiente y siempre es INFORMATIVO', p.estado === 'INFORMATIVO' && p.total === enRadio.length, `${p.total} a ${p.radioM} m; el más cercano a ${Math.round(p.distanciaM)} m`);
   const q = await Ctx.quebradas(la, lo, null);
   comprobar('Quebradas (módulo): INFORMATIVO sin umbral, con nombre y distancia; según tu umbral solo si la persona lo fija', q.estado === 'INFORMATIVO' && q.nombre && q.distanciaM > 0 && q.segunUmbralUsuario === false && (await Ctx.quebradas(la, lo, 100)).segunUmbralUsuario === true);
+  comprobar('Quebradas (módulo): nombra la fuente del cauce más cercano y las fuentes del archivo con sus tramos', ['ANA', 'IGP', 'OpenStreetMap'].includes(q.fuenteCorta) && q.fuentes.length === 3 && q.fuentes.every((x) => x.registros === quebradas.features.filter((y) => y.properties.fuente === x.id).length), `${q.nombre} (${q.fuenteCorta})`);
+  // «Qué no cubre»: las quebradas ausentes se recalculan aquí con un método propio (texto en minúsculas sin tildes) y deben coincidir.
+  {
+    const sin = (t) => String(t).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+    const todosLosNombres = sin(quebradas.metadata.nombres.join(' | '));
+    const sectores = peligros.features.map((x) => sin(x.properties.sector || ''));
+    const cuentaDe = (clave) => sectores.filter((t) => new RegExp('(quebrada|qda\\.?|torrentera)\\s+' + clave).test(t)).length;
+    const claves = (q.ausentes || []).map((a) => sin(a.nombre).replace(/[^a-z ]/g, ''));
+    comprobar('Quebradas (módulo): ninguna quebrada «ausente» figura entre los nombres del archivo', claves.every((c) => !todosLosNombres.includes(c)), claves.join(', '));
+    comprobar('Quebradas (módulo): los registros de cada quebrada ausente coinciden con un recuento independiente del campo sector de INGEMMET', (q.ausentes || []).every((a) => a.registros === 0 || cuentaDe(sin(a.nombre).replace(/[^a-z ]/g, '')) >= a.registros), (q.ausentes || []).map((a) => `${a.nombre} ${a.registros}`).join(', '));
+  }
   const sinArchivo = vm.createContext({ console, fetch: async () => ({ ok: false, status: 404, json: async () => ({}) }) });
   for (const f of ['js/config.js', 'js/calculos.js', 'js/geo.js', 'js/peligros.js', 'js/contexto.js']) vm.runInContext(leer(f), sinArchivo, { filename: f });
   const vacio = await vm.runInContext('Contexto.evaluar(-16.399, -71.537, 200)', sinArchivo);

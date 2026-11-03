@@ -88,9 +88,9 @@ const Verificaciones = (() => {
       id: 'peligros',
       titulo: 'Peligros y riesgo de desastres',
       entidad: 'SIGRID (CENEPRED)',
-      queConfirma: 'Qué información oficial hay sobre peligros y escenarios de riesgo en la zona. GeoVerificador no evalúa peligros (están fuera de su alcance).',
+      queConfirma: 'Qué información oficial hay sobre peligros y escenarios de riesgo en la zona. GeoVerificador solo muestra una estimación del CENEPRED por distrito ante El Niño y no evalúa el peligro de tu predio: en el visor público del SIGRID puedes ver los mapas y estudios del CENEPRED.',
       nota: 'Para construir, la norma E.030 exige además un Estudio de Mecánica de Suelos.',
-      enlaces: [{ texto: 'SIGRID (CENEPRED)', url: 'https://sigrid.cenepred.gob.pe/sigridv3/' }],
+      enlaces: [{ texto: 'Visor público del SIGRID (CENEPRED)', url: 'https://sigrid.cenepred.gob.pe/sigridv3/' }],
     },
   ];
 

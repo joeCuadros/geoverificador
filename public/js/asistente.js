@@ -27,6 +27,8 @@ const Asistente = (() => {
   // Se resuelven al usarlos: en el navegador son globales y en las pruebas se cargan con require.
   const Dist = () => (typeof Distritos !== 'undefined' ? Distritos : require('./distritos.js')); // eslint-disable-line no-undef
   const Ent = () => (typeof Entidades !== 'undefined' ? Entidades : require('./entidades.js')); // eslint-disable-line no-undef
+  const Vol = () => (typeof Volcan !== 'undefined' ? Volcan : require('./volcan.js')); // eslint-disable-line no-undef
+  const Cen = () => (typeof Cenepred !== 'undefined' ? Cenepred : require('./cenepred.js')); // eslint-disable-line no-undef
   const Sect = () => (typeof Sectores !== 'undefined' ? Sectores : require('./sectores.js')); // eslint-disable-line no-undef
 
   // ------------------------------------------------------------------ Criterios
@@ -110,7 +112,19 @@ const Asistente = (() => {
     // Precio de oferta por m² de un distrito (Aptología): el metro cuadrado, el distrito o la zona del punto.
     precioM2: /\b(?:m2|metros? cuadrados?|por metro|el metro|precio de oferta|precio promedio|promedio de precios?|mas caro|mas barato|mas economico|distritos?)\b/,
     precioTodos: /\b(?:distritos|todos|ranking|comparar?|mas caro|mas barato|mas economico|cada distrito)\b/,
-    // Preguntas sobre el punto (contexto de riesgo, siempre informativo; no son una evaluación de peligro).
+    // Peligro volcánico del Misti (zonas del IGP, informativo): el volcán, los lahares, la ceniza, los flujos piroclásticos, la lava y las avalanchas.
+    volcan: /\b(volcan(?:es|ico|ica|icos|icas)?|misti|lahar(?:es)?|cenizas?|erupci\w*|piroclastic\w*|avalanchas? de (?:escombros|detritos))\b/,
+    // Qué fenómeno volcánico nombra la frase (puede ser más de uno); vacío = el volcán en general.
+    volcanLahar: /\blahar(?:es)?\b/, volcanCeniza: /\bcenizas?\b/, volcanFlujo: /\b(?:piroclastic\w*|flujos? piroclastic\w*)/, volcanLava: /\blava\b/, volcanAvalancha: /\bavalanchas?\b/,
+    // Escenario de riesgo del CENEPRED ante El Niño (por distrito, informativo): inundaciones y movimientos en masa. «Huaico», «aluvión», «deslizamiento»
+    // y «derrumbe» solos siguen siendo quebradas o peligros del punto; con un distrito nombrado pasan al escenario del CENEPRED.
+    cenepred: /\b(cenepred|sigrid|inunda\w*|desbord\w*|movimientos? en masa|fenomeno del nino|el nino|nino costero)\b/,
+    cenepredAmbiguo: /\b(huaycos?|huaicos?|aluvion\w*|deslizamient\w*|derrumb\w*)\b/,
+    cenepredCauce: /\b(quebradas?|torrenteras?|cauces?|rios?|rio chili)\b/,
+    cenepredInundacion: /\b(inunda\w*|desbord\w*)\b/,
+    cenepredMasa: /\b(movimientos? en masa|huaycos?|huaicos?|aluvion\w*|deslizamient\w*|derrumb\w*)\b/,
+    cenepredMapa: /\b(mapa|muestra\w*|dibuja\w*|colorea\w*|pinta\w*|visualiza\w*)\b/,
+    cenepredTodos: /\b(?:que|cuales|cuantos)\s+distritos\b|\btodos\s+los\s+distritos\b|\bcada\s+distrito\b|\bentre\s+los\s+distritos\b/,
     quebrada: /\b(quebradas?|torrenteras?|cauces?|huaycos?|huaicos?|aluvion\w*|rios?|rio chili)\b/,
     sismos: /\b(sismos?|sismic\w*|temblor\w*|terremoto\w*)\b/,
     peligros: /\b(peligros?|riesgos?|derrumbes?|deslizamientos?|caida de rocas|geologic\w*)\b/,
@@ -163,6 +177,37 @@ const Asistente = (() => {
     return nombre;
   }
 
+  const PALABRAS_VOLCAN = /\b(?:volcan\w*|misti|lahar\w*|ceniza\w*|erupci\w*|piroclastic\w*|avalancha\w*|lava|peligro\w*|riesgo\w*|zonas?|punto|mapa|flujos?)\b/;
+
+  /**
+   * Distrito que nombra una pregunta del volcán sin que el buscador de distritos lo reconozca («que lahares hay en zamacola»
+   * → «zamacola»), o null. Solo mira lo que sigue a «distrito de», «en», «por», «de» o «para» al final de la frase y descarta
+   * lo que son palabras del propio tema («por el volcán», «en peligro»).
+   */
+  function distritoEnVolcan(t) {
+    if (RE.aqui.test(t)) return null;
+    const m = t.match(/\bdistrito\s+(?:de\s+)?([a-z ]+)$/) || t.match(/\b(?:en|por|de|para)\s+(?:el\s+|la\s+)?([a-z ]+)$/);
+    if (!m) return null;
+    const nombre = m[1].replace(/\s+(?:hoy|ahora|actualmente|por favor|gracias)$/, '').trim();
+    if (!nombre || nombre.split(' ').length > 4 || NO_DISTRITO.test(nombre) || PALABRAS_VOLCAN.test(nombre)) return null;
+    return nombre;
+  }
+
+  const PALABRAS_CENEPRED = /\b(?:cenepred|sigrid|inunda\w*|desbord\w*|huaic\w*|huayc\w*|aluvion\w*|deslizamient\w*|derrumb\w*|movimientos?|masa|nino|riesgos?|peligros?|zonas?|punto|mapa|escenario|fenomeno|costero|que|dice|dicen|sabes|hay|existe|mucho|mucha)\b/;
+
+  /**
+   * Distrito que nombra una pregunta del escenario del CENEPRED sin que el buscador de distritos lo reconozca («riesgo de huaico en
+   * zamacola» → «zamacola», «¿zamacola se inunda?»), o null. Descarta las palabras del propio tema.
+   */
+  function distritoEnCenepred(t) {
+    if (RE.aqui.test(t)) return null;
+    const m = t.match(/\bdistrito\s+(?:de\s+)?([a-z ]+)$/) || t.match(/^(?:se\s+)?(?:inunda\w*|desbord\w*)\s+(?:en\s+)?(?:el\s+|la\s+)?([a-z ]+)$/) || t.match(/^([a-z ]+?)\s+se\s+inunda\w*$/) || t.match(/.*\b(?:en|por|de|para)\s+(?:el\s+|la\s+)?([a-z ]+)$/); // la última preposición: «riesgo de huaico en zamacola» → «zamacola»
+    if (!m) return null;
+    const nombre = m[1].replace(/\s+(?:hoy|ahora|actualmente|por favor|gracias)$/, '').trim();
+    if (!nombre || nombre.split(' ').length > 4 || NO_DISTRITO.test(nombre) || PALABRAS_CENEPRED.test(nombre)) return null;
+    return nombre;
+  }
+
   /** Distancias en metros que aparecen en una frase. */
   function distanciasEn(frase) {
     const out = [];
@@ -175,7 +220,9 @@ const Asistente = (() => {
   /**
    * Convierte lo escrito en una intención.
    *   ctx: { hayPunto?: boolean, ultimaBusqueda?: { criterios } }
-   * tipo: saludo | ayuda | fuentes | pdm | construir | zona | ficha | servicio | quebrada | sismos | peligros | buscar | contar | perfil | mejor_zona | rutas | precio | no_soportado | desconocido
+   * tipo: saludo | ayuda | fuentes | pdm | construir | zona | ficha | servicio | quebrada | sismos | peligros | volcan | cenepred | buscar | contar | perfil | mejor_zona | rutas | precio | no_soportado | desconocido
+   * volcan: zonas de peligro volcánico del Misti en el punto o en un distrito (`volcanTipos`: los fenómenos que nombra la frase; vacío = todos)
+   * cenepred: escenario de riesgo del CENEPRED ante El Niño en el distrito del punto o en un distrito (`cenepredFenomenos`: inundacion | movimientos_masa; vacío = los dos; `cenepredMapa`: pidió verlo en el mapa)
    * distrito: nombre del distrito nombrado en la frase (como en el archivo de límites) o null; distritoFuera: existe en la provincia pero no está en los datos
    * precio: precio de oferta por m² de un distrito (`distrito`, o el del punto; `todosPrecio` = lista de todos los que tienen cifra)
    * modo (solo en buscar): nuevo | agregar | quitar | priorizar
@@ -184,6 +231,7 @@ const Asistente = (() => {
     const intencion = {
       tipo: 'desconocido', modo: 'nuevo', criterios: [], radioGlobalM: null, lote: null, incluirCondicional: false,
       temaNoSoportado: null, aproximados: [], limitarAlPunto: false, distrito: null, distritoFuera: false, distritoTexto: null, todosPrecio: false,
+      volcanTipos: [], cenepredFenomenos: [], cenepredMapa: false, cenepredTodos: false,
     };
     let t = normalizar(texto);
     if (!t) return intencion;
@@ -236,6 +284,30 @@ const Asistente = (() => {
     // Un distrito nombrado (con errores de tipeo, tildes o mayúsculas): el mismo buscador para contar, perfil, precio, líneas y búsquedas.
     const dis = Dist().buscarNombre(t);
     if (dis) { intencion.distrito = dis.distrito; intencion.distritoFuera = !dis.enDatos; }
+
+    // Peligro volcánico del Misti: se atiende antes que perfil, líneas y quebradas («¿Paucarpata está en peligro por el Misti?» no es un perfil).
+    // Con criterios de búsqueda («busco colegio lejos del Misti») no se puede: se dice, no se ignora.
+    if (RE.volcan.test(t)) {
+      if (hayCriterios) return { ...intencion, tipo: 'no_soportado', temaNoSoportado: 'volcan_busqueda', criterios: [], aproximados: [], limitarAlPunto: false };
+      const volcanTipos = [['lahar', RE.volcanLahar], ['flujo_piroclastico', RE.volcanFlujo], ['lava', RE.volcanLava], ['avalancha', RE.volcanAvalancha], ['ceniza', RE.volcanCeniza]].filter(([, re]) => re.test(t)).map(([id]) => id);
+      const volcan = { ...intencion, tipo: 'volcan', volcanTipos, criterios: [], aproximados: [], limitarAlPunto: false };
+      if (dis) return volcan;
+      const texto = distritoEnVolcan(t);
+      return texto ? { ...volcan, tipo: 'distrito_desconocido', distritoTexto: texto } : volcan;
+    }
+
+    // Escenario de riesgo del CENEPRED ante El Niño (inundaciones y movimientos en masa, por distrito): antes que perfil, líneas y quebradas
+    // («¿Paucarpata se inunda?» no es un perfil). Con criterios de búsqueda no se puede: se dice. «Fuentes» y «ayuda» siguen siendo suyas.
+    // «Riesgo de huaico en Zamacola»: un lugar que no es un distrito de la provincia también es del escenario (para decir que no lo reconoce), salvo que hable de una quebrada o un río.
+    const huaicoEnOtroLugar = !dis && RE.cenepredAmbiguo.test(t) && !RE.cenepredCauce.test(t) && distritoEnCenepred(t) !== null;
+    if ((RE.cenepred.test(t) || (dis && RE.cenepredAmbiguo.test(t)) || huaicoEnOtroLugar) && !RE.fuentes.test(t)) {
+      if (hayCriterios) return { ...intencion, tipo: 'no_soportado', temaNoSoportado: 'cenepred_busqueda', criterios: [], aproximados: [], limitarAlPunto: false };
+      const cenepredFenomenos = [['inundacion', RE.cenepredInundacion], ['movimientos_masa', RE.cenepredMasa]].filter(([, re]) => re.test(t)).map(([id]) => id);
+      const cen = { ...intencion, tipo: 'cenepred', cenepredFenomenos, cenepredMapa: RE.cenepredMapa.test(t), cenepredTodos: !dis && RE.cenepredTodos.test(t), criterios: [], aproximados: [], limitarAlPunto: false };
+      if (dis || cen.cenepredTodos) return cen;
+      const texto = distritoEnCenepred(t);
+      return texto ? { ...cen, tipo: 'distrito_desconocido', distritoTexto: texto } : cen;
+    }
 
     // Líneas de transporte (antes que los criterios y que «contar»: «buses» también es el criterio «transporte» de una búsqueda).
     const preguntaRutas = (RE.rutasPregunta.test(t) && RE.rutasVerbo.test(t)) || RE.rutasLinea.test(t) || RE.rutasVehiculo.test(t) || RE.rutasHay.test(t);
@@ -762,9 +834,11 @@ const Asistente = (() => {
     const partes = ['colegios', 'salud', 'paraderos', 'parques'].map((g) => parteDeConteo(g, p.conteo)).filter(Boolean);
     lineas.push(`• Servicios (OpenStreetMap, ${c.fecha || 'sin fecha'}; puede faltar alguno): ${partes.length ? partes.join('; ') : 'no encontré ninguno en los datos'}.`);
     const q = p.cauces;
-    if (q.sinDato) lineas.push('• Quebradas y ríos: no pude leer el archivo de la red de la ANA, así que no lo afirmo.');
-    else if (q.nombres.length) lineas.push(`• Quebradas y ríos: lo cruzan ${listaEs(q.nombres.slice(0, 5))} (red de la ANA; no incluye todas las quebradas urbanas ni es un mapa de peligro).`);
-    else lineas.push('• Quebradas y ríos: la red de la ANA no registra cauces en este distrito (no incluye todas las quebradas urbanas ni es un mapa de peligro).');
+    const deDonde = q.fuentes && q.fuentes.length ? listaEs(q.fuentes.map((f) => C.nombreFuenteCauce(f))) : 'la ANA';
+    const ningunoDe = Array.isArray(q.fuentes) ? 'la ANA, el IGP y OpenStreetMap no registran' : 'la ANA no registra';
+    if (q.sinDato) lineas.push('• Quebradas y ríos: no pude leer el archivo de cauces, así que no lo afirmo.');
+    else if (q.nombres.length) lineas.push(`• Quebradas y ríos: lo cruzan ${listaEs(q.nombres.slice(0, 5))} (según ${deDonde}; no incluyen todas las quebradas urbanas ni son un mapa de peligro).`);
+    else lineas.push(`• Quebradas y ríos: ${ningunoDe} cauces en este distrito (no incluyen todas las quebradas urbanas ni son un mapa de peligro).`);
     // Líneas de SmartBus que cruzan el distrito y precio de oferta por m² (Aptología, solo 3 distritos): se agregan solo si hay dato; nada inventado.
     const rd = c.rutasDistrito;
     if (rd && !rd.error && rd.res) {
@@ -777,6 +851,9 @@ const Asistente = (() => {
     if (pr && pr.estado === 'INFORMATIVO' && pr.precioM2.venta !== null) {
       lineas.push(`• Precio de oferta (Aptología, ${P.textoPeriodo(pr.periodo)}): ${soles(pr.precioM2.venta)} por m² (mediana de ${pr.nAvisos.venta} avisos de departamentos en venta; es lo que piden, no lo que se paga).`);
     }
+    // Escenario del CENEPRED ante El Niño: solo los dos niveles del distrito; el detalle se pregunta aparte.
+    const cen = c.cenepredDatos ? Cen().buscar(c.cenepredDatos, intencion.distrito) : null;
+    if (cen && cen.estado === 'INFORMATIVO') lineas.push(`• Riesgo ante El Niño (CENEPRED): inundaciones, riesgo ${cen.inundacion.nivel.toLowerCase()}; movimientos en masa, riesgo ${cen.movimientos_masa.nivel.toLowerCase()}. Es una estimación del distrito, no de tu predio.`);
     lineas.push(PREGUNTA_PRIORIDAD);
     return { texto: lineas.join('\n'), sugerencias: botonesDePrioridad(t), mapa: { distrito: intencion.distrito, capas: [] } };
   }
@@ -812,10 +889,12 @@ const Asistente = (() => {
     const q = c.cauce;
     if (!q) return 'Todavía estoy calculando las quebradas cercanas a tu punto; vuelve a preguntar en unos segundos.';
     if (q.estado === 'SIN DATO' || q.distanciaM === null) return `No tengo el dato de quebradas y cauces para tu punto (${q.error || 'archivo no disponible'}), así que no lo afirmo. Consulta SIGRID (CENEPRED) y al IMPLA.`;
-    const lineas = [`El cauce más cercano en la red hidrográfica de la ANA es ${q.nombre}${q.tipo ? ` (${q.tipo.toLowerCase()})` : ''}, a ${fmtM(q.distanciaM)} en línea recta de tu punto.`];
+    const lineas = [`El cauce más cercano es ${q.nombre}${q.tipo ? ` (${q.tipo.toLowerCase()})` : ''}, a ${fmtM(q.distanciaM)} en línea recta de tu punto${q.fuenteCorta ? ` (fuente: ${q.fuenteCorta})` : ''}.`];
+    if (Array.isArray(q.alias) && q.alias.length) lineas.push(`También figura como ${listaEs(q.alias.map((a) => a.nombre))}.`);
     if (q.segunUmbralUsuario) lineas.push(`Según tu umbral (al menos ${fmtUmbral(q.umbralM)} de un cauce): ${q.estado === 'CUMPLE' ? 'cumple' : 'no cumple'}.`);
     else lineas.push('No existe una distancia normativa a una quebrada, así que no digo si es «cerca» o «lejos». Si quieres un criterio propio, fija tu distancia mínima en «Mis umbrales».');
-    lineas.push('Límites: la red de la ANA no incluye todas las quebradas urbanas, no es un mapa de peligro y no delimita la faja marginal.', AVISO_RIESGO);
+    const faltan = C.textoQuebradasAusentes(q.ausentes);
+    lineas.push(`Límites: los cauces vienen de ${C.textoFuentesCauces(q.fuentes)} y ninguna fuente es completa${faltan ? `; todavía no figuran ${faltan}` : ''}. Tampoco es un mapa de peligro ni delimita la faja marginal.`, AVISO_RIESGO);
     return lineas.join('\n');
   }
 
@@ -837,6 +916,102 @@ const Asistente = (() => {
     if (p.masCercano) lineas.push(`El más cercano${tipo ? ` (${tipo.toLowerCase()})` : ''} está a ${fmtM(p.distanciaM)} en línea recta.`);
     lineas.push('Es un inventario de eventos documentados, no un mapa de susceptibilidad: que no haya registros cerca no significa que el lugar sea seguro.', AVISO_RIESGO);
     return lineas.join('\n');
+  }
+
+  // ---------------------------------------------------- Peligro volcánico del Misti (zonas del IGP, informativo)
+
+  const FUENTE_VOLCAN = 'Zonas de peligro volcánico del Misti del Instituto Geofísico del Perú (IGP), congeladas con su fecha de extracción. El mapa oficial de referencia es el de INGEMMET (Boletín Serie C n.° 100, 2025); no se pudo confirmar de qué edición salen las capas del IGP y el servicio no trae fecha.';
+  const LIM_VOLCAN = 'Es un mapa de escala regional y sin fecha de elaboración: cerca del borde de una zona el nivel no es exacto a nivel de predio. No es una evaluación de riesgo ni dice si habrá una erupción, y que un lugar no esté en una zona no significa que no haya peligro. Para decidir, consulta el CENEPRED (SIGRID), tu municipalidad y el IGP o INGEMMET.';
+  const SUGERENCIAS_VOLCAN = ['¿Hay lahares cerca de mi punto?', '¿Paucarpata está en peligro por el Misti?', 'Dame un resumen de mi punto'];
+
+  /** Los fenómenos que se pueden dibujar entre los que pidió la persona (todos los dibujables si no nombró ninguno); null si no hay nada que dibujar (solo ceniza). */
+  function mapaDeVolcan(intencion, distrito) {
+    const pedidos = intencion.volcanTipos || [];
+    const dibujables = Vol().dibujables();
+    const tipos = pedidos.length ? pedidos.filter((t) => dibujables.includes(t)) : dibujables;
+    return tipos.length ? { distrito, capas: [], volcan: { tipos } } : null;
+  }
+
+  function textoVolcanPunto(intencion, c) {
+    const v = c.volcan;
+    const pedidos = intencion.volcanTipos || [];
+    if (!v) return 'Todavía estoy calculando el peligro volcánico de tu punto; vuelve a preguntar en unos segundos.';
+    if (v.estado === 'SIN DATO') return `No tengo el mapa de peligro volcánico del IGP (${v.error || 'archivo no disponible'}), así que no lo afirmo. Consulta el CENEPRED (SIGRID), tu municipalidad y el IGP.`;
+    const resumen = pedidos.length ? v.resumen.filter((r) => pedidos.includes(r.tipo)) : v.resumen;
+    const lineas = [Vol().frasePunto(resumen, { tipos: pedidos })];
+    if (resumen.length) Vol().lineasPunto(resumen).forEach((l) => lineas.push(`• ${l.texto}`));
+    if (pedidos.includes('ceniza') && pedidos.length === 1) lineas.push('La ceniza cubre toda la ciudad en los escenarios del IGP, por eso no la dibujo en el mapa.');
+    lineas.push(`Datos del IGP congelados el ${v.fecha || 'sin fecha'}. ${LIM_VOLCAN}`);
+    return lineas.join('\n');
+  }
+
+  function respuestaVolcanDistrito(intencion, c) {
+    const t = c.distritoTitulo || Dist().titulo(intencion.distrito);
+    if (intencion.distritoFuera) return { texto: textoDistritoFuera(t), sugerencias: SUGERENCIAS_BASE };
+    const d = c.volcanDistrito;
+    if (!d) return { texto: `Todavía estoy midiendo el peligro volcánico de ${t}; vuelve a preguntar en unos segundos.`, sugerencias: SUGERENCIAS_VOLCAN };
+    if (d.error) return { texto: `No tengo el mapa de peligro volcánico del IGP (${d.error}), así que no lo afirmo. Consulta el CENEPRED (SIGRID), tu municipalidad y el IGP.`, sugerencias: SUGERENCIAS_VOLCAN };
+    const pedidos = intencion.volcanTipos || [];
+    const texto = [Vol().fraseDistrito(t, d.r, { tipos: pedidos }), `Datos del IGP congelados el ${d.fecha || 'sin fecha'}. Los porcentajes salen de una muestra de puntos del distrito. ${LIM_VOLCAN}`].join('\n');
+    return { texto, sugerencias: [`¿Qué líneas pasan por ${t}?`, 'Dame un resumen de mi punto', '¿Hay lahares cerca de mi punto?'], mapa: mapaDeVolcan(intencion, intencion.distrito) };
+  }
+
+  // ------------------------------- Escenario de riesgo del CENEPRED ante El Niño (por distrito, informativo)
+
+  const FUENTE_CENEPRED = 'Escenario de riesgo por inundaciones y movimientos en masa ante lluvias asociadas al Fenómeno El Niño del CENEPRED (estudio de mayo de 2026; capas del SIGRID actualizadas en 2026), congelado con su fecha de descarga.';
+  const LIM_CENEPRED = Cen().QUE_NO_CUBRE;
+  const SUGERENCIAS_CENEPRED = ['¿Paucarpata se inunda?', 'Riesgo de huaico en Sachaca', '¿Qué dice el CENEPRED de mi punto?'];
+  const SIN_CENEPRED = 'Consulta el SIGRID (CENEPRED) y la evaluación de riesgos de tu municipalidad.';
+
+  /** Qué dibujar: un fenómeno a la vez (si pidió los dos, la inundación) y, si lo hay, el distrito al que acercar el mapa. */
+  function mapaDeCenepred(intencion, distrito) {
+    const f = intencion.cenepredFenomenos || [];
+    return { distrito, capas: [], cenepred: { fenomeno: f.length === 1 ? f[0] : 'inundacion' } };
+  }
+
+  function textoCenepred(r, intencion, fecha) {
+    const f = intencion.cenepredFenomenos || [];
+    const lineas = [Cen().frase(r, { fenomenos: f })];
+    Cen().lineas(r, { fenomenos: f }).forEach((l) => lineas.push(`• ${l.texto}`));
+    lineas.push(Cen().SUSCEPTIBILIDAD);
+    if (f.includes('movimientos_masa') || f.length === 0) lineas.push(`Los movimientos en masa son, por ejemplo, ${Cen().EXPLICA_MM}.`);
+    lineas.push(`Datos del CENEPRED congelados el ${fecha || 'sin fecha'}. ${LIM_CENEPRED}`);
+    if (intencion.cenepredMapa && f.length !== 1) lineas.push('Dibujé en el mapa el riesgo ante inundaciones; pide «mapa del riesgo de movimientos en masa» para ver el otro.');
+    return lineas.join('\n');
+  }
+
+  /** Los distritos de los datos agrupados por nivel, del más alto al más bajo, para «¿qué distritos tienen riesgo muy alto de inundación?». */
+  function textoCenepredTodos(intencion, datos) {
+    const f = intencion.cenepredFenomenos && intencion.cenepredFenomenos.length ? intencion.cenepredFenomenos : Cen().IDS;
+    const total = Object.keys(datos.distritos).length;
+    const bloques = f.map((id) => {
+      const filas = Cen().distritosPorFenomeno(datos, id);
+      const cabecera = `Ante ${Cen().FENOMENOS[id].nombre}, según el CENEPRED, en un escenario El Niño:`;
+      const niveles = [...Cen().NIVELES].reverse().map((nivel) => ({ nivel, nombres: filas.filter((d) => d.nivel === nivel).map((d) => Dist().titulo(d.distrito)).sort((a, b) => a.localeCompare(b, 'es')) })).filter((x) => x.nombres.length);
+      return [cabecera, ...niveles.map((x) => `• Riesgo ${x.nivel.toLowerCase()} (${x.nombres.length}): ${x.nombres.join(', ')}.`)].join('\n');
+    });
+    return [`Estos son los ${total} distritos de Arequipa Metropolitana que tengo, por nivel de riesgo.`, ...bloques, `Datos del CENEPRED congelados el ${datos.fecha_descarga || 'sin fecha'}. ${LIM_CENEPRED}`].join('\n');
+  }
+
+  function respuestaCenepred(intencion, c) {
+    const fin = (texto, mapa) => ({ texto, sugerencias: SUGERENCIAS_CENEPRED, ...(mapa ? { mapa } : {}) });
+    if (intencion.cenepredTodos && !intencion.distrito) {
+      if (!c.cenepredDatos) return fin(`No pude leer el archivo del escenario de riesgo del CENEPRED, así que no afirmo nada. ${SIN_CENEPRED}`);
+      return fin(textoCenepredTodos(intencion, c.cenepredDatos), intencion.cenepredMapa ? mapaDeCenepred(intencion, null) : null);
+    }
+    if (intencion.distrito) {
+      const t = c.distritoTitulo || Dist().titulo(intencion.distrito);
+      if (intencion.distritoFuera) return { texto: textoDistritoFuera(t), sugerencias: SUGERENCIAS_BASE };
+      if (!c.cenepredDatos) return fin(`No pude leer el archivo del escenario de riesgo del CENEPRED, así que no afirmo nada de ${t}. ${SIN_CENEPRED}`);
+      const r = Cen().buscar(c.cenepredDatos, intencion.distrito);
+      if (r.estado !== 'INFORMATIVO') return fin(`${r.causa} No lo estimo. ${SIN_CENEPRED}`);
+      return fin(textoCenepred(r, intencion, r.fechaDescarga), intencion.cenepredMapa ? mapaDeCenepred(intencion, intencion.distrito) : null);
+    }
+    if (!c.punto) return fin('Elige un punto en el mapa para ver qué estima el CENEPRED para su distrito, o pregúntame por un distrito: «¿Paucarpata se inunda?».');
+    const r = c.cenepred;
+    if (!r) return fin('Todavía estoy calculando el escenario del CENEPRED para tu punto; vuelve a preguntar en unos segundos.');
+    if (r.estado !== 'INFORMATIVO') return fin(`No tengo el escenario de riesgo del CENEPRED para tu punto (${r.error || 'archivo no disponible'}), así que no lo afirmo. ${SIN_CENEPRED}`);
+    return fin(textoCenepred(r, intencion, r.fecha), intencion.cenepredMapa ? mapaDeCenepred(intencion, null) : null);
   }
 
   function textoPDM(estado) {
@@ -910,6 +1085,8 @@ const Asistente = (() => {
     '• Salud, colegios, paraderos y áreas verdes: OpenStreetMap (ODbL), copia congelada con su fecha de extracción. Algo que falte en el mapa puede existir.',
     '• Líneas de transporte (recorridos y paradas): SmartBus (smartbus.app), usados con su autorización verbal (confirmación escrita pendiente). Sin frecuencias ni horarios.',
     '• Umbrales: colegios 500 m inicial, 1500 m primaria y 3000 m secundaria (MINEDU); área verde ≥ 0,5 ha a 300 m (OMS Europa); salud 1000 m, paradero 400 m y borde de zona 20 m son convenciones del proyecto.',
+    '• Peligro volcánico del Misti: zonas del Instituto Geofísico del Perú (IGP), sin fecha de elaboración en el servicio; el mapa oficial de referencia es el de INGEMMET (Boletín n.° 100, 2025). Es informativo, no una evaluación de riesgo.',
+    '• Riesgo del distrito ante El Niño: escenario del CENEPRED (SIGRID) para inundaciones y movimientos en masa, estimado por distrito para lluvias como las de 1983, 1998, 2017 y 2023. Es informativo y no es una evaluación de tu predio.',
     '• Precio de oferta por m² del distrito: Aptología (datos abiertos, CC BY 4.0). Son precios pedidos en avisos, no de cierre, y solo hay cifra en los distritos con suficientes avisos.',
     '• Distancias en línea recta, no recorrido a pie.',
     '• Las búsquedas de zonas son un cálculo sobre una cuadrícula de celdas; el porcentaje es la parte del suelo habitable que cumple, no una probabilidad.',
@@ -923,7 +1100,7 @@ const Asistente = (() => {
     historico: 'no hay datos de barrios tradicionales',
   };
 
-  const TEXTO_LIMITE_CAUCES = 'Ojo: «lejos de quebradas y ríos» usa la red hidrográfica de la ANA, que no incluye todas las quebradas urbanas, no es un mapa de peligro y no delimita la faja marginal. Cumplirlo no garantiza que el lugar esté libre de huaicos.';
+  const TEXTO_LIMITE_CAUCES = 'Ojo: «lejos de quebradas y ríos» usa los cauces de la ANA, el IGP y OpenStreetMap, que no incluyen todas las quebradas urbanas, no son un mapa de peligro y no delimitan la faja marginal. Cumplirlo no garantiza que el lugar esté libre de huaicos.';
 
   const SUGERENCIAS_PRECIO = ['¿Cuánto cuesta el m² en Cayma?', 'Precio por m² en todos los distritos', 'Dame un resumen de mi punto'];
   // Se escribe con coma, como el resto de cifras del asistente, y sin espacios dentro del número (el texto se verifica cifra por cifra).
@@ -964,6 +1141,8 @@ const Asistente = (() => {
   const TEMAS = {
     seguridad: 'No evalúo seguridad ciudadana: el proyecto la dejó fuera de alcance, aunque los estudios muestran que pesa en la decisión de compra. No te doy una respuesta a medias.',
     precio: 'No tengo el precio de una casa, un terreno ni un alquiler en particular, ni puedo decirte qué zona es más barata. Solo conozco el precio de oferta por m² promedio de algunos distritos (Aptología): pregúntame «¿cuánto cuesta el m² en Cayma?».',
+    volcan_busqueda: 'Todavía no puedo buscar zonas según el peligro volcánico. Sí puedo decirte en qué zonas de peligro del Misti cae tu punto («¿hay lahares cerca de mi punto?») o qué parte de un distrito cae en cada una («¿Paucarpata está en peligro por el Misti?»).',
+    cenepred_busqueda: 'Todavía no puedo buscar zonas según el riesgo de inundación o de movimientos en masa. Sí puedo decirte qué estima el CENEPRED para el distrito de tu punto («¿qué dice el CENEPRED de mi punto?») o para un distrito («¿Paucarpata se inunda?»).',
     ruido: 'No tengo datos de ruido. «Zona tranquila» es solo una aproximación con la zonificación (residencial de densidad baja o media 1), no una medición.',
   };
 
@@ -977,7 +1156,7 @@ const Asistente = (() => {
     const fin = (texto, sugerencias = SUGERENCIAS_BASE) => ({ texto, sugerencias });
 
     if (tipo === 'saludo') return fin('¡Hola! Soy el asistente de GeoVerificador. Puedo contarte lo que hay en tu punto (zona y servicios cercanos) o buscar zonas de Arequipa según lo que te importa: colegio, posta, área verde, transporte, campiña, zona residencial. Todo con los mismos datos de la ficha.');
-    if (tipo === 'ayuda') return fin('Puedo:\n• Buscar zonas: «busco cerca de un colegio y un parque, lo más importante es el parque» o «posta y paradero en un radio de 1 km».\n• Contarte de tu punto: «¿qué zona es?», «¿hay un colegio cerca?», «dame un resumen».\n• Líneas de transporte: «¿qué buses pasan por aquí?» o «¿qué líneas pasan por Paucarpata?».\n• Calcular: «¿cuánto puedo construir en un lote de 200 m²?».\n• Decirte el precio de oferta por m² promedio de un distrito: «¿cuánto cuesta el m² en Cayma?».\n• Explicar el PDM nuevo y de dónde salen los datos.\nNo tengo datos de seguridad ni ruido, ni el precio de una casa o un terreno en particular.');
+    if (tipo === 'ayuda') return fin('Puedo:\n• Buscar zonas: «busco cerca de un colegio y un parque, lo más importante es el parque» o «posta y paradero en un radio de 1 km».\n• Contarte de tu punto: «¿qué zona es?», «¿hay un colegio cerca?», «dame un resumen».\n• Líneas de transporte: «¿qué buses pasan por aquí?» o «¿qué líneas pasan por Paucarpata?».\n• Peligro volcánico del Misti: «¿hay lahares cerca de mi punto?» o «¿Paucarpata está en peligro por el Misti?».\n• Riesgo ante El Niño por distrito (CENEPRED): «¿Paucarpata se inunda?», «riesgo de huaico en Sachaca» o «¿qué dice el CENEPRED de mi punto?».\n• Calcular: «¿cuánto puedo construir en un lote de 200 m²?».\n• Decirte el precio de oferta por m² promedio de un distrito: «¿cuánto cuesta el m² en Cayma?».\n• Explicar el PDM nuevo y de dónde salen los datos.\nNo tengo datos de seguridad ni ruido, ni el precio de una casa o un terreno en particular.');
     if (tipo === 'fuentes') return fin(TEXTO_FUENTES);
     if (tipo === 'no_soportado') return fin(`${TEMAS[intencion.temaNoSoportado] || 'Eso no está en los datos que uso.'}\nSí puedo ayudarte con la zonificación y con la cercanía a colegios, salud, transporte y áreas verdes.`);
     if (tipo === 'desconocido') return fin('No entendí eso. Puedes pedirme, por ejemplo:', SUGERENCIAS_BASE);
@@ -999,6 +1178,10 @@ const Asistente = (() => {
       return { ...fin(textoRutasPunto(rp), ['Dame un resumen del punto', '¿Hay un paradero cerca?']), mapa: mapaDeLineas(rp, null, c.punto) };
     }
     if (tipo === 'precio') return fin(textoPrecio(intencion, c), SUGERENCIAS_PRECIO);
+    if (tipo === 'cenepred') return respuestaCenepred(intencion, c);
+    if (tipo === 'volcan' && intencion.distrito) return respuestaVolcanDistrito(intencion, c);
+    if (tipo === 'volcan' && !c.punto) return fin('Elige un punto en el mapa para ver en qué zonas de peligro volcánico del Misti cae, o pregúntame por un distrito: «¿Paucarpata está en peligro por el Misti?».', SUGERENCIAS_VOLCAN);
+    if (tipo === 'volcan') return { ...fin(textoVolcanPunto(intencion, c), SUGERENCIAS_VOLCAN), mapa: mapaDeVolcan(intencion, null) };
 
     if (!c.punto) return sinPunto();
 
@@ -1364,10 +1547,10 @@ const Asistente = (() => {
   const LIM_RECTA = 'Las distancias son en línea recta, no recorrido a pie.';
   const LIM_OSM = 'OpenStreetMap es colaborativo: lo que no figura puede existir. «Sin dato» no significa que no exista.';
   const LIM_PLANO = 'El plano se extrajo de un PDF y cerca del borde entre dos zonas el resultado puede no ser exacto. La vigencia del PDM 2016-2025 es incierta y hay un PDM nuevo en trámite.';
-  const FUENTE_ANA = 'Red hidrográfica (capa «Cuerpos de Agua») de la Autoridad Nacional del Agua (ANA), elaborada en 2018, congelada con su fecha de extracción.';
+  const FUENTE_ANA = 'Cauces congelados con su fecha de extracción: la red hidrográfica de la Autoridad Nacional del Agua (ANA, 2018), las quebradas y ríos del Instituto Geofísico del Perú (IGP, sin fecha de elaboración) y los cauces de OpenStreetMap (ODbL). Cada cauce dice de cuál fuente viene.';
   const FUENTE_IGP = 'Sismos reportados, Instituto Geofísico del Perú (IGP), congelados con su fecha de extracción.';
   const FUENTE_INGEMMET = 'Inventario de peligros geológicos, GEOCATMIN (INGEMMET), congelado con su fecha de extracción.';
-  const LIM_CAUCES = 'La red de la ANA es de escala nacional: no incluye todas las quebradas urbanas ni las torrenteras menores, no es un mapa de peligro de huaicos o inundación y no delimita la faja marginal.';
+  const LIM_CAUCES = 'Ninguna de las tres fuentes de cauces es completa (la red de la ANA es de escala nacional): faltan quebradas urbanas y torrenteras menores, no son un mapa de peligro de huaicos o inundación y no delimitan la faja marginal.';
   const LIM_INVENTARIO = 'Es un inventario de eventos documentados, no un mapa de susceptibilidad: que no haya registros cerca no significa que el lugar sea seguro.';
   const GENERICO = {
     porque: ['Los datos, distancias y estados los calcula siempre el motor de la ficha con reglas explícitas. Un modelo, si está activo, solo interpreta tu frase y redacta; no aporta cifras, por eso no puede inventar un dato.'],
@@ -1405,7 +1588,7 @@ const Asistente = (() => {
       limites: ['Es un máximo teórico: no considera retiros, estacionamientos ni la forma del lote.', 'En zonas condicionadas o no construibles no se calcula.', LIM_REFERENCIAL],
     },
     quebrada: {
-      porque: ['Se mide la distancia en línea recta desde tu punto hasta el tramo más cercano de la red hidrográfica de la ANA. Si fijaste tu distancia mínima en «Mis umbrales», se compara con ella; si no, solo se informa.'],
+      porque: ['Se mide la distancia en línea recta desde tu punto hasta el tramo más cercano de los cauces de la ANA, el IGP y OpenStreetMap, y se dice de cuál fuente es. Si fijaste tu distancia mínima en «Mis umbrales», se compara con ella; si no, solo se informa.'],
       fuente: [FUENTE_ANA],
       limites: [LIM_CAUCES, 'No existe una distancia normativa a una quebrada: la faja marginal solo está delimitada donde la ANA la fijó.', LIM_RECTA, LIM_REFERENCIAL],
     },
@@ -1419,6 +1602,16 @@ const Asistente = (() => {
       fuente: [FUENTE_INGEMMET],
       limites: [LIM_INVENTARIO, LIM_RECTA, LIM_REFERENCIAL],
     },
+    volcan: {
+      porque: ['Se busca en qué polígonos de peligro volcánico del IGP cae tu punto. Para un distrito, se prueba un punto cada 250 m dentro de él y, por cada fenómeno, se cuenta el nivel más alto de ese punto.'],
+      fuente: [FUENTE_VOLCAN],
+      limites: [LIM_VOLCAN, 'La ceniza cubre toda la ciudad en los escenarios del IGP: por eso no se dibuja en el mapa.'],
+    },
+    cenepred: {
+      porque: ['Se busca el distrito (el de tu punto o el que nombras) en el escenario de riesgo del CENEPRED y se dice tal cual su nivel de riesgo ante inundaciones y ante movimientos en masa, con las viviendas, locales educativos y establecimientos de salud del distrito que están en zonas de mayor susceptibilidad. No se calcula nada nuevo.'],
+      fuente: [FUENTE_CENEPRED],
+      limites: [LIM_CENEPRED, 'El nivel es uno solo por distrito: no distingue entre una calle y otra ni mira tu predio.'],
+    },
     servicio: SERVICIOS,
     contar: {
       porque: ['Cuento los elementos de OpenStreetMap cuyo punto cae dentro del límite del distrito (los parques, por el centro de su polígono).'],
@@ -1426,7 +1619,7 @@ const Asistente = (() => {
       limites: [LIM_OSM, 'Un colegio puede atender varios niveles; los que no declaran su nivel se cuentan como primaria y secundaria.', 'Los parques se cuentan todos; los criterios de búsqueda usan solo los de al menos 0,5 ha (OMS Europa, 2016).'],
     },
     perfil: {
-      porque: ['Junta lo que hay dentro del distrito: cómo se reparte la zonificación del plano (se mide con puntos cada 300 m), cuántos servicios hay y qué cauces de la red de la ANA lo cruzan.'],
+      porque: ['Junta lo que hay dentro del distrito: cómo se reparte la zonificación del plano (se mide con puntos cada 300 m), cuántos servicios hay y qué cauces (de la ANA, el IGP y OpenStreetMap) lo cruzan.'],
       fuente: [FUENTE_PLANO, FUENTE_OSM, FUENTE_ANA],
       limites: [LIM_PLANO, LIM_OSM, LIM_CAUCES, LIM_REFERENCIAL],
     },

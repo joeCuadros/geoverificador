@@ -153,6 +153,17 @@ describe('Capas.construir: quebradas y sismos', () => {
     expect(grande.radioPx).toBeLessThanOrEqual(16);
     expect(r.leyenda.find((l: { capa: string }) => l.capa === 'sismos').texto).toMatch(/magnitud/i);
   });
+  it('cada tramo de quebrada dice su fuente y la leyenda cuenta los tramos por fuente', () => {
+    const conFuente = [{ ...cauces[0], fuente: 'IGP' }, { ...cauces[1], fuente: 'OSM' }];
+    const r = Capas.construir({ ...base, cauces: conFuente, capas: [{ id: 'quebradas' }], area: null });
+    expect(r.lineas[0].detalle).toContain('Fuente: IGP');
+    expect(r.lineas[0].fuente).toBe('IGP');
+    expect(r.leyenda.find((l: { capa: string }) => l.capa === 'quebradas').texto).toContain('IGP 1');
+  });
+  it('un cauce sin fuente (archivo antiguo) se rotula como ANA', () => {
+    const r = Capas.construir({ ...base, capas: [{ id: 'quebradas' }], area: null });
+    expect(r.lineas[0].detalle).toContain('Fuente: ANA');
+  });
   it('sin archivo de quebradas o de sismos no inventa nada y lo dice', () => {
     const r = Capas.construir({ ...base, cauces: null, sismos: null, capas: [{ id: 'quebradas' }, { id: 'sismos' }], area: null });
     expect(r.lineas).toEqual([]);
@@ -246,5 +257,125 @@ describe('Capas.construir: solo el distrito (perfil)', () => {
     const r = Capas.construir({ ...base, capas: [], area: { polys: DISTRITO } });
     expect(r.resumen).toBe('Marqué el distrito en el mapa. Elige arriba qué quieres ver dentro de él.');
     expect(r.limites).toEqual([-71.55, -16.42, -71.53, -16.40]);
+  });
+});
+
+describe('Capas.construir: riesgo de los distritos ante El Niño (CENEPRED)', () => {
+  const Distritos = require('../public/js/distritos.js');
+  const Cenepred = require('../public/js/cenepred.js');
+  const poligono = (x: number, y: number, g: number) => ({ type: 'Polygon', coordinates: [[[x, y], [x + g, y], [x + g, y + g], [x, y + g], [x, y]]] });
+  const distrito = (ubigeo: string, nombre: string, x: number) => ({ type: 'Feature', properties: { ubigeo, distrito: nombre, provincia: 'AREQUIPA', departamento: 'AREQUIPA' }, geometry: poligono(x, -16.5, 0.05) });
+  const bloque = (nivel: string, v = 100) => ({ nivel, viviendas: v, instituciones_educativas: 2, establecimientos_salud: 1 });
+  const DATOS = {
+    fecha_descarga: '2026-11-03',
+    distritos: {
+      '040117': { distrito: 'SACHACA', inundacion: bloque('Muy alto', 7926), movimientos_masa: bloque('Alto') },
+      '040112': { distrito: 'PAUCARPATA', inundacion: bloque('Alto'), movimientos_masa: bloque('Medio') },
+      '040104': { distrito: 'CERRO COLORADO', inundacion: bloque('Muy alto'), movimientos_masa: bloque('Medio') },
+    },
+  };
+  beforeAll(() => {
+    Distritos.cargarParaPruebas({ type: 'FeatureCollection', features: [distrito('040117', 'SACHACA', -71.6), distrito('040112', 'PAUCARPATA', -71.5), distrito('040104', 'CERRO COLORADO', -71.7)] });
+  });
+
+  it('colorea los distritos por nivel, del más bajo al más alto (el más alto encima)', () => {
+    const r = Capas.construir({ ...base, cenepred: DATOS, capas: [{ id: 'cenepred_inundacion' }], area: null });
+    expect(r.riesgoDistritos.map((z: { distrito: string; nivel: string }) => `${z.distrito}:${z.nivel}`)).toEqual(['PAUCARPATA:Alto', 'SACHACA:Muy alto', 'CERRO COLORADO:Muy alto']);
+    expect(r.riesgoDistritos[0].geometry.type).toBe('Polygon');
+  });
+
+  it('una línea de leyenda por nivel, del más alto al más bajo, con los nombres y el número de distritos', () => {
+    const r = Capas.construir({ ...base, cenepred: DATOS, capas: [{ id: 'cenepred_inundacion' }], area: null });
+    const ley = r.leyenda.filter((l: { capa: string }) => l.capa === 'cenepred_inundacion');
+    expect(ley.map((l: { texto: string }) => l.texto)).toEqual([
+      'Riesgo muy alto ante inundaciones: 2 distritos (Sachaca, Cerro Colorado)', 'Riesgo alto ante inundaciones: 1 distrito (Paucarpata)',
+    ]);
+    expect(ley.map((l: { nivel: string }) => l.nivel)).toEqual(['Muy alto', 'Alto']);
+    expect(r.resumen).toBe('Muestro 3 distritos coloreados por su riesgo ante inundaciones.');
+  });
+
+  it('los movimientos en masa usan su propia capa y sus propios niveles', () => {
+    const r = Capas.construir({ ...base, cenepred: DATOS, capas: [{ id: 'cenepred_mm' }], area: null });
+    expect(r.leyenda.map((l: { texto: string }) => l.texto)).toEqual([
+      'Riesgo alto ante movimientos en masa: 1 distrito (Sachaca)', 'Riesgo medio ante movimientos en masa: 2 distritos (Paucarpata, Cerro Colorado)',
+    ]);
+  });
+
+  it('cada distrito dice su nivel, los conteos y que es del distrito y no del predio', () => {
+    const z = Capas.construir({ ...base, cenepred: DATOS, capas: [{ id: 'cenepred_inundacion' }], area: null }).riesgoDistritos.find((x: { distrito: string }) => x.distrito === 'SACHACA');
+    expect(z.titulo).toBe('Sachaca: riesgo muy alto ante inundaciones');
+    expect(z.detalle).toMatch(/7 926 viviendas/);
+    expect(z.detalle).toMatch(/no es del predio/);
+    expect(JSON.stringify(z)).not.toMatch(/NO CUMPLE|puntaje/);
+  });
+
+  it('se dibuja un fenómeno a la vez y, con un distrito, se acerca a él sin quitar los demás', () => {
+    const dos = Capas.construir({ ...base, cenepred: DATOS, capas: [{ id: 'cenepred_inundacion' }, { id: 'cenepred_mm' }], area: null });
+    expect(new Set(dos.riesgoDistritos.map((z: { capa: string }) => z.capa))).toEqual(new Set(['cenepred_inundacion']));
+    const conArea = Capas.construir({ ...base, cenepred: DATOS, capas: [{ id: 'cenepred_inundacion' }], area: { polys: [poligono(-71.5, -16.5, 0.05).coordinates] } });
+    expect(conArea.riesgoDistritos).toHaveLength(3);
+    expect(conArea.limites).toEqual([-71.5, -16.5, -71.45, -16.45]);
+  });
+
+  it('sin el archivo o sin los límites de los distritos no inventa nada y lo dice', () => {
+    expect(Capas.construir({ ...base, cenepred: null, capas: [{ id: 'cenepred_inundacion' }], area: null }).sinDatos).toEqual(['cenepred']);
+    const sinLimites = { distritos: { '999999': { distrito: 'NO EXISTE', inundacion: bloque('Alto'), movimientos_masa: bloque('Alto') } } };
+    expect(Capas.construir({ ...base, cenepred: sinLimites, capas: [{ id: 'cenepred_inundacion' }], area: null }).sinDatos).toEqual(['cenepred']);
+  });
+
+  it('las dos capas se ofrecen entre las de riesgo', () => {
+    expect(Capas.CAPAS.find((c: { id: string }) => c.id === 'cenepred_inundacion')).toMatchObject({ etiqueta: 'Riesgo de inundación por distrito (CENEPRED)', grupo: 'riesgo' });
+    expect(Capas.CAPAS.find((c: { id: string }) => c.id === 'cenepred_mm')).toMatchObject({ grupo: 'riesgo' });
+    expect(Cenepred.IDS).toEqual(['inundacion', 'movimientos_masa']);
+  });
+});
+
+describe('Capas.construir: peligro volcánico del Misti', () => {
+  const Volcan = require('../public/js/volcan.js');
+  const zona = (tipo: string, nivel: string, lat: number, lon: number, g: number) => ({
+    type: 'Feature', geometry: { type: 'MultiPolygon', coordinates: [cuadrado(lat, lon, g)] }, properties: { tipo, nivel, etiqueta: `Peligro ${nivel}`, capa: `Capa ${tipo}`, detalle: 'Alcance 2 km a 4 km' },
+  });
+  const volcan = Volcan.indexar([
+    zona('lahar', 'bajo', -16.42, -71.55, 0.03), zona('lahar', 'alto', -16.41, -71.54, 0.01), zona('lava', 'alto', -16.41, -71.54, 0.005),
+    zona('ceniza', 'alto', -16.5, -71.6, 0.3), zona('lahar', 'moderado', -16.2, -71.2, 0.01),
+  ]);
+
+  it('dibuja las zonas por nivel (la más alta encima) y no dibuja la ceniza', () => {
+    const r = Capas.construir({ ...base, volcan, capas: [{ id: 'volcan' }], area: null });
+    expect(r.peligroVolcan.map((z: { tipo: string; nivel: string }) => `${z.tipo}:${z.nivel}`)).toEqual(['lahar:bajo', 'lahar:moderado', 'lahar:alto', 'lava:alto']);
+    expect(r.peligroVolcan.some((z: { tipo: string }) => z.tipo === 'ceniza')).toBe(false);
+  });
+
+  it('una línea de leyenda por nivel, del más alto al más bajo, con los fenómenos que se dibujan en él', () => {
+    const r = Capas.construir({ ...base, volcan, capas: [{ id: 'volcan' }], area: null });
+    const ley = r.leyenda.filter((l: { capa: string }) => l.capa === 'volcan');
+    expect(ley.map((l: { texto: string }) => l.texto)).toEqual(['Peligro alto: lahares y flujos de lava', 'Peligro moderado: lahares', 'Peligro bajo: lahares']);
+    expect(ley.map((l: { n: number }) => l.n)).toEqual([2, 1, 1]);
+    expect(r.resumen).toBe('Muestro 4 zonas de peligro volcánico.');
+  });
+
+  it('con un fenómeno pedido dibuja solo ese; pedir solo ceniza no dibuja nada y lo dice', () => {
+    const lava = Capas.construir({ ...base, volcan, capas: [{ id: 'volcan', tipos: ['lava'] }], area: null });
+    expect(lava.peligroVolcan).toHaveLength(1);
+    expect(lava.leyenda.map((l: { texto: string }) => l.texto)).toEqual(['Peligro alto: flujos de lava']);
+    const ceniza = Capas.construir({ ...base, volcan, capas: [{ id: 'volcan', tipos: ['ceniza'] }], area: null });
+    expect(ceniza.peligroVolcan).toEqual([]);
+    expect(ceniza.vacias).toEqual(['volcan']);
+  });
+
+  it('con un distrito solo se dibujan las zonas que tocan su caja', () => {
+    const r = Capas.construir({ ...base, volcan, capas: [{ id: 'volcan' }], area: { polys: DISTRITO } });
+    expect(r.peligroVolcan.some((z: { nivel: string; tipo: string }) => z.tipo === 'lahar' && z.nivel === 'moderado')).toBe(false);
+  });
+
+  it('sin archivo no inventa nada y lo dice; el popup cita el IGP y que no es una evaluación', () => {
+    expect(Capas.construir({ ...base, volcan: null, capas: [{ id: 'volcan' }], area: null }).sinDatos).toEqual(['volcan']);
+    const z = Capas.construir({ ...base, volcan, capas: [{ id: 'volcan' }], area: null }).peligroVolcan[0];
+    expect(z.detalle).toMatch(/IGP/);
+    expect(z.detalle).toMatch(/no es una evaluación de riesgo/);
+  });
+
+  it('la capa se ofrece entre las de riesgo', () => {
+    expect(Capas.CAPAS.find((c: { id: string }) => c.id === 'volcan')).toMatchObject({ etiqueta: 'Peligro volcánico (Misti)', grupo: 'riesgo' });
   });
 });

@@ -22,6 +22,7 @@ const Reporte = (() => {
   const coma = (n) => String(n).replace('.', ',');
   const fila = (k, v) => `<tr><th>${esc(k)}</th><td>${v}</td></tr>`;
   const P = typeof Precios !== 'undefined' ? Precios : require('./precios.js'); // eslint-disable-line no-undef
+  const CALC = typeof Calculos !== 'undefined' ? Calculos : require('./calculos.js'); // eslint-disable-line no-undef
   const NIVELES = ['inicial', 'primaria', 'secundaria'];
   const nombreNivel = (n) => n[0].toUpperCase() + n.slice(1);
 
@@ -145,9 +146,7 @@ const Reporte = (() => {
     return `<table class="rp-tabla">${filas.join('')}</table><p class="rp-nota">Criterio: un área verde de al menos ${num(u.areaMinM2)} m² a ${u.distanciaM} m o menos. ${esc(r.metodo)}</p>`;
   }
 
-  // ------------------------------------------------ Quebradas y cauces (ANA)
-  const QUEBRADAS_CITADAS = ['Añashuayco', 'San Lázaro']; // las que citan los informes de INGEMMET (docs/INVESTIGACION-VARIABLES.md)
-  const sinTildes = (s) => String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  // ------------------------------------------------ Quebradas y cauces (ANA, IGP y OpenStreetMap)
 
   function seccionQuebradas(d) {
     const q = d.cauce;
@@ -156,15 +155,14 @@ const Reporte = (() => {
       return `<table class="rp-tabla">${fila('Estado', estado('SIN DATO'))}${fila('Resultado', `No se pudo obtener el dato${q.error ? `: ${esc(q.error)}` : ''}`)}</table>
         <p class="rp-nota">Que no haya dato no significa que no haya una quebrada cerca: consulta SIGRID (CENEPRED) y al IMPLA.</p>`;
     }
-    const nombres = q.nombres || [];
-    const ausentes = QUEBRADAS_CITADAS.filter((n) => !nombres.some((x) => sinTildes(x).includes(sinTildes(n))));
+    const faltan = CALC.textoQuebradasAusentes(q.ausentes);
     const filas = [
       fila('Estado', estado(q.estado) + (q.segunUmbralUsuario ? ' <span class="rp-muted">según tu umbral</span>' : '')),
-      fila('Cauce más cercano', `${esc(q.nombre)}${q.tipo ? ` (${esc(String(q.tipo).toLowerCase())})` : ''}`),
+      fila('Cauce más cercano', `${esc(q.nombre)}${q.tipo ? ` (${esc(String(q.tipo).toLowerCase())})` : ''}${q.fuenteCorta ? ` · fuente: ${esc(q.fuenteCorta)}` : ''}${(q.alias || []).length ? `. También figura como ${esc(q.alias.map((a) => a.nombre).join(', '))}` : ''}`),
       fila('Distancia', `${dist(q.distanciaM)} en línea recta`),
       fila('Umbral', q.segunUmbralUsuario ? `Según tu umbral: al menos ${dist(q.umbralM)} de un cauce (es tu criterio, no una norma)` : 'Sin umbral normativo: no existe una distancia oficial a una quebrada, así que el dato es solo informativo'),
     ];
-    const cubre = `La red hidrográfica de la ANA es de escala nacional${q.elaboracion ? ` (elaboración: ${esc(q.elaboracion)})` : ''}: no incluye todas las quebradas urbanas${ausentes.length ? ` (en el archivo no figura${ausentes.length > 1 ? 'n' : ''} ${ausentes.join(' ni ')}, que citan los informes de INGEMMET)` : ''}. La red no es un mapa de peligro de huaicos ni de inundación y no delimita la faja marginal. La distancia es a la línea del mapa, no al cauce real.`;
+    const cubre = `Los cauces vienen de ${esc(CALC.textoFuentesCauces(q.fuentes))}; ninguna fuente es completa (la de la ANA es una red nacional de 2018).${faltan ? ` Quebradas conocidas que aún no figuran: ${esc(faltan)}.` : ''} Ninguna es un mapa de peligro de huaicos ni de inundación ni delimita la faja marginal. La distancia es a la línea del mapa, no al cauce real.`;
     return `<table class="rp-tabla">${filas.join('')}</table><p class="rp-nota">${cubre}</p>${q.metodo ? `<p class="rp-nota">${esc(q.metodo)}</p>` : ''}`;
   }
 
@@ -199,10 +197,34 @@ const Reporte = (() => {
       <p class="rp-nota">Es actividad reciente reportada por el IGP en el periodo indicado: no predice sismos ni mide el peligro del lugar, y un conteo bajo no dice nada de otros periodos. Para construir, la referencia normativa es la zona sísmica de la Norma E.030, que depende del distrito, y el Estudio de Mecánica de Suelos. El radio es una convención del proyecto. Datos congelados el ${esc(s.fecha || 'sin fecha')}.</p>`;
   }
 
+  /** Peligro volcánico del Misti (zonas del IGP): INFORMATIVO, nunca cumple ni puntaje. */
+  function bloqueVolcan(v) {
+    if (!v) return ''; // no se calculó (puntos o informes anteriores a esta variable): no se dice nada
+    if (v.estado === 'SIN DATO') {
+      return `<table class="rp-tabla">${fila('Peligro volcánico del Misti', `${estado('SIN DATO')} ${v.error ? esc(v.error) : ''}`)}</table>`;
+    }
+    const filas = [fila('Peligro volcánico del Misti', `${estado('INFORMATIVO')} ${esc(v.frase)}`)];
+    (v.lineas || []).forEach((l) => filas.push(fila('Detalle', esc(l.texto))));
+    return `<table class="rp-tabla">${filas.join('')}</table>
+      <p class="rp-nota">Zonas de peligro volcánico del IGP, de escala regional: cerca del borde de una zona el nivel no es exacto a nivel de predio. No es una evaluación de riesgo ni dice si habrá una erupción, y que el punto no esté en una zona no significa que no haya peligro. ${esc(v.fechaDelMapa || 'Sin metadatos de fecha')}${v.referencia ? `; mapa oficial de referencia: ${esc(v.referencia)}` : ''}. Datos congelados el ${esc(v.fecha || 'sin fecha')}. Consulta el CENEPRED (SIGRID), la municipalidad y el IGP o INGEMMET.</p>`;
+  }
+
+  /** Escenario de riesgo del CENEPRED ante El Niño (por distrito): INFORMATIVO, nunca cumple ni puntaje. */
+  function bloqueCenepred(c) {
+    if (!c) return ''; // no se calculó (puntos o informes anteriores a esta variable): no se dice nada
+    if (c.estado !== 'INFORMATIVO') {
+      return `<table class="rp-tabla">${fila('Riesgo del distrito ante El Niño (CENEPRED)', `${estado('SIN DATO')} ${c.error ? esc(c.error) : ''}`)}</table>`;
+    }
+    const filas = [fila('Riesgo del distrito ante El Niño (CENEPRED)', `${estado('INFORMATIVO')} ${esc(c.frase)}`)];
+    (c.lineas || []).forEach((l) => filas.push(fila('Detalle', esc(l.texto))));
+    return `<table class="rp-tabla">${filas.join('')}</table>
+      <p class="rp-nota">Escenario del CENEPRED para el distrito de ${esc(c.titulo)}, ante lluvias como las de El Niño de 1983, 1998, 2017 y 2023: es una estimación por distrito, no una predicción ni una evaluación de este predio, y dentro del distrito el riesgo cambia mucho de una calle a otra. Los movimientos en masa son, por ejemplo, deslizamientos, huaicos y derrumbes. Una zona de mayor susceptibilidad es donde el terreno es más propenso a que ocurra el fenómeno. Datos congelados el ${esc(c.fecha || 'sin fecha')}. Para decidir, pide la evaluación de riesgos de la municipalidad y consulta el SIGRID del CENEPRED (${esc(c.urlVisor || 'sigrid.cenepred.gob.pe')}).</p>`;
+  }
+
   function seccionContexto(d) {
     const c = d.contextoRiesgo;
     if (!c) return NO_CALCULADO;
-    return `<p class="rp-nota">Datos de contexto, no una evaluación de peligro: no hay umbral que diga si un lugar es seguro. Que algo no aparezca aquí no significa que el lugar esté libre de riesgo.</p>${bloquePeligros(c.peligros)}${bloqueSismos(c.sismos)}`;
+    return `<p class="rp-nota">Datos de contexto, no una evaluación de peligro: no hay umbral que diga si un lugar es seguro. Que algo no aparezca aquí no significa que el lugar esté libre de riesgo.</p>${bloquePeligros(c.peligros)}${bloqueSismos(c.sismos)}${bloqueVolcan(c.volcan)}${bloqueCenepred(c.cenepred)}`;
   }
 
   // ------------------------------- Precio de oferta del distrito (Aptología, CC BY 4.0)
@@ -261,7 +283,7 @@ const Reporte = (() => {
       let v;
       if (q.estado === 'SIN DATO') v = 'SIN DATO';
       else {
-        v = `${q.estado} · ${q.nombre} a ${dist(q.distanciaM)} en línea recta`;
+        v = `${q.estado} · ${q.nombre} a ${dist(q.distanciaM)} en línea recta${q.fuenteCorta ? ` (fuente: ${q.fuenteCorta})` : ''}`;
         v += q.segunUmbralUsuario ? ` (según tu umbral de ${dist(q.umbralM)})` : ' (sin umbral normativo)';
       }
       out.push(['Quebradas y cauces', v]);
@@ -271,6 +293,10 @@ const Reporte = (() => {
       const p = c.peligros;
       out.push(['Peligros geológicos registrados (contexto)', !p || p.estado === 'SIN DATO' ? 'SIN DATO' : `INFORMATIVO · ${num(p.total)} a ${num(p.radioM)} m o menos${p.masCercano ? `; el más cercano a ${dist(p.distanciaM)} en línea recta` : ''}`]);
       const s = c.sismos;
+      const vo = c.volcan;
+      if (vo) out.push(['Peligro volcánico del Misti (contexto)', vo.estado !== 'INFORMATIVO' ? 'SIN DATO' : `INFORMATIVO · ${vo.enZona ? vo.frase.replace(/^Tu punto está en zona de /, 'en zona de ').replace(/ del Misti, según el IGP[.]$/, '') + ' (IGP)' : 'fuera de las zonas mapeadas por el IGP'}`]);
+      const ce = c.cenepred;
+      if (ce) out.push(['Riesgo del distrito ante El Niño (CENEPRED, contexto)', ce.estado !== 'INFORMATIVO' ? 'SIN DATO' : `INFORMATIVO · en ${ce.titulo}: inundaciones ${ce.inundacion.nivel.toLowerCase()}, movimientos en masa ${ce.movimientos_masa.nivel.toLowerCase()} (estimación del distrito, no del predio)`]);
       out.push(['Sismos recientes (contexto)', !s || s.estado === 'SIN DATO' ? 'SIN DATO' : `INFORMATIVO · ${num(s.total)} a ${coma(s.radioM / 1000)} km o menos entre el ${s.desde} y el ${s.hasta}${s.magnitudMaxima !== null && s.magnitudMaxima !== undefined ? `; magnitud máxima ${coma(s.magnitudMaxima)}` : ''}`]);
     }
     const pr = d.precio;
@@ -278,8 +304,8 @@ const Reporte = (() => {
     return out;
   }
 
-  const fuenteCauce = (q) => (q ? `${q.fuente}${q.fecha ? `, datos extraídos el ${q.fecha}` : ''}` : '');
-  const fuenteContexto = (c) => (c ? [c.peligros && c.peligros.fuente, c.sismos && c.sismos.fuente].filter(Boolean).join('; ') : '');
+  const fuenteCauce = (q) => (q ? `${q.fuente}${q.fecha ? `, datos extraídos el ${q.fecha}` : ''}${q.fuentes && q.fuentes.length > 1 ? `. Cauces del archivo: ${CALC.textoFuentesCauces(q.fuentes)}` : ''}` : '');
+  const fuenteContexto = (c) => (c ? [c.peligros && c.peligros.fuente, c.sismos && c.sismos.fuente, c.volcan && c.volcan.estado === 'INFORMATIVO' && c.volcan.fuente, c.cenepred && c.cenepred.estado === 'INFORMATIVO' && c.cenepred.fuente].filter(Boolean).join('; ') : '');
 
   const fuentePrecio = (p) => (p && p.estado === 'INFORMATIVO' ? `${p.atribucion} — ${p.fuente}, licencia ${p.licencia}, descargado el ${p.fechaDescarga}` : '');
 
@@ -313,11 +339,11 @@ const Reporte = (() => {
       'Las líneas de transporte son los recorridos que SmartBus (smartbus.app) publicó en la fecha indicada, usados con su autorización verbal (confirmación escrita pendiente): no traen frecuencias ni horarios, y un cambio de ruta por tramos puede no estar reflejado.',
       'Todas las distancias son en línea recta, no recorrido a pie. Los umbrales de salud (1000 m), transporte (400 m) y borde de zona (20 m) son convenciones del proyecto; los de educación vienen del Instructivo FTE del MEF/MINEDU y el de área verde, de la OMS Europa (2016).',
       'OpenStreetMap casi no etiqueta el nivel de los colegios: un colegio sin nivel se toma como candidato a primaria y secundaria, lo que puede sobrestimar la oferta de un nivel.',
-      'Quebradas y cauces: no existe una distancia normativa a una quebrada, así que el estado es INFORMATIVO salvo que la persona fije su propio umbral («según tu umbral»). La red de la ANA es de escala nacional: no incluye todas las quebradas urbanas, no es un mapa de peligro y no delimita la faja marginal.',
-      'El contexto de riesgo (peligros geológicos de INGEMMET y sismos reportados por el IGP en el periodo indicado) es informativo: no es una evaluación, no predice sismos y que no haya registros no significa que el lugar sea seguro.',
+      'Quebradas y cauces: no existe una distancia normativa a una quebrada, así que el estado es INFORMATIVO salvo que la persona fije su propio umbral («según tu umbral»). Los cauces vienen de la ANA, el IGP y OpenStreetMap; ninguna fuente es completa, no son un mapa de peligro y no delimitan la faja marginal.',
+      'El contexto de riesgo (peligros geológicos de INGEMMET, sismos reportados por el IGP en el periodo indicado y zonas de peligro volcánico del Misti del IGP, de escala regional y sin fecha de elaboración, y el escenario de riesgo del CENEPRED ante El Niño, que es una estimación por distrito) es informativo: no es una evaluación del predio, no predice sismos, erupciones ni lluvias y que no haya registros o zonas no significa que el lugar sea seguro.',
       'El precio de oferta por m² del distrito (Aptología, CC BY 4.0) es informativo: son precios pedidos en avisos, no de cierre, y es la mediana del distrito, no el precio de este inmueble. Solo hay cifra en los distritos con al menos 30 avisos.',
     ];
-    if (m.desastre) l.push('Los peligros geológicos son un inventario de eventos documentados, no un mapa de susceptibilidad. La zona sísmica es regional y no considera el suelo del predio. No se evalúa el peligro volcánico (Misti).');
+    if (m.desastre) l.push('Los peligros geológicos son un inventario de eventos documentados, no un mapa de susceptibilidad. La zona sísmica es regional y no considera el suelo del predio.');
     if (m.seguridad) l.push('Las denuncias no son todos los delitos y solo se cuentan las que tienen ubicación.');
     l.push('Metodología, fuentes y validaciones completas: docs/METODOLOGIA.md y docs/VALIDACION.md del proyecto.');
     return l;
@@ -404,7 +430,7 @@ const Reporte = (() => {
     const secciones = construirSecciones(d);
     const resumen = [...d.resumen, ...filasResumenExtra(d)];
 
-    const datos = ['MPA/IMPLA (zonificación)', '© colaboradores de OpenStreetMap (ODbL)', 'ANA (red hidrográfica)', 'INGEMMET (peligros geológicos)', 'IGP (sismos reportados)', 'Datos: Aptologia (precio de oferta, CC BY 4.0)'];
+    const datos = ['MPA/IMPLA (zonificación)', '© colaboradores de OpenStreetMap (ODbL)', 'ANA, IGP y OpenStreetMap (cauces)', 'INGEMMET (peligros geológicos)', 'IGP (sismos reportados y zonas de peligro volcánico)', 'CENEPRED (escenario de riesgo ante El Niño por distrito)', 'Datos: Aptologia (precio de oferta, CC BY 4.0)'];
     if (m.desastre) datos.push('INGEMMET (GEOCATMIN), INEI, MVCS (E.030)');
     if (m.seguridad) datos.push('MININTER (SIDPOL)');
 

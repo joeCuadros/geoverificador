@@ -26,6 +26,7 @@ const PARES: [string, string, object][] = [
   ['perfil', 'quiero vivir en Paucarpta', { intencion: 'perfil_distrito', distrito: 'Paucarpta' }],
   ['rutas', '¿qué líneas pasan por Paucarpta?', { intencion: 'rutas', distrito: 'Paucarpta' }],
   ['precio', '¿cuánto cuesta el m² en Paucarpta?', { intencion: 'precio_distrito', distrito: 'Paucarpta' }],
+  ['cenepred', '¿Paucarpta se inunda?', { intencion: 'riesgo_cenepred', distrito: 'Paucarpta', fenomenoRiesgo: 'inundacion' }],
   ['buscar', 'busco en Paucarpta un sector con colegio y parque cerca', { intencion: 'buscar', distrito: 'Paucarpta', criterios: ['colegio', 'areaVerde'] }],
 ];
 
@@ -52,7 +53,7 @@ describe('Un solo buscador y un solo campo «distrito»', () => {
   });
 
   it('la validación del campo es la misma para todas las intenciones', () => {
-    ['contar_en_distrito', 'perfil_distrito', 'rutas', 'precio_distrito', 'buscar'].forEach((intencion) => {
+    ['contar_en_distrito', 'perfil_distrito', 'rutas', 'precio_distrito', 'riesgo_cenepred', 'buscar'].forEach((intencion) => {
       const base = intencion === 'contar_en_distrito' || intencion === 'buscar' ? { criterios: ['colegio'] } : {};
       expect(LLM.validarSpec({ intencion, ...base, distrito: 'Cayma; DROP TABLE' })).toEqual({ ok: false, motivo: 'distrito_invalido' });
       expect(LLM.validarSpec({ intencion, ...base, distrito: 7 })).toEqual({ ok: false, motivo: 'distrito_no_es_texto' });

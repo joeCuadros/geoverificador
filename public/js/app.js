@@ -58,7 +58,7 @@
     evaluacion: {},      // evaluación del usuario por riesgo: { id: { p, i, decision, hechas } }
     umbrales: Umbrales.leer(almacen()), // «Mis umbrales»: lo que fija la persona (hoy, distancia mínima a una quebrada)
     cauce: null,         // resultado de Contexto.quebradas para el punto actual (INFORMATIVO, o según el umbral de la persona)
-    contextoRiesgo: null, // { peligros, sismos } de Contexto: contexto informativo, no una evaluación
+    contextoRiesgo: null, // { peligros, sismos, volcan, cenepred } de Contexto: contexto informativo, no una evaluación
     contextoSeq: 0,      // descarta respuestas de un punto anterior
     precio: null,        // resultado de Precios.buscar para el distrito del punto (INFORMATIVO o SIN DATO; nunca cumple / no cumple)
     precioSeq: 0,        // descarta respuestas de un punto anterior
@@ -149,6 +149,8 @@
     quebradas: { titulo: 'Quebradas y cauces', icono: 'quebrada' },
     peligros: { titulo: 'Peligros geológicos registrados', icono: 'aviso' },
     sismos: { titulo: 'Sismos recientes (IGP)', icono: 'sismo' },
+    volcan: { titulo: 'Peligro volcánico del Misti', icono: 'aviso' },
+    cenepred: { titulo: 'Riesgo del distrito ante El Niño (CENEPRED)', icono: 'aviso' },
     precio: { titulo: 'Precio de oferta del distrito', icono: 'precio' },
   };
   const colorMapa = (nombre) => getComputedStyle(document.documentElement).getPropertyValue(nombre).trim() || '#1c3a6b';
@@ -722,6 +724,8 @@
       zona: state.zonaStatus === 'ok' ? state.zona : null,
       entorno: state.entorno,
       cauce: state.cauce,
+      volcan: state.contextoRiesgo ? state.contextoRiesgo.volcan : null,
+      cenepred: state.contextoRiesgo ? state.contextoRiesgo.cenepred : null,
     });
     $('ficha-resumen-lineas').innerHTML = r.lineas.map((l) => `<p>${esc(l)}</p>`).join('');
     $('ficha-resumen').hidden = false;
@@ -1197,14 +1201,12 @@
     $('entorno-fuente').textContent = 'Distancias en línea recta, no recorrido a pie. OpenStreetMap es colaborativo: algo ausente puede existir. Las distancias de referencia de salud, paradero y borde de zona son convenciones del proyecto. Las líneas de transporte son recorridos publicados por SmartBus, sin frecuencias ni horarios.';
   }
 
-  // ------------------------------------------------------ Quebradas y cauces (ANA)
+  // ------------------------------------------------------ Quebradas y cauces (ANA, IGP y OpenStreetMap)
   // Sin umbral normativo: INFORMATIVO. Si la persona fija el suyo en «Mis umbrales», CUMPLE / NO CUMPLE «según tu umbral».
-  const NORMALIZA = (s) => String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-  const QUEBRADAS_CITADAS = ['Añashuayco', 'San Lázaro']; // quebradas de Arequipa que citan los informes de INGEMMET (docs/INVESTIGACION-VARIABLES.md)
 
   function resumenQuebradas(q) {
     if (q.estado === 'SIN DATO') return 'Sin dato: no se pudo leer la red de cauces';
-    const base = `${q.nombre} · ${fmtDist(q.distanciaM)} en línea recta`;
+    const base = `${q.nombre} · ${fmtDist(q.distanciaM)} en línea recta${q.fuenteCorta ? ` · ${q.fuenteCorta}` : ''}`;
     return q.segunUmbralUsuario ? `${base} · según tu umbral de ${fmtUmbral(q.umbralM)}` : `${base} · sin umbral normativo`;
   }
 
@@ -1227,14 +1229,14 @@
     if (q.estado === 'SIN DATO') {
       return `<p class="zon-msg error"><strong>No se pudo obtener el dato.</strong> ${esc(q.error || 'El archivo de quebradas no está disponible.')}</p>${umbralFormHtml(q)}`;
     }
-    const ausentes = QUEBRADAS_CITADAS.filter((n) => !(q.nombres || []).some((x) => NORMALIZA(x).includes(NORMALIZA(n))));
-    const cubre = `La red hidrográfica de la ANA es de escala nacional: en este archivo figuran ${q.tramos} tramos de ${(q.nombres || []).length} cursos (${esc((q.nombres || []).join(', '))}). No incluye todas las quebradas urbanas${ausentes.length ? ` (por ejemplo, no figura${ausentes.length > 1 ? 'n' : ''} ${ausentes.join(' ni ')}, que citan los informes de INGEMMET)` : ''}. No es un mapa de peligro de huaicos ni de inundación, y la faja marginal no está delimitada aquí.`;
+    const faltan = Calculos.textoQuebradasAusentes(q.ausentes);
+    const cubre = `Los cauces vienen de ${esc(Calculos.textoFuentesCauces(q.fuentes))}; ninguna fuente es completa (la ANA es una red nacional de 2018). Hay ${(q.nombres || []).length} cursos con nombre: ${esc((q.nombres || []).join(', '))}.${faltan ? ` Quebradas conocidas que aún no figuran: ${esc(faltan)}.` : ''} No es un mapa de peligro de huaicos ni de inundación, y la faja marginal no está delimitada aquí.`;
     const explica = q.segunUmbralUsuario
       ? `<p class="var-explica"><strong>Según tu umbral</strong> (al menos ${fmtUmbral(q.umbralM)} de un cauce): ${q.estado === 'CUMPLE' ? 'cumple' : 'no cumple'}. Es tu criterio, no una norma.</p>`
       : '<p class="var-explica"><strong>Informativo.</strong> No existe una distancia normativa a una quebrada, así que no decimos si es cerca o lejos. Si quieres un criterio propio, fija tu distancia mínima abajo.</p>';
     return `<div class="var-dato">
         <p class="var-dist">${fmtDist(q.distanciaM)} <small>en línea recta</small></p>
-        <p class="var-nombre">${esc(q.nombre)}${q.tipo ? ` (${esc(q.tipo.toLowerCase())})` : ''}</p>
+        <p class="var-nombre">${esc(q.nombre)}${q.tipo ? ` (${esc(q.tipo.toLowerCase())})` : ''} ${q.fuenteCorta ? `<small>· fuente: ${esc(q.fuenteCorta)}</small>` : ''}</p>${(q.alias || []).length ? `<p class="small muted">También figura como: ${esc(q.alias.map((a) => `${a.nombre} (${a.fuente === 'OSM' ? 'OpenStreetMap' : a.fuente})`).join(', '))}.</p>` : ''}
       </div>
       ${explica}
       ${umbralFormHtml(q)}
@@ -1336,16 +1338,56 @@
     return tarjetaVariable(VARIABLES.sismos, 'INFORMATIVO', resumen, cuerpo, 'Informativo');
   }
 
+  function tarjetaVolcan(v) {
+    if (!v || v.estado === 'SIN DATO') {
+      return tarjetaVariable(VARIABLES.volcan, 'SIN DATO', 'Sin dato: no se pudo leer el mapa de peligro volcánico', `<p class="zon-msg error"><strong>No se pudo obtener el dato.</strong> ${esc((v && v.error) || '')}</p>`);
+    }
+    const resumen = v.enZona ? v.frase.replace(/^Tu punto está en zona de /, 'En zona de ').replace(/ del Misti, según el IGP\.$/, '') : 'Fuera de las zonas mapeadas por el IGP';
+    const lineas = v.lineas || [];
+    const cuerpo = `<div class="var-dato">
+        <p class="var-nombre">${esc(v.frase)}</p>
+      </div>
+      ${lineas.length ? `<ul class="pel-tipos">${lineas.map((l) => `<li>${esc(l.texto)}</li>`).join('')}</ul>` : ''}
+      <p class="var-explica"><strong>Informativo.</strong> Dice en qué zonas del mapa del IGP cae tu punto. No es una evaluación de riesgo ni dice si habrá una erupción.</p>
+      <dl class="var-detalle">
+        <div><dt>Fuente</dt><dd>${esc(v.fuente)}</dd></div>
+        <div><dt>Fecha de los datos</dt><dd>Datos congelados el ${esc(fmtFechaDato(v.fecha))}. ${esc(v.fechaDelMapa)}${v.referencia ? `. Mapa oficial de referencia: ${esc(v.referencia)}` : ''}</dd></div>
+        <div><dt>Método</dt><dd>${esc(v.metodo)}</dd></div>
+        <div><dt>Qué no cubre</dt><dd>Es un mapa de escala regional: cerca del borde de una zona, el nivel no es exacto a nivel de predio. No sabemos de qué edición del mapa de INGEMMET salen las capas del IGP. Que tu punto no esté en una zona no significa que no haya peligro. Para decidir, consulta el CENEPRED (SIGRID), tu municipalidad y el IGP o INGEMMET.</dd></div>
+      </dl>`;
+    return tarjetaVariable(VARIABLES.volcan, 'INFORMATIVO', resumen, cuerpo, 'Informativo');
+  }
+
+  function tarjetaCenepred(c) {
+    if (!c || c.estado === 'SIN DATO') {
+      return tarjetaVariable(VARIABLES.cenepred, 'SIN DATO', 'Sin dato: no hay escenario del CENEPRED para este distrito', `<p class="zon-msg error"><strong>No se pudo obtener el dato.</strong> ${esc((c && c.error) || '')}</p>`);
+    }
+    const resumen = `Inundaciones: ${c.inundacion.nivel.toLowerCase()} · Movimientos en masa: ${c.movimientos_masa.nivel.toLowerCase()} · ${c.titulo}`;
+    const lineas = c.lineas || [];
+    const cuerpo = `<div class="var-dato">
+        <p class="var-nombre">${esc(c.frase)}</p>
+      </div>
+      ${lineas.length ? `<ul class="pel-tipos">${lineas.map((l) => `<li>${esc(l.texto)}</li>`).join('')}</ul>` : ''}
+      <p class="var-explica"><strong>Informativo.</strong> Es una estimación para todo el distrito en un escenario de lluvias como las de El Niño, no una evaluación de tu predio. Los movimientos en masa son, por ejemplo, ${esc(Cenepred.EXPLICA_MM)}. ${esc(Cenepred.SUSCEPTIBILIDAD)}</p>
+      <dl class="var-detalle">
+        <div><dt>Fuente</dt><dd>${esc(c.fuente)}. Metodología: ${esc(c.estudio ? `${c.estudio.titulo} (${c.estudio.autor}, ${c.estudio.fecha})` : 'estudio del CENEPRED')}</dd></div>
+        <div><dt>Fecha de los datos</dt><dd>Escenario de ${esc(c.estudio ? c.estudio.fecha : 'sin fecha')}, actualizado por el CENEPRED en 2026. Datos congelados el ${esc(fmtFechaDato(c.fecha))}</dd></div>
+        <div><dt>Método</dt><dd>${esc(c.metodo)}</dd></div>
+        <div><dt>Qué no cubre</dt><dd>${esc(Cenepred.QUE_NO_CUBRE)} <a href="${esc(CONFIG.cenepred.visorUrl)}" target="_blank" rel="noopener noreferrer">Abrir el SIGRID del CENEPRED</a></dd></div>
+      </dl>`;
+    return tarjetaVariable(VARIABLES.cenepred, 'INFORMATIVO', resumen, cuerpo, 'Informativo');
+  }
+
   function renderContexto() {
     const host = $('contexto-cuerpo');
     const c = state.contextoRiesgo;
     if (!c) {
       host.setAttribute('aria-busy', 'true');
-      host.innerHTML = '<p class="zon-msg loading"><span class="spinner"></span>Buscando peligros registrados y sismos reportados…</p>';
+      host.innerHTML = '<p class="zon-msg loading"><span class="spinner"></span>Buscando peligros registrados, sismos, peligro volcánico y riesgo del distrito…</p>';
       return;
     }
     const abiertas = [...host.querySelectorAll('details.var-card')].map((d) => d.open);
-    host.innerHTML = tarjetaPeligros(c.peligros) + tarjetaSismos(c.sismos);
+    host.innerHTML = tarjetaPeligros(c.peligros) + tarjetaSismos(c.sismos) + tarjetaVolcan(c.volcan) + tarjetaCenepred(c.cenepred);
     host.querySelectorAll('details.var-card').forEach((d, i) => { d.open = Boolean(abiertas[i]); });
     host.setAttribute('aria-busy', 'false');
     $('contexto-fuente').textContent = 'Contexto informativo, no una evaluación de peligro. Distancias en línea recta. Para decidir, consulta SIGRID (CENEPRED) y al IMPLA.';
@@ -1361,7 +1403,7 @@
     const r = await Contexto.evaluar(lat, lon, state.umbrales.quebradaMinM); // nunca rechaza: cada variable devuelve SIN DATO con su causa
     if (seq !== state.contextoSeq) return; // la persona ya eligió otro punto
     state.cauce = r.quebradas;
-    state.contextoRiesgo = { peligros: r.peligros, sismos: r.sismos };
+    state.contextoRiesgo = { peligros: r.peligros, sismos: r.sismos, volcan: r.volcan, cenepred: r.cenepred };
     renderQuebradas();
     renderContexto();
     renderResumen();

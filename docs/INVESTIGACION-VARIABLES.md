@@ -1,5 +1,7 @@
 # GeoVerificador — Investigación de variables, fuentes del Estado y diseño de decisión
 
+> **Estado de integración (2026-11-03).** Ya integrados en la herramienta: **el escenario de riesgo del CENEPRED ante El Niño, solo a escala de distrito** (inundación y movimientos en masa; METODOLOGIA §12.8: sí el nivel de riesgo y tres conteos confirmados; no la susceptibilidad por ráster, no el riesgo del predio, no los campos sin significado confirmado), **N1** (cauces de la ANA, el IGP y OpenStreetMap, con la fuente de cada tramo; METODOLOGIA §12.1), **N4** (peligro volcánico del Misti con las zonas del IGP, informativo; §12.6) y, como contexto, **N9 en su versión reciente** (sismos de 2026; §12.3). El peligro sísmico por punto del IGP (`PeligroSismico`, `AceleracionGRD`) se revisó y **no** se integró por falta de metadatos (§12.7). La validación de OSM frente a RENIPRESS y ESCALE (§5.1) tiene su script (`pnpm datos:validar-oficial`) y espera los archivos oficiales descargados a mano (`docs/VALIDACION.md` §3.4).
+>
 > Fecha de la investigación: 2026-11-02. Alcance: validar y criticar las variables V1a–V5 ya implementadas, proponer variables nuevas, inventariar sistemas del Estado peruano no usados y recomendar el diseño de apoyo a la decisión.
 >
 > **Reglas de honestidad de este documento.**

@@ -23,13 +23,15 @@ const AsistenteLLM = (() => {
 
   const INTENCIONES = [
     'buscar', 'zona', 'construir', 'cambio_zonificacion', 'resumen', 'quebradas', 'sismos', 'peligros', 'servicio_cercano', 'rutas', 'precio_distrito',
-    'fuentes', 'ayuda', 'saludo', 'fuera_de_alcance', 'desconocido', 'contar_en_distrito', 'perfil_distrito', 'mejor_zona',
+    'fuentes', 'ayuda', 'saludo', 'fuera_de_alcance', 'desconocido', 'contar_en_distrito', 'perfil_distrito', 'mejor_zona', 'volcan', 'riesgo_cenepred',
   ];
+  const FENOMENOS = ['lahar', 'flujo_piroclastico', 'lava', 'avalancha', 'ceniza'];
+  const FENOMENOS_RIESGO = ['inundacion', 'movimientos_masa']; // escenario de riesgo del CENEPRED ante El Niño
   const CRITERIOS = ['salud', 'colegio', 'inicial', 'primaria', 'secundaria', 'transporte', 'areaVerde', 'campina', 'residencial', 'tranquilo', 'comercial', 'historico', 'lejosQuebrada'];
   const SERVICIOS = ['salud', 'colegio', 'inicial', 'primaria', 'secundaria', 'transporte', 'areaVerde'];
   const MODOS = ['nuevo', 'agregar', 'quitar', 'priorizar'];
   const TEMAS = ['seguridad', 'precio', 'ruido'];
-  const CAMPOS = ['intencion', 'criterios', 'prioridades', 'distancias', 'radioM', 'lejosQuebradaM', 'incluirCondicional', 'cercaDeMiPunto', 'modo', 'loteM2', 'tema', 'distrito'];
+  const CAMPOS = ['intencion', 'criterios', 'prioridades', 'distancias', 'radioM', 'lejosQuebradaM', 'incluirCondicional', 'cercaDeMiPunto', 'modo', 'loteM2', 'tema', 'distrito', 'fenomeno', 'fenomenoRiesgo', 'verEnMapa'];
 
   // Rangos a los que se ajustan las distancias y el lote (en metros y m²). Un valor fuera de rango se recorta, no se rechaza.
   const RANGOS = { radioM: [100, 5000], lejosQuebradaM: [50, 5000], distanciaM: [50, 5000], loteM2: [10, 100000] };
@@ -48,7 +50,7 @@ const AsistenteLLM = (() => {
         intencion: {
           type: 'string',
           enum: INTENCIONES,
-          description: 'buscar = encontrar zonas de la ciudad por lo que importa a la persona; zona = qué zona es su punto; construir = cuánto se puede construir en su punto; cambio_zonificacion = si el plan nuevo cambiará la zonificación; resumen = resumen/ficha del punto; quebradas, sismos, peligros = contexto de riesgo del punto; servicio_cercano = si hay un servicio cerca de su punto; precio_distrito = precio de oferta por m² promedio de un distrito (por ejemplo «cuánto cuesta el m² en Cayma»); rutas = qué líneas de bus o combi pasan cerca de su punto o por un distrito (distrito = el distrito; vacío si pregunta por su punto); fuentes = de dónde salen los datos; ayuda; saludo; fuera_de_alcance = solo seguridad, ruido, el precio de una casa o terreno en particular, alquileres o búsquedas por precio; contar_en_distrito = cuántos colegios, postas, paraderos o parques hay en un distrito (criterios = lo que se cuenta, distrito = el distrito); perfil_distrito = la persona habla de un distrito sin pedir algo concreto («quiero vivir en Paucarpata», «cómo es Cayma»); mejor_zona = pide la mejor zona o dónde vivir sin nombrar un distrito ni decir qué le importa; desconocido = no se entiende o no tiene relación.',
+          description: 'buscar = encontrar zonas de la ciudad por lo que importa a la persona; zona = qué zona es su punto; construir = cuánto se puede construir en su punto; cambio_zonificacion = si el plan nuevo cambiará la zonificación; resumen = resumen/ficha del punto; quebradas, sismos, peligros = contexto de riesgo del punto; volcan = peligro volcánico del Misti (lahares, ceniza, flujos piroclásticos, lava, avalanchas) en su punto o en un distrito; riesgo_cenepred = riesgo de inundación o de movimientos en masa (huaicos, deslizamientos) que el CENEPRED estima para un distrito ante El Niño, o qué dice el CENEPRED del distrito de su punto («¿Paucarpata se inunda?», «riesgo de huaico en Sachaca»); servicio_cercano = si hay un servicio cerca de su punto; precio_distrito = precio de oferta por m² promedio de un distrito (por ejemplo «cuánto cuesta el m² en Cayma»); rutas = qué líneas de bus o combi pasan cerca de su punto o por un distrito (distrito = el distrito; vacío si pregunta por su punto); fuentes = de dónde salen los datos; ayuda; saludo; fuera_de_alcance = solo seguridad, ruido, el precio de una casa o terreno en particular, alquileres o búsquedas por precio; contar_en_distrito = cuántos colegios, postas, paraderos o parques hay en un distrito (criterios = lo que se cuenta, distrito = el distrito); perfil_distrito = la persona habla de un distrito sin pedir algo concreto («quiero vivir en Paucarpata», «cómo es Cayma»); mejor_zona = pide la mejor zona o dónde vivir sin nombrar un distrito ni decir qué le importa; desconocido = no se entiende o no tiene relación.',
         },
         criterios: {
           type: 'array',
@@ -86,6 +88,17 @@ const AsistenteLLM = (() => {
           type: 'string',
           description: 'Nombre del distrito de la provincia de Arequipa que la persona nombra, tal como lo escribió (con sus errores de tipeo): nunca lo corrijas ni inventes uno. Obligatorio en contar_en_distrito y perfil_distrito; en rutas y precio_distrito solo si nombra un distrito (vacío si habla de su punto: «por aquí», «cerca de mí»); en buscar solo si pide buscar dentro de un distrito.',
         },
+        fenomeno: {
+          type: 'string',
+          enum: FENOMENOS,
+          description: 'Solo en intencion volcan: el fenómeno volcánico por el que pregunta, si nombra uno (lahar = lahares o huaicos del volcán, flujo_piroclastico, lava, avalancha = avalancha de escombros, ceniza). Vacío si pregunta en general por el volcán o el Misti.',
+        },
+        fenomenoRiesgo: {
+          type: 'string',
+          enum: FENOMENOS_RIESGO,
+          description: 'Solo en intencion riesgo_cenepred: el fenómeno por el que pregunta, si nombra uno (inundacion = inundarse, desborde de ríos; movimientos_masa = huaico, huayco, deslizamiento, derrumbe, movimiento en masa). Vacío si pregunta en general por el CENEPRED o por El Niño.',
+        },
+        verEnMapa: { type: 'boolean', description: 'Solo en intencion riesgo_cenepred: true si la persona pide verlo en el mapa («muéstrame en el mapa», «mapa del riesgo de inundación»).' },
         tema: {
           type: 'string',
           enum: TEMAS,
@@ -153,6 +166,9 @@ const AsistenteLLM = (() => {
     if (!ausente(args.cercaDeMiPunto) && typeof args.cercaDeMiPunto !== 'boolean') return rechazo('cercaDeMiPunto_no_es_booleano');
     if (!ausente(args.modo) && !MODOS.includes(args.modo)) return rechazo('modo_invalido');
     if (!ausente(args.tema) && !TEMAS.includes(args.tema)) return rechazo('tema_invalido');
+    if (!ausente(args.fenomeno) && !FENOMENOS.includes(args.fenomeno)) return rechazo('fenomeno_invalido');
+    if (!ausente(args.fenomenoRiesgo) && !FENOMENOS_RIESGO.includes(args.fenomenoRiesgo)) return rechazo('fenomenoRiesgo_invalido');
+    if (!ausente(args.verEnMapa) && typeof args.verEnMapa !== 'boolean') return rechazo('verEnMapa_no_es_booleano');
     const distrito = leerDistrito(args.distrito);
     if (distrito.error) return rechazo(distrito.error);
 
@@ -180,6 +196,10 @@ const AsistenteLLM = (() => {
       tema: args.tema || null,
       distrito: distrito.valor,
     };
+    // `fenomeno` solo existe en la consulta del volcán: en las demás no se añade, para no cambiar su forma.
+    if (spec.intencion === 'volcan') spec.fenomeno = args.fenomeno || null;
+    // Igual con el escenario del CENEPRED: `fenomenoRiesgo` y `verEnMapa` solo existen en esa consulta.
+    if (spec.intencion === 'riesgo_cenepred') { spec.fenomenoRiesgo = args.fenomenoRiesgo || null; spec.verEnMapa = args.verEnMapa === true; }
 
     if (spec.intencion === 'buscar') {
       // Una distancia a quebradas es, por sí sola, el criterio «lejos de quebradas».
@@ -197,6 +217,8 @@ const AsistenteLLM = (() => {
     // Las demás intenciones no usan los campos de búsqueda: se vacían para que no se cuelen.
     const limpio = { ...spec, criterios: [], prioridades: [], distancias: [], radioM: null, lejosQuebradaM: null, incluirCondicional: false, cercaDeMiPunto: false, modo: 'nuevo', distrito: null };
     if (spec.intencion === 'rutas') limpio.distrito = spec.distrito;
+    if (spec.intencion === 'volcan') limpio.distrito = spec.distrito; // vacío = su punto
+    if (spec.intencion === 'riesgo_cenepred') limpio.distrito = spec.distrito; // vacío = el distrito de su punto
     if (spec.intencion === 'contar_en_distrito' || spec.intencion === 'perfil_distrito') {
       if (spec.distrito === null) return rechazo('distrito_ausente');
       limpio.distrito = spec.distrito;
@@ -238,7 +260,7 @@ const AsistenteLLM = (() => {
 
   const TIPO_DE_INTENCION = {
     zona: 'zona', construir: 'construir', cambio_zonificacion: 'pdm', resumen: 'ficha', quebradas: 'quebrada', sismos: 'sismos',
-    peligros: 'peligros', fuentes: 'fuentes', ayuda: 'ayuda', saludo: 'saludo', mejor_zona: 'mejor_zona', precio_distrito: 'precio',
+    peligros: 'peligros', volcan: 'volcan', fuentes: 'fuentes', ayuda: 'ayuda', saludo: 'saludo', mejor_zona: 'mejor_zona', precio_distrito: 'precio',
   };
   const distritos = () => (typeof Distritos !== 'undefined' ? Distritos : require('./distritos.js')); // eslint-disable-line no-undef
 
@@ -257,7 +279,7 @@ const AsistenteLLM = (() => {
     const vacia = A.interpretar('');
     if (spec.intencion === 'desconocido') return vacia;
     if (spec.intencion === 'mejor_zona') return { ...vacia, tipo: 'mejor_zona' };
-    const conDistrito = ['contar_en_distrito', 'perfil_distrito'].includes(spec.intencion) || (['rutas', 'precio_distrito'].includes(spec.intencion) && spec.distrito) || (spec.intencion === 'buscar' && spec.distrito);
+    const conDistrito = ['contar_en_distrito', 'perfil_distrito'].includes(spec.intencion) || (['rutas', 'precio_distrito', 'volcan', 'riesgo_cenepred'].includes(spec.intencion) && spec.distrito) || (spec.intencion === 'buscar' && spec.distrito);
     const dis = conDistrito ? resolverDistrito(spec.distrito) : null;
     if (conDistrito && !dis) return { ...vacia, tipo: 'distrito_desconocido', distritoTexto: spec.distrito };
     if (spec.intencion === 'perfil_distrito') return { ...vacia, tipo: 'perfil', ...dis };
@@ -266,6 +288,8 @@ const AsistenteLLM = (() => {
     }
     if (spec.intencion === 'fuera_de_alcance') return { ...vacia, tipo: 'no_soportado', temaNoSoportado: spec.tema };
     if (spec.intencion === 'rutas') return { ...vacia, tipo: 'rutas', ...(dis || {}) };
+    if (spec.intencion === 'volcan') return { ...vacia, tipo: 'volcan', volcanTipos: spec.fenomeno ? [spec.fenomeno] : [], ...(dis || {}) };
+    if (spec.intencion === 'riesgo_cenepred') return { ...vacia, tipo: 'cenepred', cenepredFenomenos: spec.fenomenoRiesgo ? [spec.fenomenoRiesgo] : [], cenepredMapa: spec.verEnMapa === true, ...(dis || {}) };
     if (spec.intencion === 'servicio_cercano') {
       return { ...vacia, tipo: 'servicio', criterios: spec.criterios.map((id) => ({ id, umbralM: null, prioridad: 1 })) };
     }

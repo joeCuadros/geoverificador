@@ -36,11 +36,21 @@ const CONFIG = {
     fuente: 'Plano de Zonificación del PDM Arequipa 2016-2025 (PDM aprobado por la Ordenanza 961-MPA; zonificación restituida por la Ordenanza 975-MPA)',
   },
 
-  // Quebradas y cauces (ANA): red hidrográfica congelada con scripts/descargar-quebradas.mjs. NO hay umbral normativo para la
-  // distancia a una quebrada: la variable es INFORMATIVA salvo que la persona fije el suyo en «Mis umbrales».
+  // Quebradas y cauces: ANA, IGP y OpenStreetMap unidos y congelados con scripts/descargar-quebradas.mjs (cada tramo dice su
+  // fuente). NO hay umbral normativo para la distancia a una quebrada: la variable es INFORMATIVA salvo que la persona fije el
+  // suyo en «Mis umbrales». `citadas`: quebradas que nombran los informes de INGEMMET sobre Arequipa (docs/INVESTIGACION-VARIABLES.md);
+  // «Qué no cubre» las compara con los nombres del archivo, junto con las que nombra el inventario de peligros.
   quebradas: {
     geojsonUrl: 'data/quebradas_aqp.geojson',
-    fuente: 'Red hidrográfica (capa «Cuerpos de Agua»), Autoridad Nacional del Agua (ANA)',
+    fuente: 'Cauces de la ANA, el IGP y OpenStreetMap',
+    citadas: ['Chullo', 'Los Incas', 'Añashuayco', 'San Lázaro', 'El Pato'],
+  },
+
+  // Peligro volcánico del Misti: zonas del IGP (alto, moderado y bajo por lahares, flujos piroclásticos, lava, avalanchas y ceniza),
+  // congeladas con scripts/descargar-peligro-volcanico.mjs. Es INFORMATIVO: nunca cumple / no cumple ni puntaje.
+  volcan: {
+    geojsonUrl: 'data/peligro_volcanico_misti.geojson',
+    fuente: 'Zonas de peligro volcánico del Misti, Instituto Geofísico del Perú (IGP)',
   },
 
   // Sismos reportados por el IGP, congelados con scripts/descargar-sismos.mjs. `radioM` es el radio de CONTEXTO para contar
@@ -62,6 +72,14 @@ const CONFIG = {
   // Es INFORMATIVO: nunca cumple / no cumple ni entra en un puntaje. La fuente, la licencia y el periodo viajan en el propio archivo.
   precios: {
     jsonUrl: 'data/precios_m2_distrito.json',
+  },
+
+  // Escenario de riesgo del CENEPRED ante El Niño 2026-2027 (inundaciones y movimientos en masa) por distrito: archivo congelado con
+  // scripts/descargar-riesgo-cenepred.mjs. Es INFORMATIVO: nunca cumple / no cumple ni puntaje, y es una estimación por distrito, no del predio.
+  cenepred: {
+    jsonUrl: 'data/riesgo_cenepred_fen2027.json',
+    fuente: 'Escenario de riesgo ante El Niño 2026-2027, CENEPRED (SIGRID)',
+    visorUrl: 'https://sigrid.cenepred.gob.pe/sigridv3/',
   },
 
   // Peligros geológicos registrados: archivo local generado con scripts/descargar-peligros.mjs.
