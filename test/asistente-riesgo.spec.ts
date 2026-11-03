@@ -176,7 +176,7 @@ describe('Asistente.buscar con «lejos de quebradas»', () => {
   it('el texto del resultado dice «a más de» y advierte los límites de la red de la ANA', () => {
     const r = Asistente.buscar({ ...base, criterios: [req(300)] });
     const f = Asistente.formatearBusqueda(r, { aproximados: [], temaNoSoportado: null, radioGlobalM: null });
-    expect(f.texto).toContain('Lejos de quebradas y ríos a más de 300 m');
+    expect(f.texto).toContain('a más de 300 m de una quebrada o río');
     expect(f.texto).not.toMatch(/a 300 m o menos/);
     expect(f.texto).toMatch(/no incluye todas las quebradas urbanas/);
     expect(f.texto).toMatch(/no es un mapa de peligro/);

@@ -144,3 +144,50 @@ describe('Entidades.frases', () => {
     expect(Entidades.fraseColegios({ total: 0, inicial: 0, primaria: 0, secundaria: 0 })).toBe('ningún colegio');
   });
 });
+
+describe('Entidades.mezclaZonas', () => {
+  const zona = (codigo: string, grupo: string, x: number, ancho: number) => ({
+    codigo,
+    bbox: [x, -16.42, x + ancho, -16.4],
+    polys: [[[[x, -16.42], [x + ancho, -16.42], [x + ancho, -16.4], [x, -16.4], [x, -16.42]]]],
+    regla: { nombre: codigo, grupo, edificable: 'si' },
+  });
+  // Distrito: de -71.55 a -71.53. Residencial ocupa 3/4 (ancho 0.015); la campiña ZA, el último cuarto.
+  const zonas = [zona('RDM-1', 'residencial', -71.55, 0.015), zona('ZA', 'proteccion', -71.535, 0.005)];
+
+  it('reparte el distrito por tipo principal de zona, de mayor a menor', () => {
+    const m = Entidades.mezclaZonas(zonas, DISTRITO, { pasoM: 100 });
+    expect(m.partes.map((p: { id: string }) => p.id)).toEqual(['residencial', 'campina']);
+    expect(m.partes[0].pct).toBeGreaterThan(65);
+    expect(m.partes[0].pct).toBeLessThan(80);
+    expect(m.partes[1].pct).toBeGreaterThan(20);
+    expect(m.partes[0].etiqueta).toBe('residencial');
+    expect(m.partes[1].etiqueta).toBe('campiña');
+  });
+
+  it('un distrito sin plano de zonificación no inventa una mezcla', () => {
+    const m = Entidades.mezclaZonas([], DISTRITO, { pasoM: 200 });
+    expect(m.partes).toEqual([]);
+    expect(m.conPlano).toBe(false);
+  });
+});
+
+describe('Entidades.caucesEnDistrito', () => {
+  const linea = (nombre: string | null, coords: number[][]) => ({ nombre, tipo: 'Río', geometry: { type: 'LineString', coordinates: coords } });
+  const cauces = [
+    linea('Río Chili', [[-71.545, -16.419], [-71.54, -16.41], [-71.535, -16.401]]),
+    linea('Quebrada San Lázaro', [[-71.549, -16.405], [-71.548, -16.404]]),
+    linea('Quebrada Lejana', [[-71.3, -16.3], [-71.29, -16.29]]),
+    linea(null, [[-71.54, -16.41], [-71.541, -16.411]]),
+  ];
+
+  it('lista los cauces con nombre que pasan por el distrito, sin repetir', () => {
+    const r = Entidades.caucesEnDistrito(cauces, DISTRITO);
+    expect(r.nombres.sort()).toEqual(['Quebrada San Lázaro', 'Río Chili']);
+    expect(r.total).toBe(3); // el sin nombre también cruza
+  });
+
+  it('sin cauces cargados dice que no hay dato', () => {
+    expect(Entidades.caucesEnDistrito(null, DISTRITO)).toEqual({ nombres: [], total: 0, sinDato: true });
+  });
+});

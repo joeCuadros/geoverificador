@@ -22,6 +22,10 @@ const Asistente = (() => {
   const M_POR_GRADO = (Math.PI / 180) * C.RADIO_TIERRA_M;
   const rad = (d) => (d * Math.PI) / 180;
   const esNumero = (n) => typeof n === 'number' && Number.isFinite(n);
+  // Se resuelven al usarlos: en el navegador son globales y en las pruebas se cargan con require.
+  const Dist = () => (typeof Distritos !== 'undefined' ? Distritos : require('./distritos.js')); // eslint-disable-line no-undef
+  const Ent = () => (typeof Entidades !== 'undefined' ? Entidades : require('./entidades.js')); // eslint-disable-line no-undef
+  const Sect = () => (typeof Sectores !== 'undefined' ? Sectores : require('./sectores.js')); // eslint-disable-line no-undef
 
   // ------------------------------------------------------------------ Criterios
 
@@ -87,6 +91,10 @@ const Asistente = (() => {
     agregar: /^(y |tambien |ademas )|\b(agrega\w*|anade\w*|suma\w*|incorpora\w*)\b/,
     quitar: /\b(quita\w*|elimina\w*|saca\w*|ya no|olvida\w*)\b/,
     condicional: /condicional/,
+    // Distritos: contar lo que hay, perfil de un distrito y «la mejor zona» sin saber qué importa.
+    contar: /\b(cuant[oa]s?|numero de|cantidad de|total de|que cantidad)\b|^(hay|existen?|tiene|tienen)\b/,
+    mejorZona: /\b(mejor(?:es)?\s+(?:zona|lugar|sitio|distrito|barrio|sector|opcion)|(?:zona|lugar|sitio|distrito|barrio)\s+ideal|que (?:zona|distrito|barrio|lugar) (?:me )?(?:recomiendas|conviene|sugieres|elegirias)|donde (?:es )?(?:mejor )?vivir|donde me conviene|(?:es )?mejor (?:vivir|comprar|mudarse))\b/,
+    vivir: /\b(vivir|mudar\w*)\b/,
     // Preguntas sobre el punto (contexto de riesgo, siempre informativo; no son una evaluación de peligro).
     quebrada: /\b(quebradas?|torrenteras?|cauces?|huaycos?|huaicos?|aluvion\w*|rios?|rio chili)\b/,
     sismos: /\b(sismos?|sismic\w*|temblor\w*|terremoto\w*)\b/,
@@ -134,13 +142,14 @@ const Asistente = (() => {
   /**
    * Convierte lo escrito en una intención.
    *   ctx: { hayPunto?: boolean, ultimaBusqueda?: { criterios } }
-   * tipo: saludo | ayuda | fuentes | pdm | construir | zona | ficha | servicio | quebrada | sismos | peligros | buscar | no_soportado | desconocido
+   * tipo: saludo | ayuda | fuentes | pdm | construir | zona | ficha | servicio | quebrada | sismos | peligros | buscar | contar | perfil | mejor_zona | no_soportado | desconocido
+   * distrito: nombre del distrito nombrado en la frase (como en el archivo de límites) o null; distritoFuera: existe en la provincia pero no está en los datos
    * modo (solo en buscar): nuevo | agregar | quitar | priorizar
    */
   function interpretar(texto, ctx = {}) {
     const intencion = {
       tipo: 'desconocido', modo: 'nuevo', criterios: [], radioGlobalM: null, lote: null, incluirCondicional: false,
-      temaNoSoportado: null, aproximados: [], limitarAlPunto: false,
+      temaNoSoportado: null, aproximados: [], limitarAlPunto: false, distrito: null, distritoFuera: false,
     };
     let t = normalizar(texto);
     if (!t) return intencion;
@@ -190,6 +199,13 @@ const Asistente = (() => {
     if (!hayCriterios && RE.saludo.test(t)) return { ...intencion, tipo: 'saludo' };
     if (RE.ayuda.test(t) && !hayCriterios) return { ...intencion, tipo: 'ayuda' };
 
+    // Un distrito nombrado (con errores de tipeo, tildes o mayúsculas). «Cuántos colegios hay en X» es contar, aunque la frase
+    // empiece con «quiero vivir en X»; con criterios y un verbo de búsqueda sigue siendo una búsqueda, ahora dentro del distrito.
+    const dis = Dist().buscarNombre(t);
+    if (dis) { intencion.distrito = dis.distrito; intencion.distritoFuera = !dis.enDatos; }
+    const servicios = intencion.criterios.filter((c) => CRITERIOS[c.id].tipo === 'servicio');
+    if (dis && servicios.length > 0 && (RE.contar.test(t) || !RE.busqueda.test(t))) return { ...intencion, tipo: 'contar' };
+
     // Ajustes sobre la búsqueda anterior.
     if (ultima) {
       if (RE.quitar.test(t) && hayCriterios) return { ...intencion, tipo: 'buscar', modo: 'quitar' };
@@ -203,6 +219,8 @@ const Asistente = (() => {
     if (!hayCriterios) {
       if (RE.fuentes.test(t)) return { ...intencion, tipo: 'fuentes' };
       if (RE.pdm.test(t)) return { ...intencion, tipo: 'pdm' };
+      if (dis) return { ...intencion, tipo: 'perfil' };
+      if (RE.mejorZona.test(t) && !intencion.temaNoSoportado) return { ...intencion, tipo: 'mejor_zona' };
       if (RE.quebrada.test(t)) return { ...intencion, tipo: 'quebrada' };
       if (RE.sismos.test(t)) return { ...intencion, tipo: 'sismos' };
       if (RE.peligros.test(t)) return { ...intencion, tipo: 'peligros' };
@@ -210,6 +228,7 @@ const Asistente = (() => {
       if (RE.zona.test(t)) return { ...intencion, tipo: 'zona' };
       if (RE.ficha.test(t)) return { ...intencion, tipo: 'ficha' };
       if (intencion.temaNoSoportado) return { ...intencion, tipo: 'no_soportado' };
+      if (RE.vivir.test(t)) return { ...intencion, tipo: 'mejor_zona' };
       return intencion;
     }
 
@@ -470,14 +489,16 @@ const Asistente = (() => {
   /**
    * Busca zonas que cumplen los criterios y las ordena por distrito.
    *   criterios: [{ id, umbralM, prioridad }]  (prioridad 2 pesa el doble: convención del asistente)
-   *   Devuelve { criterios, totalCeldas, pasoM, areas, puntos }.
+   *   Devuelve { criterios, totalCeldas, pasoM, areas, puntos, cumplen, cumplenPor }.
+   *   distrito: si se da, solo se evalúan las celdas de ese distrito (nombre como en el archivo de límites).
+   *   cumplen: las celdas donde se cumple todo a la vez (el andamio de los sectores); cumplenPor: cuántas cumplen cada criterio.
    *   areas:   por distrito, el % de celdas que cumplen todo (pctCumpleTodo) y el puntaje ponderado (puntajePct).
    *   puntos:  las mejores celdas, separadas entre sí, con el detalle de cada criterio.
    */
   function buscar(opciones) {
     const {
       criterios, zonas, datos, distritoDe, umbrales, pasoM = 250, minCeldas = 8, centro = null, radioM = null,
-      incluirCondicional = false, radioGlobalM = null, maxPuntos = 5, separacionM = 600, celdas: celdasDadas = null,
+      incluirCondicional = false, radioGlobalM = null, maxPuntos = 5, separacionM = 600, celdas: celdasDadas = null, distrito = null,
     } = opciones;
     if (!criterios || criterios.length === 0) throw new Error('Falta al menos un criterio para buscar.');
     if (criteriosSinUmbral(criterios).length > 0) throw new Error('Falta la distancia mínima a las quebradas: dime, por ejemplo, «lejos de quebradas a más de 200 m».');
@@ -496,8 +517,14 @@ const Asistente = (() => {
     }, 0);
     const porArea = new Map();
     const evaluadas = [];
+    const cumplen = []; // las celdas donde se cumple todo a la vez: el andamio de los sectores (sectores.js)
+    const cumplenPor = Object.fromEntries(criterios.map((c) => [c.id, 0]));
+    let totalCeldas = 0;
 
     celdas.forEach((celda) => {
+      const nombre = (distritoDe && distritoDe(celda.lat, celda.lon)) || 'Sin distrito';
+      if (distrito && nombre !== distrito) return; // búsqueda dentro de un distrito: las demás celdas no se evalúan
+      totalCeldas += 1;
       const ev = evaluarCelda(celda, datos, criterios, umbrales, radioGlobalM);
       let ponderado = 0;
       let todo = true;
@@ -506,7 +533,8 @@ const Asistente = (() => {
         else todo = false;
       });
       const puntaje = (100 * ponderado) / pesoTotal;
-      const nombre = (distritoDe && distritoDe(celda.lat, celda.lon)) || 'Sin distrito';
+      criterios.forEach((c) => { if (ev[c.id].cumple) cumplenPor[c.id] += 1; });
+      if (todo) cumplen.push({ ...celda, distrito: nombre, detalle: ev });
       const a = porArea.get(nombre) || { nombre, celdas: 0, todo: 0, suma: 0, por: {} };
       a.celdas += 1;
       a.suma += puntaje;
@@ -541,9 +569,10 @@ const Asistente = (() => {
       return puntos.length >= maxPuntos;
     });
 
-    const resueltos = criterios.map((c) => ({ ...c, umbralEfectivoM: CRITERIOS[c.id].tipo === 'zona' ? umbralDe(c, umbrales, radioGlobalM) : (CRITERIOS[c.id].niveles ? null : umbralDe(c, umbrales, radioGlobalM, CRITERIOS[c.id].nivel)) }));
+    const porNivel = (c) => (CRITERIOS[c.id].niveles ? Object.fromEntries(CRITERIOS[c.id].niveles.map((n) => [n, umbralDe(c, umbrales, radioGlobalM, n)])) : null);
+    const resueltos = criterios.map((c) => ({ ...c, umbralPorNivel: porNivel(c), umbralEfectivoM: CRITERIOS[c.id].tipo === 'zona' ? umbralDe(c, umbrales, radioGlobalM) : (CRITERIOS[c.id].niveles ? null : umbralDe(c, umbrales, radioGlobalM, CRITERIOS[c.id].nivel)) }));
     const t1 = typeof performance !== 'undefined' ? performance.now() : Date.now();
-    return { criterios: resueltos, totalCeldas: celdas.length, pasoM, areas, puntos, tiempoMs: Math.round(t1 - t0) };
+    return { criterios: resueltos, totalCeldas, pasoM, areas, puntos, cumplen, cumplenPor, distrito, tiempoMs: Math.round(t1 - t0) };
   }
 
   // ----------------------------------------------------------------- Respuestas
@@ -598,6 +627,95 @@ const Asistente = (() => {
     no: 'no es construible',
   };
   const AVISO_REFERENCIAL = 'Es una consulta referencial: no reemplaza el Certificado de Parámetros Urbanísticos y Edificatorios ni el de Zonificación y Vías.';
+
+  // ------------------------------------------------------- Distritos: contar, perfil y «mejor zona»
+
+  const GRUPO_DE_CRITERIO = { inicial: 'colegios', primaria: 'colegios', secundaria: 'colegios', colegio: 'colegios', salud: 'salud', transporte: 'paraderos', areaVerde: 'parques' };
+  const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
+
+  /** «235 colegios: 134 inicial, 90 primaria, 55 secundaria», «18 establecimientos de salud»… o null si no hay ninguno. */
+  function parteDeConteo(grupo, conteo) {
+    if (grupo === 'colegios') return conteo.colegios.total > 0 ? Ent().fraseColegios(conteo.colegios) : null;
+    if (grupo === 'salud') return conteo.salud.total > 0 ? plural(conteo.salud.total, 'establecimiento de salud', 'establecimientos de salud') : null;
+    if (grupo === 'paraderos') return conteo.paraderos.total > 0 ? plural(conteo.paraderos.total, 'paradero', 'paraderos') : null;
+    const p = conteo.parques;
+    if (p.total === 0) return null;
+    if (p.grandes === 0) return `${plural(p.total, 'área verde', 'áreas verdes')}, ninguna de media hectárea o más`;
+    return `${plural(p.grandes, 'parque', 'parques')} de al menos media hectárea (${plural(p.total, 'área verde', 'áreas verdes')} en total)`;
+  }
+  const NOMBRE_DE_GRUPO = { colegios: 'colegios', salud: 'establecimientos de salud', paraderos: 'paraderos', parques: 'parques' };
+
+  const textoDistritoFuera = (t) => `${t} es un distrito de la provincia de Arequipa, pero no está en los datos de GeoVerificador: solo tengo los límites de 25 distritos, entre ellos los 21 del Plan de Desarrollo Metropolitano. Prueba con otro, por ejemplo Cayma, Paucarpata o Cerro Colorado.`;
+
+  function respuestaContar(intencion, c) {
+    const t = c.distritoTitulo || Dist().titulo(intencion.distrito);
+    if (intencion.distritoFuera) return { texto: textoDistritoFuera(t), sugerencias: SUGERENCIAS_BASE };
+    if (!c.conteo) return { texto: `Todavía estoy contando lo que hay en ${t}; vuelve a preguntar en unos segundos.`, sugerencias: [] };
+    const pedidos = intencion.criterios.filter((x) => GRUPO_DE_CRITERIO[x.id]);
+    const grupos = [...new Set(pedidos.map((x) => GRUPO_DE_CRITERIO[x.id]))];
+    const con = grupos.map((g) => [g, parteDeConteo(g, c.conteo)]);
+    const hay = con.filter(([, p]) => p);
+    const sin = con.filter(([, p]) => !p).map(([g]) => NOMBRE_DE_GRUPO[g]);
+    const fecha = c.fecha || 'sin fecha';
+    const lineas = [];
+    if (hay.length) lineas.push(`En ${t} hay ${hay.map(([, p]) => p).join('; ')} (OpenStreetMap, ${fecha}; puede faltar alguno).`);
+    if (sin.length) {
+      lineas.push(hay.length
+        ? `No encontré ${listaEs(sin)} en OpenStreetMap: puede que existan sin estar mapeados.`
+        : `En ${t} no encontré ${listaEs(sin)} en OpenStreetMap (${fecha}): puede que existan sin estar mapeados.`);
+    }
+    const col = c.conteo.colegios;
+    if (grupos.includes('colegios') && col.total > 0 && (col.inicial + col.primaria + col.secundaria > col.total || col.sinNivel > 0)) {
+      lineas.push(`Un colegio puede atender varios niveles, por eso los niveles suman más que el total${col.sinNivel > 0 ? `; ${col.sinNivel} no dicen su nivel en OpenStreetMap y los cuento como primaria y secundaria` : ''}.`);
+    }
+    if (hay.length) lineas.push('Los marqué en el mapa.');
+    return {
+      texto: lineas.join('\n'),
+      sugerencias: [`Busco en ${t} un sector con colegio y parque cerca`, `Cuéntame de ${t}`],
+      mapa: hay.length ? { distrito: intencion.distrito, capas: pedidos.map((x) => x.id) } : null,
+    };
+  }
+
+  /** Los botones que preguntan «¿qué es lo primero para ti?»: cada uno es una búsqueda, en el distrito si hay uno. */
+  function botonesDePrioridad(t) {
+    const en = t ? `en ${t} ` : '';
+    return [
+      { etiqueta: 'Colegio cerca', texto: `Busco ${en}un sector con colegio cerca` },
+      { etiqueta: 'Parque cerca', texto: `Busco ${en}un sector con parque cerca` },
+      { etiqueta: 'Transporte cerca', texto: `Busco ${en}un sector con paradero cerca` },
+      { etiqueta: 'Zona tranquila', texto: `Busco ${en}una zona tranquila` },
+      { etiqueta: 'Posta cerca', texto: `Busco ${en}un sector con posta cerca` },
+      { etiqueta: 'Colegio y parque', texto: `Busco ${en}un sector con colegio y parque cerca` },
+    ];
+  }
+  const PREGUNTA_PRIORIDAD = '¿Qué es lo primero para ti: colegio cerca, parque, transporte, tranquilidad…?';
+
+  function respuestaPerfil(intencion, c) {
+    const t = c.distritoTitulo || Dist().titulo(intencion.distrito);
+    if (intencion.distritoFuera) return { texto: textoDistritoFuera(t), sugerencias: SUGERENCIAS_BASE };
+    const p = c.perfil;
+    if (!p) return { texto: `Todavía estoy armando el perfil de ${t}; vuelve a preguntar en unos segundos.`, sugerencias: [] };
+    const lineas = [`${t} en pocas palabras:`];
+    const principales = p.zonas.partes.filter((x) => x.pct >= 5).slice(0, 3).map((x) => `${x.etiqueta} (${Math.round(x.pct)} %)`);
+    lineas.push(p.zonas.conPlano && principales.length
+      ? `• Zonificación (plano del PDM 2016-2025): sobre todo ${listaEs(principales)}.`
+      : `• Zonificación: no tengo zonificación de ${t} en el plano del PDM 2016-2025.`);
+    const partes = ['colegios', 'salud', 'paraderos', 'parques'].map((g) => parteDeConteo(g, p.conteo)).filter(Boolean);
+    lineas.push(`• Servicios (OpenStreetMap, ${c.fecha || 'sin fecha'}; puede faltar alguno): ${partes.length ? partes.join('; ') : 'no encontré ninguno en los datos'}.`);
+    const q = p.cauces;
+    if (q.sinDato) lineas.push('• Quebradas y ríos: no pude leer el archivo de la red de la ANA, así que no lo afirmo.');
+    else if (q.nombres.length) lineas.push(`• Quebradas y ríos: lo cruzan ${listaEs(q.nombres.slice(0, 5))} (red de la ANA; no incluye todas las quebradas urbanas ni es un mapa de peligro).`);
+    else lineas.push('• Quebradas y ríos: la red de la ANA no registra cauces en este distrito (no incluye todas las quebradas urbanas ni es un mapa de peligro).');
+    lineas.push(PREGUNTA_PRIORIDAD);
+    return { texto: lineas.join('\n'), sugerencias: botonesDePrioridad(t), mapa: { distrito: intencion.distrito, capas: [] } };
+  }
+
+  function respuestaMejorZona() {
+    return {
+      texto: `No elijo una «mejor zona»: depende de lo que te importe a ti. Para una familia con niños pesa el colegio; para quien no tiene auto, el transporte; para quien busca calma, que sea una zona residencial tranquila. Puedes decirme un distrito y te cuento cómo es, o decirme qué necesitas y busco los sectores donde se cumpla.\n${PREGUNTA_PRIORIDAD}`,
+      sugerencias: botonesDePrioridad(null),
+    };
+  }
 
   function sinPunto() {
     return { texto: 'Primero elige un punto en el mapa o escribe una dirección. Con el punto elegido puedo contarte su zona y los servicios cercanos. Mientras tanto puedo buscar zonas por lo que te importa, por ejemplo: «busco cerca de un colegio y un parque».', sugerencias: SUGERENCIAS_BASE };
@@ -701,6 +819,10 @@ const Asistente = (() => {
     if (tipo === 'no_soportado') return fin(`${TEMAS[intencion.temaNoSoportado] || 'Eso no está en los datos que uso.'}\nSí puedo ayudarte con la zonificación y con la cercanía a colegios, salud, transporte y áreas verdes.`);
     if (tipo === 'desconocido') return fin('No entendí eso. Puedes pedirme, por ejemplo:', SUGERENCIAS_BASE);
     if (tipo === 'pdm') return fin(textoPDM(c.estadoPDM));
+    if (tipo === 'contar') return respuestaContar(intencion, c);
+    if (tipo === 'perfil') return respuestaPerfil(intencion, c);
+    if (tipo === 'mejor_zona') return respuestaMejorZona();
+    if (tipo === 'distrito_desconocido') return fin('No reconozco «' + (intencion.distritoTexto || 'ese lugar') + '» como un distrito de la provincia de Arequipa. Puedes escribir, por ejemplo, Cayma, Paucarpata o Cerro Colorado.');
 
     if (!c.punto) return sinPunto();
 
@@ -757,58 +879,177 @@ const Asistente = (() => {
 
   // ------------------------------------------------------ Texto de una búsqueda
 
+  const MAX_SECTORES = 6;
+
   /**
-   * Presenta el resultado de `buscar`.
-   *   meta: { aproximados, temaNoSoportado, radioGlobalM, incluirCondicional?, umbrales? }
+   * Cómo se dice un criterio de la búsqueda en palabras de todos los días.
+   * Devuelve { grupo, texto }: «tienes» (algo que está cerca), «zona» (dónde estás) o «lejos» (a más de cierta distancia).
+   */
+  function fraseCriterio(c) {
+    const def = CRITERIOS[c.id];
+    const u = c.umbralEfectivoM;
+    const menos = (m) => `a menos de ${fmtDist(m)}`;
+    if (def.tipo === 'cauce') return { grupo: 'lejos', texto: `a más de ${fmtDist(u)} de una quebrada o río` };
+    if (def.tipo === 'zona') {
+      const txt = {
+        residencial: u > 0 ? `con zona residencial ${menos(u)}` : 'en zona residencial',
+        tranquilo: 'en zona tranquila (residencial de baja densidad)',
+        campina: `con campiña ${menos(u)}`,
+        comercial: `con zona comercial ${menos(u)}`,
+        historico: `con el centro histórico ${menos(u)}`,
+      }[c.id];
+      return { grupo: 'zona', texto: txt };
+    }
+    if (def.niveles) {
+      const por = c.umbralPorNivel || {};
+      const partes = def.niveles.filter((n) => esNumero(por[n])).map((n, k) => `${k === 0 ? 'inicial' : 'de primaria'} ${menos(por[n])}`);
+      return { grupo: 'tienes', texto: partes.length ? `un colegio ${partes.join(' o ')}` : 'un colegio inicial o de primaria cerca' };
+    }
+    const txt = {
+      salud: `un establecimiento de salud ${menos(u)}`,
+      inicial: `un colegio inicial ${menos(u)}`,
+      primaria: `un colegio de primaria ${menos(u)}`,
+      secundaria: `un colegio de secundaria ${menos(u)}`,
+      transporte: `un paradero ${menos(u)}`,
+      areaVerde: `un parque ${menos(u)}`,
+    }[c.id];
+    return { grupo: 'tienes', texto: txt };
+  }
+
+  /** «un colegio inicial a menos de 500 m y un parque a menos de 300 m, y estás a más de…»: la condición completa, en una frase. */
+  function condicionEnFrase(criterios, { subjuntivo = false } = {}) {
+    const fr = criterios.map(fraseCriterio);
+    const de = (g) => fr.filter((f) => f.grupo === g).map((f) => f.texto);
+    const zona = de('zona');
+    const tienes = de('tienes');
+    const lejos = de('lejos');
+    let out = zona.length ? ` ${listaEs(zona)}` : '';
+    if (tienes.length) out += ` donde ${subjuntivo ? 'tengas' : 'tienes'} a la vez ${listaEs(tienes)}`;
+    if (lejos.length) out += `${tienes.length ? ', y estás' : ''} ${listaEs(lejos)}`;
+    return out;
+  }
+
+  const hectareasEnFrase = (ha) => `unas ${ha < 15 ? Math.max(1, Math.round(ha)) : Math.round(ha / 5) * 5} hectáreas`;
+
+  /** Lo que hay en el centro de un sector, con distancias redondeadas: «colegio inicial a 230 m (Jardín X), parque a 120 m». */
+  function notaDeSector(celda, criterios) {
+    const partes = criterios.map((c) => {
+      const d = celda.detalle && celda.detalle[c.id];
+      if (!d || d.distanciaM === null || d.distanciaM === undefined) return null;
+      const nivel = d.nivel === 'inicial' ? 'colegio inicial' : 'colegio de primaria';
+      const cual = {
+        salud: 'salud', inicial: 'colegio inicial', primaria: 'colegio de primaria', secundaria: 'colegio de secundaria', colegio: d.nivel ? nivel : 'colegio',
+        transporte: 'paradero', areaVerde: 'parque', campina: 'campiña', comercial: 'zona comercial', historico: 'centro histórico',
+      }[c.id];
+      if (!cual) return null;
+      if (CRITERIOS[c.id].tipo === 'zona' && d.distanciaM === 0) return null;
+      return `${cual} a ${fmtDist(Math.max(10, Math.round(d.distanciaM / 10) * 10))}${d.nombre ? ` (${d.nombre})` : ''}`;
+    }).filter(Boolean);
+    return partes.length ? `En el centro del sector: ${partes.join(', ')}.` : '';
+  }
+
+  // Cómo se nombra un criterio al decir «Quita …».
+  const QUITA = {
+    salud: 'la posta', inicial: 'el colegio inicial', primaria: 'el colegio de primaria', secundaria: 'el colegio de secundaria', colegio: 'el colegio',
+    transporte: 'el paradero', areaVerde: 'el parque', residencial: 'la zona residencial', tranquilo: 'la zona tranquila', campina: 'la campiña',
+    comercial: 'la zona comercial', historico: 'el centro histórico', lejosQuebrada: 'lo de las quebradas',
+  };
+
+  /**
+   * Presenta el resultado de buscar en lenguaje de personas: sectores donde se cumple todo a la vez, nunca celdas ni porcentajes.
+   *   meta: { aproximados, temaNoSoportado, radioGlobalM, datos?, distrito? (título, p. ej. «Paucarpata»), maxSectores? }
+   *   datos (Asistente.prepararDatos) sirve para ponerle a cada sector el nombre del elemento con nombre más cercano.
+   * Devuelve { texto, lineas, filas, sectores, sugerencias }. filas son los sectores que se muestran en el chat (los más extensos,
+   * o los más cercanos a lo que la persona marcó como prioridad); sectores son todos, con su contorno, para dibujarlos en el mapa.
    */
   function formatearBusqueda(resultado, meta = {}) {
     const lineas = [];
-    const esDetalle = []; // paralela a `lineas`: true si la línea va en el apartado desplegable de la vista
+    const esDetalle = []; // paralela a lineas: true si la línea va en el apartado desplegable de la vista
     const agregarLinea = (texto, detalle = false) => { lineas.push(texto); esDetalle.push(detalle); };
-    const q = resultado.criterios.map((c) => {
-      const def = CRITERIOS[c.id];
-      const u = c.umbralEfectivoM;
-      if (def.tipo === 'cauce') return `${def.etiqueta}${u ? ` a más de ${fmtUmbral(u)}` : ''}${c.prioridad > 1 ? ' (prioridad)' : ''}`;
-      return `${def.etiqueta}${u ? ` a ${fmtUmbral(u)} o menos` : ''}${c.prioridad > 1 ? ' (prioridad)' : ''}`;
-    });
-    agregarLinea(`Busqué zonas con: ${q.join('; ')}.`);
-    if (hay(meta.radioGlobalM)) agregarLinea(`Usé ${fmtUmbral(meta.radioGlobalM)} como distancia para todos los criterios (si quieres otra para uno solo, dime por ejemplo «colegio a 500 m»).`, true);
-    agregarLinea(`Revisé ${fmtNum(resultado.totalCeldas)} celdas de ${resultado.pasoM} m dentro de las zonas construibles del plano 2016-2025 y las agrupé por distrito.`, true);
+    const criterios = resultado.criterios;
+    const max = meta.maxSectores || MAX_SECTORES;
+    const lugar = meta.distrito ? ` de ${meta.distrito}` : ' en la ciudad';
+    const prioritarios = criterios.filter((c) => c.prioridad > 1);
 
+    let todos = Sect().agrupar(resultado.cumplen || [], { pasoM: resultado.pasoM });
+    const grandes = todos.filter((s) => s.celdas.length >= 2);
+    if (grandes.length > 0) todos = grandes.map((s, k) => ({ ...s, n: k + 1 })); // un sector de un solo cuadro es demasiado pequeño para fiarse
     const sugerencias = [];
-    const filas = resultado.areas.slice(0, 6).map((a, i) => {
-      const por = resultado.criterios.map((c) => `${CRITERIOS[c.id].etiqueta.split(' (')[0]} ${pct(a.porCriterio[c.id] || 0)}`).join(' · ');
-      return {
-        titulo: titulo(a.nombre),
-        distrito: a.nombre,
-        orden: i + 1,
-        detalle: `${pct(a.pctCumpleTodo)} del suelo habitable cumple todo · coincidencia ponderada ${pct(a.puntajePct)}`,
-        nota: por,
-        pctCumpleTodo: a.pctCumpleTodo, // para resumir la fila en la vista; la cifra es la misma de `detalle`
-        puntajePct: a.puntajePct,
-      };
-    });
-    if (resultado.areas.length === 0) {
-      agregarLinea('No encontré ninguna zona con suficientes celdas que cumpla; los criterios juntos pueden ser demasiado exigentes.');
-      sugerencias.push('Quita un criterio', 'Busca con un radio de 1,5 km', 'Incluye zonas condicionales');
+    let filas = [];
+    let sectores = [];
+
+    if (todos.length === 0) {
+      if (resultado.totalCeldas === 0) {
+        agregarLinea(`No encontré dónde buscar${lugar}: el plano de zonificación no tiene zonas construibles ahí.`);
+        sugerencias.push('Incluye zonas condicionales');
+      } else {
+        agregarLinea(`No encontré ningún sector${lugar}${condicionEnFrase(criterios, { subjuntivo: true })}.`);
+        const por = resultado.cumplenPor || {};
+        const limita = criterios.filter((c) => por[c.id] !== undefined).sort((a, b) => por[a.id] - por[b.id])[0];
+        if (limita && criterios.length > 1) {
+          agregarLinea(`Lo que más limita es ${fraseCriterio(limita).texto}: ${por[limita.id] === 0 ? 'no hay ningún lugar que lo cumpla' : 'solo se cumple en una parte pequeña de la zona'}.`);
+          sugerencias.push(`Quita ${QUITA[limita.id] || 'ese criterio'}`);
+        }
+        sugerencias.push('Incluye zonas condicionales');
+        if (!hay(meta.radioGlobalM)) sugerencias.push('Busca con un radio de 1,5 km');
+      }
     } else {
-      agregarLinea('Los porcentajes son la parte del suelo habitable de cada distrito que cumple lo que pediste. No son una probabilidad ni una recomendación.');
-      sugerencias.push('Agrega transporte', 'Prioriza el área verde', 'Incluye zonas condicionales');
+      const n = todos.length;
+      agregarLinea(`Encontré ${n} ${n === 1 ? 'sector' : 'sectores'}${lugar}${condicionEnFrase(criterios)}.`);
+      if (!meta.distrito) {
+        const porDistrito = {};
+        todos.forEach((s) => { if (s.distrito) porDistrito[s.distrito] = (porDistrito[s.distrito] || 0) + 1; });
+        const nombres = Object.entries(porDistrito).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([d, k]) => `${Dist().titulo(d)} (${k})`);
+        if (Object.keys(porDistrito).length > 1) agregarLinea(`Están en ${Object.keys(porDistrito).length} distritos: ${listaEs(nombres)}.`);
+      }
+      // Sin prioridad no hay orden de calidad: los más extensos primero. Con prioridad, los más cercanos a eso.
+      const conCentro = todos.map((s) => ({ ...s, centroCelda: s.celdas.find((c) => c.lat === s.centro.lat && c.lon === s.centro.lon) || s.celdas[0] }));
+      const clave = (s) => prioritarios.reduce((m, c) => {
+        const d = s.centroCelda.detalle && s.centroCelda.detalle[c.id];
+        return m + (d && d.distanciaM !== null && d.distanciaM !== undefined ? d.distanciaM / (c.umbralEfectivoM || 1) : 2);
+      }, 0);
+      const ordenados = (prioritarios.length > 0 ? [...conCentro].sort((a, b) => clave(a) - clave(b)) : conCentro).map((s, k) => ({ ...s, n: k + 1 }));
+      if (n > max) agregarLinea(`Te muestro ${prioritarios.length ? `los ${max} más cercanos a lo que priorizaste` : `los ${max} más extensos`}; los demás están en el mapa.`);
+      agregarLinea(prioritarios.length
+        ? `Los ordené por cercanía a lo que marcaste como prioridad (${listaEs(prioritarios.map((c) => fraseCriterio(c).texto))}).`
+        : 'Los numeré solo para ubicarlos en el mapa; no es un ranking.');
+      const ids = criterios.map((c) => c.id);
+      sectores = ordenados.map((s) => ({
+        n: s.n, centro: s.centro, hectareas: s.hectareas, distrito: s.distrito, nombre: null, contorno: Sect().contorno(s.celdas, { pasoM: resultado.pasoM }),
+      }));
+      filas = ordenados.slice(0, max).map((s) => {
+        const nom = meta.datos ? Sect().nombrar(s.centro, meta.datos, ids) : null;
+        sectores[s.n - 1].nombre = nom ? nom.nombre : null;
+        const donde = s.distrito && !meta.distrito ? ` en ${Dist().titulo(s.distrito)}` : '';
+        return {
+          titulo: `Sector ${s.n}${nom ? ` · cerca de ${nom.nombre}` : ''}`,
+          distrito: s.distrito,
+          orden: s.n,
+          detalle: `${hectareasEnFrase(s.hectareas)}${donde}${s.centro.zona ? ` · zona ${s.centro.zona}` : ''}`,
+          nota: notaDeSector(s.centroCelda, criterios),
+          mejor: { lat: s.centro.lat, lon: s.centro.lon, zona: s.centro.zona },
+          n: s.n,
+        };
+      });
+      sugerencias.push('Agrega transporte', 'Prioriza el parque', 'Incluye zonas condicionales');
     }
+    if (hay(meta.radioGlobalM)) agregarLinea(`Usé ${fmtDist(meta.radioGlobalM)} como distancia para todo lo que pediste (si quieres otra para uno solo, dime por ejemplo «colegio a 500 m»).`, true);
+    if (todos.length > 0) agregarLinea('Para encontrarlos reviso el mapa en cuadros de 250 m y junto los vecinos que cumplen lo que pediste; por eso los bordes son aproximados.', true);
     if (meta.aproximados && meta.aproximados.length) {
       const nombres = meta.aproximados.map((id) => CRITERIOS[id].etiqueta.split(' (')[0].toLowerCase());
       const varios = nombres.length > 1;
       const motivos = meta.aproximados.map((id) => MOTIVO_APROXIMADO[id]);
       agregarLinea(`Ojo: ${nombres.join(' y ')} ${varios ? 'son aproximaciones' : 'es una aproximación'} con la zonificación (${motivos.join('; ')}), no ${varios ? 'datos medidos' : 'un dato medido'}.`);
     }
-    if (resultado.criterios.some((c) => CRITERIOS[c.id].tipo === 'cauce')) agregarLinea(TEXTO_LIMITE_CAUCES);
+    if (criterios.some((c) => CRITERIOS[c.id].tipo === 'cauce')) agregarLinea(TEXTO_LIMITE_CAUCES);
     if (meta.temaNoSoportado) agregarLinea(`${TEMAS[meta.temaNoSoportado]}`);
     agregarLinea(AVISO_REFERENCIAL.replace('Es una consulta referencial: no', 'Resultado referencial: no'), true);
     return {
       texto: lineas.join('\n'),
-      // La vista muestra `principal` y deja `detalle` dentro del apartado «Por qué, fuente y límites». Juntas son `texto`.
+      // La vista muestra principal y deja detalle dentro del apartado «Por qué, fuente y límites». Juntas son texto.
       lineas: { principal: lineas.filter((_, i) => !esDetalle[i]), detalle: lineas.filter((_, i) => esDetalle[i]) },
       filas,
+      sectores,
       sugerencias,
     };
   }
@@ -1001,6 +1242,18 @@ const Asistente = (() => {
       limites: [LIM_INVENTARIO, LIM_RECTA, LIM_REFERENCIAL],
     },
     servicio: SERVICIOS,
+    contar: {
+      porque: ['Cuento los elementos de OpenStreetMap cuyo punto cae dentro del límite del distrito (los parques, por el centro de su polígono).'],
+      fuente: [FUENTE_OSM, 'Límites distritales del INEI vía GEOCATMIN (INGEMMET).'],
+      limites: [LIM_OSM, 'Un colegio puede atender varios niveles; los que no declaran su nivel se cuentan como primaria y secundaria.', 'Los parques se cuentan todos; los criterios de búsqueda usan solo los de al menos 0,5 ha (OMS Europa, 2016).'],
+    },
+    perfil: {
+      porque: ['Junta lo que hay dentro del distrito: cómo se reparte la zonificación del plano (se mide con puntos cada 300 m), cuántos servicios hay y qué cauces de la red de la ANA lo cruzan.'],
+      fuente: [FUENTE_PLANO, FUENTE_OSM, FUENTE_ANA],
+      limites: [LIM_PLANO, LIM_OSM, LIM_CAUCES, LIM_REFERENCIAL],
+    },
+    mejor_zona: GENERICO,
+    distrito_desconocido: GENERICO,
     ficha: {
       porque: ['Junta lo que la ficha ya calculó para tu punto: la zona del plano y la distancia al servicio más cercano de cada tipo.'],
       fuente: [FUENTE_PLANO, FUENTE_OSM, FUENTE_UMBRALES],
@@ -1018,11 +1271,11 @@ const Asistente = (() => {
       const aprox = (meta.aproximados || []).map((id) => `${CRITERIOS[id].etiqueta.split(' (')[0]} es una aproximación con la zonificación (${MOTIVO_APROXIMADO[id]}), no un dato medido.`);
       return {
         porque: [
-          'Se arma una cuadrícula de celdas de 250 m sobre las zonas construibles del plano y se evalúa cada criterio en cada celda con los mismos cálculos de la ficha. Luego se agrupa por distrito.',
-          'El porcentaje es la parte del suelo habitable del distrito que cumple lo pedido. La coincidencia ponderada da peso 2 a lo que marcaste como prioridad y 1 al resto: es una convención del asistente, no una norma.',
+          'Reviso las zonas construibles del plano en cuadros de 250 m y, en cada uno, hago los mismos cálculos de la ficha para cada cosa que pediste. Un sector es una zona continua donde se cumple todo a la vez.',
+          'No hay puntaje ni orden de calidad: los sectores se numeran solo para ubicarlos. Si marcas una prioridad (por ejemplo «lo más importante es el parque»), los ordeno por cercanía a ella.',
         ],
         fuente: [meta.fecha ? `OpenStreetMap (ODbL), extraído el ${meta.fecha}.` : FUENTE_OSM, FUENTE_PLANO, FUENTE_UMBRALES],
-        limites: ['No es una probabilidad ni una recomendación.', LIM_RECTA, 'La resolución es de 250 m: no distingue cuadras.', LIM_OSM, ...aprox, ...(meta.cauce ? [LIM_CAUCES] : []), LIM_REFERENCIAL],
+        limites: ['No es una probabilidad ni una recomendación.', LIM_RECTA, 'Los bordes de un sector son aproximados: la resolución es de 250 m y no distingue cuadras.', LIM_OSM, ...aprox, ...(meta.cauce ? [LIM_CAUCES] : []), LIM_REFERENCIAL],
       };
     }
     const e = EXPLICACIONES[tipo];
@@ -1048,6 +1301,8 @@ const Asistente = (() => {
     formatearBusqueda,
     combinarBusqueda,
     describirCriterio,
+    botonesDePrioridad,
+    textoDistritoFuera,
     distanciaM,
     titulo,
     fmtDist,

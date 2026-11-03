@@ -103,7 +103,87 @@ const Entidades = (() => {
     return `${c.total} ${c.total === 1 ? 'colegio' : 'colegios'}: ${c.inicial} inicial, ${c.primaria} primaria, ${c.secundaria} secundaria`;
   }
 
-  return { enDistrito, contar, cercaDe, fraseColegios, contenedor, NIVELES };
+  // ----------------------------------------------------------- Zonificación y cauces
+
+  const TIPOS_DE_ZONA = {
+    residencial: ['residencial', 'residencial'],
+    comercial: ['comercial', 'comercial'],
+    industrial: ['industrial', 'industrial'],
+    equipamiento: ['equipamiento', 'equipamientos (colegios, hospitales…)'],
+    recreacion: ['recreacion', 'recreación'],
+    especial: ['especial', 'zonas de reglamentación especial'],
+    riesgo: ['riesgo', 'zonas de riesgo'],
+    proteccion: ['proteccion', 'zonas de protección'],
+  };
+
+  /** Tipo principal de una zona del plano: [id, etiqueta]. La campiña (ZA, ZRE-PA) se separa de la protección. */
+  function tipoDeZona(codigo, grupo) {
+    if (codigo === 'ZA' || codigo === 'ZRE-PA') return ['campina', 'campiña'];
+    return TIPOS_DE_ZONA[grupo] || null;
+  }
+
+  /**
+   * Cómo se reparte la zonificación del plano dentro de un distrito, por tipo principal (residencial, comercial, campiña…).
+   * Se mide con puntos cada `pasoM` metros dentro del distrito; gana la última zona que contiene el punto, como en el plano.
+   * Devuelve { conPlano, partes: [{ id, etiqueta, pct }] } (pct sobre lo que el plano zonifica dentro del distrito).
+   */
+  function mezclaZonas(zonas, polys, { pasoM = 300 } = {}) {
+    const b = bboxDe(polys || []);
+    const conBbox = (zonas || []).filter((z) => z.bbox && z.regla);
+    if (b[0] === Infinity || conBbox.length === 0) return { conPlano: false, partes: [] };
+    const dentro = contenedor(polys);
+    const mPorGrado = (Math.PI / 180) * C.RADIO_TIERRA_M;
+    const dLat = pasoM / mPorGrado;
+    const cuenta = new Map();
+    let total = 0;
+    for (let lat = b[1] + dLat / 2; lat < b[3]; lat += dLat) {
+      const dLon = pasoM / (mPorGrado * Math.cos((lat * Math.PI) / 180));
+      for (let lon = b[0] + dLon / 2; lon < b[2]; lon += dLon) {
+        if (!dentro(lat, lon)) continue;
+        let hit = null;
+        for (const z of conBbox) {
+          if (lon < z.bbox[0] || lon > z.bbox[2] || lat < z.bbox[1] || lat > z.bbox[3]) continue;
+          if (z.polys.some((anillos) => C.puntoEnPoligono(lat, lon, anillos))) hit = z;
+        }
+        const tipo = hit ? tipoDeZona(hit.codigo, hit.regla.grupo) : null;
+        if (!tipo) continue;
+        total += 1;
+        const previo = cuenta.get(tipo[0]) || { id: tipo[0], etiqueta: tipo[1], n: 0 };
+        previo.n += 1;
+        cuenta.set(tipo[0], previo);
+      }
+    }
+    if (total === 0) return { conPlano: false, partes: [] };
+    const partes = [...cuenta.values()].sort((x, y) => y.n - x.n).map((p) => ({ id: p.id, etiqueta: p.etiqueta, pct: (100 * p.n) / total }));
+    return { conPlano: true, partes };
+  }
+
+  /**
+   * Cauces (red hidrográfica de la ANA) que pasan por el distrito: los nombres sin repetir y cuántos tramos lo cruzan.
+   * Un tramo cruza si alguno de sus vértices cae dentro. Sin lista de cauces (archivo ausente) devuelve `sinDato`.
+   */
+  function caucesEnDistrito(cauces, polys) {
+    if (!Array.isArray(cauces) || cauces.length === 0) return { nombres: [], total: 0, sinDato: true };
+    const dentro = contenedor(polys);
+    const nombres = new Set();
+    let total = 0;
+    cauces.forEach((c) => {
+      const g = c.geometry;
+      const lineas = g && g.type === 'LineString' ? [g.coordinates] : g && g.type === 'MultiLineString' ? g.coordinates : [];
+      if (lineas.some((l) => l.some(([x, y]) => dentro(y, x)))) {
+        total += 1;
+        if (c.nombre) nombres.add(c.nombre);
+      }
+    });
+    return { nombres: [...nombres], total };
+  }
+
+  /** Todo lo que se cuenta de un distrito en su perfil: conteo, mezcla de zonas y cauces. */
+  function perfil(datos, zonas, cauces, polys, opciones = {}) {
+    return { conteo: contar(datos, polys, opciones), zonas: mezclaZonas(zonas, polys, opciones), cauces: caucesEnDistrito(cauces, polys) };
+  }
+
+  return { enDistrito, contar, cercaDe, fraseColegios, contenedor, mezclaZonas, caucesEnDistrito, perfil, tipoDeZona, NIVELES };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = Entidades;
