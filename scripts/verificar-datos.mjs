@@ -50,6 +50,7 @@ const sismos = json('data/sismos_igp.geojson');
 const volcan = json('data/peligro_volcanico_misti.geojson');
 const e030 = json('data/zonas_sismicas_e030.json');
 const precios = json('data/precios_m2_distrito.json');
+const riesgoCenepred = json('data/riesgo_cenepred_fen2027.json');
 const equipamiento = Object.fromEntries(['salud', 'educacion', 'transporte', 'areas_verdes'].map((n) => [n, json(`data/equipamiento/${n}.geojson`)]));
 
 // ------------------------------------------------------------------ A. Integridad
@@ -258,6 +259,27 @@ console.log('\n== A. Integridad de los archivos ==');
     return r.estado === 'SIN DATO' && !!r.causa && r.precioM2 === undefined;
   })());
   console.log(`INFO  Precios: ${filas.length} de ${nombres.length} distritos con cifra; ${m.fuente}; corte ${m.periodo?.corte}; descargado ${m.fecha_descarga}`);
+}
+
+// Escenario de riesgo del CENEPRED ante El Niño 2026-2027 por distrito: congelado con scripts/descargar-riesgo-cenepred.mjs
+{
+  const m = riesgoCenepred;
+  const R = createRequire(import.meta.url)('./lib/riesgo-cenepred.js');
+  const C = createRequire(import.meta.url)('../public/js/cenepred.js');
+  const filas = Object.entries(m.distritos || {});
+  const porUbigeo = new Map(distritos.features.map((x) => [x.properties.ubigeo, x.properties.distrito]));
+  comprobar('CENEPRED: metadata con fuente, URL del servicio y del visor de SIGRID, estudio con URL https, fecha de descarga (AAAA-MM-DD) y la nota de escala distrital', !!m.fuente && /^https:\/\/sigrid\.cenepred\.gob\.pe\//.test(m.url || '') && /^https:\/\/sigrid\.cenepred\.gob\.pe\/sigridv3\/?$/.test(m.url_visor || '') && /^https:\/\//.test(m.estudio?.url || '') && /^\d{4}-\d{2}-\d{2}$/.test(m.fecha_descarga || '') && /distrital/i.test(m.nota || '') && /no es una evaluaci/i.test(m.nota || ''));
+  comprobar('CENEPRED: están los 25 distritos de distritos_aqp.geojson, emparejados por ubigeo y con el mismo nombre, y no hay otros', filas.length === porUbigeo.size && filas.length === 25 && filas.every(([u, d]) => porUbigeo.get(u) === d.distrito), `${filas.length} distritos`);
+  comprobar('CENEPRED: todos los niveles (inundación y movimientos en masa) están en el conjunto conocido: Bajo, Medio, Alto, Muy alto', filas.every(([, d]) => R.NIVELES.includes(d.inundacion?.nivel) && R.NIVELES.includes(d.movimientos_masa?.nivel)));
+  comprobar('CENEPRED: viviendas, locales educativos y establecimientos de salud son enteros no negativos', filas.every(([, d]) => [d.inundacion, d.movimientos_masa].every((b) => ['viviendas', 'instituciones_educativas', 'establecimientos_salud'].every((k) => Number.isInteger(b[k]) && b[k] >= 0))));
+  comprobar('CENEPRED: el resumen por nivel del archivo coincide con el conteo de los distritos', JSON.stringify(m.resumen_por_nivel) === JSON.stringify(R.resumenPorNivel(m.distritos)));
+  comprobar('CENEPRED (módulo): cada distrito da INFORMATIVO por ubigeo y por nombre, y uno que no está en los datos (Vítor) da SIN DATO con su causa, sin inventar un nivel', filas.every(([u, d]) => C.buscar(m, u).estado === 'INFORMATIVO' && C.buscar(m, d.distrito).ubigeo === u) && (() => {
+    const r = C.buscar(m, 'Vitor');
+    return r.estado === 'SIN DATO' && !!r.causa && r.inundacion === undefined;
+  })());
+  const resumen = R.resumenPorNivel(m.distritos);
+  const texto = (o) => R.NIVELES.map((n) => `${n} ${o[n]}`).join(', ');
+  console.log(`INFO  CENEPRED: inundación ${texto(resumen.inundacion)}; movimientos en masa ${texto(resumen.movimientos_masa)}; descargado ${m.fecha_descarga}`);
 }
 
 // ------------------------------------------------- B. Corrección de los cálculos

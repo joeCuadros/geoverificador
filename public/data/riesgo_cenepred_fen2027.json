@@ -1,0 +1,448 @@
+{
+  "fuente": "CENEPRED (SIGRID), escenario de riesgo por inundaciones y movimientos en masa ante lluvias intensas asociadas al Fenómeno El Niño 2026-2027",
+  "url": "https://sigrid.cenepred.gob.pe/arcgis/rest/services/FEN/ER_NINO2027_BD/MapServer",
+  "url_visor": "https://sigrid.cenepred.gob.pe/sigridv3/",
+  "capas": {
+    "inundacion": {
+      "id": 4,
+      "nombre": "Riesgos a inundación",
+      "url": "https://sigrid.cenepred.gob.pe/arcgis/rest/services/FEN/ER_NINO2027_BD/MapServer/4",
+      "descripcion": "Identifica la posible afectación que pueden sufrir los elementos expuestos ante inundaciones en condiciones El Niño, en el ámbito nacional, considerando características similares de lluvias presentadas en los veranos 1983; 1998; 2017 y 2023, eventos asociados a lluvias intensas. Fuente: Estudio de escenarios de riesgo por inundaciones y movimientos en masa ante lluvias intensas asociadas al Fenómeno El Niño (Actualizado en base al Informe Técnico N° 69-2026/SENAMHI-DMA-SPC)"
+    },
+    "movimientos_masa": {
+      "id": 5,
+      "nombre": "Riesgos a movimientos en masa",
+      "url": "https://sigrid.cenepred.gob.pe/arcgis/rest/services/FEN/ER_NINO2027_BD/MapServer/5",
+      "descripcion": "Identifica la posible afectación que pueden sufrir los elementos expuestos ante movimientos en masa en condiciones El Niño, en el ámbito nacional, considerando características similares de lluvias presentadas en los veranos 1983; 1998; 2017 y 2023, eventos asociados a lluvias intensas. Fuente: Estudio de escenarios de riesgo por inundaciones y movimientos en masa ante lluvias intensas asociadas al Fenómeno El Niño (Actualizado en base al Informe Técnico N° 69-2026/SENAMHI-DMA-SPC)"
+    }
+  },
+  "estudio": {
+    "titulo": "Estudio de escenarios de riesgo por inundaciones y movimientos en masa ante lluvias intensas asociadas al Fenómeno El Niño",
+    "autor": "CENEPRED",
+    "fecha": "mayo de 2026",
+    "url": "https://sigrid.cenepred.gob.pe/sigridv3/storage/biblioteca//22033_estudio-de-escenarios-de-riesgo-por-inundaciones-y-movimientos-en-masa-ante-lluvias-intensas-asociadas-al-fenomeno-el-nino.pdf",
+    "metodologia_previa": "Escenarios de riesgo por inundaciones y movimientos en masa en el marco del Plan Multisectorial 2025-2027 (CENEPRED, julio de 2024)",
+    "metodologia_previa_url": "https://sigrid.cenepred.gob.pe/sigridv3/storage/biblioteca/17791_escenarios-de-riesgo-por-inundaciones-y-movimientos-en-masa-en-el-marco-del-plan-multisectorial-2025-2027.pdf",
+    "actualizacion_de_la_capa": "Informe Técnico N.° 69-2026/SENAMHI-DMA-SPC, según la descripción de la capa"
+  },
+  "escenario": "Lluvias intensas como las de los veranos de 1983, 1998, 2017 y 2023 (años El Niño). Es un escenario, no un pronóstico.",
+  "fecha_descarga": "2026-11-03",
+  "nota": "Escala distrital: un solo nivel por distrito y fenómeno. Escenario El Niño 2027, no una predicción. No es una evaluación del riesgo del predio.",
+  "niveles": [
+    "Bajo",
+    "Medio",
+    "Alto",
+    "Muy alto"
+  ],
+  "campos": {
+    "nivel": "Nivel de riesgo del distrito (bajo, medio, alto o muy alto), que el estudio obtiene de combinar la susceptibilidad y la vulnerabilidad del distrito.",
+    "viviendas": "Viviendas del distrito ubicadas en áreas de mayor susceptibilidad (indicador de exposición del estudio).",
+    "instituciones_educativas": "Locales educativos del distrito ubicados en áreas de mayor susceptibilidad.",
+    "establecimientos_salud": "Establecimientos de salud del distrito ubicados en áreas de mayor susceptibilidad."
+  },
+  "campos_servicio": {
+    "inundacion": {
+      "nivel": "nriesgo_in",
+      "viviendas": "viv_sinu",
+      "instituciones_educativas": "iiee_sinu",
+      "establecimientos_salud": "eess_sinu"
+    },
+    "movimientos_masa": {
+      "nivel": "nriesgo_mm",
+      "viviendas": "vivsm_ma_a",
+      "instituciones_educativas": "iiee_smm",
+      "establecimientos_salud": "eess_smm"
+    }
+  },
+  "resumen_por_nivel": {
+    "inundacion": {
+      "Bajo": 0,
+      "Medio": 1,
+      "Alto": 17,
+      "Muy alto": 7
+    },
+    "movimientos_masa": {
+      "Bajo": 4,
+      "Medio": 17,
+      "Alto": 4,
+      "Muy alto": 0
+    }
+  },
+  "distritos": {
+    "040115": {
+      "distrito": "QUEQUEÑA",
+      "inundacion": {
+        "nivel": "Alto",
+        "viviendas": 4734,
+        "instituciones_educativas": 10,
+        "establecimientos_salud": 1
+      },
+      "movimientos_masa": {
+        "nivel": "Medio",
+        "viviendas": 4460,
+        "instituciones_educativas": 3,
+        "establecimientos_salud": 0
+      }
+    },
+    "040102": {
+      "distrito": "ALTO SELVA ALEGRE",
+      "inundacion": {
+        "nivel": "Alto",
+        "viviendas": 28679,
+        "instituciones_educativas": 109,
+        "establecimientos_salud": 10
+      },
+      "movimientos_masa": {
+        "nivel": "Medio",
+        "viviendas": 0,
+        "instituciones_educativas": 34,
+        "establecimientos_salud": 2
+      }
+    },
+    "040106": {
+      "distrito": "CHIGUATA",
+      "inundacion": {
+        "nivel": "Medio",
+        "viviendas": 886,
+        "instituciones_educativas": 5,
+        "establecimientos_salud": 1
+      },
+      "movimientos_masa": {
+        "nivel": "Medio",
+        "viviendas": 72,
+        "instituciones_educativas": 0,
+        "establecimientos_salud": 0
+      }
+    },
+    "040124": {
+      "distrito": "UCHUMAYO",
+      "inundacion": {
+        "nivel": "Alto",
+        "viviendas": 6244,
+        "instituciones_educativas": 25,
+        "establecimientos_salud": 4
+      },
+      "movimientos_masa": {
+        "nivel": "Alto",
+        "viviendas": 2140,
+        "instituciones_educativas": 8,
+        "establecimientos_salud": 1
+      }
+    },
+    "040122": {
+      "distrito": "SOCABAYA",
+      "inundacion": {
+        "nivel": "Muy alto",
+        "viviendas": 22822,
+        "instituciones_educativas": 87,
+        "establecimientos_salud": 10
+      },
+      "movimientos_masa": {
+        "nivel": "Medio",
+        "viviendas": 571,
+        "instituciones_educativas": 9,
+        "establecimientos_salud": 1
+      }
+    },
+    "040117": {
+      "distrito": "SACHACA",
+      "inundacion": {
+        "nivel": "Muy alto",
+        "viviendas": 7926,
+        "instituciones_educativas": 50,
+        "establecimientos_salud": 6
+      },
+      "movimientos_masa": {
+        "nivel": "Alto",
+        "viviendas": 7926,
+        "instituciones_educativas": 23,
+        "establecimientos_salud": 3
+      }
+    },
+    "040114": {
+      "distrito": "POLOBAYA",
+      "inundacion": {
+        "nivel": "Alto",
+        "viviendas": 318,
+        "instituciones_educativas": 6,
+        "establecimientos_salud": 1
+      },
+      "movimientos_masa": {
+        "nivel": "Alto",
+        "viviendas": 333,
+        "instituciones_educativas": 8,
+        "establecimientos_salud": 0
+      }
+    },
+    "040104": {
+      "distrito": "CERRO COLORADO",
+      "inundacion": {
+        "nivel": "Alto",
+        "viviendas": 80385,
+        "instituciones_educativas": 358,
+        "establecimientos_salud": 46
+      },
+      "movimientos_masa": {
+        "nivel": "Medio",
+        "viviendas": 1,
+        "instituciones_educativas": 35,
+        "establecimientos_salud": 8
+      }
+    },
+    "040123": {
+      "distrito": "TIABAYA",
+      "inundacion": {
+        "nivel": "Alto",
+        "viviendas": 4569,
+        "instituciones_educativas": 41,
+        "establecimientos_salud": 3
+      },
+      "movimientos_masa": {
+        "nivel": "Medio",
+        "viviendas": 42,
+        "instituciones_educativas": 11,
+        "establecimientos_salud": 2
+      }
+    },
+    "040116": {
+      "distrito": "SABANDIA",
+      "inundacion": {
+        "nivel": "Alto",
+        "viviendas": 1241,
+        "instituciones_educativas": 14,
+        "establecimientos_salud": 1
+      },
+      "movimientos_masa": {
+        "nivel": "Medio",
+        "viviendas": 1516,
+        "instituciones_educativas": 12,
+        "establecimientos_salud": 1
+      }
+    },
+    "040105": {
+      "distrito": "CHARACATO",
+      "inundacion": {
+        "nivel": "Alto",
+        "viviendas": 6675,
+        "instituciones_educativas": 40,
+        "establecimientos_salud": 5
+      },
+      "movimientos_masa": {
+        "nivel": "Medio",
+        "viviendas": 75,
+        "instituciones_educativas": 0,
+        "establecimientos_salud": 0
+      }
+    },
+    "040119": {
+      "distrito": "SAN JUAN DE TARUCANI",
+      "inundacion": {
+        "nivel": "Alto",
+        "viviendas": 377,
+        "instituciones_educativas": 10,
+        "establecimientos_salud": 2
+      },
+      "movimientos_masa": {
+        "nivel": "Medio",
+        "viviendas": 50,
+        "instituciones_educativas": 0,
+        "establecimientos_salud": 0
+      }
+    },
+    "040113": {
+      "distrito": "POCSI",
+      "inundacion": {
+        "nivel": "Alto",
+        "viviendas": 316,
+        "instituciones_educativas": 2,
+        "establecimientos_salud": 2
+      },
+      "movimientos_masa": {
+        "nivel": "Alto",
+        "viviendas": 368,
+        "instituciones_educativas": 4,
+        "establecimientos_salud": 2
+      }
+    },
+    "040101": {
+      "distrito": "AREQUIPA",
+      "inundacion": {
+        "nivel": "Muy alto",
+        "viviendas": 17997,
+        "instituciones_educativas": 350,
+        "establecimientos_salud": 180
+      },
+      "movimientos_masa": {
+        "nivel": "Bajo",
+        "viviendas": 0,
+        "instituciones_educativas": 13,
+        "establecimientos_salud": 10
+      }
+    },
+    "040107": {
+      "distrito": "JACOBO HUNTER",
+      "inundacion": {
+        "nivel": "Muy alto",
+        "viviendas": 13160,
+        "instituciones_educativas": 69,
+        "establecimientos_salud": 13
+      },
+      "movimientos_masa": {
+        "nivel": "Medio",
+        "viviendas": 91,
+        "instituciones_educativas": 8,
+        "establecimientos_salud": 2
+      }
+    },
+    "040126": {
+      "distrito": "YANAHUARA",
+      "inundacion": {
+        "nivel": "Muy alto",
+        "viviendas": 9033,
+        "instituciones_educativas": 49,
+        "establecimientos_salud": 86
+      },
+      "movimientos_masa": {
+        "nivel": "Medio",
+        "viviendas": 9033,
+        "instituciones_educativas": 8,
+        "establecimientos_salud": 8
+      }
+    },
+    "040108": {
+      "distrito": "LA JOYA",
+      "inundacion": {
+        "nivel": "Muy alto",
+        "viviendas": 20470,
+        "instituciones_educativas": 88,
+        "establecimientos_salud": 9
+      },
+      "movimientos_masa": {
+        "nivel": "Medio",
+        "viviendas": 1898,
+        "instituciones_educativas": 18,
+        "establecimientos_salud": 0
+      }
+    },
+    "040127": {
+      "distrito": "YARABAMBA",
+      "inundacion": {
+        "nivel": "Alto",
+        "viviendas": 600,
+        "instituciones_educativas": 6,
+        "establecimientos_salud": 2
+      },
+      "movimientos_masa": {
+        "nivel": "Medio",
+        "viviendas": 355,
+        "instituciones_educativas": 0,
+        "establecimientos_salud": 0
+      }
+    },
+    "040128": {
+      "distrito": "YURA",
+      "inundacion": {
+        "nivel": "Alto",
+        "viviendas": 33483,
+        "instituciones_educativas": 56,
+        "establecimientos_salud": 4
+      },
+      "movimientos_masa": {
+        "nivel": "Medio",
+        "viviendas": 28686,
+        "instituciones_educativas": 3,
+        "establecimientos_salud": 1
+      }
+    },
+    "040103": {
+      "distrito": "CAYMA",
+      "inundacion": {
+        "nivel": "Alto",
+        "viviendas": 33092,
+        "instituciones_educativas": 108,
+        "establecimientos_salud": 38
+      },
+      "movimientos_masa": {
+        "nivel": "Medio",
+        "viviendas": 24,
+        "instituciones_educativas": 8,
+        "establecimientos_salud": 6
+      }
+    },
+    "040129": {
+      "distrito": "JOSE LUIS BUSTAMANTE Y RIVERO",
+      "inundacion": {
+        "nivel": "Muy alto",
+        "viviendas": 23796,
+        "instituciones_educativas": 130,
+        "establecimientos_salud": 37
+      },
+      "movimientos_masa": {
+        "nivel": "Bajo",
+        "viviendas": 0,
+        "instituciones_educativas": 11,
+        "establecimientos_salud": 1
+      }
+    },
+    "040110": {
+      "distrito": "MIRAFLORES",
+      "inundacion": {
+        "nivel": "Alto",
+        "viviendas": 17800,
+        "instituciones_educativas": 96,
+        "establecimientos_salud": 20
+      },
+      "movimientos_masa": {
+        "nivel": "Medio",
+        "viviendas": 0,
+        "instituciones_educativas": 10,
+        "establecimientos_salud": 2
+      }
+    },
+    "040112": {
+      "distrito": "PAUCARPATA",
+      "inundacion": {
+        "nivel": "Alto",
+        "viviendas": 36020,
+        "instituciones_educativas": 187,
+        "establecimientos_salud": 75
+      },
+      "movimientos_masa": {
+        "nivel": "Medio",
+        "viviendas": 0,
+        "instituciones_educativas": 32,
+        "establecimientos_salud": 9
+      }
+    },
+    "040109": {
+      "distrito": "MARIANO MELGAR",
+      "inundacion": {
+        "nivel": "Alto",
+        "viviendas": 20548,
+        "instituciones_educativas": 91,
+        "establecimientos_salud": 12
+      },
+      "movimientos_masa": {
+        "nivel": "Bajo",
+        "viviendas": 0,
+        "instituciones_educativas": 7,
+        "establecimientos_salud": 1
+      }
+    },
+    "040111": {
+      "distrito": "MOLLEBAYA",
+      "inundacion": {
+        "nivel": "Alto",
+        "viviendas": 3838,
+        "instituciones_educativas": 15,
+        "establecimientos_salud": 2
+      },
+      "movimientos_masa": {
+        "nivel": "Bajo",
+        "viviendas": 205,
+        "instituciones_educativas": 2,
+        "establecimientos_salud": 0
+      }
+    }
+  }
+}

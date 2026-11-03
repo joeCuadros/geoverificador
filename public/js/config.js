@@ -74,6 +74,14 @@ const CONFIG = {
     jsonUrl: 'data/precios_m2_distrito.json',
   },
 
+  // Escenario de riesgo del CENEPRED ante El Niño 2026-2027 (inundaciones y movimientos en masa) por distrito: archivo congelado con
+  // scripts/descargar-riesgo-cenepred.mjs. Es INFORMATIVO: nunca cumple / no cumple ni puntaje, y es una estimación por distrito, no del predio.
+  cenepred: {
+    jsonUrl: 'data/riesgo_cenepred_fen2027.json',
+    fuente: 'Escenario de riesgo ante El Niño 2026-2027, CENEPRED (SIGRID)',
+    visorUrl: 'https://sigrid.cenepred.gob.pe/sigridv3/',
+  },
+
   // Peligros geológicos registrados: archivo local generado con scripts/descargar-peligros.mjs.
   peligros: {
     geojsonUrl: 'data/peligros_aqp.geojson',
