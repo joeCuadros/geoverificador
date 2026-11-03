@@ -103,12 +103,22 @@ const Volcan = (() => {
       const de = tipos.length ? `zona de ${lista(tipos.map(nombreTipo))}` : 'zona de peligro volcánico';
       return `${sujeto} no cae dentro de ninguna ${de} del Misti que mapeó el IGP. Eso no significa que no haya peligro.`;
     }
-    const partes = [];
-    for (const nivel of [...NIVELES].reverse()) {
-      const tipos = resumen.filter((r) => r.nivel === nivel).map((r) => (r.tipo === 'ceniza' ? 'ceniza volcánica (según el escenario de erupción)' : nombreTipo(r.tipo)));
-      if (tipos.length) partes.push(`${NIVEL_TEXTO[nivel]} por ${lista(tipos)}`);
-    }
-    return `${sujeto} está en zona de peligro ${lista(partes)} del Misti, según el IGP.`;
+    // The IGP ash layers do not state which volcano they model, so ash is never attributed to the Misti.
+    const CENIZA = 'ceniza volcánica (según el escenario de erupción)';
+    const AVISO_CENIZA = 'la capa de ceniza no indica de qué volcán es.';
+    const partesDe = (filas, etiqueta) => {
+      const partes = [];
+      for (const nivel of [...NIVELES].reverse()) {
+        const tipos = filas.filter((r) => r.nivel === nivel).map(etiqueta);
+        if (tipos.length) partes.push(`${NIVEL_TEXTO[nivel]} por ${lista(tipos)}`);
+      }
+      return partes;
+    };
+    const misti = partesDe(resumen.filter((r) => r.tipo !== 'ceniza'), (r) => nombreTipo(r.tipo));
+    const ceniza = partesDe(resumen.filter((r) => r.tipo === 'ceniza'), () => CENIZA);
+    if (misti.length === 0) return `${sujeto} está en zona de peligro ${lista(ceniza)}, según el IGP; ${AVISO_CENIZA}`;
+    const frase = `${sujeto} está en zona de peligro ${lista(misti)} del Misti, según el IGP.`;
+    return ceniza.length ? `${frase} También está en zona de peligro ${lista(ceniza)}; ${AVISO_CENIZA}` : frase;
   }
 
   /**

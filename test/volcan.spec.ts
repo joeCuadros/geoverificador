@@ -80,6 +80,13 @@ describe('Volcan.frasePunto: informativa, sin cumple ni puntaje', () => {
   it('la ceniza aclara que depende del escenario de erupción', () => {
     expect(Volcan.frasePunto(Volcan.resumirPunto([{ tipo: 'ceniza', nivel: 'moderado' }]))).toContain('ceniza volcánica (según el escenario de erupción)');
   });
+  it('la ceniza no se atribuye al Misti: la capa del IGP no indica de qué volcán es', () => {
+    const solo = Volcan.frasePunto(Volcan.resumirPunto([{ tipo: 'ceniza', nivel: 'moderado' }]));
+    expect(solo).not.toMatch(/Misti/);
+    expect(solo).toBe('Tu punto está en zona de peligro moderado por ceniza volcánica (según el escenario de erupción), según el IGP; la capa de ceniza no indica de qué volcán es.');
+    const mixto = Volcan.frasePunto(Volcan.resumirPunto([{ tipo: 'ceniza', nivel: 'alto' }, { tipo: 'lahar', nivel: 'bajo' }]));
+    expect(mixto).toBe('Tu punto está en zona de peligro bajo por lahares del Misti, según el IGP. También está en zona de peligro alto por ceniza volcánica (según el escenario de erupción); la capa de ceniza no indica de qué volcán es.');
+  });
   it('fuera de las zonas lo dice sin afirmar que no haya peligro', () => {
     const f = Volcan.frasePunto([]);
     expect(f).toMatch(/no cae dentro de ninguna zona de peligro volcánico/);

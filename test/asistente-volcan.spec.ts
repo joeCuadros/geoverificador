@@ -87,7 +87,7 @@ describe('Asistente.responder: volcán sobre el punto', () => {
 
   it('dice en qué zona cae, de dónde sale y los límites', () => {
     const r = pregunta('¿estoy en peligro por el Misti?');
-    expect(r.texto).toContain('Tu punto está en zona de peligro alto por ceniza volcánica (según el escenario de erupción) y bajo por lahares del Misti, según el IGP.');
+    expect(r.texto).toContain('Tu punto está en zona de peligro bajo por lahares del Misti, según el IGP. También está en zona de peligro alto por ceniza volcánica (según el escenario de erupción); la capa de ceniza no indica de qué volcán es.');
     expect(r.texto).toContain('• Lahares: peligro bajo.');
     expect(r.texto).toMatch(/escala regional/);
     expect(r.texto).toMatch(/sin fecha de elaboración/);
