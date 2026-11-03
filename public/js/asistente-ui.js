@@ -189,11 +189,14 @@ const AsistenteUI = (() => {
   }
 
   /** Los datos ya ordenados para dibujar entidades en el mapa (capas-ui.js). Los sismos son opcionales: sin archivo, la capa lo dice. */
-  async function datosParaMapa() {
+  async function datosParaMapa({ rutas = false } = {}) {
     const { zonas, datos, fecha, cauces } = await preparar();
     let sismos = null;
     try { sismos = Capas.sismosDeFeatures(await Contexto.sismosCrudos()); } catch (_) { sismos = null; }
-    return { datos, zonas, cauces, sismos, umbrales: umbrales(), fecha };
+    // Los recorridos de SmartBus pesan casi 5 MB: solo se bajan cuando hay líneas que dibujar. Si fallan, la capa lo dice.
+    let indiceRutas = null;
+    if (rutas) { try { indiceRutas = await Equipamiento.indiceRutas(); } catch (_) { indiceRutas = null; } }
+    return { datos, zonas, cauces, sismos, rutas: indiceRutas, umbrales: umbrales(), fecha };
   }
 
   /** Lo que el chat necesita para hablar de un distrito: sus polígonos, el conteo o el perfil y la fecha de los datos. */
@@ -345,6 +348,7 @@ const AsistenteUI = (() => {
         if (resp.mapa && api.alBuscar) {
           const nivelPedido = resp.mapa.capas.some((id) => Asistente.NIVELES_COLEGIO.includes(id));
           const capas = Capas.deCriterios(resp.mapa.capas.map((id) => ({ id }))).map((c) => (c.id === 'colegios' && !nivelPedido ? { id: 'colegios' } : c)); // «colegios» a secas son todos los niveles
+          if (resp.mapa.lineas) capas.push({ id: 'lineas', ...resp.mapa.lineas }); // líneas de bus: nombres de las líneas y, si hay, el punto
           api.alBuscar({ capas, distrito: resp.mapa.distrito, sectores: [] });
         }
       }

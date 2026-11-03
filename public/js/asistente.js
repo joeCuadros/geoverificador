@@ -765,6 +765,18 @@ const Asistente = (() => {
     if (q.sinDato) lineas.push('• Quebradas y ríos: no pude leer el archivo de la red de la ANA, así que no lo afirmo.');
     else if (q.nombres.length) lineas.push(`• Quebradas y ríos: lo cruzan ${listaEs(q.nombres.slice(0, 5))} (red de la ANA; no incluye todas las quebradas urbanas ni es un mapa de peligro).`);
     else lineas.push('• Quebradas y ríos: la red de la ANA no registra cauces en este distrito (no incluye todas las quebradas urbanas ni es un mapa de peligro).');
+    // Líneas de SmartBus que cruzan el distrito y precio de oferta por m² (Aptología, solo 3 distritos): se agregan solo si hay dato; nada inventado.
+    const rd = c.rutasDistrito;
+    if (rd && !rd.error && rd.res) {
+      const ls = rd.res.lineas;
+      lineas.push(ls.length
+        ? `• Líneas de transporte (SmartBus): ${plural(ls.length, 'línea cruza', 'líneas cruzan')} el distrito: ${RT.listaTexto(ls, MAX_LINEAS_TEXTO)}.`
+        : '• Líneas de transporte (SmartBus): ninguna de las líneas publicadas cruza el distrito.');
+    }
+    const pr = c.precios ? P.buscar(c.precios, intencion.distrito) : null;
+    if (pr && pr.estado === 'INFORMATIVO' && pr.precioM2.venta !== null) {
+      lineas.push(`• Precio de oferta (Aptología, ${P.textoPeriodo(pr.periodo)}): ${soles(pr.precioM2.venta)} por m² (mediana de ${pr.nAvisos.venta} avisos de departamentos en venta; es lo que piden, no lo que se paga).`);
+    }
     lineas.push(PREGUNTA_PRIORIDAD);
     return { texto: lineas.join('\n'), sugerencias: botonesDePrioridad(t), mapa: { distrito: intencion.distrito, capas: [] } };
   }
@@ -883,6 +895,15 @@ const Asistente = (() => {
     ].join('\n');
   }
 
+  /**
+   * Qué dibujar para una respuesta de líneas: los recorridos de las líneas halladas y, con un punto, su parada más cercana. null si no
+   * hay ninguna (no se pinta nada). Los recorridos salen del archivo de SmartBus, que solo se carga cuando se va a dibujar.
+   */
+  function mapaDeLineas(res, distrito, punto) {
+    if (!res || res.error || !Array.isArray(res.lineas) || res.lineas.length === 0) return null;
+    return { distrito, capas: [], lineas: { nombres: res.lineas.map((l) => l.linea), punto: punto ? { lat: punto.lat, lon: punto.lon } : null } };
+  }
+
   const TEXTO_FUENTES = [
     'De dónde sale cada cosa:',
     '• Zonificación: plano y reglamento del PDM Arequipa 2016-2025 (O.M. 961-MPA, con la zonificación restituida por la 975-MPA). Es referencial.',
@@ -971,10 +992,11 @@ const Asistente = (() => {
       if (intencion.distrito) {
         const t = c.distritoTitulo || Dist().titulo(intencion.distrito);
         if (intencion.distritoFuera) return fin(textoDistritoFuera(t), SUGERENCIAS_BASE);
-        return { ...fin(textoRutasDistrito(c.rutasDistrito, t), ['¿Qué buses pasan por aquí?', `Cuéntame de ${t}`]), mapa: { distrito: intencion.distrito, capas: [], rutas: true } };
+        return { ...fin(textoRutasDistrito(c.rutasDistrito, t), ['¿Qué buses pasan por aquí?', `Cuéntame de ${t}`]), mapa: mapaDeLineas(c.rutasDistrito && c.rutasDistrito.res, intencion.distrito, null) };
       }
       if (!c.punto) return fin('Elige un punto en el mapa para ver qué líneas pasan cerca, o pregúntame por un distrito: «¿qué líneas pasan por Paucarpata?».', SUGERENCIAS_BASE);
-      return fin(textoRutasPunto(c.entorno && c.entorno.transporte && c.entorno.transporte.rutas), ['Dame un resumen del punto', '¿Hay un paradero cerca?']);
+      const rp = c.entorno && c.entorno.transporte && c.entorno.transporte.rutas;
+      return { ...fin(textoRutasPunto(rp), ['Dame un resumen del punto', '¿Hay un paradero cerca?']), mapa: mapaDeLineas(rp, null, c.punto) };
     }
     if (tipo === 'precio') return fin(textoPrecio(intencion, c), SUGERENCIAS_PRECIO);
 

@@ -19,7 +19,7 @@ const CapasUI = (() => {
   };
   const LETRA = { inicial: 'I', primaria: 'P', secundaria: 'S', salud: '+', paradero: 'B' };
 
-  let api = null; // { map, datos(): Promise<{ datos, zonas, cauces, sismos, umbrales, fecha }>, alCambiar? }
+  let api = null; // { map, datos(opciones: { rutas }): Promise<{ datos, zonas, cauces, sismos, rutas, umbrales, fecha }>, mapaVisible? }
   let grupo = null;
   let activas = []; // capas elegidas con los chips: [{ id }]
   let contexto = null; // lo que vino del chat: { capas, distrito, sectores }
@@ -65,6 +65,31 @@ const CapasUI = (() => {
     return L.circleMarker([p.lat, p.lon], { renderer: renderers.puntos, radius: 4.5, color: '#fff', weight: 1, fillColor: c, fillOpacity: 0.95 }).bindPopup(popup(p.titulo, p.detalle, p.osm));
   }
 
+  /** El punto medio del tramo más largo de una línea: ahí va su etiqueta (la línea se reconoce sin depender del color). */
+  function puntoDeEtiqueta(partes) {
+    const parte = partes.reduce((a, b) => (b.length > a.length ? b : a), partes[0]);
+    const [x, y] = parte[Math.floor(parte.length / 2)];
+    return [y, x];
+  }
+
+  function dibujarLineasDeBus(r) {
+    r.lineasBus.forEach((l) => {
+      const nombre = Rutas.etiquetaLinea(l);
+      const detalle = `Recorrido publicado por SmartBus (${l.ramales.length} ${l.ramales.length === 1 ? 'sentido o ramal' : 'sentidos y ramales'}). Sin frecuencias ni horarios.`;
+      l.partes.forEach((parte) => {
+        L.polyline(parte.map(([x, y]) => [y, x]), { color: l.color, weight: 4, opacity: 0.85, pane: 'capasLineas' }).bindPopup(popup(`Línea ${nombre}`, detalle, null)).addTo(grupo);
+      });
+      L.marker(puntoDeEtiqueta(l.partes), {
+        icon: L.divIcon({ className: 'bus-etiqueta', html: `<span style="background:${l.color}">${esc(l.linea)}</span>`, iconSize: [40, 20], iconAnchor: [20, 10] }),
+        title: `Línea ${nombre}`, keyboard: false, pane: 'capasPuntos',
+      }).bindPopup(popup(`Línea ${nombre}`, detalle, null)).addTo(grupo);
+    });
+    r.paradasBus.forEach((p) => {
+      L.circleMarker([p.lat, p.lon], { radius: 8, color: '#fff', weight: 2.5, fillColor: p.color, fillOpacity: 1, pane: 'capasPuntos' })
+        .bindPopup(popup(`Parada más cercana de la línea ${p.linea}`, `${p.nombre} · a ${Math.round(p.distanciaM)} m de tu punto (en línea recta)`, null)).addTo(grupo);
+    });
+  }
+
   function dibujar(r) {
     grupo.clearLayers();
     sectorCapas.clear();
@@ -90,6 +115,7 @@ const CapasUI = (() => {
         title: `Sector ${s.n}`, keyboard: false, pane: 'capasPuntos',
       }).bindPopup(`<strong>Sector ${s.n}</strong>${s.nombre ? `<br>Cerca de ${esc(s.nombre)}` : ''}`).addTo(grupo);
     });
+    dibujarLineasDeBus(r);
     const iconos = r.puntos.length <= MAX_ICONOS;
     r.puntos.forEach((p) => (iconos ? marcador(p) : circuloLienzo(p)).addTo(grupo));
     r.sismos.forEach((s) => {
@@ -135,12 +161,20 @@ const CapasUI = (() => {
 
   function dibujarLeyenda(r, fecha) {
     $('leyenda-resumen').textContent = r.resumen;
-    $('leyenda-estados').innerHTML = r.leyenda.map((l) => `<li class="ley-item"><span class="muestra-ent" aria-hidden="true">${muestraDe(l.capa)}</span><span class="ley-txt">${esc(l.texto)}</span></li>`).join('')
-      + r.sinDatos.map((c) => `<li class="ley-item leyenda-error"><span class="ley-txt">No pude leer el archivo de ${c === 'sismos' ? 'sismos' : 'quebradas'}, así que no lo dibujo.</span></li>`).join('');
+    const itemDe = (l) => {
+      if (l.capa !== 'lineas') return `<li class="ley-item"><span class="muestra-ent" aria-hidden="true">${muestraDe(l.capa)}</span><span class="ley-txt">${esc(l.texto)}</span></li>`;
+      // Una fila por línea, con su color y su nombre: el color solo no basta, la etiqueta del mapa lleva el mismo nombre.
+      const filas = r.lineasBus.map((b) => `<li class="ley-item"><span class="muestra-ent" aria-hidden="true"><span class="mu-linea-bus" style="background:${b.color}"></span></span><span class="ley-txt">Línea ${esc(Rutas.etiquetaLinea(b))}</span></li>`);
+      if (r.paradasBus.length) filas.push('<li class="ley-item"><span class="muestra-ent" aria-hidden="true"><span class="mu-parada-bus"></span></span><span class="ley-txt">Parada más cercana de cada línea (círculo del color de la línea)</span></li>');
+      return filas.join('');
+    };
+    $('leyenda-estados').innerHTML = r.leyenda.map(itemDe).join('')
+      + r.sinDatos.map((c) => `<li class="ley-item leyenda-error"><span class="ley-txt">${c === 'lineas' ? 'No pude leer los recorridos de SmartBus, así que no los dibujo.' : `No pude leer el archivo de ${c === 'sismos' ? 'sismos' : 'quebradas'}, así que no lo dibujo.`}</span></li>`).join('');
     const fuentes = [];
     if (r.leyenda.some((l) => ['colegios', 'salud', 'paraderos', 'parques'].includes(l.capa))) fuentes.push(`Colegios, salud, paraderos y parques: OpenStreetMap (ODbL), ${fecha || 'sin fecha'}. Puede faltar alguno.`);
     if (r.leyenda.some((l) => ['residencial', 'tranquilo', 'campina', 'comercial', 'historico'].includes(l.capa))) fuentes.push('Zonas: plano del PDM Arequipa 2016-2025 (referencial).');
     if (r.leyenda.some((l) => l.capa === 'quebradas')) fuentes.push('Quebradas y ríos: red hidrográfica de la ANA; no incluye todas las quebradas urbanas ni es un mapa de peligro.');
+    if (r.leyenda.some((l) => l.capa === 'lineas')) fuentes.push('Líneas de bus: Rutas: SmartBus (smartbus.app), recorridos publicados usados con autorización verbal; sin frecuencias ni horarios. La parada es la más cercana en línea recta.');
     if (r.leyenda.some((l) => l.capa === 'sismos')) fuentes.push('Sismos: Instituto Geofísico del Perú; actividad reciente reportada, no una predicción.');
     $('leyenda-filas').innerHTML = fuentes.map((f) => `<li><small>${esc(f)}</small></li>`).join('');
     $('leyenda-pie').textContent = r.sectores.length ? 'Los bordes de los sectores son aproximados. Distancias en línea recta.' : 'Distancias en línea recta.';
@@ -160,12 +194,12 @@ const CapasUI = (() => {
     $('leyenda-resumen').textContent = 'Preparando el mapa…';
     $('leyenda').hidden = false;
     try {
-      const d = await api.datos();
+      const d = await api.datos({ rutas: capas.some((c) => c.id === 'lineas') });
       if (mia !== secuencia) return;
       const distrito = contexto && contexto.distrito;
       const polys = distrito ? Distritos.poligonos(distrito) : null;
       const r = Capas.construir({
-        capas, datos: d.datos, zonas: d.zonas, cauces: d.cauces, sismos: d.sismos, umbrales: d.umbrales,
+        capas, datos: d.datos, zonas: d.zonas, cauces: d.cauces, sismos: d.sismos, rutas: d.rutas, umbrales: d.umbrales,
         area: polys && polys.length ? { polys } : null, sectores: contexto && contexto.sectores && contexto.sectores.length ? contexto.sectores : null,
       });
       ultimo = r;

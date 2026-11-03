@@ -100,6 +100,34 @@ describe('Resumen.punto', () => {
   });
 });
 
+describe('Resumen.punto: líneas de SmartBus', () => {
+  const conRutas = (rutas: unknown) => Resumen.punto({ ...base, entorno: { ...entorno, transporte: { ...entorno.transporte, rutas } } });
+  const lineas = [{ linea: 'C2', empresas: ['Cono Norte'] }, { linea: 'C5', empresas: ['EtraBus'] }];
+
+  it('suma «Pasan N líneas a menos de 400 m: …» a la línea de lo que tienes cerca', () => {
+    const s = conRutas({ distanciaM: 400, lineas });
+    expect(s.texto).toContain('Pasan 2 líneas a menos de 400 m: C2 (Cono Norte), C5 (EtraBus).');
+    expect(s.lineas).toHaveLength(3); // sigue siendo un resumen de tres líneas
+  });
+
+  it('una sola línea va en singular', () => {
+    expect(conRutas({ distanciaM: 400, lineas: lineas.slice(0, 1) }).texto).toContain('Pasa 1 línea a menos de 400 m: C2 (Cono Norte).');
+  });
+
+  it('si ninguna pasa, lo dice; si no se calcularon o fallaron, no dice nada', () => {
+    expect(conRutas({ distanciaM: 400, lineas: [] }).texto).toContain('Ninguna línea de SmartBus pasa a menos de 400 m.');
+    expect(conRutas(null).texto).not.toMatch(/línea/i);
+    expect(conRutas({ error: 'sin archivo', lineas: [], distanciaM: 400 }).texto).not.toMatch(/línea/i);
+    expect(Resumen.punto(base).texto).not.toMatch(/SmartBus/);
+  });
+
+  it('con muchas líneas recorta la lista y dice cuántas más hay', () => {
+    const muchas = Array.from({ length: 9 }, (_: unknown, i: number) => ({ linea: `L${i + 1}`, empresas: ['X'] }));
+    expect(conRutas({ distanciaM: 400, lineas: muchas }).texto).toContain('Pasan 9 líneas a menos de 400 m: L1 (X)');
+    expect(conRutas({ distanciaM: 400, lineas: muchas }).texto).toContain('y 3 más');
+  });
+});
+
 describe('Resumen.verificar', () => {
   it('lista los trámites por su nombre corto para el chat', () => {
     const v = Resumen.verificar([{ titulo: 'Certificado de Zonificación', entidad: 'IMPLA' }, { titulo: 'Búsqueda en SUNARP', entidad: 'SUNARP' }]);

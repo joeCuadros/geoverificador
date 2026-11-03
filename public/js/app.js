@@ -1687,7 +1687,7 @@
       return 'Todavía no puedo guardarlo: espera a que termine de calcular el punto o revisa si ya tienes el máximo de puntos guardados.';
     },
   });
-  CapasUI.iniciar({ map, datos: () => AsistenteUI.datosParaMapa(), mapaVisible: () => EspacioUI.mapaVisible() });
+  CapasUI.iniciar({ map, datos: (opciones) => AsistenteUI.datosParaMapa(opciones), mapaVisible: () => EspacioUI.mapaVisible() });
   EspacioUI.iniciar({ map, enfocarPunto: () => $(PASO_TITULO[state.flujo.paso]) });
 
   // ------------------------------------------------------------- Comparar puntos

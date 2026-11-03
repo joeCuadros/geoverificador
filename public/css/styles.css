@@ -1354,6 +1354,11 @@ summary { -webkit-tap-highlight-color: transparent; }
 .mu-paradero { background: #3b4a5a; border-radius: 8px 8px 3px 3px; }
 .mu-bloque { display: inline-block; width: 20px; height: 12px; border-radius: 2px; opacity: .55; }
 .mu-linea { display: inline-block; width: 24px; height: 3px; background: #1f6fb2; border-radius: 2px; }
+.mu-linea-bus { display: inline-block; width: 24px; height: 4px; border-radius: 2px; }
+.mu-parada-bus { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: #555; border: 2px solid #fff; box-shadow: 0 0 0 1px #555; }
+.bus-etiqueta { background: none; border: 0; }
+.bus-etiqueta span { display: block; width: 40px; line-height: 20px; text-align: center; border-radius: 10px; color: #fff; font: 800 .75rem/20px var(--font-body, system-ui, sans-serif); border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .45); box-sizing: border-box; text-shadow: 0 0 2px rgba(0, 0, 0, .55); }
+@media (forced-colors: active) { .bus-etiqueta span { forced-color-adjust: none; } }
 .mu-sismo { display: inline-block; width: 14px; height: 14px; border-radius: 50%; border: 2px solid #c2570c; background: rgba(194, 87, 12, .25); }
 .mu-sector { display: inline-block; width: 22px; height: 14px; border-radius: 4px; border: 3px solid #0b5d4f; background: rgba(11, 93, 79, .22); }
 .ley-txt { font-size: .9375rem; line-height: 1.3; }

@@ -9,6 +9,7 @@
  *   residencial, tranquilo, campina, comercial, historico → solo los polígonos de esas zonas del plano
  *   quebradas   → líneas (red hidrográfica de la ANA)
  *   sismos      → círculos pequeños, más grandes cuanto mayor la magnitud
+ *   lineas      → recorridos de bus de SmartBus (un color por línea) y, con un punto, la parada más cercana de cada una
  * Con una búsqueda se dibujan las entidades que hacen que cada sector cumpla, y UNA región resaltada: los sectores donde se
  * cumple todo lo que pidió. No se pinta lo que no cumple y no se ve la cuadrícula.
  *
@@ -16,6 +17,7 @@
  */
 const Capas = (() => {
   const A = () => (typeof Asistente !== 'undefined' ? Asistente : require('./asistente.js')); // eslint-disable-line no-undef
+  const R = () => (typeof Rutas !== 'undefined' ? Rutas : require('./rutas.js')); // eslint-disable-line no-undef
   const E = () => (typeof Entidades !== 'undefined' ? Entidades : require('./entidades.js')); // eslint-disable-line no-undef
   const C = typeof Calculos !== 'undefined' ? Calculos : require('./calculos.js'); // eslint-disable-line no-undef
   const M_POR_GRADO = (Math.PI / 180) * C.RADIO_TIERRA_M;
@@ -116,10 +118,11 @@ const Capas = (() => {
    *   capas:    [{ id, niveles?, umbralM?, umbralPorNivel? }] (ver deCriterios)
    *   datos:    Asistente.prepararDatos; zonas: Zonificacion.zonas(); cauces: [{ nombre, tipo, geometry }] o null; sismos: [{ lat, lon, magnitud, … }] o null
    *   area:     { polys } (un distrito), { bbox } o null (todo el mapa)
+   rutas:    el índice de Rutas.indexar; solo hace falta (y solo se carga) si hay una capa { id: 'lineas', nombres:[…], punto?}
    *   sectores: los de Asistente.formatearBusqueda (con `centros`); si hay, solo se dibujan las entidades que los hacen cumplir
-   * Devuelve { puntos, circulos, poligonos, lineas, sismos, sectores, leyenda, vacias, sinDatos, resumen, limites }.
+   * Devuelve { puntos, circulos, poligonos, lineas, sismos, sectores, lineasBus, paradasBus, leyenda, vacias, sinDatos, resumen, limites }.
    */
-  function construir({ capas, datos, zonas, cauces, sismos, area = null, umbrales, sectores = null, maxCirculos = 12 }) {
+  function construir({ capas, datos, zonas, cauces, sismos, area = null, umbrales, sectores = null, rutas = null, maxCirculos = 12 }) {
     const polys = area && area.polys ? area.polys : null;
     const cajaArea = polys ? bboxDePolys(polys) : area && area.bbox ? area.bbox : null;
     const dentroPoligonos = polys ? E().contenedor(polys) : null;
@@ -137,6 +140,9 @@ const Capas = (() => {
     const poligonos = [];
     const lineas = [];
     const sism = [];
+    let lineasBus = [];
+    let paradasBus = [];
+    let cajaLineas = null;
     const leyenda = [];
     const vacias = [];
     const sinDatos = [];
@@ -147,7 +153,7 @@ const Capas = (() => {
       colegios: ['colegio', 'colegios'], salud: ['establecimiento de salud', 'establecimientos de salud'], paraderos: ['paradero', 'paraderos'], parques: ['parque', 'parques'],
       residencial: ['zona residencial', 'zonas residenciales'], tranquilo: ['zona tranquila', 'zonas tranquilas'], campina: ['zona de campiña', 'zonas de campiña'],
       comercial: ['zona comercial', 'zonas comerciales'], historico: ['zona del centro histórico', 'zonas del centro histórico'],
-      quebradas: ['tramo de quebrada o río', 'tramos de quebradas y ríos'], sismos: ['sismo', 'sismos'], sectores: ['sector', 'sectores'],
+      quebradas: ['tramo de quebrada o río', 'tramos de quebradas y ríos'], sismos: ['sismo', 'sismos'], lineas: ['línea de bus', 'líneas de bus'], sectores: ['sector', 'sectores'],
     };
     const nombreDe = (capa, n) => NOMBRES[capa][n === 1 ? 0 : 1];
     const cuenta = (capa, n, texto) => {
@@ -223,6 +229,16 @@ const Capas = (() => {
         const elegidos = cauces.filter((q) => coordsDe(q.geometry).some(([x, y]) => enArea(y, x)));
         elegidos.forEach((q) => lineas.push({ capa: 'quebradas', geometry: q.geometry, nombre: q.nombre, tipo: q.tipo, titulo: q.nombre || 'Cauce sin nombre', detalle: q.tipo || 'Red hidrográfica de la ANA' }));
         cuenta('quebradas', elegidos.length, `Quebradas y ríos (red de la ANA): ${elegidos.length} ${elegidos.length === 1 ? 'tramo' : 'tramos'}`);
+      } else if (id === 'lineas') {
+        if (!rutas) { sinDatos.push('lineas'); return; }
+        const m = R().paraMapa(rutas, capa.nombres || [], capa.punto || null);
+        lineasBus = m.trazos;
+        paradasBus = m.paradas;
+        // Con un punto se encuadra el punto y las paradas más cercanas; sin él, los trazados (o el distrito, si lo hay).
+        if (capa.punto) cajaLineas = bboxDe([[capa.punto.lon, capa.punto.lat], ...m.paradas.map((p) => [p.lon, p.lat])]);
+        else cajaLineas = m.bbox;
+        const etiquetas = m.trazos.map((t) => R().etiquetaLinea(t));
+        cuenta('lineas', m.trazos.length, `Líneas de bus de SmartBus: ${etiquetas.join(', ')}${m.paradas.length ? `; con la parada más cercana de cada una (${m.paradas.length})` : ''}`);
       } else if (id === 'sismos') {
         if (!Array.isArray(sismos)) { sinDatos.push('sismos'); return; }
         sismos.forEach((s) => sism.push({ ...s, radioPx: sismoRadioPx(s.magnitud) }));
@@ -242,6 +258,7 @@ const Capas = (() => {
       limites = bboxDe(regiones.flatMap((s) => s.contorno.flatMap((a) => a)));
       limites = unir(limites, bboxDe(puntos.map((p) => [p.lon, p.lat])));
     } else if (cajaArea) limites = cajaArea;
+    else if (cajaLineas && valido(cajaLineas) && puntos.length === 0 && poligonos.length === 0) limites = cajaLineas;
     else {
       const todos = [...puntos.map((p) => [p.lon, p.lat]), ...poligonos.flatMap((p) => coordsDe(p.geometry))];
       limites = todos.length ? bboxDe(todos) : null;
@@ -253,7 +270,7 @@ const Capas = (() => {
       : vacias.length && !leyenda.length
       ? `En esta zona no hay ${vacias.map((v) => ({ colegios: 'colegios', salud: 'establecimientos de salud', paraderos: 'paraderos', parques: 'parques' }[v] || v)).join(' ni ')} en los datos.`
       : `Muestro ${listaEs(leyenda.map((l) => `${l.n} ${nombreDe(l.capa, l.n)}`))}.${vacias.length ? ` No hay ${listaEs(vacias.map((v) => nombreDe(v, 2)))} en esta zona.` : ''}`;
-    return { puntos, circulos, poligonos, lineas, sismos: sism, sectores: regiones, leyenda, vacias, sinDatos, resumen, limites };
+    return { puntos, circulos, poligonos, lineas, sismos: sism, sectores: regiones, lineasBus, paradasBus, leyenda, vacias, sinDatos, resumen, limites };
   }
 
   /** Los sismos del archivo GeoJSON del IGP como lista simple { lat, lon, magnitud, fecha, profundidadKm, ref }; ignora lo que no es un punto con magnitud. */

@@ -11,6 +11,7 @@
  * Se carga como script del navegador (define `Resumen`) y también como módulo CommonJS para las pruebas.
  */
 const Resumen = (() => {
+  const RT = () => (typeof Rutas !== 'undefined' ? Rutas : require('./rutas.js')); // eslint-disable-line no-undef
   const D = () => (typeof Distritos !== 'undefined' ? Distritos : require('./distritos.js')); // eslint-disable-line no-undef
 
   /** «351 m», «1,04 km» (dos decimales: así se compara con la ficha). */
@@ -55,6 +56,18 @@ const Resumen = (() => {
   const sinDato = (r) => !r || r.estado === 'SIN DATO' || r.error;
 
   /**
+   * Las líneas de SmartBus que pasan cerca, en una frase («Pasan 2 líneas a menos de 400 m: C2 (Cono Norte), C5 (EtraBus).»), o
+   * null si no se calcularon o no se pudieron leer: no se dice nada que no se sepa.
+   */
+  function frasePasanLineas(rutas) {
+    if (!rutas || rutas.error || !Array.isArray(rutas.lineas) || !Number.isFinite(rutas.distanciaM)) return null;
+    const ref = fmtRef(rutas.distanciaM);
+    const n = rutas.lineas.length;
+    if (n === 0) return `Ninguna línea de SmartBus pasa a menos de ${ref}.`;
+    return `${n === 1 ? 'Pasa 1 línea' : `Pasan ${n} líneas`} a menos de ${ref}: ${RT().listaTexto(rutas.lineas, 6)}.`;
+  }
+
+  /**
    * El resumen de un punto. `entorno` es el resultado de Equipamiento.evaluar; `cauce`, el de Contexto.quebradas; `zona`, el de
    * Zonificacion.lookup (o null fuera del plano).
    */
@@ -87,7 +100,9 @@ const Resumen = (() => {
     [s.transporte, s.areaVerde].forEach((i) => { if (cumple(i.r)) partesCerca.push(`${i.nombre} a ${fmt(i.r.distanciaM)} ✓`); });
 
     const l0 = dondeEstas({ distrito, zona });
-    const l1 = partesCerca.length ? `Cerca tienes: ${partesCerca.join(', ')}.` : 'No tienes ninguno de los servicios a la distancia de referencia.';
+    const cercaTexto = partesCerca.length ? `Cerca tienes: ${partesCerca.join(', ')}.` : 'No tienes ninguno de los servicios a la distancia de referencia.';
+    const pasan = frasePasanLineas(entorno.transporte && entorno.transporte.rutas);
+    const l1 = pasan ? `${cercaTexto} ${pasan}` : cercaTexto;
     const partes2 = [];
     if (lejos.length) partes2.push(`Más lejos de lo recomendado: ${lejos.join(', ')}.`);
     if (faltan.length) partes2.push(`Sin dato de: ${lista(faltan)}; eso no significa que no existan.`);
@@ -102,7 +117,7 @@ const Resumen = (() => {
     return ['Antes de comprar, verifica por tu cuenta:', ...(items || []).map((i) => `• ${i.titulo} (${i.entidad})`), 'GeoVerificador es referencial y no reemplaza ninguno de estos trámites.'].join('\n');
   }
 
-  return { punto, verificar, fmt, AVISO };
+  return { punto, verificar, frasePasanLineas, fmt, AVISO };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = Resumen;

@@ -211,6 +211,53 @@ const Rutas = (() => {
     return out;
   }
 
+  // Un color por línea para dibujarlas en el mapa. Se asigna por la posición de la línea en el orden natural de TODAS las líneas del
+  // archivo, así C2 es siempre del mismo color sin importar cuáles se pidan. Son distintos entre sí y de los verdes de los parques.
+  const COLORES = ['#d62728', '#1f77b4', '#ff7f0e', '#9467bd', '#17becf', '#8c564b', '#e377c2', '#bcbd22', '#a6761d', '#6a3d9a', '#e7298a', '#005f73'];
+
+  /** Color estable de una línea del archivo. */
+  function colorDe(indice, linea) {
+    const orden = [...indice.lineas].sort(compararLineas);
+    const i = orden.indexOf(linea);
+    return COLORES[(i < 0 ? 0 : i) % COLORES.length];
+  }
+
+  /**
+   * Lo necesario para dibujar líneas en un mapa: el trazado de cada línea pedida (todos sus recorridos) con su color, y, si hay un
+   * punto, la parada de SmartBus más cercana a él de cada línea. Los nombres que no existen en el archivo se ignoran.
+   * Devuelve { trazos, paradas, bbox } con
+   *   trazos:  [{ linea, empresas, color, partes: [[[lon, lat], …]], ramales: [{ ramal, sentido, nombre }] }]  (orden natural)
+   *   paradas: [{ linea, color, nombre, ramal, lat, lon, distanciaM }]
+   */
+  function paraMapa(indice, nombres, punto = null) {
+    const pedidas = [...new Set(nombres || [])].filter((n) => indice.lineas.includes(n)).sort(compararLineas);
+    const trazos = pedidas.map((linea) => {
+      const recorridos = indice.rutas.filter((r) => r.props.linea === linea);
+      return {
+        linea,
+        empresas: [...new Set(recorridos.map((r) => r.props.empresa))].sort((a, b) => a.localeCompare(b, 'es')),
+        color: colorDe(indice, linea),
+        partes: recorridos.flatMap((r) => r.partes),
+        ramales: recorridos.map((r) => ({ ramal: r.props.ramal, sentido: r.props.sentido || null, nombre: r.props.nombre })),
+        ids: new Set(recorridos.map((r) => r.props.id_ruta)),
+      };
+    });
+    const paradas = [];
+    if (punto) {
+      trazos.forEach((t) => {
+        let mejor = null;
+        indice.paradas.forEach((s) => {
+          if (s.props.linea !== t.linea || !t.ids.has(s.props.id_ruta)) return;
+          const d = C.haversine(punto.lat, punto.lon, s.lat, s.lon);
+          if (!mejor || d < mejor.distanciaM) mejor = { linea: t.linea, color: t.color, nombre: s.props.nombre, ramal: s.props.ramal, lat: s.lat, lon: s.lon, distanciaM: d };
+        });
+        if (mejor) paradas.push(mejor);
+      });
+    }
+    const bbox = bboxDe(trazos.flatMap((t) => t.partes));
+    return { trazos: trazos.map(({ ids, ...resto }) => resto), paradas, bbox: Number.isFinite(bbox[0]) ? bbox : null };
+  }
+
   const fmtDist = (m) => (m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(1).replace('.', ',')} km`);
 
   /** «C2 (Cono Norte), C5 (EtraBus)»; con `max`, agrega «y N más». */
@@ -226,7 +273,7 @@ const Rutas = (() => {
     return `Líneas que pasan a ≤${Math.round(res.distanciaM)} m: ${listaTexto(res.lineas, max)}`;
   }
 
-  return { FUENTE, ATRIBUCION, indexar, cerca, cruzan, etiquetaLinea, listaTexto, resumen, compararLineas, fmtDist };
+  return { FUENTE, ATRIBUCION, indexar, cerca, cruzan, paraMapa, colorDe, COLORES, etiquetaLinea, listaTexto, resumen, compararLineas, fmtDist };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = Rutas;
