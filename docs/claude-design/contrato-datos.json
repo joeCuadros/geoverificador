@@ -1,0 +1,260 @@
+{
+  "version": "0.1",
+  "muestra": true,
+  "nota": "DATOS DE EJEMPLO para diseñar pantallas realistas. Los lugares, personas, pesos y resultados son ilustrativos: no representan hogares reales ni cálculos reales de una consulta. Las cifras de zonificación y de servicios imitan la forma de las salidas reales del sistema. Marcar siempre 'ejemplo' en los prototipos.",
+
+  "perfil_hogar": {
+    "id": "hogar_demo",
+    "miembros": [
+      { "id": "ana", "nombre": "Ana", "rol": "adulta" },
+      { "id": "luis", "nombre": "Luis", "rol": "adulto" },
+      { "id": "sofia", "nombre": "Sofía", "rol": "hija", "edad": 9, "nivel_escolar": "primaria" }
+    ],
+    "tipo_vivienda": "departamento",
+    "anclas": [
+      {
+        "id": "ancla_trabajo_ana",
+        "miembro": "ana",
+        "tipo": "trabajo",
+        "etiqueta": "Trabajo de Ana",
+        "ubicacion": { "lat": -16.3988, "lon": -71.5369, "precision": "aproximada" },
+        "modo": "auto",
+        "ventana": { "dias": "lun-vie", "salida": "07:30" },
+        "max_tolerado_min": 30,
+        "peso": null
+      },
+      {
+        "id": "ancla_colegio_sofia",
+        "miembro": "sofia",
+        "tipo": "colegio",
+        "etiqueta": "Colegio de Sofía",
+        "ubicacion": { "lat": -16.3871, "lon": -71.5442, "precision": "aproximada" },
+        "modo": "auto",
+        "ventana": { "dias": "lun-vie", "salida": "07:00" },
+        "max_tolerado_min": 15,
+        "peso": null
+      }
+    ],
+    "privacidad": {
+      "direcciones_salen_del_dispositivo": false,
+      "el_llm_ve": ["id de ancla", "tiempo derivado en minutos", "modo"]
+    }
+  },
+
+  "restricciones_duras": [
+    { "id": "excluir_riesgo", "descripcion": "Excluir zonas de riesgo muy alto o alto del plano", "codigos": ["ZRE-RI1", "ZRE-RI2"], "activa": true },
+    { "id": "solo_construible", "descripcion": "Solo zonas donde el plano permite construir", "activa": true },
+    { "id": "presupuesto_distrital", "descripcion": "Presupuesto máximo (contexto distrital de precios de oferta)", "monto_pen": null, "activa": false }
+  ],
+
+  "preferencias": {
+    "grupos_orden": ["movilidad", "servicios", "entorno", "norma_precio"],
+    "criterios": [
+      {
+        "id": "colegio_primaria",
+        "grupo": "servicios",
+        "unidad": "m",
+        "ideal": 1500,
+        "ideal_fuente": "MINEDU, Instructivo FTE, Cuadro N.° 4 (RVM 208-2019)",
+        "max_tolerable": null,
+        "max_tolerable_origen": "pendiente: lo elige la persona",
+        "contexto_max": "Los estudios sitúan entre 1 y 3 km el punto en que más desalienta caminar al colegio (Rashidi et al., 2025)",
+        "peso": 0.22,
+        "metodo_peso": "swing"
+      },
+      {
+        "id": "area_verde",
+        "grupo": "entorno",
+        "unidad": "m",
+        "ideal": 300,
+        "ideal_fuente": "OMS Europa (2016): ≥ 0,5 ha a ≤ 300 m",
+        "max_tolerable": 900,
+        "max_tolerable_origen": "elegido por la persona",
+        "peso": 0.14,
+        "metodo_peso": "swing"
+      },
+      {
+        "id": "salud",
+        "grupo": "servicios",
+        "unidad": "m",
+        "ideal": 1000,
+        "ideal_fuente": "Convención del proyecto (sin norma)",
+        "max_tolerable": 2500,
+        "max_tolerable_origen": "elegido por la persona",
+        "peso": 0.12,
+        "metodo_peso": "swing"
+      },
+      {
+        "id": "ancla_trabajo_ana",
+        "grupo": "movilidad",
+        "unidad": "min",
+        "ideal": 15,
+        "ideal_fuente": "elegido por la persona",
+        "max_tolerable": 30,
+        "max_tolerable_origen": "elegido por la persona",
+        "peso": 0.32,
+        "metodo_peso": "swing"
+      },
+      {
+        "id": "ancla_colegio_sofia",
+        "grupo": "movilidad",
+        "unidad": "min",
+        "ideal": 8,
+        "ideal_fuente": "elegido por la persona",
+        "max_tolerable": 15,
+        "max_tolerable_origen": "elegido por la persona",
+        "peso": 0.20,
+        "metodo_peso": "swing"
+      }
+    ],
+    "suma_pesos": 1.0,
+    "verificacion": {
+      "confirmada_por_la_persona": true,
+      "frase_de_vuelta": "El tiempo al trabajo de Ana pesa más que el colegio de Sofía; el área verde pesa menos que la salud.",
+      "inconsistencias": []
+    }
+  },
+
+  "elicitacion": {
+    "metodo_activo": "swing",
+    "alternativas_de_metodo": ["bwm"],
+    "estructura": "jerarquica",
+    "paso_actual": "cuanto_te_importa",
+    "preguntas_respondidas": 4,
+    "siguiente_pregunta": {
+      "id": "swing_03",
+      "elegida_por": "motor",
+      "redactada_por": "llm",
+      "tipo": "swing",
+      "enunciado": "Imagina dos mejoras. A: el parque pasa de estar a 900 m a estar a 300 m. B: el colegio de Sofía pasa de 15 minutos a 8 minutos. Si solo pudieras tener una, ¿cuál elegirías?",
+      "opciones": ["A", "B", "Me da igual"],
+      "rangos": {
+        "area_verde": { "de": 900, "a": 300, "unidad": "m" },
+        "ancla_colegio_sofia": { "de": 15, "a": 8, "unidad": "min" }
+      }
+    }
+  },
+
+  "resultado_busqueda": {
+    "generado": "2026-11-02T10:00:00-05:00",
+    "celdas_revisadas": 2358,
+    "paso_celda_m": 250,
+    "areas": [
+      {
+        "orden": 1,
+        "nombre": "Cayma",
+        "celdas": 310,
+        "pct_cumple_todo": 41,
+        "puntaje_ponderado_pct": 78,
+        "por_miembro": { "ana": 81, "luis": 74, "sofia": 79 },
+        "por_criterio": {
+          "ancla_trabajo_ana": { "valor": 0.85, "tiempo_min": 18 },
+          "ancla_colegio_sofia": { "valor": 0.71, "tiempo_min": 11 },
+          "colegio_primaria": { "valor": 1.0, "distancia_m": 380 },
+          "area_verde": { "valor": 0.6, "distancia_m": 520 },
+          "salud": { "valor": 0.8, "distancia_m": 1300 }
+        },
+        "robustez": { "etiqueta": "robusta", "top1_estable_pct": 86, "variacion_pesos": 0.15 },
+        "mejor_punto": { "lat": -16.3855, "lon": -71.548, "zona": "RDA-2" },
+        "contexto_precio": {
+          "tipo": "departamento",
+          "mediana_pen": 700000,
+          "mediana_m2_pen": 4905,
+          "n_avisos": 119,
+          "fecha": "2026-10-18",
+          "fuente": "Aptología (CC BY 4.0)",
+          "aviso": "Precio de oferta, no de cierre. Muestra pequeña."
+        }
+      },
+      {
+        "orden": 2,
+        "nombre": "Yanahuara",
+        "celdas": 96,
+        "pct_cumple_todo": 38,
+        "puntaje_ponderado_pct": 76,
+        "robustez": { "etiqueta": "sensible", "top1_estable_pct": 52, "variacion_pesos": 0.15 }
+      }
+    ],
+    "sin_dato": ["calidad_escolar", "seguridad", "ruido", "tiempo_en_bus"]
+  },
+
+  "detalle_predio": {
+    "punto": { "lat": -16.3855, "lon": -71.548 },
+    "distrito": "Cayma",
+    "zona": {
+      "codigo": "RDA-2",
+      "nombre": "Residencial densidad alta tipo 2",
+      "edificable": "si",
+      "fuente": "Plano de Zonificación del PDM Arequipa 2016-2025 (O.M. 961-MPA; zonificación restituida por la O.M. 975-MPA)",
+      "fecha": "plano vigente 2016-2025"
+    },
+    "aviso_pdm": {
+      "texto": "El nuevo PDM no está aprobado; la zonificación puede cambiar.",
+      "fuente": "Diario Correo",
+      "fecha": "2026-10-24",
+      "es_nota_de_prensa": true,
+      "hay_mapa": false
+    },
+    "variables": {
+      "salud": { "estado": "CUMPLE", "nombre": "Hogar Clínica San Juan de Dios", "distanciaM": 343, "umbralM": 1000, "fuente": "OpenStreetMap (ODbL)", "fecha": "2026-10-28", "metodo": "línea recta al más cercano" },
+      "educacion": {
+        "inicial": { "estado": "CUMPLE", "nombre": "Institución educativa inicial Garabatos", "distanciaM": 101, "umbralM": 500 },
+        "primaria": { "estado": "CUMPLE", "nombre": "Institución Educativa Rey De Reyes", "distanciaM": 227, "umbralM": 1500 },
+        "secundaria": { "estado": "CUMPLE", "nombre": "Institución Educativa Honorio Delgado Espinoza", "distanciaM": 147, "umbralM": 3000 }
+      },
+      "transporte": { "estado": "NO CUMPLE", "nombre": "Real Plaza", "distanciaM": 405, "umbralM": 400 },
+      "area_verde": { "estado": "NO CUMPLE", "nombre": "Plaza de Yanahuara", "distanciaM": 541, "umbralM": 300, "areaM2": 5011 },
+      "quebradas": { "estado": "INFORMATIVO", "nombre": "Río Chili", "distanciaM": 1450, "umbral_usuario_m": null, "fuente": "ANA (red de 2018)", "limite": "Faltan quebradas urbanas como Añashuayco y San Lázaro" }
+    },
+    "contexto_riesgo": {
+      "peligros_geologicos": { "estado": "INFORMATIVO", "cantidad_en_500_m": 0, "fuente": "INGEMMET (2003-2023)" },
+      "sismos_recientes": { "estado": "INFORMATIVO", "cantidad_en_100_km": 12, "ventana": "2026-01-01 a 2026-11-02", "fuente": "IGP", "limite": "No es el catálogo histórico" }
+    },
+    "anclas": [
+      { "ancla": "ancla_trabajo_ana", "tiempo_min": 18, "modo": "auto", "fuente": "Servidor de rutas propio (OSM)", "fecha": "2026-11-02", "nota": "Tiempo típico sin tráfico en vivo" },
+      { "ancla": "ancla_colegio_sofia", "tiempo_min": 11, "modo": "auto", "fuente": "Servidor de rutas propio (OSM)", "fecha": "2026-11-02" }
+    ]
+  },
+
+  "chat_ejemplo": [
+    {
+      "rol": "usuario",
+      "texto": "¿Y si el parque me importara menos que la salud?"
+    },
+    {
+      "rol": "asistente",
+      "herramientas_llamadas": [
+        { "nombre": "actualizar_perfil", "entrada": { "criterio": "area_verde", "cambio": "bajar_peso", "propuesta_de_la_persona": true } },
+        { "nombre": "buscar_zonas", "entrada": { "perfil": "hogar_demo" } }
+      ],
+      "texto": "Con ese cambio, Cayma sigue primero y su orden se mantiene en el 81 % de las combinaciones de pesos que probé. Yanahuara baja al tercer lugar. El cambio lo hiciste tú: yo no ajusto tus pesos por mi cuenta.",
+      "cifras_citadas": [
+        { "texto": "81 %", "origen": "buscar_zonas.areas[0].robustez.top1_estable_pct" }
+      ],
+      "verificador": { "cifras_totales": 1, "cifras_trazables": 1, "ok": true }
+    },
+    {
+      "rol": "usuario",
+      "texto": "¿Es seguro Cayma?"
+    },
+    {
+      "rol": "asistente",
+      "herramientas_llamadas": [],
+      "texto": "No tengo datos de seguridad en esta versión, así que no te doy una respuesta a medias. Sí puedo comparar colegios, salud, áreas verdes, tiempos a tus anclas y la zonificación.",
+      "cifras_citadas": [],
+      "verificador": { "cifras_totales": 0, "cifras_trazables": 0, "ok": true }
+    }
+  ],
+
+  "estados_de_interfaz": {
+    "sin_resultados": {
+      "mensaje": "Ninguna zona cumple todo lo que pediste.",
+      "sugerencias": ["Subir el máximo tolerable del tiempo al trabajo de Ana", "Quitar el área verde de los no negociables", "Incluir zonas condicionadas"]
+    },
+    "sin_dato": { "mensaje": "No tengo ese dato. Eso no significa que no exista." },
+    "servidor_de_rutas_caido": { "mensaje": "No pude calcular los tiempos a tus anclas ahora. Te muestro el resto con distancias en línea recta y lo marco como aproximado." },
+    "llm_no_disponible": { "mensaje": "El chat avanzado no está disponible. Puedes seguir con el asistente básico." },
+    "modo_chat": { "valores": ["gemini", "reglas"], "etiqueta": "Modo: reglas" },
+    "estados_de_variable": ["CUMPLE", "NO CUMPLE", "SIN DATO", "INFORMATIVO", "PARCIAL"]
+  }
+}
