@@ -347,7 +347,10 @@ Ante cualquier fallo se usa el intérprete de reglas (palabras clave sin tildes 
 | Construir | «¿cuánto puedo construir en un lote de 200 m²?» | `Zonificacion.potencial`, el mismo cálculo de la ficha; no calcula en zonas condicionadas ni no construibles |
 | PDM nuevo | «¿cambiará la zonificación?» | El aviso de `CONFIG.estadoPDM` con su fuente y fecha, y aclara que no hay mapa |
 | Fuentes | «¿de dónde salen los datos?» | Fuentes y umbrales |
-| Buscar zonas | «busco cerca de un colegio y un parque, lo más importante es el parque» | Ranking por distrito (ver abajo) |
+| Buscar zonas | «busco cerca de un colegio y un parque», «busco en Paucarpata un sector con colegio y parque cerca» | Sectores donde se cumple todo a la vez, sin ranking (ver abajo) |
+| Contar en un distrito | «¿cuántos colegios hay en Paucarpata?» | «En Paucarpata hay N colegios: a inicial, b primaria, c secundaria (OpenStreetMap, fecha; puede faltar alguno)» y los muestra en el mapa |
+| Perfil de un distrito | «quiero vivir en Paucarpata», «la mejor zona para vivir en Paucarpata» | Resumen de ese distrito y la pregunta «¿Qué es lo primero para ti…?» con botones |
+| «La mejor zona» sin distrito | «la mejor zona para vivir» | Explica que no elige una «mejor» y pregunta qué importa |
 | Sin datos | «¿es seguro?», «algo barato» | Dice que no tiene seguridad ni precios; no responde a medias |
 
 **Criterios de búsqueda y sus umbrales.**
@@ -369,21 +372,33 @@ Los umbrales de campiña, comercial y centro histórico son convenciones del pro
 
 **Cómo se busca.**
 
-1. Se arma una cuadrícula de celdas de 250 m (`CONFIG.asistente.pasoCeldaM`) cuyo centro cae en una zona **construible** del plano (o también condicionada, si se pide). Si dos zonas se superponen gana la última, como en el plano.
-2. En cada celda se evalúa cada criterio con las funciones de `Calculos` (haversine y área geodésica) sobre el OpenStreetMap congelado.
-3. Se agrupa por distrito (`Distritos.nombreDe`). Un distrito con menos de 8 celdas no se lista: la cifra sería engañosa.
-4. Por distrito se informa el **porcentaje de celdas que cumple todo** y la **coincidencia ponderada**, el promedio de la fracción de criterios cumplidos con peso 2 para los prioritarios y 1 para el resto. El doble peso es una **convención del asistente**: no hay base para otro valor.
-5. Cada distrito trae su mejor celda (más puntaje y, a igual puntaje, la que cumple con más holgura) para verla en el mapa o consultarla con la ficha completa.
+1. Se arma una cuadrícula de celdas de 250 m (`CONFIG.asistente.pasoCeldaM`) cuyo centro cae en una zona **construible** del plano (o también condicionada, si se pide). Si dos zonas se superponen gana la última, como en el plano. La cuadrícula es un **andamio interno**: nunca se muestra.
+2. En cada celda se evalúa cada criterio con las funciones de `Calculos` (haversine y área geodésica) sobre el OpenStreetMap congelado. Si la persona nombró un distrito, solo se evalúan las celdas de ese distrito.
+3. Las celdas donde se cumple **todo a la vez** se juntan en **sectores**: zonas continuas (las celdas que se tocan, también por una esquina; `public/js/sectores.js`). El borde de cada sector es la unión de sus celdas, suavizada. Un sector de una sola celda no se muestra si hay otros más grandes.
+4. Cada sector se nombra con el **elemento con nombre más cercano** (colegio, parque, posta o paradero, a 500 m o menos; si la persona pidió un tipo, gana el de ese tipo). Si no hay ninguno con nombre, el sector queda sin nombre: no se inventan nombres ni calles, porque los datos no traen calles.
+5. La respuesta dice, por ejemplo, «Encontré 3 sectores de Paucarpata donde tienes a la vez un colegio inicial a menos de 500 m y un parque a menos de 300 m», con cada sector, su tamaño aproximado en hectáreas y lo que hay en su centro, y los botones «Ver en el mapa» y «Consultar este punto».
 
-**Qué NO es.** No es una probabilidad ni una recomendación: es la parte del suelo habitable de un distrito que cumple lo que se pidió. La resolución es de 250 m. Hereda todos los límites de la ficha (distancia en línea recta, OpenStreetMap incompleto, plano 2016-2025). La palabra «probabilidad» no aparece en ninguna cifra y el texto aclara que no lo es.
+**Sin ranking, salvo que se pida.** Ya no hay «% del suelo que cumple» ni «coincidencia ponderada»: eran cifras difíciles de entender y de usar. Los sectores se numeran solo para ubicarlos y se ordenan del más extenso al más pequeño. Solo si la persona marca una prioridad («lo más importante es el parque») se ordenan por cercanía a eso, y el texto lo dice. Si no hay sectores, el texto dice qué criterio limita más y ofrece quitarlo.
 
-**Ajustes sobre la búsqueda anterior.** «agrega transporte», «quita el parque», «prioriza el colegio», «incluye zonas condicionales». La cuadrícula se reutiliza entre ajustes porque no depende de los criterios.
+**Distritos.** Un distrito se reconoce por su nombre sin importar tildes, mayúsculas ni errores de tipeo razonables (`Distritos.buscarNombre`: distancia de edición proporcional al largo del nombre, con prueba contra palabras comunes para evitar falsos positivos). «Arequipa» a secas es la ciudad; el distrito se pide con «cercado» o «distrito de Arequipa». El archivo de límites trae 25 distritos, entre ellos los 21 del ámbito del PDM Arequipa 2016-2025 (memoria, cap. I, 5.1.2: Alto Selva Alegre, Arequipa, Cayma, Cerro Colorado, Characato, Jacobo Hunter, José Luis Bustamante y Rivero, Mariano Melgar, Miraflores, Mollebaya, Paucarpata, Sabandía, Sachaca, Socabaya, Tiabaya, Uchumayo, Yanahuara, Yura, Quequeña, Yarabamba y Chiguata). Los cuatro distritos de la provincia que no están en el archivo (Vítor y los tres de Siguas) no forman parte de Arequipa Metropolitana; el chat los reconoce y dice que no están en los datos.
+
+**Contar y perfil de un distrito.** «¿Cuántos colegios hay en Paucarpata?» cuenta los elementos de OpenStreetMap cuyo punto cae dentro del límite del distrito (`public/js/entidades.js`; un parque cuenta por el centro de su caja). Un colegio con varios niveles suma en cada uno, y los que no declaran su nivel se cuentan como primaria y secundaria (regla de `Calculos.nivelesEducativos`); el texto lo aclara. El perfil («quiero vivir en Paucarpata») agrega cómo se reparte la zonificación (puntos cada 300 m dentro del distrito, por tipo principal de zona) y qué cauces de la red de la ANA lo cruzan, y termina preguntando qué es lo primero para la persona, con botones que buscan **dentro de ese distrito**. «La mejor zona» sin distrito no elige una: explica que depende de lo que importe y pregunta qué importa.
+
+**Mapa por entidades.** El mapa dibuja lo que existe, no celdas (`public/js/capas.js` decide, `public/js/capas-ui.js` dibuja): colegios con un icono por nivel (inicial círculo, primaria cuadrado, secundaria hexágono) y, si son pocos, un círculo tenue con la distancia de referencia; establecimientos de salud y paraderos con su círculo de 1000 m y 400 m si son pocos; parques como polígonos verdes; solo las zonas del plano del tipo pedido (residencial, tranquila, campiña, comercial, centro histórico); quebradas como líneas; sismos como círculos de 3 a 16 px según la magnitud. En una búsqueda se dibujan las entidades que hacen que cada sector cumpla y **una sola región resaltada**, los sectores; lo que no cumple no se pinta. La leyenda explica cada capa en una línea. Con muchos puntos (más de 350) se usan círculos de lienzo en vez de iconos.
+
+**Qué NO es.** No es una probabilidad ni una recomendación ni un ranking de zonas. La resolución es de 250 m: los bordes de un sector son aproximados y no distinguen cuadras. Hereda todos los límites de la ficha (distancia en línea recta, OpenStreetMap incompleto, plano 2016-2025).
+
+**Resumen del punto en llano.** Al consultar un punto, el chat publica un resumen corto (`public/js/resumen.js`) con lo que la ficha ya calculó: dónde estás y qué se puede construir, qué tienes cerca, qué queda más lejos de lo recomendado (con la distancia de referencia) y el cauce más cercano. Trae los botones «Ver detalle técnico», «Guardar para comparar» y «¿Qué debo verificar antes de comprar?». La ficha empieza con las mismas tres líneas y deja las fuentes, el método y los límites en secciones plegadas (no se quitó ningún dato).
+
+**Rutas de buses.** Hoy solo hay paraderos. `Transporte.rutas` (`public/js/transporte.js`) es el punto de extensión para las rutas y está vacío; la ficha dice «Rutas de buses: aún sin datos (en gestión con SmartBus)» y no muestra rutas inventadas.
+
+**Ajustes sobre la búsqueda anterior.** «agrega transporte», «quita el parque», «prioriza el colegio», «incluye zonas condicionales». La cuadrícula se reutiliza entre ajustes porque no depende de los criterios; el distrito de la búsqueda anterior se conserva.
 
 **Verificación.**
 
-- `test/asistente.spec.ts`: 63 pruebas de la lógica (interpretación, evaluación de celdas, búsqueda, respuestas y textos).
-- `scripts/verificar-datos.mjs`, sección C, con los datos reales: la zona de 300 celdas al azar coincide con `Zonificacion.lookup`; las distancias y veredictos de salud, transporte e inicial en 120 celdas coinciden con una fuerza bruta con la ley esférica de los cosenos; las áreas vienen ordenadas, con porcentajes entre 0 y 100, y la mejor celda de cada una cae en su distrito; y los tiempos (con los datos reales, la primera búsqueda tarda unos 0,7 s y un ajuste con la cuadrícula ya calculada, unos 0,3 s).
-- **Lo que no se verificó:** que el ranking refleje lo que una persona consideraría mejor; no hay una prueba con usuarios del chat. Tampoco se validó la comprensión del lenguaje más allá de los casos de prueba: una frase fuera de las reglas se reconoce como «no entendí».
+- Pruebas de lógica (`test/asistente*.spec.ts`, `distritos`, `entidades`, `sectores`, `capas`, `resumen`, `transporte`): interpretación con y sin distrito (incluida la frase «quiero vivir en pauccarpata cuantos colegios hay ahi»), equivalencia entre el intérprete de reglas y el esquema del modelo, conteos, sectores y su contorno, capas del mapa y resumen del punto.
+- `scripts/verificar-datos.mjs`, sección C, con los datos reales: la zona de 300 celdas al azar coincide con `Zonificacion.lookup`; las distancias y veredictos de salud, transporte e inicial en 120 celdas coinciden con una fuerza bruta con la ley esférica de los cosenos; los colegios por distrito suman como máximo el total (ninguno se cuenta en dos distritos); Paucarpata tiene colegios, salud, paraderos y parques; una búsqueda dentro de Paucarpata solo devuelve sectores de Paucarpata y su texto no habla de suelo ni de celdas; y los tiempos.
+- **Lo que no se verificó:** que los sectores coincidan con lo que una persona consideraría un buen lugar para vivir ni que los nombres de los sectores ayuden a ubicarlos; no hay una prueba con usuarios del chat. Tampoco se validó la comprensión del lenguaje más allá de los casos de prueba: una frase fuera de las reglas se reconoce como «no entendí».
 
 ## 12. Quebradas y cauces, y contexto de riesgo (informativo)
 
