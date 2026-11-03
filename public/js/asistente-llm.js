@@ -426,10 +426,31 @@ const AsistenteLLM = (() => {
     }
   }
 
+  /**
+   * Lo que la vista dice del modo del chat y de qué se envía adónde. Solo «gemini» afirma que el texto llega al proveedor
+   * del modelo; cualquier otro valor se trata como reglas, para no prometer lo que no se sabe.
+   */
+  function textoModo(modo) {
+    if (modo === 'gemini') {
+      return {
+        modo: 'gemini',
+        etiqueta: 'Modo: Gemini',
+        ayuda: 'Gemini interpreta tu frase y redacta la respuesta; los datos, distancias y estados los calcula siempre el motor de la ficha.',
+        privacidad: 'Lo que escribes aquí se envía al proveedor del modelo (Gemini) para entender tu frase. No escribas tu dirección.',
+      };
+    }
+    return {
+      modo: 'reglas',
+      etiqueta: 'Modo: reglas',
+      ayuda: 'El asistente entiende tu frase con reglas fijas, sin IA. Entiende menos frases, pero los datos son los mismos de la ficha.',
+      privacidad: 'En modo reglas lo que escribes no se envía a ningún modelo.',
+    };
+  }
+
   return {
     HERRAMIENTA, INTENCIONES, CRITERIOS, MODOS, TEMAS, RANGOS, MAX_MENSAJE, MAX_TURNOS, MAX_TEXTO,
     validarSpec, sanitizarEstado, sanitizarHistorial, aIntencion, elegirIntencion, verificarTexto, limpiarTexto,
-    clasificarRespuesta, interpretar, redactar, disponible,
+    clasificarRespuesta, interpretar, redactar, disponible, textoModo,
   };
 })();
 

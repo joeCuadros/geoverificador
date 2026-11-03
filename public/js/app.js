@@ -7,10 +7,12 @@
  * Los módulos fuera de alcance (peligros, zona sísmica, denuncias y registro de riesgos) siguen en el código pero se
  * ocultan con CONFIG.modulos; `?modulos=todos` en la URL los vuelve a mostrar.
  *
- * La pantalla sigue 3 pasos (ver onboarding.js): 1 ubicar el predio, 2 confirmar el punto y 3 leer el reporte.
- * El primer paso es la propia pantalla de inicio. La primera visita abre un recorrido guiado que se puede omitir y que se
- * vuelve a abrir con «¿Cómo funciona?» (tour.js, tour-ui.js). Cada servicio es una tarjeta desplegable; «Comparar puntos»
- * (comparar.js, comparar-ui.js) y las verificaciones antes de comprar (verificaciones.js) completan la ayuda a decidir.
+ * El recorrido de la visita es Inicio, guía breve y chat (recorrido.js, espacio-ui.js, tour.js, tour-ui.js). El chat es lo
+ * principal (asistente-ui.js) y el mapa se pinta por el criterio que la persona elige (pintado.js, pintado-ui.js).
+ * La consulta de un punto es secundaria y vive en el panel «Buscar por punto», oculto por defecto; sigue 3 pasos (ver
+ * onboarding.js): 1 ubicar el predio, 2 confirmar el punto y 3 leer el reporte. Cada servicio es una tarjeta desplegable;
+ * «Comparar puntos» (comparar.js, comparar-ui.js) y las verificaciones antes de comprar (verificaciones.js) completan la
+ * ayuda a decidir.
  */
 (() => {
   'use strict';
@@ -115,7 +117,7 @@
     $('layers-body').hidden = !open;
   }
   $('layers-toggle').addEventListener('click', () => setLayersOpen($('layers-body').hidden));
-  if (window.matchMedia('(max-width: 899px)').matches) setLayersOpen(false);
+  if (window.matchMedia('(max-width: 1199px)').matches) setLayersOpen(false);
 
   $('probar').addEventListener('click', () => {
     colocarPunto(CONFIG.center[0], CONFIG.center[1], { etiqueta: 'Plaza de Armas de Arequipa', vista: 17 });
@@ -179,12 +181,6 @@
     $('resultado').hidden = nuevo.paso !== 'reporte';
     $('mover-panel').hidden = !nuevo.moviendo;
     $('btn-mover').setAttribute('aria-expanded', String(nuevo.moviendo));
-    const actual = Onboarding.numeroDePaso(nuevo.paso);
-    document.querySelectorAll('.stepper li').forEach((li) => {
-      const n = Onboarding.numeroDePaso(li.dataset.paso);
-      if (n === actual) li.setAttribute('aria-current', 'step'); else li.removeAttribute('aria-current');
-      li.classList.toggle('hecho', n < actual);
-    });
     // Solo se arrastra el marcador mientras se confirma el punto.
     if (state.pointMarker) {
       if (nuevo.paso === 'confirmar') state.pointMarker.dragging.enable(); else state.pointMarker.dragging.disable();
@@ -253,6 +249,7 @@
   // Elige o mueve el punto (paso 1 o 2). En el reporte el mapa no cambia el punto: eso se hace con «Cambiar».
   function colocarPunto(lat, lon, { etiqueta = null, vista = null, aviso = '', conservarMover = false } = {}) {
     if (state.flujo.paso === 'reporte') return;
+    EspacioUI.abrirPunto({ foco: false }); // elegir un punto abre «Buscar por punto» (si ya estaba abierto, no hace nada)
     state.point = { lat, lon };
     if (etiqueta !== null) {
       state.etiqueta = etiqueta;
@@ -301,7 +298,11 @@
   });
   $('btn-mover').addEventListener('click', () => aplicarFlujo(Onboarding.transicion(state.flujo, 'mover'), { foco: false }));
 
-  map.on('click', (e) => colocarPunto(e.latlng.lat, e.latlng.lng));
+  // Tocar el mapa abre el panel «Buscar por punto». Con el reporte abierto el punto no cambia: se cambia con «Cambiar».
+  map.on('click', (e) => {
+    if (state.flujo.paso === 'reporte') { EspacioUI.abrirPunto(); return; }
+    colocarPunto(e.latlng.lat, e.latlng.lng);
+  });
 
   // «Sí, verificar»: pasa al reporte y lanza todas las consultas locales.
   $('btn-verificar').addEventListener('click', () => {
@@ -1529,6 +1530,7 @@
   // ------------------------------------------------------------- Asistente de chat
   // «Consultar ese punto» desde el chat: deja el punto elegido y abre su reporte, como si se hubiera pulsado «Sí, verificar».
   function consultarPunto(lat, lon, etiqueta) {
+    EspacioUI.abrirPunto({ foco: false });
     if (state.flujo.paso === 'reporte') {
       limpiarMapa();
       aplicarFlujo(Onboarding.transicion(state.flujo, 'cambiar'), { foco: false });
@@ -1539,7 +1541,19 @@
     aplicarFlujo(nuevo);
     consultar();
   }
-  AsistenteUI.iniciar({ map, obtenerPunto: () => state.point, consultarPunto, umbrales: () => state.umbrales });
+  // El chat es lo principal. Pinta el mapa con el resultado de cada búsqueda (PintadoUI) y puede pedir que se vea el mapa.
+  AsistenteUI.iniciar({
+    map,
+    obtenerPunto: () => state.point,
+    consultarPunto,
+    umbrales: () => state.umbrales,
+    mostrarMapa: () => EspacioUI.mostrarMapa(),
+    mapaVisible: () => EspacioUI.mapaVisible(),
+    alBuscar: (busqueda) => PintadoUI.aplicarBusqueda(busqueda),
+    alCambiarFormulario: () => PintadoUI.refrescarChips(),
+  });
+  PintadoUI.iniciar({ map, datos: (opciones) => AsistenteUI.datosParaPintar(opciones), distanciaQuebradaM: () => AsistenteUI.distanciaQuebradaM() });
+  EspacioUI.iniciar({ map, enfocarPunto: () => $(PASO_TITULO[state.flujo.paso]) });
 
   // ------------------------------------------------------------- Comparar puntos
   // Instantánea del punto actual con lo que la ficha ya calculó; null mientras la consulta no termina.
@@ -1575,8 +1589,8 @@
   $('verif-calculado').innerHTML = Verificaciones.CALCULADO.map((c) => `<li><strong>${esc(c.titulo)}.</strong> ${esc(c.texto)}</li>`).join('');
   $('verif-aviso').textContent = Verificaciones.AVISO;
 
-  TourUI.iniciar();
+  // La guía (TourUI) la inicia EspacioUI: va después del Inicio.
 
   // Ayuda para verificar desde la consola del navegador (F12)
-  window.osmDebug = { map, state, MODULOS, Calculos, Services, Zonificacion, Equipamiento, Peligros, Distritos, Riesgos, Delitos, Asistente };
+  window.osmDebug = { map, state, MODULOS, Calculos, Services, Zonificacion, Equipamiento, Peligros, Distritos, Riesgos, Delitos, Asistente, Pintado, PintadoUI, EspacioUI };
 })();

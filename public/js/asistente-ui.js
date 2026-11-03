@@ -5,7 +5,9 @@
  * está en asistente.js. Aquí solo se conecta con la página: lee los mismos datos que la ficha (Zonificacion,
  * Equipamiento, Distritos) y dibuja los resultados en el mapa. Los menús desplegables producen la MISMA consulta que el
  * intérprete saca de una frase (Asistente.construirConsulta), así que hay un solo motor de decisión.
- * Nada de lo que se escribe sale del navegador y no se guarda: al recargar la página la conversación empieza de cero.
+ * La conversación no se guarda: al recargar la página empieza de cero. Con el modo Gemini activo, lo que se escribe se
+ * envía al proveedor del modelo (asistente-llm.js); en modo reglas no sale del navegador hacia ningún modelo. La vista
+ * lo dice junto al campo de texto (AsistenteLLM.textoModo).
  */
 const AsistenteUI = (() => {
   const $ = (id) => document.getElementById(id);
@@ -13,27 +15,42 @@ const AsistenteUI = (() => {
   const MAX_MENSAJES = 60;
   const NIVELES = ['inicial', 'primaria', 'secundaria'];
 
-  let api = null; // { map, obtenerPunto, consultarPunto, umbrales }
+  let api = null; // { map, obtenerPunto, consultarPunto, umbrales, mostrarMapa, mapaVisible, alBuscar, alCambiarFormulario }
   let ultimaBusqueda = null; // { criterios, radioGlobalM, incluirCondicional } para «agrega…», «quita…», «prioriza…»
   let capaMapa = null;
   let preparado = null; // promesa con los datos ya ordenados para buscar
   let cacheContexto = null; // { clave, ctx } del último punto consultado
   let ocupado = false;
   let saludado = false;
+  let limitesPendientes = null; // límites de la última búsqueda dibujada mientras el mapa no estaba a la vista
+  let promesaModo = null;
   // Language model: null = not checked yet, true = /api/chat has Gemini, false = rules only (no key or static site).
   let llmDisponible = null;
   const historial = []; // last turns sent to the model as context: { rol: 'usuario' | 'asistente', texto }
 
   const hayLLM = () => typeof AsistenteLLM !== 'undefined';
+  // El modo y lo que se envía adónde se dicen junto al campo de texto (AsistenteLLM.textoModo): con Gemini, lo escrito llega al proveedor.
   function mostrarModo(origen) {
     const el = $('asistente-modo');
     if (!el) return;
-    const gemini = origen === 'gemini';
-    el.textContent = gemini ? 'Modo: Gemini' : 'Modo: reglas';
-    el.dataset.modo = gemini ? 'gemini' : 'reglas';
-    el.title = gemini
-      ? 'Gemini interpreta tu frase y redacta la respuesta; los datos, distancias y estados los calcula siempre el motor de la ficha.'
-      : 'El asistente entiende tu frase con reglas fijas. Los datos son los mismos de la ficha.';
+    const m = hayLLM()
+      ? AsistenteLLM.textoModo(origen)
+      : { modo: 'reglas', etiqueta: 'Modo: reglas', ayuda: el.title, privacidad: 'En modo reglas lo que escribes no se envía a ningún modelo.' };
+    el.textContent = m.etiqueta;
+    el.dataset.modo = m.modo;
+    el.title = m.ayuda;
+    if ($('asistente-privacidad')) $('asistente-privacidad').textContent = m.privacidad;
+  }
+  /** Averigua una sola vez si el servidor tiene el modelo. Se espera antes de enviar el primer mensaje: así el modo ya se ve. */
+  function verificarModo() {
+    if (!hayLLM() || llmDisponible !== null) return Promise.resolve();
+    if (!promesaModo) {
+      promesaModo = AsistenteLLM.disponible().then((si) => {
+        if (llmDisponible === null) llmDisponible = si;
+        mostrarModo(si ? 'gemini' : 'reglas');
+      });
+    }
+    return promesaModo;
   }
   function recordar(rol, texto) {
     historial.push({ rol, texto: String(texto).slice(0, 300) });
@@ -47,7 +64,6 @@ const AsistenteUI = (() => {
     return cacheCeldas.get(k);
   };
 
-  const esMovil = () => window.matchMedia('(max-width: 899px)').matches;
   const umbrales = () => ({ ...CONFIG.umbrales, zona: CONFIG.asistente.umbralesZona });
   const pausa = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -91,13 +107,14 @@ const AsistenteUI = (() => {
   }
 
   /** Agrega un mensaje al registro. Devuelve el elemento (para poder quitar el aviso de «buscando»). */
-  function mensaje(rol, { texto, filas = [], sugerencias = [], espera = false, explicacion = null, detalle = [] }) {
+  function mensaje(rol, { texto, filas = [], sugerencias = [], espera = false, explicacion = null, detalle = [], verMapa = false }) {
     const log = $('asistente-log');
     const el = document.createElement('div');
     el.className = `chat-msg chat-${rol}`;
     if (espera) el.dataset.espera = 'true';
     const quien = rol === 'usuario' ? 'Tú: ' : 'Asistente: ';
     el.innerHTML = `<span class="sr-only">${quien}</span><div class="chat-burbuja">${rol === 'usuario' ? `<p>${esc(texto)}</p>` : textoAHtml(texto)}${filas.length ? `<ol class="chat-filas">${filas.map(filaHtml).join('')}</ol>` : ''}${masHtml(explicacion, detalle)}</div>`
+      + (verMapa ? '<div class="chat-acc chat-ver-mapa"><button type="button" class="ghost" data-accion="mapa">Ver el mapa pintado</button></div>' : '')
       + (sugerencias.length ? `<div class="chat-sug" role="group" aria-label="Sugerencias">${sugerencias.map((s) => `<button type="button" class="ghost" data-accion="sugerir" data-texto="${esc(s)}">${esc(s)}</button>`).join('')}</div>` : '');
     log.appendChild(el);
     while (log.children.length > MAX_MENSAJES) log.removeChild(log.firstChild);
@@ -132,7 +149,7 @@ const AsistenteUI = (() => {
   function preparar() {
     if (!preparado) {
       preparado = (async () => {
-        const [zonas, congelados, cauces] = await Promise.all([Zonificacion.zonas(), Equipamiento.datosCongelados(), Distritos.load().catch(() => null), Contexto.cauces().catch(() => null)]);
+        const [zonas, congelados, , cauces] = await Promise.all([Zonificacion.zonas(), Equipamiento.datosCongelados(), Distritos.load().catch(() => null), Contexto.cauces().catch(() => null)]); // el tercero (distritos) solo se precarga
         if (!congelados) throw new Error('Faltan los archivos de equipamiento de OpenStreetMap (public/data/equipamiento); sin ellos no puedo buscar zonas.');
         const datos = Asistente.prepararDatos({
           salud: congelados.salud.features, educacion: congelados.educacion.features, transporte: congelados.transporte.features, areasVerdes: congelados.areasVerdes.features,
@@ -157,7 +174,33 @@ const AsistenteUI = (() => {
         .bindPopup(`<strong>${i + 1}. ${esc(Asistente.titulo(a.nombre))}</strong><br>Zona ${esc(a.mejor.zona)}<br>${lineas.join('<br>')}`)
         .addTo(capaMapa);
     });
-    if (puntos.length) api.map.fitBounds(L.latLngBounds(puntos.map((a) => [a.mejor.lat, a.mejor.lon])).pad(0.3), { maxZoom: 14, animate: false });
+    if (puntos.length) {
+      const limites = L.latLngBounds(puntos.map((a) => [a.mejor.lat, a.mejor.lon])).pad(0.3);
+      api.map.fitBounds(limites, { maxZoom: 14, animate: false });
+      // Si el mapa no está a la vista (chat ampliado o móvil), se vuelve a encuadrar cuando se muestre.
+      limitesPendientes = api.mapaVisible && !api.mapaVisible() ? limites : null;
+    }
+  }
+
+  /** Al volver a ver el mapa: si una búsqueda se dibujó con el mapa oculto, se encuadra de nuevo con su tamaño real. */
+  function reajustarVista() {
+    if (!limitesPendientes) return;
+    api.map.fitBounds(limitesPendientes, { maxZoom: 14, animate: false });
+    limitesPendientes = null;
+  }
+
+  /** La cuadrícula y los datos ya preparados, para pintar el mapa por un criterio (pintado-ui.js). */
+  async function datosParaPintar({ incluirCondicional = false } = {}) {
+    const { zonas, datos, fecha } = await preparar();
+    return { celdas: celdasDe(zonas, incluirCondicional), datos, umbrales: umbrales(), fecha };
+  }
+
+  /** Distancia mínima a quebradas que dio la persona (menú o frase), o null: solo con ella existe el criterio «lejos de quebradas». */
+  function distanciaQuebradaM() {
+    const menu = $('cons-cauce') && $('cons-cauce').value ? Number($('cons-cauce').value) : null;
+    if (menu) return menu;
+    const dicho = ultimaBusqueda && ultimaBusqueda.criterios.find((c) => c.id === 'lejosQuebrada');
+    return dicho && dicho.umbralM ? dicho.umbralM : null;
   }
 
   async function ejecutarBusqueda(intencion) {
@@ -215,8 +258,11 @@ const AsistenteUI = (() => {
         sugerencias: f.sugerencias,
         explicacion: Asistente.explicar('buscar', { fecha, aproximados, cauce: criterios.some((c) => c.id === 'lejosQuebrada') }),
         detalle: f.lineas.detalle,
+        verMapa: true,
       });
       dibujar(resultado.areas.slice(0, filas.length), resultado.criterios);
+      // El mapa se pinta con el mismo resultado: los mismos criterios, distancias y zonas condicionales.
+      if (api.alBuscar) api.alBuscar({ criterios, radioGlobalM, incluirCondicional });
     } catch (err) {
       espera.remove();
       console.error('[Asistente] búsqueda', err);
@@ -238,6 +284,7 @@ const AsistenteUI = (() => {
     ocupar(true);
     mensaje('usuario', { texto: limpio });
     try {
+      await verificarModo(); // antes de enviar nada, la persona ya ve si el texto llega a un modelo
       const hayPunto = Boolean(api.obtenerPunto());
       const reglas = () => Asistente.interpretar(limpio, { hayPunto, ultimaBusqueda });
       let eleccion = { origen: 'reglas', intencion: null };
@@ -331,6 +378,7 @@ const AsistenteUI = (() => {
     $('cons-prio').value = conCauce.includes(prevista) ? prevista : '';
     $('cons-error').hidden = true;
     actualizarPunto();
+    if (api && api.alCambiarFormulario) api.alCambiarFormulario(); // la distancia a quebradas puede haber cambiado
   }
 
   /**
@@ -435,39 +483,22 @@ const AsistenteUI = (() => {
     document.addEventListener('click', (e) => { if (!e.target.closest('#cons-que')) cerrarMulti(); });
   }
 
-  // ----------------------------------------------------------------- Abrir y cerrar
+  // ------------------------------------------------------------------- Activar
 
-  function abrir() {
-    const panel = $('asistente');
-    panel.hidden = false;
-    $('asistente-btn').setAttribute('aria-expanded', 'true');
-    if (esMovil()) $('app').inert = true; // en el móvil el chat cubre toda la pantalla: el teclado no debe llegar a lo que queda detrás
+  /** Se llama al entrar al espacio de trabajo: saluda una sola vez y averigua el modo (Gemini o reglas). */
+  function activar() {
     if (!saludado) {
       saludado = true;
       mensaje('asistente', { ...Asistente.responder({ tipo: 'saludo', criterios: [] }, {}), explicacion: Asistente.explicar('saludo') }); // trae sus sugerencias
     }
     actualizarPunto(); // el punto pudo cambiar desde la última vez
-    if (hayLLM() && llmDisponible === null) {
-      AsistenteLLM.disponible().then((si) => { if (llmDisponible === null) llmDisponible = si; mostrarModo(si ? 'gemini' : 'reglas'); });
-    }
-    $('asistente-texto').focus();
-  }
-
-  function cerrar({ devolverFoco = true } = {}) {
-    $('asistente').hidden = true;
-    $('app').inert = false;
-    $('asistente-btn').setAttribute('aria-expanded', 'false');
-    if (devolverFoco) $('asistente-btn').focus();
+    verificarModo();
   }
 
   function iniciar(opciones) {
     api = opciones;
     capaMapa = L.layerGroup().addTo(api.map);
     iniciarConstructor();
-
-    $('asistente-btn').addEventListener('click', () => { if ($('asistente').hidden) abrir(); else cerrar(); });
-    $('asistente-cerrar').addEventListener('click', () => cerrar());
-    $('asistente').addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); cerrar(); } });
 
     $('asistente-form').addEventListener('submit', (e) => {
       e.preventDefault();
@@ -484,18 +515,19 @@ const AsistenteUI = (() => {
       if (!b) return;
       const { accion } = b.dataset;
       if (accion === 'sugerir') { enviar(b.dataset.texto); return; }
+      if (accion === 'mapa') { if (api.mostrarMapa) api.mostrarMapa(); return; }
       const lat = Number(b.dataset.lat);
       const lon = Number(b.dataset.lon);
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
       if (accion === 'ver') {
+        if (api.mostrarMapa) api.mostrarMapa(); // en el móvil o con el chat ampliado el mapa no está a la vista
         api.map.setView([lat, lon], 15, { animate: false });
-        if (esMovil()) cerrar({ devolverFoco: false }); // en el móvil el chat tapa el mapa
+        limitesPendientes = null;
       } else if (accion === 'consultar') {
-        api.consultarPunto(lat, lon, b.dataset.nombre ? `Mejor punto en ${b.dataset.nombre}` : null);
-        if (esMovil()) cerrar({ devolverFoco: false });
+        api.consultarPunto(lat, lon, b.dataset.nombre ? `Punto en ${b.dataset.nombre}` : null);
       }
     });
   }
 
-  return { iniciar, abrir, cerrar };
+  return { iniciar, activar, reajustarVista, datosParaPintar, distanciaQuebradaM };
 })();

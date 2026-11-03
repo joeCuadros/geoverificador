@@ -1,10 +1,11 @@
 /**
  * asistente.js — Lógica del asistente de chat (sin DOM, sin red, sin estado).
  *
- * El asistente NO usa un modelo de lenguaje: entiende frases en español con reglas explícitas y responde únicamente con
- * lo que ya calculan las 5 variables (zonificación, salud, educación, transporte y área verde) y con los mismos datos y
- * umbrales de CONFIG. Por eso funciona en el sitio estático, no necesita claves ni servidor y no puede inventar un dato:
- * si algo no está en los datos, lo dice.
+ * Este motor entiende frases en español con reglas explícitas y responde únicamente con lo que ya calculan las 5 variables
+ * (zonificación, salud, educación, transporte y área verde) y con los mismos datos y umbrales de CONFIG. Por eso
+ * funciona en el sitio estático, sin claves ni servidor, y no puede inventar un dato: si algo no está en los datos, lo
+ * dice. Encima de este motor puede haber un modelo (Gemini, asistente-llm.js) que solo interpreta la frase y redacta
+ * la respuesta; en ese modo lo que la persona escribe SÍ se envía al proveedor del modelo, y la vista lo dice.
  *
  *   interpretar(texto, ctx)   → intención { tipo, modo, criterios, radioGlobalM, lote, ... }
  *   responder(intencion, ctx) → { texto, sugerencias } sobre el punto ya consultado (ficha, zona, PDM, fuentes…)
@@ -941,7 +942,7 @@ const Asistente = (() => {
   const LIM_CAUCES = 'La red de la ANA es de escala nacional: no incluye todas las quebradas urbanas ni las torrenteras menores, no es un mapa de peligro de huaicos o inundación y no delimita la faja marginal.';
   const LIM_INVENTARIO = 'Es un inventario de eventos documentados, no un mapa de susceptibilidad: que no haya registros cerca no significa que el lugar sea seguro.';
   const GENERICO = {
-    porque: ['El asistente entiende frases con reglas explícitas, no con un modelo de lenguaje: por eso no puede inventar un dato.'],
+    porque: ['Los datos, distancias y estados los calcula siempre el motor de la ficha con reglas explícitas. Un modelo, si está activo, solo interpreta tu frase y redacta; no aporta cifras, por eso no puede inventar un dato.'],
     fuente: ['Responde solo con los datos de la ficha: el plano de zonificación y OpenStreetMap.'],
     limites: ['No tiene datos de seguridad, precios ni ruido, y lo dice cuando se lo preguntan.', LIM_REFERENCIAL],
   };

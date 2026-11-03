@@ -3,21 +3,38 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>GeoVerificador · Zonificación y servicios de un predio en Arequipa</title>
+  <title>GeoVerificador · Zonas de Arequipa según lo que te importa</title>
   <meta name="color-scheme" content="light dark">
   <meta name="theme-color" content="#f3eee3" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#101520" media="(prefers-color-scheme: dark)">
-  <meta name="description" content="Ficha de un predio en Arequipa con datos públicos: zonificación vigente y aviso del PDM nuevo, y si hay cerca salud, colegios, transporte y un área verde, con su fuente y sus límites.">
+  <meta name="description" content="Chat y mapa para encontrar zonas de Arequipa que cumplen lo que te importa (colegio, salud, transporte, área verde), con datos públicos, su fuente y sus límites. Consulta referencial: no reemplaza el certificado municipal.">
   <link rel="preload" href="fonts/public-sans-latin-wght.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="fonts/source-serif-4-latin-wght.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231c3a6b'/%3E%3Cpath d='M16 6c-4.4 0-8 3.4-8 7.7C8 19.5 16 26 16 26s8-6.5 8-12.3C24 9.4 20.4 6 16 6zm0 10.6a3 3 0 1 1 0-6 3 3 0 0 1 0 6z' fill='%23fff'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
         integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
   <link rel="stylesheet" href="css/styles.css">
+  <script src="js/recorrido.js"></script>
+  <script>
+    // Antes de pintar: la primera visita abre el Inicio y las de regreso van directo al chat (así no hay un destello del Inicio).
+    (function () {
+      var vista = 'inicio';
+      try { vista = Recorrido.vistaInicial({ visto: Recorrido.visto(window.localStorage), busqueda: window.location.search }); } catch (e) { /* queda el Inicio */ }
+      document.documentElement.setAttribute('data-vista', vista);
+    })();
+  </script>
 </head>
 <body>
-  <a class="saltar" href="#contenido">Saltar a la consulta</a>
-  
+  <!--
+    THESIS: un plano de Arequipa que se conversa; el chat conduce y el mapa se pinta con lo que la persona pidió.
+    OWN-WORLD: hoja de plano, con el alzado del Misti sobre la planta y su cuadrícula de 250 m; sillar con juntas, tinta azul de plano, ámbar solo para "consulta referencial".
+    STORY: Inicio, guía breve y chat grande; el mapa pinta cumple, no cumple y sin dato con su umbral y su fuente; buscar por punto queda aparte.
+    FIRST VIEWPORT: titular serif, "Comenzar recorrido", enlace discreto al chat y nota honesta, junto al Misti sobre la planta (o la foto img/arequipa-hero.jpg si existe).
+    FORM: dos columnas asimétricas, sin tarjetas de iconos ni degradados; chat y mapa divididos por un separador con teclado.
+    FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+  -->
+  <a class="saltar" href="#asistente">Saltar al chat</a>
+
   <!-- Iconos: un solo trazo (1,75 px, extremos redondeados). Se usan con <use href="#i-...">. -->
   <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
     <defs>
@@ -47,6 +64,12 @@
       <symbol id="i-escudo" viewBox="0 0 24 24"><path d="M12 3l7.500 2.800v5.700c0 4.600-3.100 8.200-7.500 9.700-4.400-1.500-7.500-5.100-7.500-9.700V5.800z"/><path d="M8.800 12.200l2.300 2.300 4.200-4.500"/></symbol>
       <symbol id="i-quebrada" viewBox="0 0 24 24"><path d="M3 8c2.500-2 4.500-2 7 0s4.500 2 7 0 3-1.500 4-1"/><path d="M3 13c2.500-2 4.500-2 7 0s4.500 2 7 0 3-1.500 4-1"/><path d="M3 18c2.500-2 4.500-2 7 0s4.500 2 7 0 3-1.500 4-1"/></symbol>
       <symbol id="i-sismo" viewBox="0 0 24 24"><path d="M2.500 12h4l2-6 3.500 12 3-9 1.500 3h5"/></symbol>
+      <symbol id="i-cuenta" viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.6"/><path d="M5 20c.8-3.6 3.6-5.6 7-5.6s6.2 2 7 5.6"/></symbol>
+      <symbol id="i-inicio" viewBox="0 0 24 24"><path d="M3.5 11.5L12 4l8.5 7.5"/><path d="M5.5 10v9.5h13V10"/><path d="M10 19.5v-5h4v5"/></symbol>
+      <symbol id="i-flecha-der" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+      <symbol id="i-ampliar" viewBox="0 0 24 24"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></symbol>
+      <symbol id="i-reducir" viewBox="0 0 24 24"><path d="M20 10h-6V4M4 14h6v6M14 10l7-7M10 14l-7 7"/></symbol>
+      <symbol id="i-mapa" viewBox="0 0 24 24"><path d="M3.5 6.5L9 4l6 2.5L20.5 4v13.5L15 20l-6-2.5L3.5 20z"/><path d="M9 4v13.5M15 6.5V20"/></symbol>
       <symbol id="i-estrella" viewBox="0 0 24 24"><path d="M12 3.500l2.600 5.400 5.900.8-4.300 4.100 1 5.800L12 16.800l-5.200 2.800 1-5.800-4.300-4.100 5.900-.8z"/></symbol>
     </defs>
   </svg>
@@ -54,42 +77,165 @@
   <div class="app" id="app" data-paso="ubicar">
     <!-- ============================================================ Barra superior -->
     <header class="topbar">
-      <div class="brand">
+      <!-- La marca lleva al Inicio. -->
+      <a class="brand" id="brand-inicio" href="#inicio" aria-label="GeoVerificador, Predios de Arequipa: ir al inicio">
         <svg class="brand-logo" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7"/><path d="M5 22.500h22M5 17.500h22" class="brand-juntas"/><path d="M16 5.500c-3.900 0-7 3-7 6.800 0 5 7 11 7 11s7-6 7-11c0-3.800-3.100-6.800-7-6.800zm0 9.400a2.600 2.600 0 1 1 0-5.200 2.600 2.600 0 0 1 0 5.200z" class="brand-pin"/></svg>
         <div class="brand-text">
           <h1>GeoVerificador</h1>
           <span>Predios de Arequipa</span>
         </div>
-      </div>
-
-      <nav class="stepper" aria-label="Pasos de la consulta">
-        <ol>
-          <li data-paso="ubicar" aria-current="step"><span class="st-n" aria-hidden="true">1</span><span class="st-label"><span class="sr-only">Paso 1: </span>Ubica tu predio</span></li>
-          <li data-paso="confirmar"><span class="st-n" aria-hidden="true">2</span><span class="st-label"><span class="sr-only">Paso 2: </span>Confirma el punto</span></li>
-          <li data-paso="reporte"><span class="st-n" aria-hidden="true">3</span><span class="st-label"><span class="sr-only">Paso 3: </span>Lee tu reporte</span></li>
-        </ol>
-      </nav>
+      </a>
 
       <div class="barra-acciones">
-        <button id="comparar-btn" type="button" class="btn-barra" aria-haspopup="dialog">
+        <button id="inicio-btn" title="Inicio" type="button" class="btn-barra solo-espacio solo-ancho">
+          <svg class="ico" aria-hidden="true"><use href="#i-inicio"/></svg>
+          <span class="btn-barra-texto">Inicio</span>
+        </button>
+        <!-- Vía secundaria: abre el panel «Buscar por punto» (el contenido de la antigua barra lateral). -->
+        <button id="punto-btn" title="Buscar por punto" type="button" class="btn-barra solo-espacio" aria-expanded="false" aria-controls="contenido">
+          <svg class="ico" aria-hidden="true"><use href="#i-pin"/></svg>
+          <span class="btn-barra-texto">Buscar por punto</span>
+        </button>
+        <button id="comparar-btn" title="Comparar" type="button" class="btn-barra solo-espacio" aria-haspopup="dialog">
           <svg class="ico" aria-hidden="true"><use href="#i-comparar"/></svg>
           <span class="btn-barra-texto">Comparar</span>
           <span class="contador" id="comparar-contador" aria-hidden="true" hidden>0</span>
           <span class="sr-only" id="comparar-contador-sr"></span>
         </button>
-        <button id="asistente-btn" type="button" class="btn-barra" aria-expanded="false" aria-controls="asistente">
-          <svg class="ico" aria-hidden="true"><use href="#i-chat"/></svg>
-          <span class="btn-barra-texto">Asistente</span>
-        </button>
-        <button id="ayuda-btn" type="button" class="btn-barra" aria-haspopup="dialog">
+        <button id="ayuda-btn" title="¿Cómo funciona?" type="button" class="btn-barra" aria-haspopup="dialog">
           <svg class="ico" aria-hidden="true"><use href="#i-ayuda"/></svg>
           <span class="btn-barra-texto">¿Cómo funciona?</span>
         </button>
+        <!-- Cuenta opcional: oculta hasta que /api/auth/me responda (js/cuenta-ui.js). Sin servidor o sin configurar, no aparece. -->
+        <a id="cuenta-btn" class="btn-barra btn-cuenta" href="login.html" hidden>
+          <svg class="ico" aria-hidden="true"><use href="#i-cuenta"/></svg>
+          <span class="btn-barra-texto" id="cuenta-texto">Iniciar sesión</span>
+        </a>
       </div>
     </header>
 
-    <!-- ============================================================ Panel -->
-    <aside class="panel" id="contenido" tabindex="-1" aria-label="Consulta de un predio">
+    <!-- ============================================================ Inicio (primer momento de la visita) -->
+    <main class="inicio" id="inicio" aria-labelledby="inicio-h">
+      <div class="inicio-texto">
+        <h2 id="inicio-h">Mira qué zonas de Arequipa cumplen lo que te importa</h2>
+        <p class="inicio-lede">Cuéntale al asistente qué quieres tener cerca, por ejemplo un colegio, una posta o un parque. El mapa se pinta con las zonas que lo cumplen, y cada dato muestra su fuente.</p>
+        <div class="inicio-acciones">
+          <button id="inicio-comenzar" type="button" class="primary primary-lg">
+            Comenzar recorrido
+            <svg class="ico" aria-hidden="true"><use href="#i-flecha-der"/></svg>
+          </button>
+          <button id="inicio-saltar" type="button" class="link">Ya lo conozco: ir al chat</button>
+        </div>
+        <p class="inicio-nota">
+          <svg class="ico" aria-hidden="true"><use href="#i-aviso"/></svg>
+          <span><strong>Consulta referencial.</strong> No reemplaza el certificado municipal. Antes de conversar verás una guía breve.</span>
+        </p>
+      </div>
+      <!-- Arte del Inicio: ver el comentario de css/styles.css (.inicio-arte). Si existe img/arequipa-hero.jpg se usa en su lugar.
+           El crédito va con la foto: si se cambia o se borra img/arequipa-hero.jpg, hay que cambiar o quitar este párrafo. -->
+      <div class="inicio-arte">
+        <p class="inicio-credito">Foto: Draceane, <a href="https://creativecommons.org/licenses/by-sa/4.0/deed.es" target="_blank" rel="noopener">CC BY-SA 4.0</a>, vía <a href="https://commons.wikimedia.org/wiki/File:Arequipa,_Plaza_de_Armas,_2023_(10).jpg" target="_blank" rel="noopener">Wikimedia Commons</a>. Recortada y reducida.</p>
+      </div>
+    </main>
+
+    <!-- ============================================================ Espacio de trabajo: chat (principal) y mapa -->
+    <main class="espacio" id="espacio" data-modo="dividido" data-panel="chat" aria-label="Asistente y mapa">
+
+      <!-- Asistente de chat: responde sobre el punto consultado y busca zonas con los mismos datos de la ficha -->
+      <aside id="asistente" class="asistente" aria-labelledby="asistente-h" tabindex="-1">
+        <header class="asistente-cab">
+          <h2 id="asistente-h" tabindex="-1">Asistente</h2>
+          <span id="asistente-modo" class="asistente-modo" data-modo="reglas" title="El asistente entiende tu frase con reglas fijas, sin IA. Entiende menos frases, pero los datos son los mismos de la ficha.">Modo: reglas</span>
+          <button type="button" id="chat-ampliar" class="btn-chat solo-ancho-chat" aria-pressed="false" title="Ampliar el chat">
+            <svg class="ico" aria-hidden="true"><use href="#i-ampliar"/></svg>
+            <span id="chat-ampliar-texto">Ampliar el chat</span>
+          </button>
+        </header>
+        <div id="asistente-log" class="asistente-log" role="log" aria-live="polite" aria-relevant="additions" aria-label="Conversación con el asistente" tabindex="0"></div>
+
+        <!-- Armar una búsqueda sin escribir: genera la misma consulta que el intérprete saca de una frase (Asistente.construirConsulta) -->
+        <details id="constructor" class="constructor">
+          <summary><svg class="ico" aria-hidden="true"><use href="#i-ajustes"/></svg><span>Armar una búsqueda sin escribir</span></summary>
+          <form id="constructor-form" class="constructor-form" novalidate>
+            <div class="presets" role="group" aria-label="Búsquedas rápidas">
+              <span class="campo-etiqueta" id="presets-l">Búsquedas rápidas</span>
+              <div id="presets" class="presets-lista"></div>
+            </div>
+
+            <div class="campo">
+              <span class="campo-etiqueta" id="cons-que-l">Qué quieres tener cerca</span>
+              <details class="multi" id="cons-que">
+                <summary aria-labelledby="cons-que-l cons-que-n"><span id="cons-que-n" class="multi-valor">Elige uno o más</span></summary>
+                <div class="multi-panel">
+                  <fieldset class="multi-grupo">
+                    <legend>Servicios</legend>
+                    <div id="cons-servicios"></div>
+                  </fieldset>
+                  <fieldset class="multi-grupo">
+                    <legend>Tipo de zona</legend>
+                    <div id="cons-zonas"></div>
+                  </fieldset>
+                </div>
+              </details>
+            </div>
+
+            <div class="campo-fila">
+              <label class="campo" id="cons-nivel-campo" hidden>
+                <span class="campo-etiqueta">Nivel educativo</span>
+                <select id="cons-nivel"></select>
+              </label>
+              <label class="campo">
+                <span class="campo-etiqueta">Lo más importante</span>
+                <select id="cons-prio"></select>
+              </label>
+              <label class="campo">
+                <span class="campo-etiqueta" id="cons-radio-l">Distancia máxima</span>
+                <select id="cons-radio"></select>
+              </label>
+            </div>
+
+            <label class="campo">
+              <span class="campo-etiqueta">Lejos de quebradas y ríos</span>
+              <select id="cons-cauce" aria-describedby="cons-cauce-ayuda"></select>
+              <small id="cons-cauce-ayuda" class="campo-ayuda">Tú eliges la distancia mínima: no existe una distancia oficial. Usa la red de la ANA, que no incluye todas las quebradas urbanas.</small>
+            </label>
+
+            <div class="campo">
+              <label class="check"><input id="cons-punto" type="checkbox" aria-describedby="cons-punto-ayuda"><span id="cons-punto-t">Solo cerca de mi punto</span></label>
+              <small id="cons-punto-ayuda" class="campo-ayuda"></small>
+            </div>
+            <label class="check"><input id="cons-cond" type="checkbox"><span>Incluir zonas condicionales</span></label>
+            <p id="cons-error" class="texto-error small" role="alert" hidden></p>
+            <div class="constructor-acciones">
+              <button type="submit" class="primary" id="cons-buscar">Buscar zonas</button>
+              <button type="button" class="secondary" id="cons-limpiar">Limpiar</button>
+            </div>
+          </form>
+        </details>
+
+        <form id="asistente-form" class="asistente-form" autocomplete="off">
+          <label for="asistente-texto" class="sr-only">Escribe tu pregunta</label>
+          <input id="asistente-texto" type="text" maxlength="300" placeholder="Ej.: busco cerca de un colegio y un parque" enterkeyhint="send">
+          <button type="submit" id="asistente-enviar" class="primary">Enviar</button>
+        </form>
+        <p class="asistente-pie">
+          <span id="asistente-privacidad">En modo reglas lo que escribes no se envía a ningún modelo.</span>
+          Es referencial: no reemplaza el certificado municipal.
+          <button type="button" id="chat-punto" class="link">Buscar por punto</button>
+        </p>
+      </aside>
+
+      <!-- Divisor: se arrastra o se mueve con las flechas del teclado (Disposicion, espacio-ui.js). -->
+      <div id="divisor" class="divisor" role="separator" aria-orientation="vertical" aria-label="Ancho del chat" aria-controls="asistente" tabindex="0"></div>
+
+    <!-- ============================================================ Buscar por punto (secundario, oculto por defecto) -->
+    <aside class="panel" id="contenido" tabindex="-1" aria-label="Buscar por punto" hidden>
+      <div class="panel-cab">
+        <p class="panel-cab-t">Buscar por punto</p>
+        <button type="button" id="panel-cerrar" class="icon-btn" aria-label="Cerrar Buscar por punto">
+          <svg class="ico" aria-hidden="true"><use href="#i-cerrar"/></svg>
+        </button>
+      </div>
 
       <!-- Paso 1: Ubica tu predio -->
       <section id="paso-ubicar" class="paso" aria-labelledby="ubicar-h">
@@ -394,8 +540,29 @@
     </aside>
 
     <!-- ============================================================ Mapa -->
-    <main class="map-wrap" id="mapa-zona">
+    <section class="map-wrap" id="mapa-zona" aria-label="Mapa de zonas">
+      <!-- Pintar el mapa por el criterio elegido (pintado-ui.js): chips, quitar colores y leyenda. -->
+      <div class="pintar" id="pintar" role="group" aria-labelledby="pintar-t">
+        <div class="pintar-fila">
+          <p class="pintar-t" id="pintar-t">Pintar el mapa por:</p>
+          <div class="pintar-chips" id="pintar-chips"></div>
+          <button type="button" id="pintar-quitar" class="secondary compacto pintar-quitar" hidden>Quitar colores</button>
+        </div>
+      </div>
+      <p id="pintar-anuncio" class="sr-only" role="status" aria-live="polite"></p>
+
+      <div class="map-area">
       <div id="map" role="application" aria-label="Mapa de Arequipa. Toca un lugar para elegir el punto."></div>
+
+      <details class="leyenda" id="leyenda" open hidden>
+        <summary><span id="leyenda-resumen" class="leyenda-resumen"></span></summary>
+        <div class="leyenda-cuerpo">
+          <ul class="leyenda-estados" id="leyenda-estados"></ul>
+          <p class="leyenda-inter small" id="leyenda-inter" hidden>Con varios criterios se pinta la intersección: solo cumplen las celdas que cumplen todos.</p>
+          <ul class="leyenda-filas" id="leyenda-filas"></ul>
+          <p class="leyenda-pie small" id="leyenda-pie"></p>
+        </div>
+      </details>
 
       <div class="layers-card" id="layers-card">
         <button type="button" class="layers-toggle" id="layers-toggle" aria-expanded="true" aria-controls="layers-body">
@@ -415,90 +582,21 @@
         </div>
       </div>
 
-      <div class="map-hint" id="map-hint">Toca el mapa para elegir un punto</div>
+      <div class="map-hint" id="map-hint">Toca el mapa para consultar un punto</div>
+      </div>
+    </section>
+
+    <!-- Solo en el móvil: el chat ocupa la pantalla y este botón alterna con el mapa. -->
+    <div class="barra-vista" id="barra-vista">
+      <button type="button" id="vista-alternar" class="primary">
+        <svg class="ico" aria-hidden="true"><use href="#i-mapa"/></svg>
+        <span id="vista-alternar-texto">Ver mapa</span>
+      </button>
+    </div>
     </main>
   </div>
 
-  <!-- Asistente de chat: responde sobre el punto consultado y busca zonas con los mismos datos de la ficha -->
-  <aside id="asistente" class="asistente" aria-labelledby="asistente-h" hidden>
-    <header class="asistente-cab">
-      <h2 id="asistente-h" tabindex="-1">Asistente</h2>
-      <span id="asistente-modo" class="asistente-modo" data-modo="reglas" title="El asistente entiende tu frase con reglas fijas. Los datos son los mismos de la ficha.">Modo: reglas</span>
-      <button type="button" id="asistente-cerrar" class="icon-btn" aria-label="Cerrar el asistente">
-        <svg class="ico" aria-hidden="true"><use href="#i-cerrar"/></svg>
-      </button>
-    </header>
-    <div id="asistente-log" class="asistente-log" role="log" aria-live="polite" aria-relevant="additions" aria-label="Conversación con el asistente" tabindex="0"></div>
-
-    <!-- Armar una búsqueda sin escribir: genera la misma consulta que el intérprete saca de una frase (Asistente.construirConsulta) -->
-    <details id="constructor" class="constructor">
-      <summary><svg class="ico" aria-hidden="true"><use href="#i-ajustes"/></svg><span>Armar una búsqueda sin escribir</span></summary>
-      <form id="constructor-form" class="constructor-form" novalidate>
-        <div class="presets" role="group" aria-label="Búsquedas rápidas">
-          <span class="campo-etiqueta" id="presets-l">Búsquedas rápidas</span>
-          <div id="presets" class="presets-lista"></div>
-        </div>
-
-        <div class="campo">
-          <span class="campo-etiqueta" id="cons-que-l">Qué quieres tener cerca</span>
-          <details class="multi" id="cons-que">
-            <summary aria-labelledby="cons-que-l cons-que-n"><span id="cons-que-n" class="multi-valor">Elige uno o más</span></summary>
-            <div class="multi-panel">
-              <fieldset class="multi-grupo">
-                <legend>Servicios</legend>
-                <div id="cons-servicios"></div>
-              </fieldset>
-              <fieldset class="multi-grupo">
-                <legend>Tipo de zona</legend>
-                <div id="cons-zonas"></div>
-              </fieldset>
-            </div>
-          </details>
-        </div>
-
-        <div class="campo-fila">
-          <label class="campo" id="cons-nivel-campo" hidden>
-            <span class="campo-etiqueta">Nivel educativo</span>
-            <select id="cons-nivel"></select>
-          </label>
-          <label class="campo">
-            <span class="campo-etiqueta">Lo más importante</span>
-            <select id="cons-prio"></select>
-          </label>
-          <label class="campo">
-            <span class="campo-etiqueta" id="cons-radio-l">Distancia máxima</span>
-            <select id="cons-radio"></select>
-          </label>
-        </div>
-
-        <label class="campo">
-          <span class="campo-etiqueta">Lejos de quebradas y ríos</span>
-          <select id="cons-cauce" aria-describedby="cons-cauce-ayuda"></select>
-          <small id="cons-cauce-ayuda" class="campo-ayuda">Tú eliges la distancia mínima: no existe una distancia oficial. Usa la red de la ANA, que no incluye todas las quebradas urbanas.</small>
-        </label>
-
-        <div class="campo">
-          <label class="check"><input id="cons-punto" type="checkbox" aria-describedby="cons-punto-ayuda"><span id="cons-punto-t">Solo cerca de mi punto</span></label>
-          <small id="cons-punto-ayuda" class="campo-ayuda"></small>
-        </div>
-        <label class="check"><input id="cons-cond" type="checkbox"><span>Incluir zonas condicionales</span></label>
-        <p id="cons-error" class="texto-error small" role="alert" hidden></p>
-        <div class="constructor-acciones">
-          <button type="submit" class="primary" id="cons-buscar">Buscar zonas</button>
-          <button type="button" class="secondary" id="cons-limpiar">Limpiar</button>
-        </div>
-      </form>
-    </details>
-
-    <form id="asistente-form" class="asistente-form" autocomplete="off">
-      <label for="asistente-texto" class="sr-only">Escribe tu pregunta</label>
-      <input id="asistente-texto" type="text" maxlength="300" placeholder="Ej.: busco cerca de un colegio y un parque" enterkeyhint="send">
-      <button type="submit" id="asistente-enviar" class="primary">Enviar</button>
-    </form>
-    <p class="asistente-pie">Respondo solo con los datos de la ficha, sin inventar. Es referencial: no reemplaza el certificado municipal.</p>
-  </aside>
-
-  <!-- Recorrido guiado: se abre solo la primera vez y con «¿Cómo funciona?». Contenido en js/tour.js -->
+  <!-- Guía breve: va después del Inicio y se abre de nuevo con «¿Cómo funciona?». Contenido en js/tour.js -->
   <dialog id="tour" class="dialogo tour" aria-labelledby="tour-h">
     <div class="dialogo-cab">
       <div class="tour-titulos">
@@ -577,9 +675,15 @@
   <script src="js/delitos.js"></script>
   <script src="js/asistente.js"></script>
   <script src="js/asistente-llm.js"></script>
+  <script src="js/disposicion.js"></script>
+  <script src="js/pintado.js"></script>
   <script src="js/asistente-ui.js"></script>
+  <script src="js/pintado-ui.js"></script>
   <script src="js/comparar-ui.js"></script>
   <script src="js/tour-ui.js"></script>
+  <script src="js/espacio-ui.js"></script>
   <script src="js/app.js"></script>
+  <script src="js/cuenta.js"></script>
+  <script src="js/cuenta-ui.js"></script>
 </body>
 </html>
