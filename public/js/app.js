@@ -58,7 +58,7 @@
     evaluacion: {},      // evaluación del usuario por riesgo: { id: { p, i, decision, hechas } }
     umbrales: Umbrales.leer(almacen()), // «Mis umbrales»: lo que fija la persona (hoy, distancia mínima a una quebrada)
     cauce: null,         // resultado de Contexto.quebradas para el punto actual (INFORMATIVO, o según el umbral de la persona)
-    contextoRiesgo: null, // { peligros, sismos } de Contexto: contexto informativo, no una evaluación
+    contextoRiesgo: null, // { peligros, sismos, volcan } de Contexto: contexto informativo, no una evaluación
     contextoSeq: 0,      // descarta respuestas de un punto anterior
     precio: null,        // resultado de Precios.buscar para el distrito del punto (INFORMATIVO o SIN DATO; nunca cumple / no cumple)
     precioSeq: 0,        // descarta respuestas de un punto anterior
@@ -149,6 +149,7 @@
     quebradas: { titulo: 'Quebradas y cauces', icono: 'quebrada' },
     peligros: { titulo: 'Peligros geológicos registrados', icono: 'aviso' },
     sismos: { titulo: 'Sismos recientes (IGP)', icono: 'sismo' },
+    volcan: { titulo: 'Peligro volcánico del Misti', icono: 'aviso' },
     precio: { titulo: 'Precio de oferta del distrito', icono: 'precio' },
   };
   const colorMapa = (nombre) => getComputedStyle(document.documentElement).getPropertyValue(nombre).trim() || '#1c3a6b';
@@ -722,6 +723,7 @@
       zona: state.zonaStatus === 'ok' ? state.zona : null,
       entorno: state.entorno,
       cauce: state.cauce,
+      volcan: state.contextoRiesgo ? state.contextoRiesgo.volcan : null,
     });
     $('ficha-resumen-lineas').innerHTML = r.lineas.map((l) => `<p>${esc(l)}</p>`).join('');
     $('ficha-resumen').hidden = false;
@@ -1334,16 +1336,36 @@
     return tarjetaVariable(VARIABLES.sismos, 'INFORMATIVO', resumen, cuerpo, 'Informativo');
   }
 
+  function tarjetaVolcan(v) {
+    if (!v || v.estado === 'SIN DATO') {
+      return tarjetaVariable(VARIABLES.volcan, 'SIN DATO', 'Sin dato: no se pudo leer el mapa de peligro volcánico', `<p class="zon-msg error"><strong>No se pudo obtener el dato.</strong> ${esc((v && v.error) || '')}</p>`);
+    }
+    const resumen = v.enZona ? v.frase.replace(/^Tu punto está en zona de /, 'En zona de ').replace(/ del Misti, según el IGP\.$/, '') : 'Fuera de las zonas mapeadas por el IGP';
+    const lineas = v.lineas || [];
+    const cuerpo = `<div class="var-dato">
+        <p class="var-nombre">${esc(v.frase)}</p>
+      </div>
+      ${lineas.length ? `<ul class="pel-tipos">${lineas.map((l) => `<li>${esc(l.texto)}</li>`).join('')}</ul>` : ''}
+      <p class="var-explica"><strong>Informativo.</strong> Dice en qué zonas del mapa del IGP cae tu punto. No es una evaluación de riesgo ni dice si habrá una erupción.</p>
+      <dl class="var-detalle">
+        <div><dt>Fuente</dt><dd>${esc(v.fuente)}</dd></div>
+        <div><dt>Fecha de los datos</dt><dd>Datos congelados el ${esc(fmtFechaDato(v.fecha))}. ${esc(v.fechaDelMapa)}${v.referencia ? `. Mapa oficial de referencia: ${esc(v.referencia)}` : ''}</dd></div>
+        <div><dt>Método</dt><dd>${esc(v.metodo)}</dd></div>
+        <div><dt>Qué no cubre</dt><dd>Es un mapa de escala regional: cerca del borde de una zona, el nivel no es exacto a nivel de predio. No sabemos de qué edición del mapa de INGEMMET salen las capas del IGP. Que tu punto no esté en una zona no significa que no haya peligro. Para decidir, consulta el CENEPRED (SIGRID), tu municipalidad y el IGP o INGEMMET.</dd></div>
+      </dl>`;
+    return tarjetaVariable(VARIABLES.volcan, 'INFORMATIVO', resumen, cuerpo, 'Informativo');
+  }
+
   function renderContexto() {
     const host = $('contexto-cuerpo');
     const c = state.contextoRiesgo;
     if (!c) {
       host.setAttribute('aria-busy', 'true');
-      host.innerHTML = '<p class="zon-msg loading"><span class="spinner"></span>Buscando peligros registrados y sismos reportados…</p>';
+      host.innerHTML = '<p class="zon-msg loading"><span class="spinner"></span>Buscando peligros registrados, sismos y peligro volcánico…</p>';
       return;
     }
     const abiertas = [...host.querySelectorAll('details.var-card')].map((d) => d.open);
-    host.innerHTML = tarjetaPeligros(c.peligros) + tarjetaSismos(c.sismos);
+    host.innerHTML = tarjetaPeligros(c.peligros) + tarjetaSismos(c.sismos) + tarjetaVolcan(c.volcan);
     host.querySelectorAll('details.var-card').forEach((d, i) => { d.open = Boolean(abiertas[i]); });
     host.setAttribute('aria-busy', 'false');
     $('contexto-fuente').textContent = 'Contexto informativo, no una evaluación de peligro. Distancias en línea recta. Para decidir, consulta SIGRID (CENEPRED) y al IMPLA.';
@@ -1359,7 +1381,7 @@
     const r = await Contexto.evaluar(lat, lon, state.umbrales.quebradaMinM); // nunca rechaza: cada variable devuelve SIN DATO con su causa
     if (seq !== state.contextoSeq) return; // la persona ya eligió otro punto
     state.cauce = r.quebradas;
-    state.contextoRiesgo = { peligros: r.peligros, sismos: r.sismos };
+    state.contextoRiesgo = { peligros: r.peligros, sismos: r.sismos, volcan: r.volcan };
     renderQuebradas();
     renderContexto();
     renderResumen();

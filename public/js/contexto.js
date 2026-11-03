@@ -161,17 +161,63 @@ const Contexto = (() => {
     }
   }
 
+  // ------------------------------------------------------- Peligro volcánico del Misti
+
+  const V = () => (typeof Volcan !== 'undefined' ? Volcan : require('./volcan.js')); // eslint-disable-line no-undef
+  let zonasVolcan = null; // zonas indexadas (una sola vez)
+
+  /** Las zonas de peligro volcánico listas para consultar, con la metadata del archivo. Rechaza si el archivo falta. */
+  async function zonasVolcanicas() {
+    const { features, meta } = await archivo('volcan');
+    if (!zonasVolcan || zonasVolcan.features !== features) zonasVolcan = { features, zonas: V().indexar(features) };
+    if (zonasVolcan.zonas.length === 0) throw new Error('El archivo de peligro volcánico no tiene zonas.');
+    return { zonas: zonasVolcan.zonas, meta };
+  }
+
+  /**
+   * En qué zonas de peligro volcánico del Misti cae el punto (INFORMATIVO: nunca cumple ni puntaje). Cada fenómeno (lahares,
+   * flujos piroclásticos, lava, avalanchas, ceniza) trae su nivel más alto. Si el archivo falta, SIN DATO con la causa.
+   */
+  async function volcan(lat, lon) {
+    const base = { fuente: CONFIG.volcan.fuente };
+    try {
+      const { zonas, meta } = await zonasVolcanicas();
+      const items = V().enZonas(lat, lon, zonas);
+      const resumen = V().resumirPunto(items);
+      return {
+        estado: 'INFORMATIVO',
+        enZona: resumen.length > 0,
+        resumen,
+        detalle: items,
+        frase: V().frasePunto(resumen),
+        lineas: V().lineasPunto(resumen),
+        fuente: meta.fuente || base.fuente,
+        fecha: dia(meta.descargado),
+        referencia: meta.referencia || null,
+        fechaDelMapa: meta.fechaDelMapa || 'Sin metadatos de fecha',
+        metodo: 'Se busca en qué polígonos de peligro del IGP cae el punto (si cae en un hueco, queda fuera). Datos congelados.',
+      };
+    } catch (err) {
+      return sinDato({ ...base, enZona: false, resumen: [], detalle: [], frase: null, fecha: null, metodo: 'No se pudo obtener el dato.', error: err.message });
+    }
+  }
+
+  /** Las zonas y la metadata tal como están en el archivo, para dibujarlas en el mapa. Rechaza si el archivo falta. */
+  async function volcanCrudo() {
+    return zonasVolcanicas();
+  }
+
   /** Los sismos del archivo congelado tal como vienen (GeoJSON), para dibujarlos en el mapa. Rechaza si el archivo falta. */
   async function sismosCrudos() {
     const { features } = await archivo('sismos');
     return features;
   }
 
-  /** Las tres variables para un punto: { quebradas, peligros, sismos } (ninguna rechaza). */
+  /** Las variables para un punto: { quebradas, peligros, sismos, volcan } (ninguna rechaza). */
   async function evaluar(lat, lon, umbralUsuarioM = null) {
-    const [q, p, s] = await Promise.all([quebradas(lat, lon, umbralUsuarioM), peligros(lat, lon), sismos(lat, lon)]);
-    return { quebradas: q, peligros: p, sismos: s };
+    const [q, p, s, v] = await Promise.all([quebradas(lat, lon, umbralUsuarioM), peligros(lat, lon), sismos(lat, lon), volcan(lat, lon)]);
+    return { quebradas: q, peligros: p, sismos: s, volcan: v };
   }
 
-  return { cauces, quebradas, quebradasAusentes, peligros, sismos, sismosCrudos, evaluar };
+  return { cauces, quebradas, quebradasAusentes, peligros, sismos, sismosCrudos, volcan, volcanCrudo, evaluar };
 })();

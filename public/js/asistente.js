@@ -27,6 +27,7 @@ const Asistente = (() => {
   // Se resuelven al usarlos: en el navegador son globales y en las pruebas se cargan con require.
   const Dist = () => (typeof Distritos !== 'undefined' ? Distritos : require('./distritos.js')); // eslint-disable-line no-undef
   const Ent = () => (typeof Entidades !== 'undefined' ? Entidades : require('./entidades.js')); // eslint-disable-line no-undef
+  const Vol = () => (typeof Volcan !== 'undefined' ? Volcan : require('./volcan.js')); // eslint-disable-line no-undef
   const Sect = () => (typeof Sectores !== 'undefined' ? Sectores : require('./sectores.js')); // eslint-disable-line no-undef
 
   // ------------------------------------------------------------------ Criterios
@@ -110,7 +111,10 @@ const Asistente = (() => {
     // Precio de oferta por m² de un distrito (Aptología): el metro cuadrado, el distrito o la zona del punto.
     precioM2: /\b(?:m2|metros? cuadrados?|por metro|el metro|precio de oferta|precio promedio|promedio de precios?|mas caro|mas barato|mas economico|distritos?)\b/,
     precioTodos: /\b(?:distritos|todos|ranking|comparar?|mas caro|mas barato|mas economico|cada distrito)\b/,
-    // Preguntas sobre el punto (contexto de riesgo, siempre informativo; no son una evaluación de peligro).
+    // Peligro volcánico del Misti (zonas del IGP, informativo): el volcán, los lahares, la ceniza, los flujos piroclásticos, la lava y las avalanchas.
+    volcan: /\b(volcan(?:es|ico|ica|icos|icas)?|misti|lahar(?:es)?|cenizas?|erupci\w*|piroclastic\w*|avalanchas? de (?:escombros|detritos))\b/,
+    // Qué fenómeno volcánico nombra la frase (puede ser más de uno); vacío = el volcán en general.
+    volcanLahar: /\blahar(?:es)?\b/, volcanCeniza: /\bcenizas?\b/, volcanFlujo: /\b(?:piroclastic\w*|flujos? piroclastic\w*)/, volcanLava: /\blava\b/, volcanAvalancha: /\bavalanchas?\b/,
     quebrada: /\b(quebradas?|torrenteras?|cauces?|huaycos?|huaicos?|aluvion\w*|rios?|rio chili)\b/,
     sismos: /\b(sismos?|sismic\w*|temblor\w*|terremoto\w*)\b/,
     peligros: /\b(peligros?|riesgos?|derrumbes?|deslizamientos?|caida de rocas|geologic\w*)\b/,
@@ -163,6 +167,22 @@ const Asistente = (() => {
     return nombre;
   }
 
+  const PALABRAS_VOLCAN = /\b(?:volcan\w*|misti|lahar\w*|ceniza\w*|erupci\w*|piroclastic\w*|avalancha\w*|lava|peligro\w*|riesgo\w*|zonas?|punto|mapa|flujos?)\b/;
+
+  /**
+   * Distrito que nombra una pregunta del volcán sin que el buscador de distritos lo reconozca («que lahares hay en zamacola»
+   * → «zamacola»), o null. Solo mira lo que sigue a «distrito de», «en», «por», «de» o «para» al final de la frase y descarta
+   * lo que son palabras del propio tema («por el volcán», «en peligro»).
+   */
+  function distritoEnVolcan(t) {
+    if (RE.aqui.test(t)) return null;
+    const m = t.match(/\bdistrito\s+(?:de\s+)?([a-z ]+)$/) || t.match(/\b(?:en|por|de|para)\s+(?:el\s+|la\s+)?([a-z ]+)$/);
+    if (!m) return null;
+    const nombre = m[1].replace(/\s+(?:hoy|ahora|actualmente|por favor|gracias)$/, '').trim();
+    if (!nombre || nombre.split(' ').length > 4 || NO_DISTRITO.test(nombre) || PALABRAS_VOLCAN.test(nombre)) return null;
+    return nombre;
+  }
+
   /** Distancias en metros que aparecen en una frase. */
   function distanciasEn(frase) {
     const out = [];
@@ -175,7 +195,8 @@ const Asistente = (() => {
   /**
    * Convierte lo escrito en una intención.
    *   ctx: { hayPunto?: boolean, ultimaBusqueda?: { criterios } }
-   * tipo: saludo | ayuda | fuentes | pdm | construir | zona | ficha | servicio | quebrada | sismos | peligros | buscar | contar | perfil | mejor_zona | rutas | precio | no_soportado | desconocido
+   * tipo: saludo | ayuda | fuentes | pdm | construir | zona | ficha | servicio | quebrada | sismos | peligros | volcan | buscar | contar | perfil | mejor_zona | rutas | precio | no_soportado | desconocido
+   * volcan: zonas de peligro volcánico del Misti en el punto o en un distrito (`volcanTipos`: los fenómenos que nombra la frase; vacío = todos)
    * distrito: nombre del distrito nombrado en la frase (como en el archivo de límites) o null; distritoFuera: existe en la provincia pero no está en los datos
    * precio: precio de oferta por m² de un distrito (`distrito`, o el del punto; `todosPrecio` = lista de todos los que tienen cifra)
    * modo (solo en buscar): nuevo | agregar | quitar | priorizar
@@ -184,6 +205,7 @@ const Asistente = (() => {
     const intencion = {
       tipo: 'desconocido', modo: 'nuevo', criterios: [], radioGlobalM: null, lote: null, incluirCondicional: false,
       temaNoSoportado: null, aproximados: [], limitarAlPunto: false, distrito: null, distritoFuera: false, distritoTexto: null, todosPrecio: false,
+      volcanTipos: [],
     };
     let t = normalizar(texto);
     if (!t) return intencion;
@@ -236,6 +258,17 @@ const Asistente = (() => {
     // Un distrito nombrado (con errores de tipeo, tildes o mayúsculas): el mismo buscador para contar, perfil, precio, líneas y búsquedas.
     const dis = Dist().buscarNombre(t);
     if (dis) { intencion.distrito = dis.distrito; intencion.distritoFuera = !dis.enDatos; }
+
+    // Peligro volcánico del Misti: se atiende antes que perfil, líneas y quebradas («¿Paucarpata está en peligro por el Misti?» no es un perfil).
+    // Con criterios de búsqueda («busco colegio lejos del Misti») no se puede: se dice, no se ignora.
+    if (RE.volcan.test(t)) {
+      if (hayCriterios) return { ...intencion, tipo: 'no_soportado', temaNoSoportado: 'volcan_busqueda', criterios: [], aproximados: [], limitarAlPunto: false };
+      const volcanTipos = [['lahar', RE.volcanLahar], ['flujo_piroclastico', RE.volcanFlujo], ['lava', RE.volcanLava], ['avalancha', RE.volcanAvalancha], ['ceniza', RE.volcanCeniza]].filter(([, re]) => re.test(t)).map(([id]) => id);
+      const volcan = { ...intencion, tipo: 'volcan', volcanTipos, criterios: [], aproximados: [], limitarAlPunto: false };
+      if (dis) return volcan;
+      const texto = distritoEnVolcan(t);
+      return texto ? { ...volcan, tipo: 'distrito_desconocido', distritoTexto: texto } : volcan;
+    }
 
     // Líneas de transporte (antes que los criterios y que «contar»: «buses» también es el criterio «transporte» de una búsqueda).
     const preguntaRutas = (RE.rutasPregunta.test(t) && RE.rutasVerbo.test(t)) || RE.rutasLinea.test(t) || RE.rutasVehiculo.test(t) || RE.rutasHay.test(t);
@@ -843,6 +876,44 @@ const Asistente = (() => {
     return lineas.join('\n');
   }
 
+  // ---------------------------------------------------- Peligro volcánico del Misti (zonas del IGP, informativo)
+
+  const FUENTE_VOLCAN = 'Zonas de peligro volcánico del Misti del Instituto Geofísico del Perú (IGP), congeladas con su fecha de extracción. El mapa oficial de referencia es el de INGEMMET (Boletín Serie C n.° 100, 2025); no se pudo confirmar de qué edición salen las capas del IGP y el servicio no trae fecha.';
+  const LIM_VOLCAN = 'Es un mapa de escala regional y sin fecha de elaboración: cerca del borde de una zona el nivel no es exacto a nivel de predio. No es una evaluación de riesgo ni dice si habrá una erupción, y que un lugar no esté en una zona no significa que no haya peligro. Para decidir, consulta el CENEPRED (SIGRID), tu municipalidad y el IGP o INGEMMET.';
+  const SUGERENCIAS_VOLCAN = ['¿Hay lahares cerca de mi punto?', '¿Paucarpata está en peligro por el Misti?', 'Dame un resumen de mi punto'];
+
+  /** Los fenómenos que se pueden dibujar entre los que pidió la persona (todos los dibujables si no nombró ninguno); null si no hay nada que dibujar (solo ceniza). */
+  function mapaDeVolcan(intencion, distrito) {
+    const pedidos = intencion.volcanTipos || [];
+    const dibujables = Vol().dibujables();
+    const tipos = pedidos.length ? pedidos.filter((t) => dibujables.includes(t)) : dibujables;
+    return tipos.length ? { distrito, capas: [], volcan: { tipos } } : null;
+  }
+
+  function textoVolcanPunto(intencion, c) {
+    const v = c.volcan;
+    const pedidos = intencion.volcanTipos || [];
+    if (!v) return 'Todavía estoy calculando el peligro volcánico de tu punto; vuelve a preguntar en unos segundos.';
+    if (v.estado === 'SIN DATO') return `No tengo el mapa de peligro volcánico del IGP (${v.error || 'archivo no disponible'}), así que no lo afirmo. Consulta el CENEPRED (SIGRID), tu municipalidad y el IGP.`;
+    const resumen = pedidos.length ? v.resumen.filter((r) => pedidos.includes(r.tipo)) : v.resumen;
+    const lineas = [Vol().frasePunto(resumen, { tipos: pedidos })];
+    if (resumen.length) Vol().lineasPunto(resumen).forEach((l) => lineas.push(`• ${l.texto}`));
+    if (pedidos.includes('ceniza') && pedidos.length === 1) lineas.push('La ceniza cubre toda la ciudad en los escenarios del IGP, por eso no la dibujo en el mapa.');
+    lineas.push(`Datos del IGP congelados el ${v.fecha || 'sin fecha'}. ${LIM_VOLCAN}`);
+    return lineas.join('\n');
+  }
+
+  function respuestaVolcanDistrito(intencion, c) {
+    const t = c.distritoTitulo || Dist().titulo(intencion.distrito);
+    if (intencion.distritoFuera) return { texto: textoDistritoFuera(t), sugerencias: SUGERENCIAS_BASE };
+    const d = c.volcanDistrito;
+    if (!d) return { texto: `Todavía estoy midiendo el peligro volcánico de ${t}; vuelve a preguntar en unos segundos.`, sugerencias: SUGERENCIAS_VOLCAN };
+    if (d.error) return { texto: `No tengo el mapa de peligro volcánico del IGP (${d.error}), así que no lo afirmo. Consulta el CENEPRED (SIGRID), tu municipalidad y el IGP.`, sugerencias: SUGERENCIAS_VOLCAN };
+    const pedidos = intencion.volcanTipos || [];
+    const texto = [Vol().fraseDistrito(t, d.r, { tipos: pedidos }), `Datos del IGP congelados el ${d.fecha || 'sin fecha'}. Los porcentajes salen de una muestra de puntos del distrito. ${LIM_VOLCAN}`].join('\n');
+    return { texto, sugerencias: [`¿Qué líneas pasan por ${t}?`, 'Dame un resumen de mi punto', '¿Hay lahares cerca de mi punto?'], mapa: mapaDeVolcan(intencion, intencion.distrito) };
+  }
+
   function textoPDM(estado) {
     const aviso = C.avisoPDMProyectado(estado);
     if (!aviso) return 'No tengo un aviso con fuente y fecha sobre el PDM nuevo, así que no lo afirmo. Consulta al IMPLA.';
@@ -914,6 +985,7 @@ const Asistente = (() => {
     '• Salud, colegios, paraderos y áreas verdes: OpenStreetMap (ODbL), copia congelada con su fecha de extracción. Algo que falte en el mapa puede existir.',
     '• Líneas de transporte (recorridos y paradas): SmartBus (smartbus.app), usados con su autorización verbal (confirmación escrita pendiente). Sin frecuencias ni horarios.',
     '• Umbrales: colegios 500 m inicial, 1500 m primaria y 3000 m secundaria (MINEDU); área verde ≥ 0,5 ha a 300 m (OMS Europa); salud 1000 m, paradero 400 m y borde de zona 20 m son convenciones del proyecto.',
+    '• Peligro volcánico del Misti: zonas del Instituto Geofísico del Perú (IGP), sin fecha de elaboración en el servicio; el mapa oficial de referencia es el de INGEMMET (Boletín n.° 100, 2025). Es informativo, no una evaluación de riesgo.',
     '• Precio de oferta por m² del distrito: Aptología (datos abiertos, CC BY 4.0). Son precios pedidos en avisos, no de cierre, y solo hay cifra en los distritos con suficientes avisos.',
     '• Distancias en línea recta, no recorrido a pie.',
     '• Las búsquedas de zonas son un cálculo sobre una cuadrícula de celdas; el porcentaje es la parte del suelo habitable que cumple, no una probabilidad.',
@@ -968,6 +1040,7 @@ const Asistente = (() => {
   const TEMAS = {
     seguridad: 'No evalúo seguridad ciudadana: el proyecto la dejó fuera de alcance, aunque los estudios muestran que pesa en la decisión de compra. No te doy una respuesta a medias.',
     precio: 'No tengo el precio de una casa, un terreno ni un alquiler en particular, ni puedo decirte qué zona es más barata. Solo conozco el precio de oferta por m² promedio de algunos distritos (Aptología): pregúntame «¿cuánto cuesta el m² en Cayma?».',
+    volcan_busqueda: 'Todavía no puedo buscar zonas según el peligro volcánico. Sí puedo decirte en qué zonas de peligro del Misti cae tu punto («¿hay lahares cerca de mi punto?») o qué parte de un distrito cae en cada una («¿Paucarpata está en peligro por el Misti?»).',
     ruido: 'No tengo datos de ruido. «Zona tranquila» es solo una aproximación con la zonificación (residencial de densidad baja o media 1), no una medición.',
   };
 
@@ -981,7 +1054,7 @@ const Asistente = (() => {
     const fin = (texto, sugerencias = SUGERENCIAS_BASE) => ({ texto, sugerencias });
 
     if (tipo === 'saludo') return fin('¡Hola! Soy el asistente de GeoVerificador. Puedo contarte lo que hay en tu punto (zona y servicios cercanos) o buscar zonas de Arequipa según lo que te importa: colegio, posta, área verde, transporte, campiña, zona residencial. Todo con los mismos datos de la ficha.');
-    if (tipo === 'ayuda') return fin('Puedo:\n• Buscar zonas: «busco cerca de un colegio y un parque, lo más importante es el parque» o «posta y paradero en un radio de 1 km».\n• Contarte de tu punto: «¿qué zona es?», «¿hay un colegio cerca?», «dame un resumen».\n• Líneas de transporte: «¿qué buses pasan por aquí?» o «¿qué líneas pasan por Paucarpata?».\n• Calcular: «¿cuánto puedo construir en un lote de 200 m²?».\n• Decirte el precio de oferta por m² promedio de un distrito: «¿cuánto cuesta el m² en Cayma?».\n• Explicar el PDM nuevo y de dónde salen los datos.\nNo tengo datos de seguridad ni ruido, ni el precio de una casa o un terreno en particular.');
+    if (tipo === 'ayuda') return fin('Puedo:\n• Buscar zonas: «busco cerca de un colegio y un parque, lo más importante es el parque» o «posta y paradero en un radio de 1 km».\n• Contarte de tu punto: «¿qué zona es?», «¿hay un colegio cerca?», «dame un resumen».\n• Líneas de transporte: «¿qué buses pasan por aquí?» o «¿qué líneas pasan por Paucarpata?».\n• Peligro volcánico del Misti: «¿hay lahares cerca de mi punto?» o «¿Paucarpata está en peligro por el Misti?».\n• Calcular: «¿cuánto puedo construir en un lote de 200 m²?».\n• Decirte el precio de oferta por m² promedio de un distrito: «¿cuánto cuesta el m² en Cayma?».\n• Explicar el PDM nuevo y de dónde salen los datos.\nNo tengo datos de seguridad ni ruido, ni el precio de una casa o un terreno en particular.');
     if (tipo === 'fuentes') return fin(TEXTO_FUENTES);
     if (tipo === 'no_soportado') return fin(`${TEMAS[intencion.temaNoSoportado] || 'Eso no está en los datos que uso.'}\nSí puedo ayudarte con la zonificación y con la cercanía a colegios, salud, transporte y áreas verdes.`);
     if (tipo === 'desconocido') return fin('No entendí eso. Puedes pedirme, por ejemplo:', SUGERENCIAS_BASE);
@@ -1003,6 +1076,9 @@ const Asistente = (() => {
       return { ...fin(textoRutasPunto(rp), ['Dame un resumen del punto', '¿Hay un paradero cerca?']), mapa: mapaDeLineas(rp, null, c.punto) };
     }
     if (tipo === 'precio') return fin(textoPrecio(intencion, c), SUGERENCIAS_PRECIO);
+    if (tipo === 'volcan' && intencion.distrito) return respuestaVolcanDistrito(intencion, c);
+    if (tipo === 'volcan' && !c.punto) return fin('Elige un punto en el mapa para ver en qué zonas de peligro volcánico del Misti cae, o pregúntame por un distrito: «¿Paucarpata está en peligro por el Misti?».', SUGERENCIAS_VOLCAN);
+    if (tipo === 'volcan') return { ...fin(textoVolcanPunto(intencion, c), SUGERENCIAS_VOLCAN), mapa: mapaDeVolcan(intencion, null) };
 
     if (!c.punto) return sinPunto();
 
@@ -1422,6 +1498,11 @@ const Asistente = (() => {
       porque: ['Se cuentan los eventos del inventario de peligros geológicos de INGEMMET a 500 m o menos de tu punto y se mide la distancia al más cercano.'],
       fuente: [FUENTE_INGEMMET],
       limites: [LIM_INVENTARIO, LIM_RECTA, LIM_REFERENCIAL],
+    },
+    volcan: {
+      porque: ['Se busca en qué polígonos de peligro volcánico del IGP cae tu punto. Para un distrito, se prueba un punto cada 250 m dentro de él y, por cada fenómeno, se cuenta el nivel más alto de ese punto.'],
+      fuente: [FUENTE_VOLCAN],
+      limites: [LIM_VOLCAN, 'La ceniza cubre toda la ciudad en los escenarios del IGP: por eso no se dibuja en el mapa.'],
     },
     servicio: SERVICIOS,
     contar: {

@@ -37,10 +37,12 @@ const Comparar = (() => {
   const MERCADO = [{ id: 'precio', titulo: 'Precio de oferta del distrito (por m²)' }];
   const P = typeof Precios !== 'undefined' ? Precios : require('./precios.js'); // eslint-disable-line no-undef
   /** Filas informativas de la tabla: contexto, nunca prioridad. */
-  const CONTEXTO = [
+  const CONTEXTO_BASE = [
     { id: 'peligros', titulo: 'Peligros geológicos registrados' },
     { id: 'sismos', titulo: 'Sismos recientes (IGP)' },
   ];
+  // El peligro volcánico se sumó después: los puntos guardados antes no lo tienen y siguen siendo válidos (celda «Sin dato»).
+  const CONTEXTO = [...CONTEXTO_BASE, { id: 'volcan', titulo: 'Peligro volcánico del Misti (IGP)' }];
 
   const esNumero = (n) => typeof n === 'number' && Number.isFinite(n);
   const esTexto = (t) => typeof t === 'string';
@@ -113,6 +115,14 @@ const Comparar = (() => {
     tipo: p && p.masCercano ? p.masCercano.subtipo || p.masCercano.tipo || null : null,
   });
 
+  // Peligro volcánico del Misti (Contexto.volcan): solo la frase y los fenómenos con su nivel; siempre informativo.
+  const contextoVolcan = (v) => ({
+    estado: v && v.estado === 'INFORMATIVO' && esTexto(v.frase) ? 'INFORMATIVO' : 'SIN DATO',
+    enZona: Boolean(v && v.enZona),
+    frase: v && esTexto(v.frase) ? v.frase : null,
+    zonas: v && Array.isArray(v.resumen) ? v.resumen.filter((r) => r && esTexto(r.tipo) && esTexto(r.nivel)).map((r) => ({ tipo: r.tipo, nivel: r.nivel })) : [],
+  });
+
   const contextoSismos = (s) => ({
     estado: s && s.estado === 'INFORMATIVO' && esNumero(s.total) ? 'INFORMATIVO' : 'SIN DATO',
     total: s && esNumero(s.total) ? s.total : null,
@@ -167,7 +177,7 @@ const Comparar = (() => {
         areaVerde: servicio(entorno.areaVerde),
         quebradas: variableQuebradas(cauce),
       },
-      contexto: { peligros: contextoPeligros(contexto && contexto.peligros), sismos: contextoSismos(contexto && contexto.sismos) },
+      contexto: { peligros: contextoPeligros(contexto && contexto.peligros), sismos: contextoSismos(contexto && contexto.sismos), volcan: contextoVolcan(contexto && contexto.volcan) },
       precio: variablePrecio(precio),
     };
   }
@@ -308,8 +318,12 @@ const Comparar = (() => {
 
   /** Filas de contexto (peligros y sismos): estado INFORMATIVO o SIN DATO y líneas de texto. Nunca son prioridad. */
   function celdaContexto(candidato, id) {
-    const v = candidato.contexto[id];
+    const v = candidato.contexto[id] || { estado: 'SIN DATO' }; // un punto guardado antes de existir la fila no la tiene
     if (v.estado !== 'INFORMATIVO') return { estado: 'SIN DATO', partes: [{ texto: 'Sin dato' }] };
+    if (id === 'volcan') {
+      const texto = v.enZona ? v.frase.replace(/^Tu punto está en zona de /, 'En zona de ').replace(/ del Misti, según el IGP[.]$/, '') : 'Fuera de las zonas mapeadas por el IGP';
+      return { estado: 'INFORMATIVO', partes: [{ texto }, { texto: 'Mapa del IGP de escala regional, sin fecha; no es una evaluación' }] };
+    }
     if (id === 'peligros') {
       const partes = [{ texto: `${v.total} registrado${v.total === 1 ? '' : 's'} a ${fmtRef(v.radioM)} o menos` }];
       if (v.distanciaM !== null) partes.push({ texto: `El más cercano a ${fmtDist(v.distanciaM)} en línea recta${v.tipo ? ` (${v.tipo.toLowerCase()})` : ''}` });
@@ -394,7 +408,7 @@ const Comparar = (() => {
     const v = c.variables;
     if (!IDS.every((id) => v[id] && ESTADOS.includes(v[id].estado))) return false;
     if (!v.educacion.niveles || !NIVELES.every((n) => v.educacion.niveles[n] && ESTADOS.includes(v.educacion.niveles[n].estado))) return false;
-    return !!c.contexto && CONTEXTO.every((x) => c.contexto[x.id] && ESTADOS.includes(c.contexto[x.id].estado));
+    return !!c.contexto && CONTEXTO_BASE.every((x) => c.contexto[x.id] && ESTADOS.includes(c.contexto[x.id].estado));
   }
 
   /** Lee los puntos guardados; descarta lo que no tenga la forma esperada (datos viejos o alterados). */

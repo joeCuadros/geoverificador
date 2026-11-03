@@ -259,3 +259,53 @@ describe('Capas.construir: solo el distrito (perfil)', () => {
     expect(r.limites).toEqual([-71.55, -16.42, -71.53, -16.40]);
   });
 });
+
+describe('Capas.construir: peligro volcánico del Misti', () => {
+  const Volcan = require('../public/js/volcan.js');
+  const zona = (tipo: string, nivel: string, lat: number, lon: number, g: number) => ({
+    type: 'Feature', geometry: { type: 'MultiPolygon', coordinates: [cuadrado(lat, lon, g)] }, properties: { tipo, nivel, etiqueta: `Peligro ${nivel}`, capa: `Capa ${tipo}`, detalle: 'Alcance 2 km a 4 km' },
+  });
+  const volcan = Volcan.indexar([
+    zona('lahar', 'bajo', -16.42, -71.55, 0.03), zona('lahar', 'alto', -16.41, -71.54, 0.01), zona('lava', 'alto', -16.41, -71.54, 0.005),
+    zona('ceniza', 'alto', -16.5, -71.6, 0.3), zona('lahar', 'moderado', -16.2, -71.2, 0.01),
+  ]);
+
+  it('dibuja las zonas por nivel (la más alta encima) y no dibuja la ceniza', () => {
+    const r = Capas.construir({ ...base, volcan, capas: [{ id: 'volcan' }], area: null });
+    expect(r.peligroVolcan.map((z: { tipo: string; nivel: string }) => `${z.tipo}:${z.nivel}`)).toEqual(['lahar:bajo', 'lahar:moderado', 'lahar:alto', 'lava:alto']);
+    expect(r.peligroVolcan.some((z: { tipo: string }) => z.tipo === 'ceniza')).toBe(false);
+  });
+
+  it('una línea de leyenda por nivel, del más alto al más bajo, con los fenómenos que se dibujan en él', () => {
+    const r = Capas.construir({ ...base, volcan, capas: [{ id: 'volcan' }], area: null });
+    const ley = r.leyenda.filter((l: { capa: string }) => l.capa === 'volcan');
+    expect(ley.map((l: { texto: string }) => l.texto)).toEqual(['Peligro alto: lahares y flujos de lava', 'Peligro moderado: lahares', 'Peligro bajo: lahares']);
+    expect(ley.map((l: { n: number }) => l.n)).toEqual([2, 1, 1]);
+    expect(r.resumen).toBe('Muestro 4 zonas de peligro volcánico.');
+  });
+
+  it('con un fenómeno pedido dibuja solo ese; pedir solo ceniza no dibuja nada y lo dice', () => {
+    const lava = Capas.construir({ ...base, volcan, capas: [{ id: 'volcan', tipos: ['lava'] }], area: null });
+    expect(lava.peligroVolcan).toHaveLength(1);
+    expect(lava.leyenda.map((l: { texto: string }) => l.texto)).toEqual(['Peligro alto: flujos de lava']);
+    const ceniza = Capas.construir({ ...base, volcan, capas: [{ id: 'volcan', tipos: ['ceniza'] }], area: null });
+    expect(ceniza.peligroVolcan).toEqual([]);
+    expect(ceniza.vacias).toEqual(['volcan']);
+  });
+
+  it('con un distrito solo se dibujan las zonas que tocan su caja', () => {
+    const r = Capas.construir({ ...base, volcan, capas: [{ id: 'volcan' }], area: { polys: DISTRITO } });
+    expect(r.peligroVolcan.some((z: { nivel: string; tipo: string }) => z.tipo === 'lahar' && z.nivel === 'moderado')).toBe(false);
+  });
+
+  it('sin archivo no inventa nada y lo dice; el popup cita el IGP y que no es una evaluación', () => {
+    expect(Capas.construir({ ...base, volcan: null, capas: [{ id: 'volcan' }], area: null }).sinDatos).toEqual(['volcan']);
+    const z = Capas.construir({ ...base, volcan, capas: [{ id: 'volcan' }], area: null }).peligroVolcan[0];
+    expect(z.detalle).toMatch(/IGP/);
+    expect(z.detalle).toMatch(/no es una evaluación de riesgo/);
+  });
+
+  it('la capa se ofrece entre las de riesgo', () => {
+    expect(Capas.CAPAS.find((c: { id: string }) => c.id === 'volcan')).toMatchObject({ etiqueta: 'Peligro volcánico (Misti)', grupo: 'riesgo' });
+  });
+});

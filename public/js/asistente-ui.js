@@ -144,7 +144,7 @@ const AsistenteUI = (() => {
       Distritos.lookup(p.lat, p.lon).catch(() => null),
       Contexto.evaluar(p.lat, p.lon, umbral), // quebradas, peligros y sismos: contexto informativo
     ]);
-    const ctx = { ...base, punto: { lat: p.lat, lon: p.lon }, distrito: dis ? dis.distrito : null, zona, entorno, cauce: riesgo.quebradas, sismos: riesgo.sismos, peligros: riesgo.peligros };
+    const ctx = { ...base, punto: { lat: p.lat, lon: p.lon }, distrito: dis ? dis.distrito : null, zona, entorno, cauce: riesgo.quebradas, sismos: riesgo.sismos, peligros: riesgo.peligros, volcan: riesgo.volcan };
     cacheContexto = { clave, ctx };
     return ctx;
   }
@@ -157,6 +157,17 @@ const AsistenteUI = (() => {
     } catch (err) {
       console.error('[Asistente] rutas por distrito', err);
       return { distrito, error: err.message };
+    }
+  }
+
+  /** Qué parte de un distrito (nombre exacto de Distritos) cae en cada zona de peligro volcánico del Misti: { r, fecha } o { error }. */
+  async function volcanDeDistrito(distrito) {
+    try {
+      const [{ zonas, meta }] = await Promise.all([Contexto.volcanCrudo(), Distritos.load()]);
+      return { r: Volcan.porDistrito(zonas, Distritos.poligonos(distrito), { pasoM: 250 }), fecha: String(meta.descargado || '').slice(0, 10) };
+    } catch (err) {
+      console.error('[Asistente] peligro volcánico por distrito', err);
+      return { error: err.message };
     }
   }
 
@@ -189,14 +200,17 @@ const AsistenteUI = (() => {
   }
 
   /** Los datos ya ordenados para dibujar entidades en el mapa (capas-ui.js). Los sismos son opcionales: sin archivo, la capa lo dice. */
-  async function datosParaMapa({ rutas = false } = {}) {
+  async function datosParaMapa({ rutas = false, volcan = false } = {}) {
     const { zonas, datos, fecha, cauces } = await preparar();
     let sismos = null;
     try { sismos = Capas.sismosDeFeatures(await Contexto.sismosCrudos()); } catch (_) { sismos = null; }
     // Los recorridos de SmartBus pesan casi 5 MB: solo se bajan cuando hay líneas que dibujar. Si fallan, la capa lo dice.
     let indiceRutas = null;
     if (rutas) { try { indiceRutas = await Equipamiento.indiceRutas(); } catch (_) { indiceRutas = null; } }
-    return { datos, zonas, cauces, sismos, rutas: indiceRutas, umbrales: umbrales(), fecha };
+    // Las zonas de peligro volcánico (~0,5 MB) solo se bajan cuando se van a dibujar. Si fallan, la capa lo dice.
+    let zonasVolcan = null;
+    if (volcan) { try { zonasVolcan = (await Contexto.volcanCrudo()).zonas; } catch (_) { zonasVolcan = null; } }
+    return { datos, zonas, cauces, sismos, volcan: zonasVolcan, rutas: indiceRutas, umbrales: umbrales(), fecha };
   }
 
   /** Lo que el chat necesita para hablar de un distrito: sus polígonos, el conteo o el perfil y la fecha de los datos. */
@@ -205,6 +219,7 @@ const AsistenteUI = (() => {
     if (intencion.distritoFuera) return base;
     await Distritos.load();
     if (intencion.tipo === 'rutas') return { ...base, rutasDistrito: await rutasDeDistrito(intencion.distrito) };
+    if (intencion.tipo === 'volcan') return { ...base, volcanDistrito: await volcanDeDistrito(intencion.distrito) };
     const { zonas, datos, fecha, cauces } = await preparar();
     const polys = Distritos.poligonos(intencion.distrito);
     const opciones = { areaMinM2: CONFIG.umbrales.areaVerde.areaMinM2 };
@@ -329,8 +344,8 @@ const AsistenteUI = (() => {
       const intencion = eleccion.intencion;
       if (intencion.tipo === 'buscar') await ejecutarBusqueda(intencion);
       else {
-        const esDistrito = ['contar', 'perfil', 'rutas'].includes(intencion.tipo) && intencion.distrito;
-        const conPunto = ['ficha', 'servicio', 'zona', 'construir', 'quebrada', 'sismos', 'peligros', 'rutas'].includes(intencion.tipo);
+        const esDistrito = ['contar', 'perfil', 'rutas', 'volcan'].includes(intencion.tipo) && intencion.distrito;
+        const conPunto = ['ficha', 'servicio', 'zona', 'construir', 'quebrada', 'sismos', 'peligros', 'rutas', 'volcan'].includes(intencion.tipo);
         const ctx = intencion.tipo === 'precio' ? await contextoPrecio() : esDistrito ? await contextoDistrito(intencion) : conPunto ? await contexto() : { estadoPDM: CONFIG.estadoPDM, potencial: Zonificacion.potencial, punto: api.obtenerPunto() };
         const resp = Asistente.responder(intencion, ctx);
         let texto = resp.texto;
@@ -349,6 +364,7 @@ const AsistenteUI = (() => {
           const nivelPedido = resp.mapa.capas.some((id) => Asistente.NIVELES_COLEGIO.includes(id));
           const capas = Capas.deCriterios(resp.mapa.capas.map((id) => ({ id }))).map((c) => (c.id === 'colegios' && !nivelPedido ? { id: 'colegios' } : c)); // «colegios» a secas son todos los niveles
           if (resp.mapa.lineas) capas.push({ id: 'lineas', ...resp.mapa.lineas }); // líneas de bus: nombres de las líneas y, si hay, el punto
+          if (resp.mapa.volcan) capas.push({ id: 'volcan', ...resp.mapa.volcan }); // peligro volcánico: los fenómenos que se dibujan
           api.alBuscar({ capas, distrito: resp.mapa.distrito, sectores: [] });
         }
       }

@@ -47,6 +47,7 @@ const peligros = json('data/peligros_aqp.geojson');
 const distritos = json('data/distritos_aqp.geojson');
 const quebradas = json('data/quebradas_aqp.geojson');
 const sismos = json('data/sismos_igp.geojson');
+const volcan = json('data/peligro_volcanico_misti.geojson');
 const e030 = json('data/zonas_sismicas_e030.json');
 const precios = json('data/precios_m2_distrito.json');
 const equipamiento = Object.fromEntries(['salud', 'educacion', 'transporte', 'areas_verdes'].map((n) => [n, json(`data/equipamiento/${n}.geojson`)]));
@@ -187,6 +188,24 @@ console.log('\n== A. Integridad de los archivos ==');
   console.log(`INFO  Quebradas: Añashuayco ${nombres.some((x) => /añashuayco/i.test(x)) ? 'figura' : 'NO figura'}; San Lázaro ${nombres.some((x) => /san l[aá]zaro/i.test(x)) ? 'figura' : 'NO figura'}`);
 }
 
+// Peligro volcánico del Misti (IGP): congelado con scripts/descargar-peligro-volcanico.mjs
+{
+  const f = volcan.features;
+  const m = volcan.metadata || {};
+  const TIPOS = ['lahar', 'flujo_piroclastico', 'lava', 'avalancha', 'ceniza'];
+  const NIVELES = ['bajo', 'moderado', 'alto'];
+  const anillos = f.flatMap((x) => x.geometry.coordinates.flatMap((p) => p));
+  comprobar('Volcán: FeatureCollection con solo MultiPolygon, tipo y nivel conocidos, capa de origen y anillos cerrados de al menos 4 puntos', volcan.type === 'FeatureCollection' && f.length > 0 && f.every((x) => x.geometry?.type === 'MultiPolygon' && TIPOS.includes(x.properties.tipo) && NIVELES.includes(x.properties.nivel) && !!x.properties.capa && Number.isInteger(x.properties.capaId)) && anillos.every((r) => r.length >= 4 && r[0][0] === r[r.length - 1][0] && r[0][1] === r[r.length - 1][1]), `${f.length} polígonos`);
+  comprobar('Volcán: metadata con fuente (IGP), servicio https, fecha de extracción, licencia, referencia oficial (INGEMMET) y la aclaración «sin metadatos de fecha»', /Instituto Geofísico del Perú/.test(m.fuente || '') && /^https:/.test(m.servicio || '') && /^\d{4}-\d{2}-\d{2}T/.test(m.descargado || '') && !!m.licencia && /INGEMMET/.test(m.referencia || '') && /Sin metadatos de fecha/.test(m.fechaDelMapa || ''), m.descargado);
+  const porTipo = Object.fromEntries(TIPOS.map((t) => [t, f.filter((x) => x.properties.tipo === t).length]));
+  comprobar('Volcán: metadata.registros, porTipo y capas[].registros coinciden con los polígonos del archivo', m.registros === f.length && TIPOS.every((t) => (m.porTipo[t] || 0) === porTipo[t]) && m.capas.reduce((s, c) => s + c.registros, 0) === f.length && m.capas.every((c) => f.filter((x) => x.properties.capaId === c.id).length === c.registros), JSON.stringify(porTipo));
+  comprobar('Volcán: lahares, flujos piroclásticos, lava y avalanchas traen los tres niveles (alto, moderado y bajo)', ['lahar', 'flujo_piroclastico', 'lava', 'avalancha'].every((t) => NIVELES.every((n) => f.some((x) => x.properties.tipo === t && x.properties.nivel === n))));
+  const cerca = f.filter((x) => x.properties.tipo !== 'ceniza').flatMap((x) => x.geometry.coordinates.flatMap((p) => p[0]));
+  comprobar('Volcán: los polígonos de lahares, flujos, lava y avalanchas quedan cerca del Misti (lon -71,8 a -71,2; lat -16,7 a -16,1)', cerca.every(([x, y]) => x > -71.8 && x < -71.2 && y > -16.7 && y < -16.1), `${cerca.length} vértices`);
+  comprobar('Volcán: la ceniza dice su escenario y el espesor del depósito', f.filter((x) => x.properties.tipo === 'ceniza').every((x) => ['vulcaniana', 'subpliniana', 'pliniana'].includes(x.properties.escenario) && /cm|mm/.test(x.properties.deposito || '')));
+  console.log(`INFO  Volcán: ${f.length} polígonos (${TIPOS.map((t) => `${t} ${porTipo[t]}`).join(', ')}); ${m.fechaDelMapa}`);
+}
+
 // Sismos reportados (IGP): congelados con scripts/descargar-sismos.mjs
 {
   const f = sismos.features;
@@ -256,7 +275,7 @@ const ctx = vm.createContext({
     }
   },
 });
-for (const f of ['js/config.js', 'js/calculos.js', 'js/rutas.js', 'js/geo.js', 'js/zonificacion.js', 'js/peligros.js', 'js/contexto.js', 'js/delitos.js', 'js/distritos.js', 'js/riesgos.js']) {
+for (const f of ['js/config.js', 'js/calculos.js', 'js/rutas.js', 'js/geo.js', 'js/zonificacion.js', 'js/peligros.js', 'js/volcan.js', 'js/contexto.js', 'js/delitos.js', 'js/distritos.js', 'js/riesgos.js']) {
   vm.runInContext(leer(f), ctx, { filename: f });
 }
 const app = (expr) => vm.runInContext(expr, ctx);
@@ -505,6 +524,78 @@ const dentro = (x, y, anillos) => vueltas(x, y, anillos[0]) && !anillos.slice(1)
     const n = Calc.evaluarCauces({ lat: -16.399, lon: -71.537 }, quebradas.features.map((x) => ({ nombre: x.properties.nombre, geometry: x.geometry })), { umbralUsuarioM: 50000 });
     return r0.estado === 'INFORMATIVO' && r0.umbralM === null && c.estado === 'CUMPLE' && n.estado === 'NO CUMPLE';
   })());
+}
+
+// B7a. Peligro volcánico: el módulo del navegador frente a un recuento independiente (número de vueltas, sin índice de cajas).
+{
+  const Vol = app('Volcan');
+  const Ctx = app('Contexto');
+  const RANGO = { bajo: 1, moderado: 2, alto: 3 };
+  // En un punto: el nivel más alto de cada fenómeno, calculado aquí con el método de las vueltas sobre el archivo crudo.
+  // Se descartan primero los polígonos cuya caja (mínimo y máximo de sus vértices, calculados aquí) no contiene el punto.
+  const cajas = volcan.features.map((x) => {
+    const pts = x.geometry.coordinates.flatMap((p) => p[0]);
+    return [Math.min(...pts.map((c) => c[0])), Math.min(...pts.map((c) => c[1])), Math.max(...pts.map((c) => c[0])), Math.max(...pts.map((c) => c[1]))];
+  });
+  const nivelesEn = (lat, lon) => {
+    const mejor = {};
+    volcan.features.forEach((x, i) => {
+      const t = x.properties.tipo;
+      const b = cajas[i];
+      if (lon < b[0] || lon > b[2] || lat < b[1] || lat > b[3]) return;
+      if (x.geometry.coordinates.some((p) => dentro(lon, lat, p)) && (!mejor[t] || RANGO[x.properties.nivel] > RANGO[mejor[t]])) mejor[t] = x.properties.nivel;
+    });
+    return mejor;
+  };
+  const zonas = Vol.indexar(volcan.features);
+  let distintos = 0;
+  let conZona = 0;
+  const detalles = [];
+  for (let k = 0; k < 400; k++) {
+    const lat = sur + azar() * (norte - sur);
+    const lon = oeste + azar() * (este - oeste);
+    const esperado = nivelesEn(lat, lon);
+    const obtenido = Object.fromEntries(Vol.resumirPunto(Vol.enZonas(lat, lon, zonas)).map((r) => [r.tipo, r.nivel]));
+    if (Object.keys(esperado).some((t) => t !== 'ceniza')) conZona++;
+    if (JSON.stringify(Object.entries(esperado).sort()) !== JSON.stringify(Object.entries(obtenido).sort())) { distintos++; if (detalles.length < 3) detalles.push(`${lat.toFixed(4)},${lon.toFixed(4)}`); }
+  }
+  comprobar('Volcán: 400 puntos al azar en Arequipa metropolitana dan el mismo nivel por fenómeno que el método independiente', distintos === 0, `${distintos} diferencias${detalles.length ? ` (${detalles.join('; ')})` : ''}; ${conZona} puntos en alguna zona de lahares, flujos, lava o avalanchas`);
+  // Un punto conocido: la cima del Misti.
+  const cima = Vol.resumirPunto(Vol.enZonas(-16.294, -71.409, zonas));
+  comprobar('Volcán: la cima del Misti cae en peligro alto de flujos piroclásticos y de avalanchas', cima.find((r) => r.tipo === 'flujo_piroclastico')?.nivel === 'alto' && cima.find((r) => r.tipo === 'avalancha')?.nivel === 'alto');
+  // El módulo Contexto.volcan devuelve lo mismo, informativo, con su fuente y sin cumple.
+  const v = await Ctx.volcan(-16.4256, -71.4944);
+  comprobar('Volcán (módulo): INFORMATIVO, con frase, fuente del IGP, referencia y fecha de los datos; nunca cumple ni puntaje', v.estado === 'INFORMATIVO' && /Instituto Geofísico/.test(v.fuente) && /INGEMMET/.test(v.referencia) && /Sin metadatos de fecha/.test(v.fechaDelMapa) && !/cumple|puntaje/i.test(JSON.stringify(v.frase) + JSON.stringify(v.lineas)), v.frase);
+  // Por distrito: Paucarpata y Cayma con una muestra cada 150 m (independiente) frente a la de 250 m del módulo (tolerancia de 4 puntos).
+  const mPorGrado = ((Math.PI / 180) * 6371008.8);
+  const porcentajes = (polys) => {
+    const bx = polys.flatMap((p) => p[0]);
+    const x0 = Math.min(...bx.map((c) => c[0])); const x1 = Math.max(...bx.map((c) => c[0]));
+    const y0 = Math.min(...bx.map((c) => c[1])); const y1 = Math.max(...bx.map((c) => c[1]));
+    const dl = 150 / mPorGrado;
+    const cuenta = { alto: 0, moderado: 0, bajo: 0, ninguno: 0 };
+    let n = 0;
+    for (let lat = y0 + dl / 2; lat < y1; lat += dl) {
+      const dlo = 150 / (mPorGrado * Math.cos(rad(lat)));
+      for (let lon = x0 + dlo / 2; lon < x1; lon += dlo) {
+        if (!polys.some((p) => dentro(lon, lat, p))) continue;
+        n++;
+        cuenta[nivelesEn(lat, lon).lahar || 'ninguno']++;
+      }
+    }
+    return Object.fromEntries(Object.entries(cuenta).map(([k, c]) => [k, (100 * c) / n]));
+  };
+  const resultados = [];
+  let distritosOk = true;
+  for (const nombre of ['PAUCARPATA', 'CAYMA']) {
+    const polys = Dis.poligonos(nombre);
+    const mio = Vol.porDistrito(zonas, polys, { pasoM: 250 }).porTipo.lahar;
+    const otro = porcentajes(polys);
+    const peor = Math.max(...Object.keys(otro).map((k) => Math.abs(mio[k] - otro[k])));
+    if (peor > 4) distritosOk = false;
+    resultados.push(`${nombre} alto ${mio.alto.toFixed(1)}/${otro.alto.toFixed(1)} moderado ${mio.moderado.toFixed(1)}/${otro.moderado.toFixed(1)} bajo ${mio.bajo.toFixed(1)}/${otro.bajo.toFixed(1)}`);
+  }
+  comprobar('Volcán: la parte de Paucarpata y de Cayma en cada nivel de lahares coincide (±4 puntos) con una muestra independiente cada 150 m', distritosOk, resultados.join(' · '));
 }
 
 // B7b. Contexto: el módulo del navegador da lo mismo que un conteo independiente y rotula lo que corresponde.

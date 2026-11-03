@@ -5,7 +5,7 @@
  * a comprar: dónde está, qué se puede construir, qué tiene cerca, qué queda más lejos de lo recomendado y qué hay en riesgo
  * cerca. No agrega datos ni calcula nada nuevo: cada cifra sale de la ficha. Lo usan el chat y el inicio de la ficha.
  *
- *   punto({ distrito, zona, entorno, cauce }) → { texto, lineas: [3 líneas], aviso }
+ *   punto({ distrito, zona, entorno, cauce, volcan }) → { texto, lineas: [3 líneas], aviso }
  *   verificar(items)                          → texto con los trámites que conviene comprobar antes de comprar
  *
  * Se carga como script del navegador (define `Resumen`) y también como módulo CommonJS para las pruebas.
@@ -68,10 +68,11 @@ const Resumen = (() => {
   }
 
   /**
-   * El resumen de un punto. `entorno` es el resultado de Equipamiento.evaluar; `cauce`, el de Contexto.quebradas; `zona`, el de
+   * El resumen de un punto. `entorno` es el resultado de Equipamiento.evaluar; `cauce`, el de Contexto.quebradas; `volcan`, el de
+   * Contexto.volcan (su frase se agrega tal cual, p. ej. «Tu punto está en zona de peligro bajo por lahares del Misti, según el IGP.»); `zona`, el de
    * Zonificacion.lookup (o null fuera del plano).
    */
-  function punto({ distrito = null, zona = null, entorno, cauce = null }) {
+  function punto({ distrito = null, zona = null, entorno, cauce = null, volcan = null }) {
     const s = servicios(entorno);
     const cerca = [];
     const lejos = [];
@@ -107,6 +108,8 @@ const Resumen = (() => {
     if (lejos.length) partes2.push(`Más lejos de lo recomendado: ${lejos.join(', ')}.`);
     if (faltan.length) partes2.push(`Sin dato de: ${lista(faltan)}; eso no significa que no existan.`);
     if (cauce && typeof cauce.distanciaM === 'number' && cauce.nombre) partes2.push(`Lo más cercano en riesgo: ${cauce.nombre} a ${fmt(cauce.distanciaM)}${cauce.fuenteCorta ? ` (${cauce.fuenteCorta})` : ''}.`);
+    // Peligro volcánico del Misti (IGP): solo la frase ya armada por Volcan.frasePunto; informativa, sin cumple ni puntaje.
+    if (volcan && volcan.estado === 'INFORMATIVO' && volcan.frase) partes2.push(volcan.frase);
     const l2 = partes2.join(' ');
     const lineas = [l0, l1, l2].filter(Boolean);
     return { texto: lineas.join(' '), lineas, aviso: AVISO };

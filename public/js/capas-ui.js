@@ -15,11 +15,11 @@ const CapasUI = (() => {
   // Un color por tipo de entidad; los colegios además cambian de forma/letra por nivel (nunca solo el color).
   const COLOR = {
     inicial: '#9a4d00', primaria: '#1c3a6b', secundaria: '#6b2d7a', salud: '#b0272b', paradero: '#3b4a5a', parques: '#2f7d3b', quebradas: '#1f6fb2',
-    sismos: '#c2570c', sectores: '#0b5d4f', residencial: '#b88a2e', tranquilo: '#8a6d1f', campina: '#6f9a2f', comercial: '#7a4fa0', historico: '#a0422f',
+    sismos: '#c2570c', volcan_alto: '#a31621', volcan_moderado: '#e07b00', volcan_bajo: '#e9c046', sectores: '#0b5d4f', residencial: '#b88a2e', tranquilo: '#8a6d1f', campina: '#6f9a2f', comercial: '#7a4fa0', historico: '#a0422f',
   };
   const LETRA = { inicial: 'I', primaria: 'P', secundaria: 'S', salud: '+', paradero: 'B' };
 
-  let api = null; // { map, datos(opciones: { rutas }): Promise<{ datos, zonas, cauces, sismos, rutas, umbrales, fecha }>, mapaVisible? }
+  let api = null; // { map, datos(opciones: { rutas, volcan }): Promise<{ datos, zonas, cauces, sismos, volcan, rutas, umbrales, fecha }>, mapaVisible? }
   let grupo = null;
   let activas = []; // capas elegidas con los chips: [{ id }]
   let contexto = null; // lo que vino del chat: { capas, distrito, sectores }
@@ -37,6 +37,7 @@ const CapasUI = (() => {
       return p;
     };
     pane('capasZonas', 352);
+    pane('capasVolcan', 354, true);
     pane('capasParques', 356);
     pane('capasSectores', 380, true);
     pane('capasLineas', 420, true);
@@ -115,6 +116,10 @@ const CapasUI = (() => {
         title: `Sector ${s.n}`, keyboard: false, pane: 'capasPuntos',
       }).bindPopup(`<strong>Sector ${s.n}</strong>${s.nombre ? `<br>Cerca de ${esc(s.nombre)}` : ''}`).addTo(grupo);
     });
+    (r.peligroVolcan || []).forEach((z) => {
+      L.geoJSON({ type: 'Feature', geometry: z.geometry }, { style: { color: COLOR[`volcan_${z.nivel}`], weight: 1.5, fillColor: COLOR[`volcan_${z.nivel}`], fillOpacity: 0.3 }, pane: 'capasVolcan' })
+        .bindPopup(popup(z.titulo, z.detalle, null)).addTo(grupo);
+    });
     dibujarLineasDeBus(r);
     const iconos = r.puntos.length <= MAX_ICONOS;
     r.puntos.forEach((p) => (iconos ? marcador(p) : circuloLienzo(p)).addTo(grupo));
@@ -149,7 +154,7 @@ const CapasUI = (() => {
     sismos: '<span class="mu-sismo"></span>',
     sectores: '<span class="mu-sector"></span>',
   };
-  const muestraDe = (capa) => MUESTRA[capa] || `<span class="mu-bloque" style="background:${COLOR[capa] || '#777'}"></span>`;
+  const muestraDe = (capa, l = null) => (capa === 'volcan' && l ? `<span class="mu-bloque" style="background:${COLOR[`volcan_${l.nivel}`]}"></span>` : null) || MUESTRA[capa] || `<span class="mu-bloque" style="background:${COLOR[capa] || '#777'}"></span>`;
 
   function limpiarLeyenda() {
     $('leyenda').hidden = true;
@@ -162,19 +167,20 @@ const CapasUI = (() => {
   function dibujarLeyenda(r, fecha) {
     $('leyenda-resumen').textContent = r.resumen;
     const itemDe = (l) => {
-      if (l.capa !== 'lineas') return `<li class="ley-item"><span class="muestra-ent" aria-hidden="true">${muestraDe(l.capa)}</span><span class="ley-txt">${esc(l.texto)}</span></li>`;
+      if (l.capa !== 'lineas') return `<li class="ley-item"><span class="muestra-ent" aria-hidden="true">${muestraDe(l.capa, l)}</span><span class="ley-txt">${esc(l.texto)}</span></li>`;
       // Una fila por línea, con su color y su nombre: el color solo no basta, la etiqueta del mapa lleva el mismo nombre.
       const filas = r.lineasBus.map((b) => `<li class="ley-item"><span class="muestra-ent" aria-hidden="true"><span class="mu-linea-bus" style="background:${b.color}"></span></span><span class="ley-txt">Línea ${esc(Rutas.etiquetaLinea(b))}</span></li>`);
       if (r.paradasBus.length) filas.push('<li class="ley-item"><span class="muestra-ent" aria-hidden="true"><span class="mu-parada-bus"></span></span><span class="ley-txt">Parada más cercana de cada línea (círculo del color de la línea)</span></li>');
       return filas.join('');
     };
     $('leyenda-estados').innerHTML = r.leyenda.map(itemDe).join('')
-      + r.sinDatos.map((c) => `<li class="ley-item leyenda-error"><span class="ley-txt">${c === 'lineas' ? 'No pude leer los recorridos de SmartBus, así que no los dibujo.' : `No pude leer el archivo de ${c === 'sismos' ? 'sismos' : 'quebradas'}, así que no lo dibujo.`}</span></li>`).join('');
+      + r.sinDatos.map((c) => `<li class="ley-item leyenda-error"><span class="ley-txt">${c === 'lineas' ? 'No pude leer los recorridos de SmartBus, así que no los dibujo.' : `No pude leer el archivo de ${c === 'sismos' ? 'sismos' : c === 'volcan' ? 'peligro volcánico' : 'quebradas'}, así que no lo dibujo.`}</span></li>`).join('');
     const fuentes = [];
     if (r.leyenda.some((l) => ['colegios', 'salud', 'paraderos', 'parques'].includes(l.capa))) fuentes.push(`Colegios, salud, paraderos y parques: OpenStreetMap (ODbL), ${fecha || 'sin fecha'}. Puede faltar alguno.`);
     if (r.leyenda.some((l) => ['residencial', 'tranquilo', 'campina', 'comercial', 'historico'].includes(l.capa))) fuentes.push('Zonas: plano del PDM Arequipa 2016-2025 (referencial).');
     if (r.leyenda.some((l) => l.capa === 'quebradas')) fuentes.push('Quebradas y ríos: cauces de la ANA (red de 2018), el IGP y OpenStreetMap (ODbL); cada tramo dice su fuente al tocarlo. Ninguna fuente es completa ni es un mapa de peligro.');
     if (r.leyenda.some((l) => l.capa === 'lineas')) fuentes.push('Líneas de bus: Rutas: SmartBus (smartbus.app), recorridos publicados usados con autorización verbal; sin frecuencias ni horarios.' + (r.paradasBus.length ? ' La parada es la más cercana en línea recta.' : ''));
+    if (r.leyenda.some((l) => l.capa === 'volcan')) fuentes.push('Peligro volcánico: zonas del IGP para el Misti (lahares, flujos piroclásticos, lava y avalanchas), un mapa de escala regional y sin fecha de elaboración. No es una evaluación de riesgo, el borde de una zona no es exacto y la ceniza (que cubre toda la ciudad) no se dibuja.');
     if (r.leyenda.some((l) => l.capa === 'sismos')) fuentes.push('Sismos: Instituto Geofísico del Perú; actividad reciente reportada, no una predicción.');
     $('leyenda-filas').innerHTML = fuentes.map((f) => `<li><small>${esc(f)}</small></li>`).join('');
     $('leyenda-pie').textContent = r.sectores.length ? 'Los bordes de los sectores son aproximados. Distancias en línea recta.' : 'Distancias en línea recta.';
@@ -194,12 +200,12 @@ const CapasUI = (() => {
     $('leyenda-resumen').textContent = 'Preparando el mapa…';
     $('leyenda').hidden = false;
     try {
-      const d = await api.datos({ rutas: capas.some((c) => c.id === 'lineas') });
+      const d = await api.datos({ rutas: capas.some((c) => c.id === 'lineas'), volcan: capas.some((c) => c.id === 'volcan') });
       if (mia !== secuencia) return;
       const distrito = contexto && contexto.distrito;
       const polys = distrito ? Distritos.poligonos(distrito) : null;
       const r = Capas.construir({
-        capas, datos: d.datos, zonas: d.zonas, cauces: d.cauces, sismos: d.sismos, rutas: d.rutas, umbrales: d.umbrales,
+        capas, datos: d.datos, zonas: d.zonas, cauces: d.cauces, sismos: d.sismos, volcan: d.volcan, rutas: d.rutas, umbrales: d.umbrales,
         area: polys && polys.length ? { polys } : null, sectores: contexto && contexto.sectores && contexto.sectores.length ? contexto.sectores : null,
       });
       ultimo = r;

@@ -46,6 +46,13 @@ const CONFIG = {
     citadas: ['Chullo', 'Los Incas', 'Añashuayco', 'San Lázaro', 'El Pato'],
   },
 
+  // Peligro volcánico del Misti: zonas del IGP (alto, moderado y bajo por lahares, flujos piroclásticos, lava, avalanchas y ceniza),
+  // congeladas con scripts/descargar-peligro-volcanico.mjs. Es INFORMATIVO: nunca cumple / no cumple ni puntaje.
+  volcan: {
+    geojsonUrl: 'data/peligro_volcanico_misti.geojson',
+    fuente: 'Zonas de peligro volcánico del Misti, Instituto Geofísico del Perú (IGP)',
+  },
+
   // Sismos reportados por el IGP, congelados con scripts/descargar-sismos.mjs. `radioM` es el radio de CONTEXTO para contar
   // sismos (convención del proyecto, no un umbral de peligro).
   sismos: {

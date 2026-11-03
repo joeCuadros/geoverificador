@@ -45,6 +45,18 @@ describe('Resumen.punto', () => {
     expect(Resumen.punto({ ...base, cauce: { ...cauce, fuenteCorta: 'OpenStreetMap' } }).texto).toContain('Lo más cercano en riesgo: Río Chili a 1,86 km (OpenStreetMap).');
   });
 
+  it('suma la frase del peligro volcánico del Misti (informativa) cuando se conoce', () => {
+    const volcan = { estado: 'INFORMATIVO', frase: 'Tu punto está en zona de peligro bajo por lahares del Misti, según el IGP.' };
+    const t = Resumen.punto({ ...base, volcan }).texto;
+    expect(t).toContain('Tu punto está en zona de peligro bajo por lahares del Misti, según el IGP.');
+    expect(t).not.toMatch(/puntaje|cumple/i);
+  });
+
+  it('sin dato del peligro volcánico no dice nada de él', () => {
+    expect(Resumen.punto({ ...base, volcan: { estado: 'SIN DATO', frase: null } }).texto).not.toContain('Misti');
+    expect(Resumen.punto(base).texto).not.toContain('Misti');
+  });
+
   it('entrega tres líneas para el inicio de la ficha', () => {
     expect(s.lineas).toHaveLength(3);
     expect(s.lineas[0]).toMatch(/Sachaca/);

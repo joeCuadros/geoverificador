@@ -96,6 +96,56 @@ describe('Reporte.seccionQuebradas', () => {
   });
 });
 
+const volcan = (extra = {}) => ({
+  estado: 'INFORMATIVO', enZona: true, frase: 'Tu punto está en zona de peligro bajo por lahares del Misti, según el IGP.',
+  resumen: [{ tipo: 'lahar', nivel: 'bajo' }], lineas: [{ tipo: 'lahar', nivel: 'bajo', texto: 'Lahares: peligro bajo.' }],
+  fuente: 'Zonas de peligro volcánico del Misti, Instituto Geofísico del Perú (IGP)', fecha: '2026-11-03',
+  fechaDelMapa: 'Sin metadatos de fecha: el servicio no dice cuándo se elaboró', referencia: 'INGEMMET, Boletín Serie C n.° 100 (2025)', ...extra,
+});
+
+describe('Reporte: peligro volcánico del Misti en el contexto de riesgo', () => {
+  const conVolcan = (v: unknown) => base({ contextoRiesgo: { peligros: peligros(), sismos: sismos(), volcan: v } });
+
+  it('muestra la frase, el detalle por fenómeno y la fuente, como INFORMATIVO', () => {
+    const h = Reporte.seccionContexto(conVolcan(volcan()));
+    expect(h).toContain('Peligro volcánico del Misti');
+    expect(h).toContain('Tu punto está en zona de peligro bajo por lahares del Misti, según el IGP.');
+    expect(h).toContain('Lahares: peligro bajo.');
+    expect(h).toMatch(/INFORMATIVO/);
+  });
+
+  it('dice lo que no cubre: escala regional, sin fecha del mapa, no es evaluación ni dice si habrá erupción, y a quién consultar', () => {
+    const h = Reporte.seccionContexto(conVolcan(volcan()));
+    expect(h).toMatch(/escala regional/);
+    expect(h).toMatch(/Sin metadatos de fecha/);
+    expect(h).toMatch(/No es una evaluación de riesgo/);
+    expect(h).toMatch(/CENEPRED \(SIGRID\)/);
+    expect(h).toContain('Boletín Serie C n.° 100');
+  });
+
+  it('nunca dice cumple ni da un puntaje', () => {
+    expect(Reporte.seccionContexto(conVolcan(volcan()))).not.toMatch(/NO CUMPLE|>CUMPLE|puntaje/);
+  });
+
+  it('sin dato muestra la causa y no inventa nada', () => {
+    const h = Reporte.seccionContexto(conVolcan({ estado: 'SIN DATO', error: 'sin archivo' }));
+    expect(h).toContain('SIN DATO');
+    expect(h).toContain('sin archivo');
+  });
+
+  it('el resumen suma una fila informativa y la fuente se cita', () => {
+    const f = Reporte.filasResumenExtra(conVolcan(volcan())).find(([k]: [string]) => k.startsWith('Peligro volcánico'));
+    expect(f[1]).toBe('INFORMATIVO · en zona de peligro bajo por lahares (IGP)');
+    const s = Reporte.construirSecciones(conVolcan(volcan())).find((x: { titulo: string }) => x.titulo.startsWith('Contexto de riesgo'));
+    expect(s.fuente).toContain('Zonas de peligro volcánico del Misti');
+  });
+
+  it('fuera de las zonas el resumen lo dice sin afirmar que no haya peligro', () => {
+    const f = Reporte.filasResumenExtra(conVolcan(volcan({ enZona: false, resumen: [], lineas: [], frase: 'Tu punto no cae dentro de ninguna zona de peligro volcánico del Misti que mapeó el IGP. Eso no significa que no haya peligro.' }))).find(([k]: [string]) => k.startsWith('Peligro volcánico'));
+    expect(f[1]).toBe('INFORMATIVO · fuera de las zonas mapeadas por el IGP');
+  });
+});
+
 describe('Reporte.seccionContexto', () => {
   it('presenta peligros y sismos como contexto informativo, no como evaluación', () => {
     const h = Reporte.seccionContexto(base());
