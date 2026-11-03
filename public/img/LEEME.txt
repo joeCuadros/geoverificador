@@ -1,15 +1,17 @@
 Arte del Inicio (pagina de entrada)
 
-Por defecto el Inicio muestra arequipa-hero.svg: una ilustracion hecha para el proyecto (el Misti sobre el plano de la
-ciudad, con juntas de sillar y lineas de plano en tinta azul). Sirve en tema claro y oscuro.
+Hoy el Inicio muestra arequipa-hero.jpg: una fotografia de la Plaza de Armas de Arequipa (Catedral de sillar y el Misti al fondo).
 
-Para usar una fotografia de Arequipa basta con dejar UN archivo en esta carpeta:
+    Autor:    Draceane
+    Licencia: CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/)
+    Origen:   https://commons.wikimedia.org/wiki/File:Arequipa,_Plaza_de_Armas,_2023_(10).jpg
+    Cambios:  reducida a 1600 px de ancho y recomprimida (sin otro retoque).
 
-    public/img/arequipa-hero.jpg
+La licencia exige credito (ya esta en el Inicio, parrafo .inicio-credito de index.html) y que una version adaptada de la foto se
+comparta con la misma licencia. Esto aplica a la foto, no al codigo del sitio.
 
-Si existe, se dibuja encima de la ilustracion y la cubre. Si no existe, se ve la ilustracion (no hace falta tocar codigo).
-La regla esta en css/styles.css, selector .inicio-arte (dos fondos: primero el .jpg y debajo el .svg).
+Si se cambia la foto, hay que actualizar este archivo y el credito de index.html. Si se borra arequipa-hero.jpg, el Inicio vuelve
+a mostrar arequipa-hero.svg (ilustracion hecha para el proyecto: el Misti sobre el plano de la ciudad) y hay que quitar el credito.
 
-Recomendaciones para la foto: horizontal o cuadrada, de al menos 1600 px de ancho y menos de 400 KB; el recorte es "cover"
-centrado un poco hacia abajo, asi que el sujeto (por ejemplo el Misti) debe quedar al centro. Debe ser una foto cuyo uso este
-permitido (propia o con licencia); el repositorio no incluye ninguna.
+La regla esta en css/styles.css, selector .inicio-arte (dos fondos: primero el .jpg y debajo el .svg). Recomendaciones para otra
+foto: horizontal o cuadrada, de al menos 1600 px de ancho y menos de 400 KB, con el sujeto al centro (el recorte es "cover").

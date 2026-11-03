@@ -1225,6 +1225,11 @@ summary { -webkit-tap-highlight-color: transparent; }
   background-color: var(--surface-2); background-repeat: no-repeat; background-size: cover; background-position: 50% 58%;
   background-image: url("../img/arequipa-hero.jpg"), url("../img/arequipa-hero.svg");
 }
+.inicio-credito {
+  position: absolute; right: 0; bottom: 0; max-width: 100%; margin: 0; padding: 5px 12px; border-top-left-radius: 8px;
+  background: color-mix(in srgb, var(--bg) 86%, transparent); color: var(--ink-2); font-size: .75rem; line-height: 1.4;
+}
+.inicio-credito a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 /* Un solo momento de movimiento: la hoja entra una vez. */
 @media (prefers-reduced-motion: no-preference) {
   .inicio-arte { animation: arte-entra 1.1s cubic-bezier(.16, 1, .3, 1) both; }
