@@ -23,7 +23,7 @@ const Tour = (() => {
         {
           titulo: 'Qué hace',
           items: [
-            'Busca zonas que cumplan lo que te importa (colegio, salud, transporte, área verde, tipo de zona) y las pinta en el mapa.',
+            'Busca zonas que cumplan lo que te importa (colegio, salud, transporte, área verde, tipo de zona) y las muestra en el mapa.',
             'Ubica un punto en el plano de zonificación del PDM 2016-2025 y mide la distancia a la salud, los colegios, el paradero y el área verde más cercanos.',
             'Dice de dónde sale cada dato, de qué fecha es y qué no cubre.',
           ],

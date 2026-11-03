@@ -601,6 +601,22 @@ console.log('\n== C. Asistente: búsqueda de zonas frente a un método independi
   comprobar('Asistente: los porcentajes están entre 0 y 100 y las áreas vienen ordenadas por coincidencia', r.areas.length > 0 && r.areas.every((a, i) => a.pctCumpleTodo >= 0 && a.pctCumpleTodo <= 100 && a.puntajePct >= 0 && a.puntajePct <= 100 && (i === 0 || r.areas[i - 1].puntajePct >= a.puntajePct)), `${r.areas.length} distritos`);
   comprobar('Asistente: la mejor celda de cada área cae realmente en ese distrito', r.areas.every((a) => Dis.nombreDe(a.mejor.lat, a.mejor.lon) === a.nombre));
   comprobar('Asistente: la suma de celdas por distrito no supera el total', r.areas.reduce((s, a) => s + a.celdas, 0) <= r.totalCeldas);
+  // Distritos y entidades: conteo por distrito, sectores dentro de un distrito y lenguaje de la respuesta.
+  const Ent = createRequire(import.meta.url)('../public/js/entidades.js');
+  const nombresDistrito = Dis.lista().map((d) => d.nombre);
+  const conteos = nombresDistrito.map((n) => [n, Ent.contar(datosRapido, Dis.poligonos(n))]);
+  const sumaColegios = conteos.reduce((s, [, c]) => s + c.colegios.total, 0);
+  comprobar('Distritos: la lista trae los 25 distritos del archivo, cada uno con polígono', nombresDistrito.length === 25 && nombresDistrito.every((n) => Dis.poligonos(n).length > 0), `${nombresDistrito.length} distritos`);
+  comprobar('Distritos: los colegios por distrito no superan el total de colegios con nivel (ninguno se cuenta en dos distritos)', sumaColegios <= datosRapido.colegiosLista.length, `${sumaColegios} de ${datosRapido.colegiosLista.length}`);
+  const pau = Object.fromEntries(conteos).PAUCARPATA;
+  comprobar('Distritos: Paucarpata tiene colegios, salud, paraderos y parques en los datos', pau.colegios.total > 0 && pau.salud.total > 0 && pau.paraderos.total > 0 && pau.parques.total > 0, `${pau.colegios.total} colegios, ${pau.salud.total} salud, ${pau.paraderos.total} paraderos, ${pau.parques.total} parques`);
+  const enPau = Rapido.buscar({ ...parametros, criterios: [req('inicial'), req('areaVerde')], distrito: 'PAUCARPATA', celdas: celdasListas });
+  const fPau = Rapido.formatearBusqueda(enPau, { datos: datosRapido, distrito: 'Paucarpata' });
+  comprobar('Asistente: una búsqueda dentro de Paucarpata solo devuelve celdas de Paucarpata y sectores con su contorno', enPau.cumplen.length > 0 && enPau.cumplen.every((c) => c.distrito === 'PAUCARPATA') && fPau.sectores.length > 0 && fPau.sectores.every((s) => s.contorno.length > 0), `${fPau.sectores.length} sectores`);
+  comprobar('Asistente: el centro de cada sector cae dentro de Paucarpata', fPau.sectores.every((s) => Dis.contiene('PAUCARPATA', s.centro.lat, s.centro.lon)));
+  comprobar('Asistente: el texto de una búsqueda no habla de suelo, coincidencia ni celdas', !/suelo|coincidencia|ponderad|celda|cuadr[ií]cula/i.test(fPau.texto), fPau.texto.split('\n')[0]);
+  const frase = Rapido.interpretar('quiero vivir en pauccarpata cuantos colegios hay ahi', {});
+  comprobar('Asistente: «quiero vivir en pauccarpata cuantos colegios hay ahi» cuenta colegios en Paucarpata', frase.tipo === 'contar' && frase.distrito === 'PAUCARPATA');
   const cubre = (id) => `${id} ${Math.round((100 * celdas.filter((c) => A.evaluarCelda(c, datos, [req(id)], U)[id].cumple).length) / celdas.length)} %`;
   console.log(`INFO  Parte de las celdas que cumple cada criterio con su umbral: ${['colegio', 'inicial', 'primaria', 'secundaria', 'salud', 'transporte', 'areaVerde', 'campina'].map(cubre).join(' · ')}`);
 }

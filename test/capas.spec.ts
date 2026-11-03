@@ -240,3 +240,11 @@ describe('Capas.sismosDeFeatures', () => {
     expect(Capas.sismosDeFeatures(null)).toEqual([]);
   });
 });
+
+describe('Capas.construir: solo el distrito (perfil)', () => {
+  it('marca el distrito y dice cómo ver más, sin un «Muestro .» vacío', () => {
+    const r = Capas.construir({ ...base, capas: [], area: { polys: DISTRITO } });
+    expect(r.resumen).toBe('Marqué el distrito en el mapa. Elige arriba qué quieres ver dentro de él.');
+    expect(r.limites).toEqual([-71.55, -16.42, -71.53, -16.40]);
+  });
+});

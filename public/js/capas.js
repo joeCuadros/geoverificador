@@ -68,6 +68,8 @@ const Capas = (() => {
 
   // ------------------------------------------------------------------- Auxiliares
 
+  const listaEs = (items) => (items.length <= 1 ? items.join('') : `${items.slice(0, -1).join(', ')} y ${items[items.length - 1]}`);
+
   const bboxDe = (puntos) => {
     const b = [Infinity, Infinity, -Infinity, -Infinity];
     puntos.forEach(([x, y]) => {
@@ -140,6 +142,14 @@ const Capas = (() => {
     const sinDatos = [];
     let limites = null;
 
+    // Cómo se nombra cada capa en el resumen: [singular, plural].
+    const NOMBRES = {
+      colegios: ['colegio', 'colegios'], salud: ['establecimiento de salud', 'establecimientos de salud'], paraderos: ['paradero', 'paraderos'], parques: ['parque', 'parques'],
+      residencial: ['zona residencial', 'zonas residenciales'], tranquilo: ['zona tranquila', 'zonas tranquilas'], campina: ['zona de campiña', 'zonas de campiña'],
+      comercial: ['zona comercial', 'zonas comerciales'], historico: ['zona del centro histórico', 'zonas del centro histórico'],
+      quebradas: ['tramo de quebrada o río', 'tramos de quebradas y ríos'], sismos: ['sismo', 'sismos'], sectores: ['sector', 'sectores'],
+    };
+    const nombreDe = (capa, n) => NOMBRES[capa][n === 1 ? 0 : 1];
     const cuenta = (capa, n, texto) => {
       if (n === 0) { vacias.push(capa); return; }
       leyenda.push({ capa, texto, n });
@@ -238,9 +248,11 @@ const Capas = (() => {
     }
     if (limites && !valido(limites)) limites = null;
 
-    const resumen = vacias.length && !leyenda.length
+    const resumen = !leyenda.length && !vacias.length && !sinDatos.length
+      ? (cajaArea ? 'Marqué el distrito en el mapa. Elige arriba qué quieres ver dentro de él.' : '')
+      : vacias.length && !leyenda.length
       ? `En esta zona no hay ${vacias.map((v) => ({ colegios: 'colegios', salud: 'establecimientos de salud', paraderos: 'paraderos', parques: 'parques' }[v] || v)).join(' ni ')} en los datos.`
-      : `Muestro ${leyenda.map((l) => `${l.n} ${l.capa === 'sectores' ? (l.n === 1 ? 'sector' : 'sectores') : l.texto.split(':')[0].replace(/ \(.*\)/, '').toLowerCase()}`).join(', ')}.${vacias.length ? ` No hay ${vacias.join(' ni ')} en esta zona.` : ''}`;
+      : `Muestro ${listaEs(leyenda.map((l) => `${l.n} ${nombreDe(l.capa, l.n)}`))}.${vacias.length ? ` No hay ${listaEs(vacias.map((v) => nombreDe(v, 2)))} en esta zona.` : ''}`;
     return { puntos, circulos, poligonos, lineas, sismos: sism, sectores: regiones, leyenda, vacias, sinDatos, resumen, limites };
   }
 
