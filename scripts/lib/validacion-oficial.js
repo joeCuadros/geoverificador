@@ -6,6 +6,7 @@
  *   parsearCsv(texto)                         → { columnas, filas } (delimitador detectado; comillas, BOM)
  *   leerRenipress(texto, opciones)            → { registros, descartados, columnas }
  *   leerEscale(texto, opciones)               → { locales, iies, descartados, columnas }   (un local por código de local)
+ *   leerEscaleFilas({ columnas, filas }, ...) → lo mismo desde filas ya leídas (CSV o DBF); nivelDeCodigo(NIV_MOD) → nivel de la EBR
  *   normalizarNombre(n) / similitud(a, b)     → nombre sin tildes ni palabras vacías / parecido de 0 a 1
  *   emparejar(oficiales, osm, opciones)       → { pares, ... } uno a uno por nombre (>= 0,9) y distancia (radio)
  *   metricas(oficiales, osm, radiosM, ...)    → exhaustividad, precisión y desfase por radio
@@ -78,9 +79,13 @@ const ALIAS = {
   lon: ['longitud', 'longitude', 'lon', 'long', 'lng', 'nlong_ie', 'nlong', 'x', 'coord_x'],
   nombreSalud: ['nombre_del_establecimiento', 'nombre_establecimiento', 'establecimiento', 'nombre', 'razon_social'],
   nombreIE: ['cen_edu', 'nombre_ie', 'nombre_de_ie', 'nombre_de_la_ie', 'institucion_educativa', 'nombre', 'nom_ie'],
-  estado: ['estado', 'situacion', 'condicion', 'd_estado', 'estado_ie'],
+  // El texto («Activo») va antes que el código («1»): en el padrón de ESCALE conviven ESTADO (1 o 2) y D_ESTADO.
+  estado: ['d_estado', 'estado', 'situacion', 'condicion', 'estado_ie'],
   clasificacion: ['clasificacion', 'tipo', 'tipo_de_establecimiento', 'clase'],
-  codigoSalud: ['codigo_unico', 'codigo_renipress', 'codigo', 'cod_unico', 'renipress'],
+  tipoEstablecimiento: ['tipo_establecimiento', 'tipo_de_establecimiento', 'tipo'],
+  categoria: ['categoria'],
+  codigoSalud: ['codigo_unico', 'codigo_renipress', 'cod_ipress', 'codigo', 'cod_unico', 'renipress'],
+  gestion: ['d_gestion', 'gestion'],
   departamento: ['departamento', 'dpto', 'd_dpto'],
   provincia: ['provincia', 'prov', 'd_prov'],
   distrito: ['distrito', 'dist', 'd_dist', 'd_distrito'],
@@ -93,7 +98,7 @@ const ALIAS = {
 const esActivo = (v) => {
   const t = sinTildes(v).toLowerCase();
   if (t === '') return null;
-  if (/inactiv|cerrad|clausur|suspend|baja|cancelad|no activ|no funcion/.test(t)) return false;
+  if (/inactiv|cerrad|cierre|clausur|suspend|baja|cancelad|no activ|no funcion|^2$/.test(t)) return false;
   return /activ|funcion|abiert|operat|^1$|^si$/.test(t) ? true : null;
 };
 
@@ -109,21 +114,38 @@ function validarColumnas(columnas, requeridas, archivo) {
 // ------------------------------------------------------------------------ RENIPRESS
 
 /**
- * Establecimientos de salud de RENIPRESS en Arequipa metropolitana. Filtra: con coordenadas, dentro de la caja (y, si el archivo
- * trae departamento y provincia, solo AREQUIPA/AREQUIPA), en estado activo (si el archivo trae estado) y, salvo que se pida lo
- * contrario, sin consultorios. Un archivo con solo coordenadas UTM (Norte, Este) no sirve: se pide una edición con latitud y longitud.
+ * Si el archivo no trae LATITUD y LONGITUD pero sí NORTE y ESTE (así viene el CSV de datosabiertos.gob.pe), se usan como latitud y
+ * longitud SOLO si todos sus valores son grados decimales; si son metros (UTM) no sirven y se pide otra edición.
  */
-function leerRenipress(texto, { incluirConsultorios = false, caja = CAJA_AREQUIPA } = {}) {
+function coordenadasNorteEste(columnas, filas) {
+  if (tiene(columnas, ALIAS.lat) || tiene(columnas, ALIAS.lon) || !columnas.includes('norte') || !columnas.includes('este')) return false;
+  return filas.every((f) => {
+    const n = numero(f.norte);
+    const e = numero(f.este);
+    return (n === null || Math.abs(n) <= 90) && (e === null || Math.abs(e) <= 180);
+  });
+}
+
+/**
+ * Establecimientos de salud de RENIPRESS en Arequipa metropolitana. Filtra: con coordenadas, dentro de la caja (y, si el archivo
+ * trae departamento y provincia, solo AREQUIPA/AREQUIPA), dentro de `dentro(lat, lon)` si se da (p. ej. los polígonos de los
+ * distritos), en estado activo (si el archivo trae estado: solo lo claramente activo cuenta; «cierre temporal» o «baja» no) y,
+ * salvo que se pida lo contrario, sin consultorios. Un archivo con solo coordenadas UTM (Norte, Este en metros) no sirve: se pide
+ * una edición con latitud y longitud.
+ */
+function leerRenipress(texto, { incluirConsultorios = false, caja = CAJA_AREQUIPA, dentro = null } = {}) {
   const { columnas, filas } = parsearCsv(texto);
-  validarColumnas(columnas, [['nombre', ALIAS.nombreSalud], ['latitud', ALIAS.lat], ['longitud', ALIAS.lon]], 'RENIPRESS');
-  const d = { total: filas.length, sinCoordenadas: 0, fueraDeZona: 0, otraProvincia: 0, inactivos: 0, consultorios: 0, repetidos: 0 };
+  const aLat = coordenadasNorteEste(columnas, filas) ? ['norte'] : ALIAS.lat;
+  const aLon = aLat[0] === 'norte' ? ['este'] : ALIAS.lon;
+  validarColumnas(columnas, [['nombre', ALIAS.nombreSalud], ['latitud', aLat], ['longitud', aLon]], 'RENIPRESS');
+  const d = { total: filas.length, sinCoordenadas: 0, fueraDeZona: 0, fueraDeDistrito: 0, otraProvincia: 0, inactivos: 0, consultorios: 0, repetidos: 0 };
   const registros = [];
   const vistos = new Set();
   const hayUbicacion = tiene(columnas, ALIAS.departamento) && tiene(columnas, ALIAS.provincia);
   const hayEstado = tiene(columnas, ALIAS.estado);
   for (const f of filas) {
-    const lat = numero(columna(f, ALIAS.lat));
-    const lon = numero(columna(f, ALIAS.lon));
+    const lat = numero(columna(f, aLat));
+    const lon = numero(columna(f, aLon));
     if (lat === null || lon === null || (lat === 0 && lon === 0) || Math.abs(lat) > 90 || Math.abs(lon) > 180) { d.sinCoordenadas++; continue; }
     if (hayUbicacion) {
       const dep = sinTildes(columna(f, ALIAS.departamento)).toUpperCase();
@@ -131,46 +153,87 @@ function leerRenipress(texto, { incluirConsultorios = false, caja = CAJA_AREQUIP
       if (dep !== 'AREQUIPA' || prov !== 'AREQUIPA') { d.otraProvincia++; continue; }
     }
     if (!dentroDeCaja(lat, lon, caja)) { d.fueraDeZona++; continue; }
-    if (hayEstado && esActivo(columna(f, ALIAS.estado)) === false) { d.inactivos++; continue; }
+    if (dentro && !dentro(lat, lon)) { d.fueraDeDistrito++; continue; }
+    if (hayEstado && esActivo(columna(f, ALIAS.estado)) !== true) { d.inactivos++; continue; }
     const clasif = sinTildes(columna(f, ALIAS.clasificacion)).toLowerCase();
     if (!incluirConsultorios && /consultorio/.test(clasif)) { d.consultorios++; continue; }
     const id = columna(f, ALIAS.codigoSalud) || `${lat},${lon}`;
     if (vistos.has(id)) { d.repetidos++; continue; }
     vistos.add(id);
-    registros.push({ id, nombre: columna(f, ALIAS.nombreSalud), lat, lon, distrito: sinTildes(columna(f, ALIAS.distrito)).toUpperCase() || null, tipo: columna(f, ALIAS.clasificacion) || null });
+    registros.push({
+      id,
+      nombre: columna(f, ALIAS.nombreSalud),
+      lat,
+      lon,
+      distrito: sinTildes(columna(f, ALIAS.distrito)).toUpperCase() || null,
+      tipo: columna(f, ALIAS.clasificacion) || null,
+      tipoEstablecimiento: columna(f, ALIAS.tipoEstablecimiento) || null,
+      categoria: columna(f, ALIAS.categoria) || null,
+    });
   }
   return { registros, descartados: d, columnas };
 }
 
 // -------------------------------------------------------------------------- ESCALE
 
-/** Los niveles básicos (inicial, primaria, secundaria) de una fila del padrón, desde el texto del nivel o su código. */
-function nivelesDeFila(f, columnas) {
+/**
+ * Educación básica regular (EBR) en el padrón de ESCALE: código de nivel/modalidad (NIV_MOD) → nivel de la ficha. Los pares
+ * código / texto (D_NIV_MOD) salen del propio Padron_web.dbf del 2026-10-30, y las tres filas de la EBR son las únicas que los
+ * umbrales de la ficha (RVM 104-2019-MINEDU y 208-2019-MINEDU) cubren:
+ *   A1 Inicial - Cuna · A2 Inicial - Jardín · A3 Inicial - Cuna-jardín  → inicial
+ *   B0 Primaria  → primaria · F0 Secundaria  → secundaria
+ * Quedan fuera, a propósito: A5 Inicial - Programa no escolarizado (PRONOEI, sin local propio), C0 y G0 (primaria y secundaria de
+ * adultos), D0 D1 D2 (básica alternativa), E0 E1 E2 y K0 (básica especial), L* (técnico-productiva y ocupacional), M0 P0 S0 T0
+ * (formación artística, pedagógica y tecnológica superior).
+ */
+const NIVELES_EBR = { A1: 'inicial', A2: 'inicial', A3: 'inicial', B0: 'primaria', F0: 'secundaria' };
+
+/** El nivel de la ficha de un código NIV_MOD, o null si no es educación básica regular. */
+function nivelDeCodigo(codigo) {
+  return NIVELES_EBR[String(codigo == null ? '' : codigo).trim().toUpperCase()] || null;
+}
+
+// Texto del nivel que NO es educación básica regular, aunque contenga «inicial», «primaria» o «secundaria».
+const NO_EBR = /no escolarizad|adulto|alternativ|especial|ocupacional|productiv|superior|tecnolog|pedagog|artistic/;
+
+/**
+ * Los niveles básicos (inicial, primaria, secundaria) de una fila del padrón. Con el código de nivel (NIV_MOD) manda el código;
+ * sin código se lee el texto (D_NIV_MOD). En los dos casos lo que no es educación básica regular no cuenta.
+ */
+function nivelesDeFila(f) {
   const texto = sinTildes(columna(f, ['d_niv_mod', 'nivel_modalidad', 'nivel', 'nivel_educativo', 'd_forma']) || '').toLowerCase();
-  const codigo = sinTildes(columna(f, ['niv_mod', 'codigo_nivel']) || '').toUpperCase();
+  const codigo = String(columna(f, ['niv_mod', 'codigo_nivel']) || '').trim().toUpperCase();
   const niveles = new Set();
-  if (/no escolarizad/.test(texto) || codigo === 'A3') return niveles; // PRONOEI y similares: no son colegios
-  if (/inicial/.test(texto)) niveles.add('inicial');
-  if (/primaria/.test(texto) && !/alternativ/.test(texto)) niveles.add('primaria');
-  if (/secundaria/.test(texto) && !/alternativ/.test(texto)) niveles.add('secundaria');
-  if (niveles.size === 0 && texto === '') {
-    if (codigo === 'A1' || codigo === 'A2') niveles.add('inicial');
-    else if (codigo === 'B0') niveles.add('primaria');
-    else if (codigo === 'F0') niveles.add('secundaria');
+  if (NO_EBR.test(texto)) return niveles;
+  if (codigo) {
+    const n = nivelDeCodigo(codigo);
+    if (n) niveles.add(n);
+    return niveles;
   }
-  void columnas;
+  if (/inicial/.test(texto)) niveles.add('inicial');
+  if (/primaria/.test(texto)) niveles.add('primaria');
+  if (/secundaria/.test(texto)) niveles.add('secundaria');
   return niveles;
 }
 
+/** «Pública de gestión directa» y «Pública de gestión privada» son públicas; «Privada», privada; sin dato, null. */
+function gestionDeFila(f) {
+  const t = sinTildes(columna(f, ALIAS.gestion)).toLowerCase();
+  if (/^publica/.test(t)) return 'Pública';
+  if (/^privada/.test(t)) return 'Privada';
+  return null;
+}
+
 /**
- * Locales educativos del padrón de ESCALE en Arequipa metropolitana. Una fila es una institución educativa (IIEE) y un local
- * puede tener varias: se deduplica por CÓDIGO DE LOCAL (los niveles se juntan y los nombres se guardan todos). Solo niveles
- * inicial, primaria y secundaria, estado activo (si el archivo trae estado), con coordenadas y dentro de la caja.
+ * Locales educativos del padrón de ESCALE en Arequipa metropolitana, desde las filas ya leídas (`{ columnas, filas }`, sea de un CSV
+ * o de un DBF). Una fila es una institución educativa (IIEE) y un local puede tener varias: se deduplica por CÓDIGO DE LOCAL (los
+ * niveles se juntan; los nombres y las instituciones, con su código modular, nivel y gestión, se guardan todos). Solo educación
+ * básica regular (inicial, primaria y secundaria), estado activo (si el archivo trae estado; solo lo claramente activo cuenta),
+ * con coordenadas, dentro de la caja y de `dentro(lat, lon)` si se da.
  */
-function leerEscale(texto, { caja = CAJA_AREQUIPA } = {}) {
-  const { columnas, filas } = parsearCsv(texto);
+function leerEscaleFilas({ columnas, filas }, { caja = CAJA_AREQUIPA, dentro = null } = {}) {
   validarColumnas(columnas, [['código de local', ALIAS.codLocal], ['nombre', ALIAS.nombreIE], ['latitud', ALIAS.lat], ['longitud', ALIAS.lon]], 'ESCALE');
-  const d = { total: filas.length, sinCoordenadas: 0, fueraDeZona: 0, otraProvincia: 0, inactivas: 0, otroNivel: 0 };
+  const d = { total: filas.length, sinCoordenadas: 0, fueraDeZona: 0, fueraDeDistrito: 0, otraProvincia: 0, inactivas: 0, otroNivel: 0 };
   const porLocal = new Map();
   const hayUbicacion = tiene(columnas, ALIAS.departamento) && tiene(columnas, ALIAS.provincia);
   const hayEstado = tiene(columnas, ALIAS.estado);
@@ -185,19 +248,26 @@ function leerEscale(texto, { caja = CAJA_AREQUIPA } = {}) {
       if (dep !== 'AREQUIPA' || prov !== 'AREQUIPA') { d.otraProvincia++; continue; }
     }
     if (!dentroDeCaja(lat, lon, caja)) { d.fueraDeZona++; continue; }
-    if (hayEstado && esActivo(columna(f, ALIAS.estado)) === false) { d.inactivas++; continue; }
-    const niveles = nivelesDeFila(f, columnas);
+    if (dentro && !dentro(lat, lon)) { d.fueraDeDistrito++; continue; }
+    if (hayEstado && esActivo(columna(f, ALIAS.estado)) !== true) { d.inactivas++; continue; }
+    const niveles = nivelesDeFila(f);
     if (niveles.size === 0) { d.otroNivel++; continue; }
     iies++;
     const cod = columna(f, ALIAS.codLocal);
-    const local = porLocal.get(cod) || { codLocal: cod, nombres: [], niveles: new Set(), lat, lon, distrito: sinTildes(columna(f, ALIAS.distrito)).toUpperCase() || null };
+    const local = porLocal.get(cod) || { codLocal: cod, nombres: [], niveles: new Set(), instituciones: [], lat, lon, distrito: sinTildes(columna(f, ALIAS.distrito)).toUpperCase() || null };
     const nombre = columna(f, ALIAS.nombreIE);
     if (nombre && !local.nombres.includes(nombre)) local.nombres.push(nombre);
     niveles.forEach((n) => local.niveles.add(n));
+    local.instituciones.push({ codigoModular: columna(f, ALIAS.codMod) || null, nombre, nivel: [...niveles][0], gestion: gestionDeFila(f) });
     porLocal.set(cod, local);
   }
   const locales = [...porLocal.values()].map((l) => ({ ...l, nombre: l.nombres[0] || '', niveles: ['inicial', 'primaria', 'secundaria'].filter((n) => l.niveles.has(n)) }));
   return { locales, iies, descartados: { ...d, repetidosPorLocal: iies - locales.length }, columnas };
+}
+
+/** Lo mismo desde el texto de un CSV. */
+function leerEscale(texto, opciones = {}) {
+  return leerEscaleFilas(parsearCsv(texto), opciones);
 }
 
 // ---------------------------------------------------------------------- Nombres
@@ -454,5 +524,5 @@ function informe(r, { renipress, escale, meta = {} } = {}) {
 
 module.exports = {
   CAJA_AREQUIPA, parsearCsv, detectarDelimitador, leerRenipress, leerEscale, normalizarNombre, similitud, emparejar, metricas, porDistrito,
-  impacto, malla, percentil, validar, informe, nivelesDeFila,
+  impacto, malla, percentil, validar, informe, nivelesDeFila, nivelDeCodigo, leerEscaleFilas, NIVELES_EBR, clave, esActivo, sinTildes,
 };

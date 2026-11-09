@@ -72,6 +72,23 @@ describe('leerEscale', () => {
   });
 });
 
+describe('estado activo (corrección de la corrida del 2026-11-09)', () => {
+  it('RENIPRESS: el cierre temporal y la baja no son activos, y una fila sin estado tampoco cuando el archivo trae la columna', () => {
+    const t = 'COD_IPRESS;NOMBRE;DEPARTAMENTO;PROVINCIA;ESTADO;NORTE;ESTE'+'\n1;A;AREQUIPA;AREQUIPA;ACTIVO;-16.40;-71.50\n2;B;AREQUIPA;AREQUIPA;CIERRE TEMPORAL DE OFICIO;-16.41;-71.50\n3;C;AREQUIPA;AREQUIPA;BAJA DEFINITIVA;-16.42;-71.50\n4;D;AREQUIPA;AREQUIPA;;-16.43;-71.50\n';
+    const r = V.leerRenipress(t);
+    expect(r.registros.map((x: { id: string }) => x.id)).toEqual(['1']);
+    expect(r.descartados.inactivos).toBe(3);
+  });
+  it('ESCALE: con ESTADO (1 o 2) y D_ESTADO a la vez manda el texto; solo el código también sirve (2 es inactivo)', () => {
+    const t = 'CODLOCAL,CEN_EDU,NIV_MOD,ESTADO,D_ESTADO,NLAT_IE,NLONG_IE\n1,A,B0,1,Activo,-16.4,-71.5\n2,B,B0,2,Inactivo,-16.41,-71.5\n';
+    expect(V.leerEscale(t).locales.map((l: { codLocal: string }) => l.codLocal)).toEqual(['1']);
+  });
+  it('la cuna-jardín (A3) es inicial y la primaria de adultos y la educación especial no son educación básica regular', () => {
+    const t = 'CODLOCAL,CEN_EDU,NIV_MOD,D_NIV_MOD,NLAT_IE,NLONG_IE\n1,A,A3,Inicial - Cuna-jardín,-16.4,-71.5\n2,B,C0,Primaria de Adultos,-16.41,-71.5\n3,C,E1,Básica Especial-Inicial,-16.42,-71.5\n';
+    expect(V.leerEscale(t).locales.map((l: { codLocal: string }) => l.codLocal)).toEqual(['1']);
+  });
+});
+
 describe('normalizarNombre y similitud', () => {
   it('quita tildes, signos y palabras vacías', () => {
     expect(V.normalizarNombre('I.E. N° 40001 "Glorioso Colegio Nacional" de Varones')).toBe('40001 glorioso nacional varones'.replace('nacional ', '')); // «colegio» y «nacional» son vacías
