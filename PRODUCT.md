@@ -8,7 +8,7 @@ web
 
 ## Users
 
-Individuals and families deciding where to live or buy in Arequipa, Peru (Spanish-speaking, mostly on a phone, sometimes on a desktop). They arrive with a few priorities ("school nearby, a park, a bus stop") and no way to check them against official zoning and real service locations. A secondary audience is the project team and evaluators (GSTI course work). Inferred from `docs/claude-design/`; not re-confirmed by an interview.
+Individuals and families deciding where to live or buy in Arequipa, Peru (Spanish-speaking, mostly on a phone, sometimes on a desktop). They arrive with a few priorities ("school nearby, a park, a bus stop") and no way to check them against official zoning and real service locations. A secondary audience is the project team and evaluators (GSTI course work). Inferred from the team's design brief; not re-confirmed by an interview.
 
 ## Product Purpose
 
@@ -22,13 +22,13 @@ Not a listings portal and not a score. It is a verifiable, source-backed fit che
 
 - Static front end in `public/` (Leaflet map, vanilla JS), served by NestJS locally and by Vercel in production (https://geoverificador-nine.vercel.app).
 - Chat assistant: deterministic rule engine plus an optional Gemini layer that only interprets and rephrases; it never invents figures and falls back to rules on any failure.
-- Data: PDM 2016-2025 zoning polygons, MINEDU schools, health facilities, bus stops and green areas (OSM), INGEMMET hazards, IGP earthquakes, ANA quebradas. A precomputed grid of 2,358 cells backs the search criteria.
+- Data: PDM 2016-2025 zoning polygons, schools, health facilities, bus stops and green areas (all four from OpenStreetMap, not from the MINEDU or MINSA registers; the OSM-versus-official check is in `docs/VALIDACION.md` §3.4), INGEMMET hazards, IGP earthquakes, ANA quebradas. A precomputed grid of 2,358 cells backs the search criteria.
 - Optional Google sign-in exists on branch `feat/login-google` (name and opaque id only).
 
 ## Capabilities and Constraints
 
 - Criteria the assistant can search: health, inicial, primaria, secundaria, colegio, transporte, area verde, residencial, tranquilo, campina, comercial, historico, lejos de quebradas (some are zoning approximations).
-- Thresholds: MINEDU 500/1500/3000 m for school levels; OMS 300 m for green space; others are project conventions. Weights and tolerances belong to the person; no unsourced default.
+- Thresholds: 500/1500/3000 m for inicial/primaria/secundaria are the referential distances of MINEDU's design norms (RVM 104-2019 and RVM 208-2019, article 7.1, Cuadro N.° 1); 300 m and 0.5 ha for green space is the WHO Europe (2016) monitoring indicator, not a Peruvian norm; others are project conventions. Weights and tolerances belong to the person; no unsourced default.
 - Not available and must be stated honestly: security, noise, school quality, bus travel times, per-property prices.
 - Hazards, quakes and quebradas are informative context, not criteria, unless the person sets a distance.
 - Comparator holds up to 3 points and never names a winner.
@@ -41,7 +41,7 @@ Name "GeoVerificador", subtitle "Predios de Arequipa". Identity to preserve: whi
 
 ## Evidence on Hand
 
-`docs/claude-design/` (prompt, spec, data, evidence E1-E26, team direction, sample data contract, UX skill); `docs/VALIDACION.md` (793=793 polygons, 99.97% points, 98.1% labels); real test runs (551 tests, 91/91 data checks). No photo of Arequipa for the landing exists in the repo; none may be fabricated.
+`docs/VALIDACION.md` (793=793 polygons, 99.97% points, 98.1% labels; OSM versus RENIPRESS and ESCALE in §3.4); `docs/INVESTIGACION-VARIABLES.md` (sources of each variable); real test runs (1,111 unit tests with `pnpm test` plus 4 e2e tests with `pnpm test:e2e`, counted on 2026-11-09; 144 data and calculation checks with `pnpm datos:verificar`, of which 142 passed on 2026-11-09 in two runs; the 2 that failed are speed limits of the assistant search (2.7-4.7 s against 2 s, and 1.0-1.2 s against 1 s) on the dev machine, not correctness checks). No photo of Arequipa for the landing exists in the repo; none may be fabricated.
 
 ## Product Principles
 
