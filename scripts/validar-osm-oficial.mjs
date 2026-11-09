@@ -1,10 +1,11 @@
 /**
- * validar-osm-oficial.mjs — K2: contrasta el equipamiento de OpenStreetMap (ya congelado en public/data/equipamiento) con los
- * registros oficiales de salud (RENIPRESS) y de educación (padrón de ESCALE). NO descarga nada: los dos archivos CSV los
- * descarga la persona a mano (docs/VALIDACION.md dice dónde) y se pasan como argumentos.
+ * validar-osm-oficial.mjs — K2: contrasta el equipamiento de OpenStreetMap (la copia congelada en public/data/equipamiento/osm, que es
+ * el respaldo de la aplicación) con los registros oficiales de salud (RENIPRESS) y de educación (padrón de ESCALE). NO descarga nada:
+ * los archivos los descarga scripts/descargar-equipamiento-oficial.mjs (caché .cache-equipamiento-oficial/) o la persona a mano
+ * (docs/VALIDACION.md dice dónde) y se pasan como argumentos. El de ESCALE puede ser el CSV o el Padron_web.dbf tal cual.
  *
  * Uso:
- *   node scripts/validar-osm-oficial.mjs --escale=ruta/padron_escale.csv --renipress=ruta/renipress.csv [opciones]
+ *   node scripts/validar-osm-oficial.mjs --escale=ruta/padron_escale.csv|Padron_web.dbf --renipress=ruta/renipress.csv [opciones]
  *   pnpm datos:validar-oficial -- --escale=... --renipress=...
  *
  * Opciones:
@@ -30,6 +31,7 @@ import vm from 'node:vm';
 
 const require = createRequire(import.meta.url);
 const V = require('./lib/validacion-oficial.js');
+const E = require('./lib/equipamiento-oficial.js');
 const Calculos = require('../public/js/calculos.js');
 
 const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..', 'public');
@@ -80,15 +82,15 @@ function main() {
   let escale;
   try {
     renipress = V.leerRenipress(leerTexto(rutaRenipress), { incluirConsultorios: Boolean(a['incluir-consultorios']) });
-    escale = V.leerEscale(leerTexto(rutaEscale));
+    escale = /\.dbf$/i.test(rutaEscale) ? E.seleccionarEscaleDbf(rutaEscale) : V.leerEscale(leerTexto(rutaEscale));
   } catch (err) {
     uso(err.message);
   }
   if (renipress.registros.length === 0 || escale.locales.length === 0) uso(`Después de filtrar Arequipa metropolitana quedaron ${renipress.registros.length} establecimientos de RENIPRESS y ${escale.locales.length} locales de ESCALE: revisa que sean los archivos correctos y que traigan latitud y longitud.`);
 
-  // OpenStreetMap congelado: salud y colegios (con sus niveles, inferidos como en la ficha).
-  const fcSalud = json('data/equipamiento/salud.geojson');
-  const fcEdu = json('data/equipamiento/educacion.geojson');
+  // OpenStreetMap congelado (la copia cruda, no la fusión con los registros oficiales): salud y colegios, con sus niveles inferidos como en la ficha.
+  const fcSalud = json('data/equipamiento/osm/salud.geojson');
+  const fcEdu = json('data/equipamiento/osm/educacion.geojson');
   const puntoDe = (f) => (f.geometry && f.geometry.type === 'Point' ? { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0] } : null);
   const osmSalud = fcSalud.features.map((f) => ({ f, p: puntoDe(f) })).filter((x) => x.p).map(({ f, p }) => ({ id: f.properties.osm, nombre: f.properties.nombre || '', ...p }));
   const osmEducacion = fcEdu.features.map((f) => ({ f, p: puntoDe(f) })).filter((x) => x.p)
@@ -111,7 +113,7 @@ function main() {
     meta: {
       renipress: `${rutaRenipress}${a['fecha-renipress'] ? ` (edición ${a['fecha-renipress']})` : ' (anota la edición con --fecha-renipress)'}`,
       escale: `${rutaEscale}${a['fecha-escale'] ? ` (${a['fecha-escale']})` : ' (anota la fecha con --fecha-escale)'}`,
-      osm: `copia congelada en public/data/equipamiento, extraída el ${fcSalud.metadata.fecha_extraccion} (base de OSM del ${String(fcSalud.metadata.osm_base).slice(0, 10)}); malla de ${puntos.length} puntos cada ${paso} m dentro del plano de zonificación`,
+      osm: `copia congelada en public/data/equipamiento/osm, extraída el ${fcSalud.metadata.fecha_extraccion} (base de OSM del ${String(fcSalud.metadata.osm_base).slice(0, 10)}); malla de ${puntos.length} puntos cada ${paso} m dentro del plano de zonificación`,
     },
   });
   console.log(texto);

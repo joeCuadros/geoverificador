@@ -4,7 +4,10 @@
  * la aplicación lee estos archivos y solo consulta Overpass en vivo si falta alguno.
  *
  * Uso:   node scripts/extraer-equipamiento.mjs      (o: pnpm datos:extraer)
- * Sale:  public/data/equipamiento/{salud,educacion,transporte,areas_verdes}.geojson
+ * Sale:  public/data/equipamiento/{transporte,areas_verdes}.geojson y, como COPIA DE OPENSTREETMAP (respaldo),
+ *        public/data/equipamiento/osm/{salud,educacion}.geojson. Los archivos que lee la aplicación para salud y educación
+ *        (public/data/equipamiento/{salud,educacion}.geojson) los arma scripts/descargar-equipamiento-oficial.mjs
+ *        (pnpm datos:oficial) con RENIPRESS y ESCALE como fuente primaria y esta copia como respaldo: córrelo después.
  *
  * Decisiones:
  *  - UNA sola consulta a Overpass para toda la caja (la de CONFIG.viewbox), no una por categoría: es lo que pide la
@@ -92,11 +95,11 @@ async function obtener(consulta) {
 }
 
 // ------------------------------------------------------------------ SALIDA
-async function guardar(nombre, features, metadata) {
+async function guardar(nombre, features, metadata, subcarpeta = '') {
   const cabecera = JSON.stringify({ type: 'FeatureCollection', metadata: { ...metadata, registros: features.length } }).slice(0, -1);
   const cuerpo = `${cabecera},"features":[\n${features.map((f) => JSON.stringify(f)).join(',\n')}\n]}\n`;
-  await writeFile(join(SALIDA, `${nombre}.geojson`), cuerpo);
-  console.log(`  ${nombre}.geojson: ${features.length} elementos, ${(Buffer.byteLength(cuerpo) / 1024).toFixed(0)} kB`);
+  await writeFile(join(SALIDA, subcarpeta, `${nombre}.geojson`), cuerpo);
+  console.log(`  ${subcarpeta ? subcarpeta + '/' : ''}${nombre}.geojson: ${features.length} elementos, ${(Buffer.byteLength(cuerpo) / 1024).toFixed(0)} kB`);
 }
 
 async function main() {
@@ -127,9 +130,11 @@ async function main() {
   const vacias = Object.entries(porVariable).filter(([, f]) => f.length === 0).map(([n]) => n);
   if (vacias.length) throw new Error(`Sin resultados para: ${vacias.join(', ')}. No se guardó nada.`);
 
-  await mkdir(SALIDA, { recursive: true });
+  await mkdir(join(SALIDA, 'osm'), { recursive: true });
   console.log(`\nDatos de OSM al ${metadata.osm_base ?? 's. d.'}; extracción del ${fecha}. Elementos sin geometría utilizable (p. ej. relaciones sin cerrar): ${metadata.sin_geometria_utilizable}.`);
-  for (const [nombre, features] of Object.entries(porVariable)) await guardar(nombre, features, metadata);
+  // Salud y educación quedan como copia de OSM (el respaldo); la aplicación lee la fusión con RENIPRESS y ESCALE.
+  for (const [nombre, features] of Object.entries(porVariable)) await guardar(nombre, features, metadata, nombre === 'salud' || nombre === 'educacion' ? 'osm' : '');
+  console.log('\nAhora corre «pnpm datos:oficial» para volver a armar salud.geojson y educacion.geojson con los registros oficiales.');
 }
 
 main().catch((err) => {
