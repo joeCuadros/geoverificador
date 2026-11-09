@@ -161,7 +161,25 @@ Los cementerios se excluyeron: el Reglamento no les asigna una zona, y suponerla
 
 ### 3.4 OpenStreetMap frente a RENIPRESS y ESCALE (K2)
 
-**Resultado:** _pendiente de correr con los archivos oficiales_. El script y su lógica están hechos y probados con archivos CSV pequeños de muestra (`test/fixtures/`, datos inventados que no dicen nada de la realidad); **no se descargó ningún dato oficial**: los dos archivos los baja la persona a mano. Sigue el protocolo de `docs/INVESTIGACION-VARIABLES.md` §5.1.
+**Resultado (corrida del 2026-11-09, resultado completo en `docs/validacion/k2-resultado.json`):** con los archivos oficiales **OpenStreetMap no alcanza el criterio de aceptación fijado antes de medir (85 % de exhaustividad y de precisión), ni en salud ni en educación**. Es una corrida real; los números salen del script sin ajustes.
+
+**Archivos usados.** RENIPRESS: `RENIPRESS_30-10-2026.csv` (edición del 2026-10-30, `datosabiertos.gob.pe`; 36 249 filas). ESCALE: `Padron_web_20261030.zip` (padrón al 2026-10-30; `Padron_web.dbf` con 180 943 registros). OpenStreetMap: la copia congelada del 2026-10-28. Comando: `--min-exhaustividad=0.85 --min-precision=0.85 --fecha-escale=2026-10-30 --fecha-renipress=2026-10-30`.
+
+**Preparación de los archivos (no está en el script).** Las descargas directas con `curl` funcionaron esta vez (el CSV de RENIPRESS y el ZIP de ESCALE; no hizo falta el navegador). (1) El CSV de RENIPRESS no trae columnas `LATITUD` y `LONGITUD`: trae `NORTE` y `ESTE`, que en las 967 filas de Arequipa con valor son grados decimales (por ejemplo -16,4 y -71,5; ninguna es UTM ni está invertida), y se renombraron en el encabezado para que el script las acepte; se dejaron solo las filas del departamento de Arequipa. (2) El padrón de ESCALE viene en `.dbf` con codificación CP850; se convirtió a CSV UTF-8 con un conversor propio fuera del repositorio y se dejaron solo las filas del departamento de Arequipa (8 463).
+
+**Qué quedó en la comparación.** RENIPRESS: de 1 688 filas del departamento, se descartaron 710 sin coordenadas (**el 42 %**), 194 de otra provincia, 30 fuera de la zona, 72 inactivas, 243 consultorios y 33 repetidas, y quedaron **406 establecimientos**. ESCALE: de 8 463 filas se descartaron 41 sin coordenadas, 2 357 de otra provincia, 313 fuera de la zona y 1 998 de otro nivel, y quedaron 3 754 instituciones en **2 227 locales** (una fila por código de local).
+
+| Categoría | Oficiales | En OSM | Exhaustividad (50 / 100 / 200 m) | Precisión (50 / 100 / 200 m) | Desfase (mediana; p90, a 200 m) | Puntos de la malla (1 536) donde cambia CUMPLE / NO CUMPLE |
+|---|---|---|---|---|---|---|
+| Salud (1000 m) | 406 | 164 | 19,2 / 19,7 / 20,2 % | 49,7 / 51,0 / 52,2 % | 10 m; 31 m | 97 (6,3 %): OSM cumple y el oficial no, 20; el oficial cumple y OSM no, 77 |
+| Educación (todos los niveles) | 2 227 | 2 151 | 42,7 / 45,6 / 46,7 % | 44,9 / 48,0 / 49,2 % | 6 m; 45 m | no se calcula por total |
+| Inicial (500 m) | 1 666 | 1 191 | 41,3 / 43,8 / 45,1 % | 58,1 / 61,6 / 63,4 % | 6 m; 44 m | 103 (6,7 %): 27 y 76 |
+| Primaria (1500 m) | 1 273 | 892 | 42,9 / 47,3 / 48,5 % | 63,3 / 69,8 / 71,6 % | 10 m; 53 m | 65 (4,2 %): 6 y 59 |
+| Secundaria (3000 m) | 717 | 556 | 41,1 / 47,1 / 48,5 % | 56,1 / 64,3 / 66,2 % | 15 m; 60 m | 73 (4,8 %): 3 y 70 |
+
+La diferencia mediana de la distancia al establecimiento más cercano es de 14 m en salud, 20 m en inicial, 17 m en primaria y 34 m en secundaria (percentil 90: 436, 406, 306 y 757 m). Por distrito (radio de 200 m), la exhaustividad más baja en salud es la del Cercado (6 de 111, 5,4 %), Yanahuara (2 de 51, 3,9 %) y Paucarpata (12 de 78, 15,4 %); en educación, la del Cercado (124 de 400, 31,0 %), Miraflores (34,8 %) y José Luis Bustamante y Rivero (36,5 %).
+
+**Cómo leerlo.** (1) Lo que OSM sí tiene está bien ubicado (desfase mediano de 6 a 15 m). (2) Le falta más de la mitad de lo oficial, sobre todo en salud, y esa ausencia mueve el resultado de CUMPLE / NO CUMPLE solo en el 4 % al 7 % de los puntos de la malla, casi siempre en el sentido de que OSM dice «no cumple» donde el registro oficial dice «cumple». (3) La precisión es una cota baja: un colegio o un puesto de OSM con otro nombre que el del registro no se empareja (el parecido mínimo es 0,9) y cuenta como sin correspondencia; no se revisó a mano ninguna muestra de los no emparejados. (4) La exhaustividad de salud está medida sobre los 406 establecimientos con coordenadas: el 42 % de las filas de RENIPRESS en Arequipa no las trae y no se pueden contrastar. (5) Las coordenadas de ESCALE son las del local, reportadas por la UGEL. **Decisión pendiente del equipo:** usar RENIPRESS y ESCALE como fuente primaria con la fuente y la fecha de cada dato (la alternativa que ya figuraba en este documento), o mantener OSM y decirlo en pantalla. Este documento no la toma. El script, la lógica y el protocolo siguen siendo los de `docs/INVESTIGACION-VARIABLES.md` §5.1.
 
 **Dónde descargar cada archivo** (las descargas automáticas reciben HTTP 418 o piden sesión: hay que usar un navegador):
 
@@ -209,5 +227,5 @@ Opciones: `--radios=50,100,200` (m), `--umbral-nombre=0.9`, `--paso=500` (separa
 - [ ] Obtener los certificados u otra referencia oficial para la muestra (§3.1).
 - [ ] Reclutar participantes y fijar las tareas con su respuesta correcta (§3.2).
 - [ ] Revisión del mapa de calor con conocedores (§3.3).
-- [ ] Descargar a mano RENIPRESS y el padrón de ESCALE, fijar los criterios de aceptación y correr `pnpm datos:validar-oficial` (§3.4).
+- [x] Descargar RENIPRESS y el padrón de ESCALE, fijar los criterios de aceptación y correr `pnpm datos:validar-oficial` (§3.4; hecho el 2026-11-09). Falta revisar a mano una muestra de los no emparejados y decidir la fuente primaria.
 - [ ] Registrar resultados en las plantillas y completar este documento.
