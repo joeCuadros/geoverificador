@@ -34,7 +34,7 @@ const Tour = (() => {
             'No da un puntaje global ni recomienda dónde comprar: no hay base para decidir cuánto pesa cada variable.',
             'No es un certificado. No reemplaza el Certificado de Zonificación y Vías ni el de Parámetros Urbanísticos y Edificatorios.',
             'Las distancias son en línea recta, no recorrido a pie.',
-            'Los servicios vienen de OpenStreetMap, un mapa colaborativo: algo que falte en el mapa puede existir.',
+            'Salud y colegios vienen de los registros oficiales (RENIPRESS y ESCALE), con OpenStreetMap solo de respaldo; paraderos y parques, de OpenStreetMap, un mapa colaborativo: algo que falte puede existir.',
           ],
         },
       ],

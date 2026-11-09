@@ -89,7 +89,7 @@ describe('Asistente.responder: contar', () => {
 
   it('responde con el formato pedido y cita la fuente y la fecha', () => {
     const r = Asistente.responder(intencion('¿cuántos colegios hay en Paucarpata?'), ctx);
-    expect(r.texto).toContain('En Paucarpata hay 235 colegios: 134 inicial, 90 primaria, 55 secundaria (OpenStreetMap, 2026-10-28; puede faltar alguno).');
+    expect(r.texto).toContain('En Paucarpata hay 235 colegios: 134 inicial, 90 primaria, 55 secundaria (ESCALE, con OpenStreetMap de respaldo, 2026-10-28; puede faltar alguno).');
   });
 
   it('explica por qué los niveles suman más que el total', () => {
@@ -109,11 +109,11 @@ describe('Asistente.responder: contar', () => {
     expect(r.mapa.capas.sort()).toEqual(['areaVerde', 'salud']);
   });
 
-  it('si no hay ninguno, no inventa: dice que no lo encontró en OpenStreetMap', () => {
+  it('si no hay ninguno, no inventa: dice que no lo encontró en sus datos', () => {
     const vacio = { ...conteo, salud: { total: 0, lista: [] } };
     const r = Asistente.responder(intencion('cuántas postas hay en Paucarpata'), { ...ctx, conteo: vacio });
     expect(r.texto).toMatch(/no encontré/i);
-    expect(r.texto).toContain('puede que existan sin estar mapeados');
+    expect(r.texto).toContain('puede que existan sin estar registrados ni mapeados');
   });
 
   it('un distrito fuera de los datos lo dice y no da cifras', () => {
@@ -148,7 +148,7 @@ describe('Asistente.responder: perfil de un distrito', () => {
     expect(r.texto).toContain('43 paraderos');
     expect(r.texto).toContain('8 parques');
     expect(r.texto).toContain('Río Chili');
-    expect(r.texto).toContain('OpenStreetMap, 2026-10-28');
+    expect(r.texto).toContain('RENIPRESS y ESCALE, con OpenStreetMap de respaldo y para paraderos y parques, 2026-10-28');
   });
 
   it('termina con una pregunta sobre lo primero para la persona y ofrece botones que buscan dentro de ese distrito', () => {

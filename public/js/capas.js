@@ -119,6 +119,8 @@ const Capas = (() => {
   };
 
   const tituloColegio = (c) => c.nombre || 'Colegio sin nombre en OpenStreetMap';
+  // De qué fuente es el punto (RENIPRESS, ESCALE u OSM de respaldo) y su código oficial, para el popup del mapa.
+  const fuenteDe = (p) => ({ fuente: p.fuente || 'OSM', fuenteTexto: C.textoFuenteElemento({ fuenteElemento: p.fuente || 'OSM', codigo: p.codigo, categoria: p.categoria, gestion: p.gestion, osm: p.osm }) });
   const NOMBRE_NIVEL = { inicial: 'inicial', primaria: 'primaria', secundaria: 'secundaria' };
 
   // -------------------------------------------------------------------- Construir
@@ -189,7 +191,7 @@ const Capas = (() => {
           const propios = c.niveles.filter((n) => niveles.includes(n));
           const subtipo = propios.length === 1 ? propios[0] : propios[0];
           puntos.push({
-            capa: 'colegios', tipo: 'colegio', subtipo, niveles: propios, lat: c.lat, lon: c.lon, nombre: c.nombre, osm: c.osm,
+            capa: 'colegios', tipo: 'colegio', subtipo, niveles: propios, lat: c.lat, lon: c.lon, nombre: c.nombre, osm: c.osm, ...fuenteDe(c),
             titulo: tituloColegio(c), detalle: `Colegio de ${propios.map((n) => NOMBRE_NIVEL[n]).join(' y ')}`, radioM: umbralDe(subtipo),
           });
         });
@@ -199,8 +201,8 @@ const Capas = (() => {
         const umbral = typeof capa.umbralM === 'number' ? capa.umbralM : id === 'salud' ? u.salud : u.transporte;
         const elegidos = (lista || []).filter((p) => enArea(p.lat, p.lon) && (!centros || cercaDe(centros, p.lat, p.lon, umbral)));
         elegidos.forEach((p) => puntos.push({
-          capa: id, tipo: id === 'salud' ? 'salud' : 'paradero', subtipo: id, lat: p.lat, lon: p.lon, nombre: p.nombre, osm: p.osm,
-          titulo: p.nombre || (id === 'salud' ? 'Establecimiento de salud sin nombre en OpenStreetMap' : 'Paradero'), detalle: id === 'salud' ? 'Establecimiento de salud' : 'Paradero de transporte público', radioM: umbral,
+          capa: id, tipo: id === 'salud' ? 'salud' : 'paradero', subtipo: id, lat: p.lat, lon: p.lon, nombre: p.nombre, osm: p.osm, ...(id === 'salud' ? fuenteDe(p) : {}),
+          titulo: p.nombre || (id === 'salud' ? 'Establecimiento de salud sin nombre' : 'Paradero'), detalle: id === 'salud' ? 'Establecimiento de salud' : 'Paradero de transporte público', radioM: umbral,
         }));
         cuenta(id, elegidos.length, `${id === 'salud' ? 'Establecimientos de salud' : 'Paraderos'}: ${elegidos.length}`);
       } else if (id === 'parques') {

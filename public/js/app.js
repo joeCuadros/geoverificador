@@ -1069,6 +1069,8 @@
   const fmtFechaDato = (iso) => (iso ? new Date(`${iso}T12:00:00Z`).toLocaleDateString('es-PE', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }) : 'sin fecha');
   const NIVEL_TXT = { inicial: 'Inicial', primaria: 'Primaria', secundaria: 'Secundaria' };
   const SIN_DATO_TXT = 'Puede existir pero no estar en nuestros datos: OpenStreetMap es un mapa colaborativo.';
+  // Salud y colegios salen de los registros oficiales (RENIPRESS, ESCALE), que tampoco ubican todo.
+  const SIN_DATO_OFICIAL_TXT = 'Puede existir pero no estar en nuestros datos: los registros oficiales no ubican todos los establecimientos y OpenStreetMap, que completa donde faltan, es un mapa colaborativo.';
 
   // Distancia grande y, debajo, el nombre del más cercano.
   function datoPrincipal(r) {
@@ -1084,15 +1086,15 @@
   // Explicación en una frase: qué significa el estado frente a la distancia de referencia.
   function explicacion(r, cosa) {
     if (r.error) return '';
-    if (r.estado === 'SIN DATO') return `<p class="var-vacio"><strong>Sin dato.</strong> No hay ${cosa} en nuestros datos. ${SIN_DATO_TXT}</p>`;
+    if (r.estado === 'SIN DATO') return `<p class="var-vacio"><strong>Sin dato.</strong> No hay ${cosa} en nuestros datos. ${/salud|colegios/.test(cosa) ? SIN_DATO_OFICIAL_TXT : SIN_DATO_TXT}</p>`;
     if (r.distanciaM === null) return `<p class="var-explica">No se encontró ${cosa} dentro de los datos cercanos. Distancia de referencia: ${fmtUmbral(r.umbralM)}.</p>`;
     return `<p class="var-explica">${r.estado === 'CUMPLE' ? `Está dentro de la distancia de referencia (${fmtUmbral(r.umbralM)}).` : `Está más lejos que la distancia de referencia (${fmtUmbral(r.umbralM)}).`}</p>`;
   }
 
   // Lo que cada dato NO dice. Va dentro de cada tarjeta, junto a la fuente y la fecha.
   const QUE_NO_CUBRE = {
-    salud: 'Solo cuenta lo mapeado en OpenStreetMap con etiquetas de salud. No dice si atiende emergencias, su horario ni su categoría, y la distancia es en línea recta, no recorrido a pie.',
-    educacion: 'OpenStreetMap casi no etiqueta el nivel: un colegio sin nivel se toma como candidato a primaria y secundaria, y los jardines cuentan como inicial. No dice si es público o privado, ni si hay vacantes.',
+    salud: 'Cuenta los establecimientos activos de RENIPRESS (SUSALUD) con categoría I-1 a III-E y coordenadas, consultorios incluidos, y los de OpenStreetMap solo donde RENIPRESS no tiene un punto a 200 m. Cerca del 42 % de los establecimientos de Arequipa en RENIPRESS no trae coordenadas y no puede contarse. No dice si atiende emergencias ni su horario, y la distancia es en línea recta, no recorrido a pie.',
+    educacion: 'Cuenta los locales activos de educación básica regular del padrón de ESCALE (MINEDU), públicos y privados, con el nivel de cada institución. OpenStreetMap solo completa donde ESCALE no tiene un local del mismo nivel a 200 m, y allí casi no etiqueta el nivel: uno sin nivel se toma como candidato a primaria y secundaria. La ubicación es la del local que reportó la UGEL; no dice si hay vacantes.',
     transporte: 'Un paradero no es un servicio: el de OpenStreetMap no dice qué líneas lo usan, su horario ni su frecuencia, y las paradas informales (combis, micros) rara vez están completas.',
     rutas: 'Son los recorridos que SmartBus publicó en la fecha indicada, no un servicio garantizado: no traen frecuencias ni horarios, y un cambio de ruta por tramos puede no estar reflejado. La distancia es al trazado, no a donde se puede subir. Una línea de otra empresa que SmartBus no publica no aparece.',
     areaVerde: `Solo cuenta polígonos cerrados en OpenStreetMap de al menos ${fmtNum(CONFIG.umbrales.areaVerde.areaMinM2)} m²; una plaza mapeada de otra forma no cuenta. No dice si el acceso es público ni cómo está mantenida.`,
@@ -1156,7 +1158,12 @@
 
   function renderEntorno() {
     const e = state.entorno;
-    const etiq = (r) => (r.etiqueta ? `<p class="var-meta">Etiqueta de OpenStreetMap: <code>${esc(r.etiqueta)}</code></p>` : '');
+    // De qué fuente es el establecimiento más cercano (RENIPRESS, ESCALE u OpenStreetMap de respaldo), con su código oficial.
+    const etiq = (r) => {
+      const fuente = Calculos.textoFuenteElemento(r);
+      return (fuente ? `<p class="var-meta"><b>Fuente del establecimiento:</b> ${esc(fuente)}</p>` : '')
+        + (r.etiqueta ? `<p class="var-meta">Etiqueta de OpenStreetMap: <code>${esc(r.etiqueta)}</code></p>` : '');
+    };
 
     const salud = tarjetaVariable(VARIABLES.salud, e.salud.estado, lineaResumen(e.salud),
       datoPrincipal(e.salud) + explicacion(e.salud, 'establecimientos de salud') + etiq(e.salud) + detalleDato(e.salud, QUE_NO_CUBRE.salud));
@@ -1198,7 +1205,7 @@
     $('entorno').setAttribute('aria-busy', 'false');
     $('entorno-toggle').hidden = false;
     actualizarToggleTarjetas();
-    $('entorno-fuente').textContent = 'Distancias en línea recta, no recorrido a pie. OpenStreetMap es colaborativo: algo ausente puede existir. Las distancias de referencia de salud, paradero y borde de zona son convenciones del proyecto. Las líneas de transporte son recorridos publicados por SmartBus, sin frecuencias ni horarios.';
+    $('entorno-fuente').textContent = 'Distancias en línea recta, no recorrido a pie. Salud: RENIPRESS (SUSALUD); colegios: padrón de ESCALE (MINEDU); OpenStreetMap, colaborativo, solo de respaldo donde no hay un punto oficial a 200 m y para paraderos y áreas verdes: algo ausente puede existir. Cada establecimiento dice de qué fuente es. Las distancias de referencia de salud, paradero y borde de zona son convenciones del proyecto. Las líneas de transporte son recorridos publicados por SmartBus, sin frecuencias ni horarios.';
   }
 
   // ------------------------------------------------------ Quebradas y cauces (ANA, IGP y OpenStreetMap)
@@ -1523,8 +1530,10 @@
       else L.polyline([[lat, lon], [r.lat, r.lon]], { color: c, weight: 2, dashArray: '4 6', interactive: false }).addTo(grupo);
       const enlace = r.osm ? `<br><small><a href="https://www.openstreetmap.org/${esc(r.osm)}" target="_blank" rel="noopener">${esc(r.osm)} en openstreetmap.org</a></small>` : '';
       const dist = r.distanciaM === 0 ? 'el punto está dentro del área' : `${fmtDist(r.distanciaM)} en línea recta`;
+      const fuenteTxt = Calculos.textoFuenteElemento(r);
+      const fuente = fuenteTxt ? `<br><small>Fuente: ${esc(fuenteTxt)}</small>` : '';
       L.marker([r.lat, r.lon], { icon: poiIcon(v), title: r.nombre || v.titulo })
-        .bindPopup(`<strong>${esc(r.nombre)}</strong><br>${rotulos.map(esc).join('<br>')}<br>${dist}${enlace}`)
+        .bindPopup(`<strong>${esc(r.nombre)}</strong><br>${rotulos.map(esc).join('<br>')}<br>${dist}${fuente}${enlace}`)
         .addTo(grupo);
       if (r.distanciaM <= 1500) cercanos.push([r.lat, r.lon]);
     });

@@ -52,7 +52,8 @@ const CapasUI = (() => {
   }
 
   const enlaceOsm = (osm) => (osm ? `<br><small><a href="https://www.openstreetmap.org/${esc(osm)}" target="_blank" rel="noopener">${esc(osm)} en openstreetmap.org</a></small>` : '');
-  const popup = (titulo, detalle, osm) => `<strong>${esc(titulo)}</strong>${detalle ? `<br>${esc(detalle)}` : ''}${enlaceOsm(osm)}`;
+  // `fuente` (opcional) es la línea que dice de dónde sale un colegio o un establecimiento de salud, con su código oficial.
+  const popup = (titulo, detalle, osm, fuente) => `<strong>${esc(titulo)}</strong>${detalle ? `<br>${esc(detalle)}` : ''}${fuente ? `<br><small>Fuente: ${esc(fuente)}</small>` : ''}${enlaceOsm(osm)}`;
 
   function marcador(p) {
     const clase = p.tipo === 'colegio' ? `ent-colegio-${p.subtipo}` : `ent-${p.tipo}`;
@@ -61,12 +62,12 @@ const CapasUI = (() => {
     return L.marker([p.lat, p.lon], {
       icon: L.divIcon({ className: `ent-marcador ${clase}`, html, iconSize: [24, 24], iconAnchor: [12, 12], popupAnchor: [0, -10] }),
       title: p.titulo, keyboard: false, pane: 'capasPuntos',
-    }).bindPopup(popup(p.titulo, p.detalle, p.osm));
+    }).bindPopup(popup(p.titulo, p.detalle, p.osm, p.fuenteTexto));
   }
 
   function circuloLienzo(p) {
     const c = COLOR[p.tipo === 'colegio' ? p.subtipo : p.tipo];
-    return L.circleMarker([p.lat, p.lon], { renderer: renderers.puntos, radius: 4.5, color: '#fff', weight: 1, fillColor: c, fillOpacity: 0.95 }).bindPopup(popup(p.titulo, p.detalle, p.osm));
+    return L.circleMarker([p.lat, p.lon], { renderer: renderers.puntos, radius: 4.5, color: '#fff', weight: 1, fillColor: c, fillOpacity: 0.95 }).bindPopup(popup(p.titulo, p.detalle, p.osm, p.fuenteTexto));
   }
 
   /** El punto medio del tramo más largo de una línea: ahí va su etiqueta (la línea se reconoce sin depender del color). */
@@ -184,7 +185,7 @@ const CapasUI = (() => {
     $('leyenda-estados').innerHTML = r.leyenda.map(itemDe).join('')
       + r.sinDatos.map((c) => `<li class="ley-item leyenda-error"><span class="ley-txt">${c === 'lineas' ? 'No pude leer los recorridos de SmartBus, así que no los dibujo.' : `No pude leer el archivo de ${c === 'sismos' ? 'sismos' : c === 'volcan' ? 'peligro volcánico' : c === 'cenepred' ? 'riesgo de los distritos (CENEPRED)' : 'quebradas'}, así que no lo dibujo.`}</span></li>`).join('');
     const fuentes = [];
-    if (r.leyenda.some((l) => ['colegios', 'salud', 'paraderos', 'parques'].includes(l.capa))) fuentes.push(`Colegios, salud, paraderos y parques: OpenStreetMap (ODbL), ${fecha || 'sin fecha'}. Puede faltar alguno.`);
+    if (r.leyenda.some((l) => ['colegios', 'salud', 'paraderos', 'parques'].includes(l.capa))) fuentes.push(`Colegios: padrón de ESCALE (MINEDU). Salud: RENIPRESS (SUSALUD). Paraderos y parques: OpenStreetMap (ODbL), que en colegios y salud solo completa donde no hay un punto oficial a 200 m. Datos al ${fecha || 'sin fecha'}; cada punto dice su fuente al tocarlo. Puede faltar alguno.`);
     if (r.leyenda.some((l) => ['residencial', 'tranquilo', 'campina', 'comercial', 'historico'].includes(l.capa))) fuentes.push('Zonas: plano del PDM Arequipa 2016-2025 (referencial).');
     if (r.leyenda.some((l) => l.capa === 'quebradas')) fuentes.push('Quebradas y ríos: cauces de la ANA (red de 2018), el IGP y OpenStreetMap (ODbL); cada tramo dice su fuente al tocarlo. Ninguna fuente es completa ni es un mapa de peligro.');
     if (r.leyenda.some((l) => l.capa === 'lineas')) fuentes.push('Líneas de bus: Rutas: SmartBus (smartbus.app), recorridos publicados usados con autorización verbal; sin frecuencias ni horarios.' + (r.paradasBus.length ? ' La parada es la más cercana en línea recta.' : ''));

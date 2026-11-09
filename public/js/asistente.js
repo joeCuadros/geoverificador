@@ -402,7 +402,11 @@ const Asistente = (() => {
     return b;
   };
   // Conserva `osm` y `tags`: el mapa por entidades y el conteo por distrito necesitan identificar y describir cada elemento.
-  const puntoDe = (f) => ({ lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0], nombre: f.properties.nombre || null, osm: f.properties.osm || null, tags: f.properties.tags || {} });
+  // También conserva de qué fuente es (RENIPRESS, ESCALE u OSM) y su código oficial; en un local de ESCALE, `nivel` elige la institución.
+  const puntoDe = (f, nivel) => {
+    const o = C.origenDe(f.properties, nivel);
+    return { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0], nombre: o.nombre || null, osm: f.properties.osm || null, tags: f.properties.tags || {}, fuente: o.fuente, codigo: o.codigo, categoria: o.categoria, gestion: o.gestion };
+  };
   const esPunto = (f) => f && f.geometry && f.geometry.type === 'Point';
 
   /** ¿La zona cumple lo que pide el criterio de zona (por código o por grupo)? */
@@ -430,10 +434,9 @@ const Asistente = (() => {
     const colegios = { inicial: [], primaria: [], secundaria: [] };
     const colegiosLista = []; // cada colegio una sola vez, con todos sus niveles
     (e.educacion || []).filter(esPunto).forEach((f) => {
-      const niveles = C.nivelesEducativos(f.properties.tags);
-      const p = puntoDe(f);
-      niveles.forEach((n) => colegios[n].push(p));
-      if (niveles.length > 0) colegiosLista.push({ ...p, niveles });
+      const niveles = C.nivelesDe(f.properties);
+      niveles.forEach((n) => colegios[n].push(puntoDe(f, n)));
+      if (niveles.length > 0) colegiosLista.push({ ...puntoDe(f, niveles[0]), niveles });
     });
     const verdesTodos = (e.areasVerdes || [])
       .filter((f) => f && f.geometry)
@@ -737,11 +740,23 @@ const Asistente = (() => {
     if (!r) return `${etiqueta}: sin dato.`;
     if (r.estado === 'SIN DATO' || r.distanciaM === null) return `${etiqueta}: sin dato en los datos que tengo (no significa que no exista).`;
     const extra = r.areaM2 ? `, ${fmtNum(r.areaM2)} m²` : '';
-    return `${etiqueta}: ${ESTADO[r.estado]} · ${r.nombre || 'sin nombre en OSM'} a ${fmtDist(r.distanciaM)} (referencia ${fmtUmbral(r.umbralM)}${extra}).`;
+    const fuente = C.textoFuenteElemento(r);
+    return `${etiqueta}: ${ESTADO[r.estado]} · ${r.nombre || 'sin nombre en OSM'} a ${fmtDist(r.distanciaM)} (referencia ${fmtUmbral(r.umbralM)}${extra}).${fuente ? ` Fuente: ${fuente}.` : ''}`;
   };
 
   // Líneas de SmartBus del punto, en una línea («Líneas que pasan a ≤400 m: C2 (Cono Norte), …»); nada si no se calcularon.
   const lineaLineas = (t) => (t && t.rutas && !t.rutas.error ? [`${RT.resumen(t.rutas, 6)}.`] : []);
+
+  // Cierre de «¿hay … cerca?»: de qué fuente sale cada tipo. Salud y colegios, de los registros oficiales; lo demás, de OpenStreetMap.
+  function cierreServicios(ids) {
+    const partes = [];
+    if (ids.includes('salud')) partes.push('salud: RENIPRESS (SUSALUD)');
+    if (ids.some((id) => id === 'colegio' || (CRITERIOS[id] && CRITERIOS[id].nivel))) partes.push('colegios: ESCALE (MINEDU)');
+    const abierto = ids.filter((id) => id === 'transporte' || id === 'areaVerde');
+    if (partes.length === 0) return 'Distancias en línea recta, con datos de OpenStreetMap.';
+    if (abierto.length) partes.push('paraderos y áreas verdes: OpenStreetMap');
+    return `Distancias en línea recta. Fuentes: ${partes.join('; ')}${ids.some((id) => id === 'salud' || id === 'colegio' || (CRITERIOS[id] && CRITERIOS[id].nivel)) ? '. OpenStreetMap solo de respaldo, donde ningún registro oficial tiene un punto cerca' : ''}.`;
+  }
 
   function lineasServicio(id, entorno) {
     if (id === 'salud') return [linea('Salud', entorno.salud)];
@@ -774,6 +789,13 @@ const Asistente = (() => {
     if (p.grandes === 0) return `${plural(p.total, 'área verde', 'áreas verdes')}, ninguna de media hectárea o más`;
     return `${plural(p.grandes, 'parque', 'parques')} de al menos media hectárea (${plural(p.total, 'área verde', 'áreas verdes')} en total)`;
   }
+  // De dónde salen los conteos de un distrito: salud y colegios, de los registros oficiales (con OpenStreetMap de respaldo); lo demás, de OpenStreetMap.
+  function fuentesDeGrupos(grupos) {
+    const oficial = [grupos.includes('salud') ? 'RENIPRESS' : null, grupos.includes('colegios') ? 'ESCALE' : null].filter(Boolean);
+    const abierto = grupos.some((g) => g === 'paraderos' || g === 'parques');
+    if (oficial.length === 0) return 'OpenStreetMap';
+    return `${oficial.join(' y ')}, con OpenStreetMap ${abierto ? 'de respaldo y para paraderos y parques' : 'de respaldo'}`;
+  }
   const NOMBRE_DE_GRUPO = { colegios: 'colegios', salud: 'establecimientos de salud', paraderos: 'paraderos', parques: 'parques' };
 
   const textoDistritoFuera = (t) => `${t} es un distrito de la provincia de Arequipa, pero no está en los datos de GeoVerificador: solo tengo los límites de 25 distritos, entre ellos los 21 del Plan de Desarrollo Metropolitano. Prueba con otro, por ejemplo Cayma, Paucarpata o Cerro Colorado.`;
@@ -789,11 +811,11 @@ const Asistente = (() => {
     const sin = con.filter(([, p]) => !p).map(([g]) => NOMBRE_DE_GRUPO[g]);
     const fecha = c.fecha || 'sin fecha';
     const lineas = [];
-    if (hay.length) lineas.push(`En ${t} hay ${hay.map(([, p]) => p).join('; ')} (OpenStreetMap, ${fecha}; puede faltar alguno).`);
+    if (hay.length) lineas.push(`En ${t} hay ${hay.map(([, p]) => p).join('; ')} (${fuentesDeGrupos(hay.map(([g]) => g))}, ${fecha}; puede faltar alguno).`);
     if (sin.length) {
       lineas.push(hay.length
-        ? `No encontré ${listaEs(sin)} en OpenStreetMap: puede que existan sin estar mapeados.`
-        : `En ${t} no encontré ${listaEs(sin)} en OpenStreetMap (${fecha}): puede que existan sin estar mapeados.`);
+        ? `No encontré ${listaEs(sin)} en mis datos: puede que existan sin estar registrados ni mapeados.`
+        : `En ${t} no encontré ${listaEs(sin)} en mis datos (${fuentesDeGrupos(sin.map((n) => Object.keys(NOMBRE_DE_GRUPO).find((g) => NOMBRE_DE_GRUPO[g] === n)))}, ${fecha}): puede que existan sin estar registrados ni mapeados.`);
     }
     const col = c.conteo.colegios;
     if (grupos.includes('colegios') && col.total > 0 && (col.inicial + col.primaria + col.secundaria > col.total || col.sinNivel > 0)) {
@@ -832,7 +854,7 @@ const Asistente = (() => {
       ? `• Zonificación (plano del PDM 2016-2025): sobre todo ${listaEs(principales)}.`
       : `• Zonificación: no tengo zonificación de ${t} en el plano del PDM 2016-2025.`);
     const partes = ['colegios', 'salud', 'paraderos', 'parques'].map((g) => parteDeConteo(g, p.conteo)).filter(Boolean);
-    lineas.push(`• Servicios (OpenStreetMap, ${c.fecha || 'sin fecha'}; puede faltar alguno): ${partes.length ? partes.join('; ') : 'no encontré ninguno en los datos'}.`);
+    lineas.push(`• Servicios (${fuentesDeGrupos(['colegios', 'salud', 'paraderos', 'parques'])}, ${c.fecha || 'sin fecha'}; puede faltar alguno): ${partes.length ? partes.join('; ') : 'no encontré ninguno en los datos'}.`);
     const q = p.cauces;
     const deDonde = q.fuentes && q.fuentes.length ? listaEs(q.fuentes.map((f) => C.nombreFuenteCauce(f))) : 'la ANA';
     const ningunoDe = Array.isArray(q.fuentes) ? 'la ANA, el IGP y OpenStreetMap no registran' : 'la ANA no registra';
@@ -1082,7 +1104,8 @@ const Asistente = (() => {
   const TEXTO_FUENTES = [
     'De dónde sale cada cosa:',
     '• Zonificación: plano y reglamento del PDM Arequipa 2016-2025 (O.M. 961-MPA, con la zonificación restituida por la 975-MPA). Es referencial.',
-    '• Salud, colegios, paraderos y áreas verdes: OpenStreetMap (ODbL), copia congelada con su fecha de extracción. Algo que falte en el mapa puede existir.',
+    '• Salud: RENIPRESS (SUSALUD, licencia ODC-By) y colegios: padrón de ESCALE (MINEDU), como fuente primaria, con su fecha. OpenStreetMap (ODbL) solo de respaldo, donde ningún registro oficial tiene un punto a 200 m; cada establecimiento dice de cuál es.',
+    '• Paraderos y áreas verdes: OpenStreetMap (ODbL), copia congelada con su fecha de extracción. Algo que falte en el mapa puede existir.',
     '• Líneas de transporte (recorridos y paradas): SmartBus (smartbus.app), usados con su autorización verbal (confirmación escrita pendiente). Sin frecuencias ni horarios.',
     '• Umbrales: colegios 500 m inicial, 1500 m primaria y 3000 m secundaria (MINEDU); área verde ≥ 0,5 ha a 300 m (OMS Europa); salud 1000 m, paradero 400 m y borde de zona 20 m son convenciones del proyecto.',
     '• Peligro volcánico del Misti: zonas del Instituto Geofísico del Perú (IGP), sin fecha de elaboración en el servicio; el mapa oficial de referencia es el de INGEMMET (Boletín n.° 100, 2025). Es informativo, no una evaluación de riesgo.',
@@ -1215,7 +1238,7 @@ const Asistente = (() => {
       if (tipo === 'servicio') {
         const ids = intencion.criterios.filter((x) => CRITERIOS[x.id].tipo === 'servicio').map((x) => x.id);
         if (ids.length === 0) return fin('Eso lo uso para buscar zonas, no para describir un punto. Prueba: «busco una zona cerca de campiña y residencial».');
-        return fin([...ids.flatMap((id) => lineasServicio(id, c.entorno)), 'Distancias en línea recta, con datos de OpenStreetMap.'].join('\n'));
+        return fin([...ids.flatMap((id) => lineasServicio(id, c.entorno)), cierreServicios(ids)].join('\n'));
       }
       const zonaTxt = c.zona ? `${c.zona.codigo} (${c.zona.regla ? c.zona.regla.nombre : 'sin reglas'}), ${c.zona.regla ? EDIFICABLE[c.zona.regla.edificable] : ''}` : 'fuera del área zonificada del plano';
       const e = c.entorno;
@@ -1542,10 +1565,12 @@ const Asistente = (() => {
 
   const FUENTE_PLANO = 'Plano y Reglamento del PDM Arequipa 2016-2025 (O.M. 961-MPA; zonificación restituida por la 975-MPA).';
   const FUENTE_OSM = 'OpenStreetMap (ODbL), copia congelada con su fecha de extracción.';
+  const FUENTE_SERVICIOS = 'Salud: RENIPRESS (SUSALUD, ODC-By). Colegios: padrón de ESCALE (MINEDU, con su acuerdo de uso de datos). Son la fuente primaria; OpenStreetMap (ODbL) solo de respaldo donde ningún registro oficial tiene un punto a 200 m. Paraderos y áreas verdes: OpenStreetMap. Copias congeladas con su fecha.';
   const FUENTE_UMBRALES = 'Umbrales: colegios 500 m inicial, 1500 m primaria y 3000 m secundaria (MINEDU); área verde de al menos 5000 m² a 300 m (OMS Europa, 2016); salud 1000 m y paradero 400 m son convenciones del proyecto.';
   const LIM_REFERENCIAL = 'Es referencial: no reemplaza el Certificado de Zonificación y Vías ni el de Parámetros Urbanísticos y Edificatorios.';
   const LIM_RECTA = 'Las distancias son en línea recta, no recorrido a pie.';
   const LIM_OSM = 'OpenStreetMap es colaborativo: lo que no figura puede existir. «Sin dato» no significa que no exista.';
+  const LIM_OFICIAL = 'Los registros oficiales no ubican todos los establecimientos (cerca del 42 % de los de salud de Arequipa en RENIPRESS no trae coordenadas) y ESCALE ubica el local que reportó la UGEL. Un establecimiento oficial puede estar y no verse; uno de OpenStreetMap solo aparece donde no hay un punto oficial cerca.';
   const LIM_PLANO = 'El plano se extrajo de un PDF y cerca del borde entre dos zonas el resultado puede no ser exacto. La vigencia del PDM 2016-2025 es incierta y hay un PDM nuevo en trámite.';
   const FUENTE_ANA = 'Cauces congelados con su fecha de extracción: la red hidrográfica de la Autoridad Nacional del Agua (ANA, 2018), las quebradas y ríos del Instituto Geofísico del Perú (IGP, sin fecha de elaboración) y los cauces de OpenStreetMap (ODbL). Cada cauce dice de cuál fuente viene.';
   const FUENTE_IGP = 'Sismos reportados, Instituto Geofísico del Perú (IGP), congelados con su fecha de extracción.';
@@ -1554,13 +1579,13 @@ const Asistente = (() => {
   const LIM_INVENTARIO = 'Es un inventario de eventos documentados, no un mapa de susceptibilidad: que no haya registros cerca no significa que el lugar sea seguro.';
   const GENERICO = {
     porque: ['Los datos, distancias y estados los calcula siempre el motor de la ficha con reglas explícitas. Un modelo, si está activo, solo interpreta tu frase y redacta; no aporta cifras, por eso no puede inventar un dato.'],
-    fuente: ['Responde solo con los datos de la ficha: el plano de zonificación y OpenStreetMap.'],
+    fuente: ['Responde solo con los datos de la ficha: el plano de zonificación y los servicios (RENIPRESS, ESCALE y OpenStreetMap de respaldo).'],
     limites: ['No tiene datos de seguridad ni ruido, ni el precio de un inmueble en particular (solo el promedio de oferta por m² de algunos distritos), y lo dice cuando se lo preguntan.', LIM_REFERENCIAL],
   };
   const SERVICIOS = {
     porque: ['Se mide la distancia en línea recta desde tu punto hasta el elemento más cercano de cada tipo y se compara con la distancia de referencia (umbral).'],
-    fuente: [FUENTE_OSM, FUENTE_UMBRALES],
-    limites: [LIM_RECTA, LIM_OSM, LIM_REFERENCIAL],
+    fuente: [FUENTE_SERVICIOS, FUENTE_UMBRALES],
+    limites: [LIM_RECTA, LIM_OFICIAL, LIM_OSM, LIM_REFERENCIAL],
   };
   const EXPLICACIONES = {
     saludo: GENERICO,
@@ -1569,8 +1594,8 @@ const Asistente = (() => {
     no_soportado: GENERICO,
     fuentes: {
       porque: ['Resume de dónde sale cada dato de la ficha y qué umbral se usa.'],
-      fuente: [FUENTE_PLANO, FUENTE_OSM, FUENTE_UMBRALES],
-      limites: [LIM_RECTA, LIM_OSM, LIM_REFERENCIAL],
+      fuente: [FUENTE_PLANO, FUENTE_SERVICIOS, FUENTE_UMBRALES],
+      limites: [LIM_RECTA, LIM_OFICIAL, LIM_OSM, LIM_REFERENCIAL],
     },
     pdm: {
       porque: ['Muestra el aviso sobre el estado del PDM nuevo que registra la herramienta, con su fuente y su fecha. No lo interpreta.'],

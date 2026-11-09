@@ -233,7 +233,7 @@ const CompararUI = (() => {
     }
     const fechas = [...new Set(candidatos.map((c) => c.fechaDatos).filter(Boolean))];
     $('comparar-fuente').textContent = hay
-      ? `Zonificación: plano del PDM Arequipa 2016-2025. Salud, colegios, paraderos y áreas verdes: OpenStreetMap${fechas.length ? `, datos del ${fechas.join(' y del ')}` : ''}. Líneas de transporte: recorridos de SmartBus (smartbus.app), sin frecuencias ni horarios. Quebradas: cauces de la ANA, el IGP y OpenStreetMap (ODbL; cada celda dice su fuente). Peligros geológicos: INGEMMET. Sismos: IGP. Precio de oferta del distrito: Aptología (CC BY 4.0), precios de avisos y no de cierre. Distancias en línea recta. Esta tabla muestra lo que la herramienta calculó y es referencial; lo que tú debes comprobar (certificados, partida registral, servicios, peligros) está en «Verificaciones recomendadas antes de comprar», en el reporte.`
+      ? `Zonificación: plano del PDM Arequipa 2016-2025. Salud: RENIPRESS (SUSALUD). Colegios: padrón de ESCALE (MINEDU). OpenStreetMap, de respaldo en ambos y para paraderos y áreas verdes${fechas.length ? `, datos del ${fechas.join(' y del ')}` : ''}. Líneas de transporte: recorridos de SmartBus (smartbus.app), sin frecuencias ni horarios. Quebradas: cauces de la ANA, el IGP y OpenStreetMap (ODbL; cada celda dice su fuente). Peligros geológicos: INGEMMET. Sismos: IGP. Precio de oferta del distrito: Aptología (CC BY 4.0), precios de avisos y no de cierre. Distancias en línea recta. Esta tabla muestra lo que la herramienta calculó y es referencial; lo que tú debes comprobar (certificados, partida registral, servicios, peligros) está en «Verificaciones recomendadas antes de comprar», en el reporte.`
       : '';
   }
 

@@ -51,13 +51,16 @@ const Entidades = (() => {
    * Un colegio con varios niveles suma en cada uno (por eso inicial + primaria + secundaria puede superar al total).
    * Los parques se cuentan todos; `grandes` son los de al menos el área mínima de los criterios (0,5 ha, OMS).
    */
+  // Cuántos elementos hay de cada fuente (RENIPRESS, ESCALE u OSM); lo que no dice fuente es de OSM.
+  const porFuente = (lista) => lista.reduce((o, p) => { const f = p.fuente || 'OSM'; o[f] = (o[f] || 0) + 1; return o; }, {});
+
   function contar(datos, polys, { areaMinM2 = 5000 } = {}) {
     const e = enDistrito(datos, polys);
     const porNivel = Object.fromEntries(NIVELES.map((n) => [n, e.colegios.filter((c) => c.niveles.includes(n)).length]));
     const parques = [...e.parques].sort((a, b) => b.areaM2 - a.areaM2);
     return {
-      colegios: { total: e.colegios.length, ...porNivel, sinNivel: e.colegios.filter(sinNivelDeclarado).length, lista: e.colegios },
-      salud: { total: e.salud.length, lista: e.salud },
+      colegios: { total: e.colegios.length, ...porNivel, sinNivel: e.colegios.filter(sinNivelDeclarado).length, fuentes: porFuente(e.colegios), lista: e.colegios },
+      salud: { total: e.salud.length, fuentes: porFuente(e.salud), lista: e.salud },
       paraderos: { total: e.paraderos.length, lista: e.paraderos },
       parques: {
         total: parques.length,

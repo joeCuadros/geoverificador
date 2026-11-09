@@ -86,6 +86,7 @@ const Reporte = (() => {
     if (r.error) return [fila('Resultado', `No se pudo obtener el dato: ${esc(r.error)}`)];
     const f = [fila('Estado', estado(r.estado))];
     if (r.nombre) f.push(fila('Más cercano', esc(r.nombre)));
+    if (r.fuenteElemento) f.push(fila('Fuente del establecimiento', esc(CALC.textoFuenteElemento(r))));
     f.push(fila('Distancia', r.distanciaM === null ? 'Sin dato' : r.distanciaM === 0 ? 'El punto está dentro del área' : `${dist(r.distanciaM)} en línea recta`));
     f.push(fila('Umbral', `${dist(r.umbralM)} (${esc(fuenteUmbral)})`));
     return f;
@@ -103,11 +104,12 @@ const Reporte = (() => {
     const filas = NIVELES.flatMap((n) => {
       const r = e[n];
       if (r.error) return [fila(nombreNivel(n), `No se pudo obtener el dato: ${esc(r.error)}`)];
-      const det = r.nombre ? `${esc(r.nombre)} · ${r.distanciaM === null ? 'sin distancia' : `${dist(r.distanciaM)} en línea recta`} · umbral ${dist(r.umbralM)}` : `Sin dato · umbral ${dist(r.umbralM)}`;
+      const origen = r.fuenteElemento ? ` · fuente: ${esc(CALC.textoFuenteElemento(r))}` : '';
+      const det = r.nombre ? `${esc(r.nombre)} · ${r.distanciaM === null ? 'sin distancia' : `${dist(r.distanciaM)} en línea recta`} · umbral ${dist(r.umbralM)}${origen}` : `Sin dato · umbral ${dist(r.umbralM)}`;
       return [fila(nombreNivel(n), `${estado(r.estado)} ${det}`)];
     });
     return `<table class="rp-tabla">${filas.join('')}</table>
-      <p class="rp-nota">Umbrales: ${esc(d.fuentesUmbral.educacion)}. OpenStreetMap casi no etiqueta el nivel de los colegios: uno sin nivel se toma como candidato a primaria y secundaria; los jardines (amenity=kindergarten) cuentan como inicial.</p>`;
+      <p class="rp-nota">Umbrales: ${esc(d.fuentesUmbral.educacion)}. Los colegios salen del padrón de ESCALE (MINEDU), que dice el nivel de cada local; OpenStreetMap solo completa donde ESCALE no tiene un local a 200 m, y allí casi no etiqueta el nivel: uno sin nivel se toma como candidato a primaria y secundaria, y los jardines (amenity=kindergarten) cuentan como inicial.</p>`;
   }
 
   // Líneas de SmartBus que pasan cerca del punto: fuente distinta del paradero de OpenStreetMap, con su permiso y sus límites.
@@ -335,10 +337,10 @@ const Reporte = (() => {
     const l = [
       'La zonificación vigente es la del PDM 2016-2025, cuya vigencia de 10 años se cumplió; hay un PDM nuevo en trámite y una sentencia (183-2019) que suspendió ciertos actos para predios antes agrícolas o de reserva paisajista. La zonificación proyectada no se muestra: solo se advierte su estado, con la fuente indicada.',
       'Los polígonos de la zonificación se extrajeron de un PDF: cerca del borde entre dos zonas el resultado puede no ser exacto (por eso se avisa cuando otra zona queda a 20 m o menos).',
-      'Salud, educación, transporte y área verde salen de OpenStreetMap, un mapa colaborativo: algo ausente puede existir. Los datos se extrajeron una vez (fecha indicada en cada sección) y no se actualizan solos.',
+      'Salud sale de RENIPRESS (SUSALUD) y educación del padrón de ESCALE (MINEDU), como fuente primaria; OpenStreetMap, un mapa colaborativo, solo sirve de respaldo donde ningún registro oficial tiene un punto a 200 m, y es la fuente de transporte y área verde: algo ausente puede existir. RENIPRESS no trae las coordenadas de cerca del 42 % de los establecimientos de Arequipa, que por eso no pueden ubicarse. Los datos se extrajeron una vez (fecha indicada en cada sección) y no se actualizan solos.',
       'Las líneas de transporte son los recorridos que SmartBus (smartbus.app) publicó en la fecha indicada, usados con su autorización verbal (confirmación escrita pendiente): no traen frecuencias ni horarios, y un cambio de ruta por tramos puede no estar reflejado.',
       'Todas las distancias son en línea recta, no recorrido a pie. Los umbrales de salud (1000 m), transporte (400 m) y borde de zona (20 m) son convenciones del proyecto; los de educación son distancias referenciales de las normas del MINEDU (RVM 104-2019 y 208-2019, numeral 7.1) y el de área verde es un indicador de la OMS Europa (2016), no una norma peruana.',
-      'OpenStreetMap casi no etiqueta el nivel de los colegios: un colegio sin nivel se toma como candidato a primaria y secundaria, lo que puede sobrestimar la oferta de un nivel.',
+      'Los locales de ESCALE dicen su nivel. Los colegios de OpenStreetMap que completan el mapa casi no lo etiquetan: uno sin nivel se toma como candidato a primaria y secundaria, lo que puede sobrestimar la oferta de un nivel.',
       'Quebradas y cauces: no existe una distancia normativa a una quebrada, así que el estado es INFORMATIVO salvo que la persona fije su propio umbral («según tu umbral»). Los cauces vienen de la ANA, el IGP y OpenStreetMap; ninguna fuente es completa, no son un mapa de peligro y no delimitan la faja marginal.',
       'El contexto de riesgo (peligros geológicos de INGEMMET, sismos reportados por el IGP en el periodo indicado y zonas de peligro volcánico del Misti del IGP, de escala regional y sin fecha de elaboración, y el escenario de riesgo del CENEPRED ante El Niño, que es una estimación por distrito) es informativo: no es una evaluación del predio, no predice sismos, erupciones ni lluvias y que no haya registros o zonas no significa que el lugar sea seguro.',
       'El precio de oferta por m² del distrito (Aptología, CC BY 4.0) es informativo: son precios pedidos en avisos, no de cierre, y es la mediana del distrito, no el precio de este inmueble. Solo hay cifra en los distritos con al menos 30 avisos.',
@@ -430,7 +432,7 @@ const Reporte = (() => {
     const secciones = construirSecciones(d);
     const resumen = [...d.resumen, ...filasResumenExtra(d)];
 
-    const datos = ['MPA/IMPLA (zonificación)', '© colaboradores de OpenStreetMap (ODbL)', 'ANA, IGP y OpenStreetMap (cauces)', 'INGEMMET (peligros geológicos)', 'IGP (sismos reportados y zonas de peligro volcánico)', 'CENEPRED (escenario de riesgo ante El Niño por distrito)', 'Datos: Aptologia (precio de oferta, CC BY 4.0)'];
+    const datos = ['MPA/IMPLA (zonificación)', 'RENIPRESS (SUSALUD, ODC-By)', 'Padrón de ESCALE (MINEDU)', '© colaboradores de OpenStreetMap (ODbL, respaldo y transporte)', 'ANA, IGP y OpenStreetMap (cauces)', 'INGEMMET (peligros geológicos)', 'IGP (sismos reportados y zonas de peligro volcánico)', 'CENEPRED (escenario de riesgo ante El Niño por distrito)', 'Datos: Aptologia (precio de oferta, CC BY 4.0)'];
     if (m.desastre) datos.push('INGEMMET (GEOCATMIN), INEI, MVCS (E.030)');
     if (m.seguridad) datos.push('MININTER (SIDPOL)');
 
