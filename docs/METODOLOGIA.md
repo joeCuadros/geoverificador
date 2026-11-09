@@ -208,11 +208,11 @@ Descarga: `node scripts/descargar-delitos.mjs` → `public/data/delitos_aqp.geoj
 | Variable | Elementos (etiquetas de OSM) | Umbral | Origen del umbral |
 |---|---|---|---|
 | V2 Salud | `amenity=hospital, clinic, doctors` y `healthcare=*` | 1000 m | Convención del proyecto |
-| V3 Educación inicial | `amenity=kindergarten`; `amenity=school` con `isced:level=0` o `school=kindergarten` | 500 m | MEF/MINEDU, Instructivo FTE, Cuadro N.° 1 (RVM 104-2019 y 208-2019-MINEDU) |
+| V3 Educación inicial | `amenity=kindergarten`; `amenity=school` con `isced:level=0` o `school=kindergarten` | 500 m | MINEDU, numeral 7.1, Cuadro N.° 1 (RVM 104-2019 para inicial; RVM 208-2019 para primaria y secundaria; distancias referenciales) |
 | V3 Educación primaria | `amenity=school` con `isced:level=1` o `school=primary`; sin etiqueta de nivel | 1500 m | ídem |
 | V3 Educación secundaria | `amenity=school` con `isced:level=2 o 3` o `school=secondary`; sin etiqueta de nivel | 3000 m | ídem |
 | V4 Transporte | `highway=bus_stop`, `public_transport=platform, stop_position` | 400 m | Convención del proyecto |
-| V5 Área verde | Polígonos `leisure=park, garden`, `landuse=recreation_ground` | al menos 5000 m² a 300 m | Indicador básico de la OMS Europa (2016) |
+| V5 Área verde | Polígonos `leisure=park, garden`, `landuse=recreation_ground` | al menos 5000 m² a 300 m | Indicador básico de la OMS Europa (2016), informe «Urban green spaces and health», p. 39 (indicador de monitoreo, no norma peruana) |
 
 **Decisiones que la fuente no resuelve.**
 - `healthcare=*` incluye farmacias, laboratorios y consultas de una sola especialidad; se excluyen `pharmacy`, `optometrist`, `alternative`, `blood_donation`, `laboratory`, `sample_collection`, `dentist`, `physiotherapist`, `occupational_therapist`, `psychotherapist`, `speech_therapist`, `audiologist` y `podiatrist`, que no son centros de atención general.

@@ -114,9 +114,9 @@ const CONFIG = {
   fuentesUmbral: {
     bordeZona: 'Convención del proyecto',
     salud: 'Convención del proyecto',
-    educacion: 'MEF/MINEDU, Instructivo FTE, Cuadro N.° 1 (RVM 104-2019-MINEDU y 208-2019-MINEDU)',
+    educacion: 'MINEDU, numeral 7.1, Cuadro N.° 1, distancias referenciales: inicial 500 m (RVM 104-2019-MINEDU), primaria 1500 m y secundaria 3000 m (RVM 208-2019-MINEDU)',
     transporte: 'Convención del proyecto',
-    areaVerde: 'Indicador básico de la OMS Europa (2016): un espacio verde de al menos 0,5 ha a 300 m en línea recta',
+    areaVerde: 'Indicador básico de la OMS Europa (2016), «Urban green spaces and health», p. 39: un espacio verde de al menos 0,5 ha a 300 m en línea recta; es un indicador de monitoreo, no una norma peruana',
   },
 
   // V1b Zonificación proyectada: solo un aviso de texto. Se muestra ÚNICAMENTE si hay fuente y fecha; con null no se
