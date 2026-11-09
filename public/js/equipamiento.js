@@ -22,7 +22,15 @@ const Equipamiento = (() => {
       if (!res.ok) return null;
       const fc = await res.json();
       if (!fc || !Array.isArray(fc.features)) return null;
-      return { features: fc.features, fecha: (fc.metadata && fc.metadata.fecha_extraccion) || null, origen: 'archivo' };
+      const meta = fc.metadata || {};
+      return {
+        features: fc.features,
+        fecha: meta.fecha_extraccion || null,
+        origen: 'archivo',
+        fuente: meta.fuente || null, // p. ej. «RENIPRESS (SUSALUD) (fuente primaria) y OpenStreetMap (ODbL, respaldo)»
+        fuentes: Array.isArray(meta.fuentes) ? meta.fuentes : null, // [{ rol: 'primaria' | 'respaldo', id, nombre, fecha }]
+        radioDedupM: (meta.deduplicacion && meta.deduplicacion.radio_m) || null,
+      };
     } catch (_) {
       return null;
     }
@@ -94,16 +102,30 @@ const Equipamiento = (() => {
     etiqueta,
   });
 
-  const metodoBase = (datos, que) => {
-    const origen = datos.origen === 'archivo'
-      ? 'Datos congelados de OpenStreetMap (ODbL).'
-      : `Datos de respaldo: no se encontró el archivo local, así que se consultó Overpass en vivo en un radio de ${CONFIG.equipamiento.respaldoRadioM / 1000} km.`;
-    return `Distancia en línea recta (haversine, R = 6 371 008,8 m) hasta ${que} más cercano. ${origen}`;
+  /**
+   * Candidato de salud o de educación: además dice de qué fuente es (RENIPRESS, ESCALE u OSM) y su código oficial. En educación,
+   * `nivel` elige la institución del local de ESCALE cuyo nombre, código modular y gestión se muestran.
+   */
+  const candidatoConFuente = (f, etiqueta, nivel) => {
+    const o = Calculos.origenDe(f.properties, nivel);
+    return { ...candidato(f, etiqueta), nombre: o.nombre, fuente: o.fuente, codigo: o.codigo, categoria: o.categoria, gestion: o.gestion };
   };
+
+  /** De dónde salen los datos del archivo: la fuente primaria con su fecha y OpenStreetMap solo como respaldo. */
+  const origenDeLosDatos = (datos) => {
+    if (datos.origen !== 'archivo') return `Datos de respaldo: no se encontró el archivo local, así que se consultó Overpass en vivo en un radio de ${CONFIG.equipamiento.respaldoRadioM / 1000} km.`;
+    const primaria = (datos.fuentes || []).find((x) => x.rol === 'primaria');
+    if (!primaria) return 'Datos congelados de OpenStreetMap (ODbL).';
+    const respaldo = (datos.fuentes || []).find((x) => x.rol === 'respaldo');
+    const radio = datos.radioDedupM ? ` a ${datos.radioDedupM} m` : '';
+    return `Datos congelados de ${primaria.nombre}${primaria.fecha ? ` (${primaria.fecha})` : ''}, fuente primaria, y de OpenStreetMap (ODbL${respaldo && respaldo.fecha ? `, ${respaldo.fecha}` : ''}), solo como respaldo donde no hay un punto oficial${radio}.`;
+  };
+
+  const metodoBase = (datos, que) => `Distancia en línea recta (haversine, R = 6 371 008,8 m) hasta ${que} más cercano. ${origenDeLosDatos(datos)}`;
 
   const comunes = (datos, umbralM, fuenteUmbral, metodo) => ({
     umbralM,
-    fuente: CONFIG.equipamiento.fuente,
+    fuente: datos.fuente || CONFIG.equipamiento.fuente,
     fecha: datos.fecha,
     metodo: `${metodo} Umbral de ${umbralM} m: ${fuenteUmbral}.`,
     alcanceM: datos.alcanceM,
@@ -113,7 +135,7 @@ const Equipamiento = (() => {
     const u = CONFIG.umbrales.salud;
     return Calculos.evaluarMasCercano(
       punto,
-      datos.features.map((f) => candidato(f, Calculos.etiquetaDe(f.properties.tags, 'salud'))),
+      datos.features.map((f) => candidatoConFuente(f, Calculos.etiquetaElemento(f.properties, 'salud'))),
       comunes(datos, u, CONFIG.fuentesUmbral.salud, metodoBase(datos, 'el establecimiento de salud (hospital, clínica, consultorio o healthcare=*)')),
     );
   }
@@ -127,17 +149,18 @@ const Equipamiento = (() => {
     );
   }
 
-  /** Un resultado por nivel. Regla de niveles: Calculos.nivelesEducativos (documentada allí). */
+  /** Un resultado por nivel. Regla de niveles: los del local de ESCALE o, para OpenStreetMap, Calculos.nivelesEducativos (documentada allí). */
   function educacion(datos, punto) {
     const out = {};
     NIVELES.forEach((nivel) => {
       const u = CONFIG.umbrales.educacion[nivel];
       const candidatos = datos.features
-        .filter((f) => Calculos.nivelesEducativos(f.properties.tags).includes(nivel))
+        .filter((f) => Calculos.nivelesDe(f.properties).includes(nivel))
         .map((f) => {
-          const t = f.properties.tags;
+          const t = f.properties.tags || {};
           const asumido = t.amenity === 'school' && !t['isced:level'] && !t.school;
-          return candidato(f, `${Calculos.etiquetaDe(t, 'educacion')}${asumido ? ' (sin etiqueta de nivel: se asume primaria o secundaria)' : ''}`);
+          const etiqueta = Calculos.etiquetaElemento(f.properties, 'educacion');
+          return candidatoConFuente(f, etiqueta && `${etiqueta}${asumido ? ' (sin etiqueta de nivel: se asume primaria o secundaria)' : ''}`, nivel);
         });
       out[nivel] = Calculos.evaluarMasCercano(
         punto,
@@ -207,3 +230,5 @@ const Equipamiento = (() => {
 
   return { NIVELES, evaluar, datosCongelados, indiceRutas: cargarRutas };
 })();
+
+if (typeof module !== 'undefined' && module.exports) module.exports = Equipamiento;

@@ -478,3 +478,98 @@ describe('osmAFeatures (Overpass → GeoJSON)', () => {
     expect(Calculos.osmAFeatures([el], 'poligonos')).toHaveLength(0);
   });
 });
+
+describe('fuente de cada establecimiento (RENIPRESS, ESCALE u OpenStreetMap)', () => {
+  const renipress = { fuente: 'RENIPRESS', nombre: 'POLICLINICO X', codigo_renipress: '00001231', categoria: 'I-3', clasificacion: 'POLICLINICOS' };
+  const escale = {
+    fuente: 'ESCALE', nombre: 'COLEGIO A', codigo_modular: '0100001', codigo_local: '100001', niveles: ['primaria', 'secundaria'],
+    instituciones: [
+      { codigo_modular: '0100001', nombre: 'ESCUELA 1', nivel: 'primaria', gestion: 'Pública' },
+      { codigo_modular: '0100002', nombre: 'COLEGIO 2', nivel: 'secundaria', gestion: 'Privada' },
+    ],
+  };
+  const osm = { osm: 'node/5', nombre: 'Clínica Vallesur', tags: { amenity: 'clinic' } };
+
+  describe('fuenteDe', () => {
+    it('lee la propiedad `fuente` y, si falta (archivo antiguo o consulta en vivo), es OpenStreetMap', () => {
+      expect(Calculos.fuenteDe(renipress)).toBe('RENIPRESS');
+      expect(Calculos.fuenteDe(escale)).toBe('ESCALE');
+      expect(Calculos.fuenteDe(osm)).toBe('OSM');
+      expect(Calculos.fuenteDe({ fuente: 'OSM' })).toBe('OSM');
+      expect(Calculos.fuenteDe(undefined)).toBe('OSM');
+      expect(Calculos.fuenteDe({ fuente: 'otra cosa' })).toBe('OSM');
+    });
+  });
+
+  describe('nivelesDe', () => {
+    it('un local de ESCALE trae sus niveles; no se infieren de etiquetas', () => {
+      expect(Calculos.nivelesDe(escale)).toEqual(['primaria', 'secundaria']);
+    });
+    it('lo de OpenStreetMap que se conserva como respaldo trae solo los niveles que el registro oficial no cubre', () => {
+      expect(Calculos.nivelesDe({ ...osm, tags: { amenity: 'school', 'isced:level': '1;2' }, niveles: ['secundaria'] })).toEqual(['secundaria']);
+    });
+    it('sin `niveles` se infiere de las etiquetas de OpenStreetMap, como siempre', () => {
+      expect(Calculos.nivelesDe({ tags: { amenity: 'kindergarten' } })).toEqual(['inicial']);
+      expect(Calculos.nivelesDe({ tags: { amenity: 'school' } })).toEqual(['primaria', 'secundaria']);
+      expect(Calculos.nivelesDe({})).toEqual([]);
+    });
+  });
+
+  describe('origenDe', () => {
+    it('RENIPRESS: código y categoría', () => {
+      expect(Calculos.origenDe(renipress)).toEqual({ fuente: 'RENIPRESS', codigo: '00001231', categoria: 'I-3', gestion: null, nombre: 'POLICLINICO X' });
+    });
+    it('ESCALE: el código modular, el nombre y la gestión de la institución del nivel pedido', () => {
+      expect(Calculos.origenDe(escale, 'secundaria')).toEqual({ fuente: 'ESCALE', codigo: '0100002', categoria: null, gestion: 'Privada', nombre: 'COLEGIO 2' });
+      expect(Calculos.origenDe(escale, 'primaria')).toMatchObject({ codigo: '0100001', gestion: 'Pública', nombre: 'ESCUELA 1' });
+    });
+    it('ESCALE sin el nivel pedido: los del local', () => {
+      expect(Calculos.origenDe(escale)).toMatchObject({ codigo: '0100001', nombre: 'COLEGIO A', gestion: null });
+    });
+    it('OpenStreetMap: sin código oficial', () => {
+      expect(Calculos.origenDe(osm)).toEqual({ fuente: 'OSM', codigo: null, categoria: null, gestion: null, nombre: 'Clínica Vallesur' });
+    });
+  });
+
+  describe('etiquetaElemento', () => {
+    it('OpenStreetMap: la etiqueta clave=valor de siempre', () => {
+      expect(Calculos.etiquetaElemento(osm, 'salud')).toBe('amenity=clinic');
+    });
+    it('un punto oficial no tiene etiqueta de OpenStreetMap', () => {
+      expect(Calculos.etiquetaElemento(renipress, 'salud')).toBeNull();
+    });
+  });
+
+  describe('textoFuenteElemento', () => {
+    it('RENIPRESS: nombre del registro, código y categoría', () => {
+      expect(Calculos.textoFuenteElemento({ fuenteElemento: 'RENIPRESS', codigo: '00001231', categoria: 'I-3' })).toBe('RENIPRESS (SUSALUD) · código 00001231 · categoría I-3');
+    });
+    it('ESCALE: código modular y gestión', () => {
+      expect(Calculos.textoFuenteElemento({ fuenteElemento: 'ESCALE', codigo: '0100002', gestion: 'Privada' })).toBe('ESCALE (MINEDU) · código modular 0100002 · privada');
+      expect(Calculos.textoFuenteElemento({ fuenteElemento: 'ESCALE', codigo: '0100001', gestion: 'Pública' })).toBe('ESCALE (MINEDU) · código modular 0100001 · pública');
+    });
+    it('OpenStreetMap: dice que es el respaldo y el identificador', () => {
+      expect(Calculos.textoFuenteElemento({ fuenteElemento: 'OSM', osm: 'node/5' })).toBe('OpenStreetMap (respaldo: no hay un punto oficial cerca) · node/5');
+      expect(Calculos.textoFuenteElemento({ fuenteElemento: 'OSM' })).toBe('OpenStreetMap (respaldo: no hay un punto oficial cerca)');
+    });
+    it('sin fuente (por ejemplo un paradero) no dice nada', () => {
+      expect(Calculos.textoFuenteElemento({ fuenteElemento: null })).toBe('');
+      expect(Calculos.textoFuenteElemento({})).toBe('');
+    });
+  });
+
+  describe('evaluarMasCercano deja pasar la fuente y el código del más cercano', () => {
+    const opciones = { umbralM: 1000, fuente: 'x', fecha: '2026-10-30', metodo: 'm' };
+    it('los copia del candidato elegido', () => {
+      const r = Calculos.evaluarMasCercano(P, [
+        { nombre: 'Lejos', lat: P.lat + dLat(900), lon: P.lon, fuente: 'OSM' },
+        { nombre: 'Cerca', lat: P.lat + dLat(100), lon: P.lon, fuente: 'RENIPRESS', codigo: '00001231', categoria: 'I-3' },
+      ], opciones);
+      expect(r).toMatchObject({ nombre: 'Cerca', fuenteElemento: 'RENIPRESS', codigo: '00001231', categoria: 'I-3', gestion: null });
+    });
+    it('sin candidatos o sin fuente quedan en null', () => {
+      expect(Calculos.evaluarMasCercano(P, [], opciones)).toMatchObject({ fuenteElemento: null, codigo: null, categoria: null, gestion: null });
+      expect(Calculos.evaluarMasCercano(P, [{ nombre: 'X', lat: P.lat, lon: P.lon }], opciones).fuenteElemento).toBeNull();
+    });
+  });
+});

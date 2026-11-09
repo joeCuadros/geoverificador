@@ -259,15 +259,77 @@ const Calculos = (() => {
     return ['inicial', 'primaria', 'secundaria'].filter((n) => niveles.has(n));
   }
 
+  // --------------------------------- Fuente de cada establecimiento (salud y educación)
+
+  /**
+   * Los archivos de salud y de educación (scripts/descargar-equipamiento-oficial.mjs) juntan tres fuentes y cada elemento dice
+   * la suya en `properties.fuente`: RENIPRESS (SUSALUD) y ESCALE (MINEDU) son la fuente primaria; OSM es el respaldo, solo donde
+   * no hay un punto oficial cerca. Un archivo anterior, o la consulta en vivo a Overpass, no trae `fuente`: es OpenStreetMap.
+   */
+  const FUENTES_ELEMENTO = ['RENIPRESS', 'ESCALE', 'OSM'];
+  const NOMBRE_FUENTE_ELEMENTO = { RENIPRESS: 'RENIPRESS (SUSALUD)', ESCALE: 'ESCALE (MINEDU)' };
+
+  function fuenteDe(props) {
+    const f = props && props.fuente;
+    return FUENTES_ELEMENTO.includes(f) ? f : 'OSM';
+  }
+
+  /**
+   * Niveles que atiende un colegio. Un local de ESCALE los trae (`niveles`); lo de OpenStreetMap que se conserva como respaldo
+   * trae solo los que el registro oficial no cubre ahí; si no hay `niveles`, se infieren de las etiquetas de OSM (nivelesEducativos).
+   */
+  function nivelesDe(props) {
+    const p = props || {};
+    if (Array.isArray(p.niveles)) return ['inicial', 'primaria', 'secundaria'].filter((n) => p.niveles.includes(n));
+    return nivelesEducativos(p.tags);
+  }
+
+  /**
+   * De dónde sale un elemento y su código oficial: { fuente, codigo, categoria, gestion, nombre }. Para un local de ESCALE con
+   * `nivel`, el código modular, el nombre y la gestión son los de la institución de ese nivel (un local puede tener varias).
+   */
+  function origenDe(props, nivel) {
+    const p = props || {};
+    const fuente = fuenteDe(p);
+    const base = { fuente, codigo: null, categoria: null, gestion: null, nombre: p.nombre ?? null };
+    if (fuente === 'RENIPRESS') return { ...base, codigo: p.codigo_renipress ?? null, categoria: p.categoria ?? null };
+    if (fuente === 'ESCALE') {
+      const ie = nivel ? (p.instituciones || []).find((i) => i.nivel === nivel) : null;
+      return { ...base, codigo: (ie && ie.codigo_modular) || p.codigo_modular || null, gestion: (ie && ie.gestion) || null, nombre: (ie && ie.nombre) || base.nombre };
+    }
+    return base;
+  }
+
+  /** «amenity=clinic» para lo de OpenStreetMap; null para un punto oficial (no tiene etiquetas de OSM). */
+  function etiquetaElemento(props, categoria) {
+    return fuenteDe(props) === 'OSM' ? etiquetaDe(props && props.tags, categoria) : null;
+  }
+
+  /**
+   * Una línea que dice de dónde sale el establecimiento más cercano de un resultado de evaluarMasCercano, con su código oficial:
+   * «RENIPRESS (SUSALUD) · código 00001231 · categoría I-3». Vacía si el resultado no trae fuente (p. ej. un paradero).
+   */
+  function textoFuenteElemento(r) {
+    const f = r && r.fuenteElemento;
+    if (!f) return '';
+    if (f === 'OSM') return `OpenStreetMap (respaldo: no hay un punto oficial cerca)${r.osm ? ` · ${r.osm}` : ''}`;
+    const partes = [NOMBRE_FUENTE_ELEMENTO[f] || f];
+    if (r.codigo) partes.push(f === 'ESCALE' ? `código modular ${r.codigo}` : `código ${r.codigo}`);
+    if (r.categoria) partes.push(`categoría ${r.categoria}`);
+    if (r.gestion) partes.push(String(r.gestion).toLowerCase());
+    return partes.join(' · ');
+  }
+
   // ------------------------------------------------- Resultado de cada variable
 
   const SIN_NOMBRE = 'Sin nombre en OSM';
 
   /**
    * Establecimiento más cercano y veredicto contra el umbral (V2, V3 por nivel y V4).
-   *   candidatos: [{ nombre, lat, lon, osm?, etiqueta? }]
+   *   candidatos: [{ nombre, lat, lon, osm?, etiqueta?, fuente?, codigo?, categoria?, gestion? }]  (fuente = RENIPRESS | ESCALE | OSM, ver origenDe)
    *   opciones:   { umbralM, fuente, fecha, metodo, alcanceM? }
-   * Devuelve { estado, nombre, distanciaM, umbralM, fuente, fecha, metodo, lat, lon, osm, etiqueta }.
+   * Devuelve { estado, nombre, distanciaM, umbralM, fuente, fecha, metodo, lat, lon, osm, etiqueta, fuenteElemento, codigo, categoria, gestion }
+   * (`fuente` es la del archivo; `fuenteElemento` y `codigo`, la del establecimiento más cercano).
    *   CUMPLE      distancia ≤ umbral (inclusivo).
    *   NO CUMPLE   más lejos que el umbral; o, si la búsqueda cubrió un `alcanceM` mayor que el umbral y no halló nada,
    *               sin distancia (hay algo más allá del alcance, o nada).
@@ -285,7 +347,7 @@ const Calculos = (() => {
     }
     if (!mejor) {
       const cubierto = esNumero(alcanceM) && alcanceM >= umbralM;
-      return { estado: cubierto ? 'NO CUMPLE' : 'SIN DATO', nombre: null, distanciaM: null, ...base, lat: null, lon: null, osm: null, etiqueta: null };
+      return { estado: cubierto ? 'NO CUMPLE' : 'SIN DATO', nombre: null, distanciaM: null, ...base, lat: null, lon: null, osm: null, etiqueta: null, fuenteElemento: null, codigo: null, categoria: null, gestion: null };
     }
     return {
       estado: mejorD <= umbralM ? 'CUMPLE' : 'NO CUMPLE',
@@ -296,6 +358,10 @@ const Calculos = (() => {
       lon: mejor.lon,
       osm: mejor.osm ?? null,
       etiqueta: mejor.etiqueta ?? null,
+      fuenteElemento: mejor.fuente ?? null,
+      codigo: mejor.codigo ?? null,
+      categoria: mejor.categoria ?? null,
+      gestion: mejor.gestion ?? null,
     };
   }
 
@@ -683,6 +749,12 @@ const Calculos = (() => {
     avisoPDMProyectado,
     modulosEfectivos,
     osmAFeatures,
+    FUENTES_ELEMENTO,
+    fuenteDe,
+    nivelesDe,
+    origenDe,
+    etiquetaElemento,
+    textoFuenteElemento,
   };
 })();
 
