@@ -22,7 +22,7 @@ Not a listings portal and not a score. It is a verifiable, source-backed fit che
 
 - Static front end in `public/` (Leaflet map, vanilla JS), served by NestJS locally and by Vercel in production (https://geoverificador-nine.vercel.app).
 - Chat assistant: deterministic rule engine plus an optional Gemini layer that only interprets and rephrases; it never invents figures and falls back to rules on any failure.
-- Data: PDM 2016-2025 zoning polygons, schools, health facilities, bus stops and green areas (all four from OpenStreetMap, not from the MINEDU or MINSA registers; the OSM-versus-official check is in `docs/VALIDACION.md` §3.4), INGEMMET hazards, IGP earthquakes, ANA quebradas. A precomputed grid of 2,358 cells backs the search criteria.
+- Data: PDM 2016-2025 zoning polygons, health facilities (RENIPRESS, SUSALUD) and schools (ESCALE padrón, MINEDU) as the primary sources with OpenStreetMap only as a backup where no official point lies within 200 m, plus bus stops and green areas (OpenStreetMap); every facility shows its source and official code. The decision follows the OSM-versus-official check in `docs/VALIDACION.md` §3.4, INGEMMET hazards, IGP earthquakes, ANA quebradas. A precomputed grid of 2,358 cells backs the search criteria.
 - Optional Google sign-in exists on branch `feat/login-google` (name and opaque id only).
 
 ## Capabilities and Constraints
@@ -41,7 +41,7 @@ Name "GeoVerificador", subtitle "Predios de Arequipa". Identity to preserve: whi
 
 ## Evidence on Hand
 
-`docs/VALIDACION.md` (793=793 polygons, 99.97% points, 98.1% labels; OSM versus RENIPRESS and ESCALE in §3.4); `docs/INVESTIGACION-VARIABLES.md` (sources of each variable); real test runs (1,111 unit tests with `pnpm test` plus 4 e2e tests with `pnpm test:e2e`, counted on 2026-11-09; 144 data and calculation checks with `pnpm datos:verificar`, of which 142 passed on 2026-11-09 in two runs; the 2 that failed are speed limits of the assistant search (2.7-4.7 s against 2 s, and 1.0-1.2 s against 1 s) on the dev machine, not correctness checks). No photo of Arequipa for the landing exists in the repo; none may be fabricated.
+`docs/VALIDACION.md` (793=793 polygons, 99.97% points, 98.1% labels; OSM versus RENIPRESS and ESCALE in §3.4, which led to making the registers the primary source); `docs/INVESTIGACION-VARIABLES.md` (sources of each variable); real test runs (1,111 unit tests with `pnpm test` plus 4 e2e tests with `pnpm test:e2e`, counted on 2026-11-09; 144 data and calculation checks with `pnpm datos:verificar`, of which 142 passed on 2026-11-09 in two runs; the 2 that failed are speed limits of the assistant search (2.7-4.7 s against 2 s, and 1.0-1.2 s against 1 s) on the dev machine, not correctness checks). No photo of Arequipa for the landing exists in the repo; none may be fabricated.
 
 ## Product Principles
 

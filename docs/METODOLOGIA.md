@@ -24,7 +24,7 @@
 | Normativo | ¿Puedo construir lo que quiero? | Plano y Reglamento del PDM Arequipa 2016-2025 | §3 |
 | De desastre | ¿Hay peligros geológicos documentados cerca? ¿Qué zona sísmica le corresponde? | INGEMMET (GEOCATMIN) + zonas de riesgo del plano + Norma E.030 y límites del INEI | §4 |
 | De seguridad | ¿Cuántos robos y hurtos se denunciaron cerca? | MININTER / SIDPOL-PNP | §5 |
-| De entorno | ¿Hay servicios, transporte y áreas verdes cerca? | OpenStreetMap | §6 |
+| De entorno | ¿Hay servicios, transporte y áreas verdes cerca? | RENIPRESS (salud) y ESCALE (colegios), con OpenStreetMap de respaldo; OpenStreetMap (paraderos y áreas verdes) | §6 |
 
 ## 2. Cómo se calcula «cerca»
 
@@ -201,26 +201,77 @@ Descarga: `node scripts/descargar-delitos.mjs` → `public/data/delitos_aqp.geoj
 
 ## 6. Servicios: salud, educación, transporte y área verde (V2 a V5)
 
-**Fuente.** OpenStreetMap (ODbL), extraído **una sola vez** con `pnpm datos:extraer` (`scripts/extraer-equipamiento.mjs`: una consulta a Overpass para la caja de Arequipa metropolitana, con reintentos y un espejo de respaldo) y congelado en `public/data/equipamiento/{salud,educacion,transporte,areas_verdes}.geojson`. Cada archivo trae `metadata: { fuente, fecha_extraccion, consulta }`. La aplicación lee esos archivos; solo si falta alguno consulta Overpass en vivo, alrededor del punto, y lo dice en el método del resultado. Las etiquetas de cada variable están en `Calculos.FILTROS` (`public/js/calculos.js`); la misma definición sirve para consultar, clasificar y documentar en pantalla.
+**Fuente.** Desde la validación K2 (`docs/VALIDACION.md` §3.4), que mostró que OpenStreetMap no alcanza el 85 % de exhaustividad ni de precisión, **salud y educación usan los registros oficiales como fuente primaria y OpenStreetMap como respaldo**:
+
+- **Salud: RENIPRESS** (Superintendencia Nacional de Salud, SUSALUD), CSV de `datosabiertos.gob.pe` (licencia Open Data Commons Attribution, ODC-By).
+- **Educación: padrón de instituciones educativas de ESCALE** (Unidad de Estadística del MINEDU), `Padron_web.dbf` dentro de `Padron_web_AAAAMMDD.zip`. Sin licencia abierta declarada (§6.4).
+- **Respaldo: OpenStreetMap** (ODbL), extraído con `pnpm datos:extraer` (`scripts/extraer-equipamiento.mjs`: una consulta a Overpass para la caja de Arequipa metropolitana, con reintentos y un espejo de respaldo) y guardado tal cual, sin fusionar, en `public/data/equipamiento/osm/{salud,educacion}.geojson`. De ahí también salen, en `public/data/equipamiento/{transporte,areas_verdes}.geojson`, los paraderos y las áreas verdes, que siguen siendo solo de OpenStreetMap.
+
+`pnpm datos:oficial` (`scripts/descargar-equipamiento-oficial.mjs`; lógica y pruebas en `scripts/lib/equipamiento-oficial.js` y `test/equipamiento-oficial.spec.ts`) descarga las dos ediciones más recientes (con una pausa entre solicitudes, reintentos y una caché local fuera del repositorio), aplica las reglas de §6.1 a §6.3 y escribe `public/data/equipamiento/{salud,educacion}.geojson`, que son los archivos que lee la aplicación. Si una descarga falla, no escribe nada y dice el error exacto. Cada archivo trae `metadata` con las fuentes (dirección, fecha, licencia), el conteo por fuente, las reglas y los descartes; cada elemento trae `fuente` (`RENIPRESS`, `ESCALE` u `OSM`) y su código oficial (`codigo_renipress`, `codigo_modular`). La aplicación solo consulta Overpass en vivo, alrededor del punto, si falta un archivo, y lo dice en el método del resultado. Las etiquetas de OpenStreetMap de cada variable están en `Calculos.FILTROS` (`public/js/calculos.js`); la misma definición sirve para consultar, clasificar y documentar en pantalla.
 
 **Qué se calcula.** Para el punto elegido, el elemento más cercano de cada variable (distancia en línea recta, haversine con R = 6 371 008,8 m) y su veredicto contra el umbral: `CUMPLE` (distancia ≤ umbral), `NO CUMPLE` o `SIN DATO` (no hay elementos en los datos).
 
-| Variable | Elementos (etiquetas de OSM) | Umbral | Origen del umbral |
+| Variable | Elementos (fuente primaria; etiquetas de OSM del respaldo) | Umbral | Origen del umbral |
 |---|---|---|---|
-| V2 Salud | `amenity=hospital, clinic, doctors` y `healthcare=*` | 1000 m | Convención del proyecto |
-| V3 Educación inicial | `amenity=kindergarten`; `amenity=school` con `isced:level=0` o `school=kindergarten` | 500 m | MINEDU, numeral 7.1, Cuadro N.° 1 (RVM 104-2019 para inicial; RVM 208-2019 para primaria y secundaria; distancias referenciales) |
-| V3 Educación primaria | `amenity=school` con `isced:level=1` o `school=primary`; sin etiqueta de nivel | 1500 m | ídem |
-| V3 Educación secundaria | `amenity=school` con `isced:level=2 o 3` o `school=secondary`; sin etiqueta de nivel | 3000 m | ídem |
+| V2 Salud | RENIPRESS, categorías I-1 a III-E (§6.1); respaldo: `amenity=hospital, clinic, doctors` y `healthcare=*` | 1000 m | Convención del proyecto |
+| V3 Educación inicial | ESCALE, niveles `A1`, `A2` y `A3` (§6.2); respaldo: `amenity=kindergarten`; `amenity=school` con `isced:level=0` o `school=kindergarten` | 500 m | MINEDU, numeral 7.1, Cuadro N.° 1 (RVM 104-2019 para inicial; RVM 208-2019 para primaria y secundaria; distancias referenciales) |
+| V3 Educación primaria | ESCALE, nivel `B0`; respaldo: `amenity=school` con `isced:level=1` o `school=primary`; sin etiqueta de nivel | 1500 m | ídem |
+| V3 Educación secundaria | ESCALE, nivel `F0`; respaldo: `amenity=school` con `isced:level=2 o 3` o `school=secondary`; sin etiqueta de nivel | 3000 m | ídem |
 | V4 Transporte | `highway=bus_stop`, `public_transport=platform, stop_position` | 400 m | Convención del proyecto |
 | V5 Área verde | Polígonos `leisure=park, garden`, `landuse=recreation_ground` | al menos 5000 m² a 300 m | Indicador básico de la OMS Europa (2016), informe «Urban green spaces and health», p. 39 (indicador de monitoreo, no norma peruana) |
 
 **Decisiones que la fuente no resuelve.**
-- `healthcare=*` incluye farmacias, laboratorios y consultas de una sola especialidad; se excluyen `pharmacy`, `optometrist`, `alternative`, `blood_donation`, `laboratory`, `sample_collection`, `dentist`, `physiotherapist`, `occupational_therapist`, `psychotherapist`, `speech_therapist`, `audiologist` y `podiatrist`, que no son centros de atención general.
-- OSM casi no etiqueta el nivel de los colegios. Un `amenity=school` sin `isced:level` ni `school` es candidato a primaria y secundaria (no a inicial; los jardines se mapean como `kindergarten`); uno etiquetado solo con `isced:level` ≥ 4 (superior mal etiquetada) no cuenta. Esa regla puede sobrestimar la oferta de un nivel (`Calculos.nivelesEducativos`).
+- Las reglas de selección y de unión de los registros oficiales están en §6.1 a §6.4.
+- En el respaldo de OpenStreetMap, `healthcare=*` incluye farmacias, laboratorios y consultas de una sola especialidad; se excluyen `pharmacy`, `optometrist`, `alternative`, `blood_donation`, `laboratory`, `sample_collection`, `dentist`, `physiotherapist`, `occupational_therapist`, `psychotherapist`, `speech_therapist`, `audiologist` y `podiatrist`, que no son centros de atención general.
+- OSM casi no etiqueta el nivel de los colegios (los locales de ESCALE sí dicen el suyo). Un `amenity=school` sin `isced:level` ni `school` es candidato a primaria y secundaria (no a inicial; los jardines se mapean como `kindergarten`); uno etiquetado solo con `isced:level` ≥ 4 (superior mal etiquetada) no cuenta. Esa regla puede sobrestimar la oferta de un nivel (`Calculos.nivelesEducativos`).
 - Área verde: el área de cada polígono es geodésica (esfera de R = 6 371 008,8 m, fórmula de Chamberlain y Duquette) y la distancia es hasta su borde más cercano, 0 si el punto está dentro (proyección local plana, error de milímetros a 300 m). Se informa también si hay una de al menos 1 ha a 300 m (sensibilidad). Las relaciones multipolígono se ensamblan a partir de sus miembros; si el contorno exterior no cierra, se descartan.
 - Salud, educación y transporte se guardan como puntos (nodo, o centro de la vía o relación): la distancia a un hospital mapeado como edificio es al centro.
 
-**Límites.** OSM es colaborativo: lo ausente puede existir y `SIN DATO` significa que no está en el archivo. Los datos no se actualizan solos (fecha de extracción en cada resultado). Distancia en línea recta, no recorrido. Los umbrales de salud, transporte y borde de zona son convenciones del proyecto, no normas.
+**Límites.** Los registros oficiales no son completos: RENIPRESS no trae las coordenadas de cerca del 42 % de los registros de Arequipa (no pueden ubicarse) y ESCALE da la ubicación del local que reportó la UGEL. OSM es colaborativo: lo ausente puede existir y `SIN DATO` significa que no está en el archivo. Los datos no se actualizan solos (fecha de extracción en cada resultado). Distancia en línea recta, no recorrido. Los umbrales de salud, transporte y borde de zona son convenciones del proyecto, no normas.
+
+### 6.1 Salud: qué registros de RENIPRESS cuentan
+
+Se parte del CSV de RENIPRESS (36 246 filas en la edición del 2026-10-30; ver `metadata.descartes_oficial` del archivo para los conteos de cada corrida). Un registro cuenta si cumple **todo** esto:
+
+1. `ESTADO` = `ACTIVO`. Cualquier otro valor (`BAJA DEFINITIVA`, `BAJA PROVISIONAL`, `CIERRE TEMPORAL DE OFICIO` o de parte) o vacío queda fuera.
+2. Departamento y provincia `AREQUIPA`.
+3. Coordenadas: `NORTE` es la latitud y `ESTE` la longitud, **en grados decimales** (el script comprueba que todos los valores lo sean; si fueran metros UTM rechaza el archivo). El punto debe caer dentro de algún polígono de `public/data/distritos_aqp.geojson` (INEI vía GEOCATMIN). Los registros sin coordenadas no pueden ubicarse y no cuentan.
+4. `TIPO_ESTABLECIMIENTO` es `ESTABLECIMIENTO DE SALUD CON INTERNAMIENTO` o `SIN INTERNAMIENTO`: es atención de salud para quien vive cerca. El `SERVICIO MÉDICO DE APOYO` (laboratorios de patología clínica, diagnóstico por imágenes, hemodiálisis, ópticas, traslado de pacientes, rehabilitación y similares, categoría 0) **no** cuenta.
+5. `CATEGORIA` es `I-1`, `I-2`, `I-3`, `I-4`, `II-1`, `II-2`, `II-E`, `III-1`, `III-2` o `III-E` (categorías de los establecimientos de salud de la norma técnica del MINSA, NTS 021-MINSA/DGSP-V.03). Sin categoría válida no cuenta.
+6. No es un centro odontológico (`CLASIFICACION` = `CENTRO ODONTOLOGICO`): atiende una sola especialidad, y el respaldo de OpenStreetMap también excluye `healthcare=dentist`.
+
+El **consultorio médico** (`CONSULTORIOS MEDICOS Y DE OTROS PROFESIONALES DE LA SALUD`, categorías I-1 y I-2) **sí** cuenta: es atención ambulatoria y el criterio de OpenStreetMap ya lo incluía (`amenity=doctors`). Ojo: la corrida K2 del 2026-11-09 los había excluido; es una decisión del equipo que se puede revertir cambiando `clasificarSalud` en `scripts/lib/equipamiento-oficial.js`, y el archivo guarda la `clasificacion` de cada punto para poder filtrar.
+
+### 6.2 Educación: qué registros de ESCALE cuentan y cómo se asigna el nivel
+
+Cada fila del `Padron_web.dbf` es una institución educativa (IIEE). Cuenta si `D_ESTADO` es `Activo`, `D_PROV` es `AREQUIPA`, tiene `NLAT_IE` y `NLONG_IE` dentro de los polígonos de los distritos y es de **educación básica regular** según su código de nivel `NIV_MOD`. La correspondencia sale de los pares `NIV_MOD` / `D_NIV_MOD` del propio padrón (edición del 2026-10-30); la hoja «Especificación de la tabla de datos padron web» del ZIP solo describe los campos, no lista los códigos:
+
+| `NIV_MOD` | `D_NIV_MOD` | Nivel de la ficha |
+|---|---|---|
+| `A1` | Inicial - Cuna | inicial |
+| `A2` | Inicial - Jardín | inicial |
+| `A3` | Inicial - Cuna-jardín | inicial |
+| `B0` | Primaria | primaria |
+| `F0` | Secundaria | secundaria |
+| `A5` | Inicial - Programa no escolarizado | no cuenta (PRONOEI y similares, sin local propio) |
+| `C0`, `G0` | Primaria y secundaria de adultos | no cuenta |
+| `D0`, `D1`, `D2` | Básica alternativa | no cuenta |
+| `E0`, `E1`, `E2`, `K0` | Básica especial | no cuenta |
+| `L*`, `M0`, `P0`, `S0`, `T0` | Técnico-productiva, ocupacional, artística, pedagógica y tecnológica superior | no cuenta |
+
+Se mantienen las instituciones **públicas y privadas** (`D_GESTION`: «Pública de gestión directa» y «Pública de gestión privada» se guardan como pública; «Privada», como privada). Un local puede albergar varias IIEE: se deduplica por **código de local** (`CODLOCAL`). Cada local conserva los niveles que suman sus instituciones y la lista de instituciones con su código modular, nombre, nivel y gestión; en la ficha, el nombre y el código modular que se muestran para un nivel son los de la institución de ese nivel.
+
+### 6.3 Unión con OpenStreetMap (respaldo)
+
+Entra **todo** punto oficial. De OpenStreetMap se añade un elemento solo si **ningún punto oficial de la misma categoría está a 200 m o menos** (distancia en línea recta, haversine: la misma función y el mismo radio con que K2 midió la exhaustividad; el radio se cambia con `--radio=` y queda escrito en `metadata.deduplicacion`). En salud, la categoría es una sola. En educación, la categoría es el nivel: un elemento de OSM con niveles inferidos (`Calculos.nivelesEducativos`) se conserva si algún nivel suyo no lo cubre un local de ESCALE de ese nivel a 200 m, y entonces **lleva en `niveles` solo los niveles sin cubrir**; los que OSM etiqueta como educación superior no se añaden. `metadata.deduplicacion.osm` cuenta cuántos de OSM se descartaron y, de ellos, cuántos coinciden también en el nombre (parecido de 0,9 o más, el emparejamiento de K2) y cuántos se descartaron solo por cercanía. Un elemento de OSM que se conserva no deja de ser de OSM: dice `fuente: "OSM"`, su `osm` y sus etiquetas.
+
+### 6.4 Procedencia, licencias y qué muestra la pantalla
+
+- **RENIPRESS:** licencia Open Data Commons Attribution (ODC-By): se puede usar y redistribuir con atribución a SUSALUD.
+- **ESCALE:** el padrón no declara una licencia abierta (no es ODC-By ni CC). Trae un «Acuerdo de uso de datos»: la fuente es el Padrón de Servicios Educativos y Programas de la Unidad de Estadística del MINEDU; la ubicación la proporcionan las DRE/GRE y las UGEL y es la del local educativo; y los límites de referencia son censales del INEI, por lo que no indican pertenencia a una jurisdicción político-administrativa. El proyecto lo usa con atribución al MINEDU y guarda solo lo necesario (locales de la provincia, con código, nombre, niveles y gestión). **Si el proyecto se publica con fines distintos de los académicos, conviene pedir confirmación escrita al MINEDU**, como se hizo con SmartBus.
+- **OpenStreetMap:** ODbL, © colaboradores de OpenStreetMap.
+
+La ficha, los popups del mapa, el chat y el informe imprimible dicen de qué fuente es cada establecimiento y su código («RENIPRESS (SUSALUD) · código 00001231 · categoría I-3»; «ESCALE (MINEDU) · código modular 0100001 · pública»; «OpenStreetMap (respaldo: no hay un punto oficial cerca) · node/…»). Las pruebas están en `test/equipamiento-fuentes.spec.ts` y `test/fuentes-visualizacion.spec.ts`.
 
 ## 6b. Zonificación: alerta de borde y PDM proyectado (V1a y V1b)
 
@@ -306,7 +357,8 @@ Las filas de peligros (módulo), zona sísmica, denuncias y riesgos corresponden
 
 ```bash
 npm install
-npm run datos:extraer                 # public/data/equipamiento/*.geojson (OpenStreetMap, una consulta)
+npm run datos:extraer                 # OpenStreetMap, una consulta: transporte, áreas verdes y la copia de respaldo en equipamiento/osm
+npm run datos:oficial                 # RENIPRESS y ESCALE + respaldo de OSM -> public/data/equipamiento/{salud,educacion}.geojson
 node --use-system-ca scripts/descargar-peligros.mjs   # public/data/peligros_aqp.geojson (no sobrescribe un archivo con más registros)
 node scripts/descargar-quebradas.mjs  # public/data/quebradas_aqp.geojson (ANA, IGP y OpenStreetMap)
 node scripts/descargar-peligro-volcanico.mjs  # public/data/peligro_volcanico_misti.geojson (IGP)
@@ -396,7 +448,7 @@ Ante cualquier fallo se usa el intérprete de reglas (palabras clave sin tildes 
 | PDM nuevo | «¿cambiará la zonificación?» | El aviso de `CONFIG.estadoPDM` con su fuente y fecha, y aclara que no hay mapa |
 | Fuentes | «¿de dónde salen los datos?» | Fuentes y umbrales |
 | Buscar zonas | «busco cerca de un colegio y un parque», «busco en Paucarpata un sector con colegio y parque cerca» | Sectores donde se cumple todo a la vez, sin ranking (ver abajo) |
-| Contar en un distrito | «¿cuántos colegios hay en Paucarpata?» | «En Paucarpata hay N colegios: a inicial, b primaria, c secundaria (OpenStreetMap, fecha; puede faltar alguno)» y los muestra en el mapa |
+| Contar en un distrito | «¿cuántos colegios hay en Paucarpata?» | «En Paucarpata hay N colegios: a inicial, b primaria, c secundaria (ESCALE, con OpenStreetMap de respaldo, fecha; puede faltar alguno)» y los muestra en el mapa |
 | Perfil de un distrito | «quiero vivir en Paucarpata», «la mejor zona para vivir en Paucarpata» | Resumen de ese distrito y la pregunta «¿Qué es lo primero para ti…?» con botones |
 | «La mejor zona» sin distrito | «la mejor zona para vivir» | Explica que no elige una «mejor» y pregunta qué importa |
 | Precio del distrito | «¿cuánto cuesta el m² en Cayma?», «precio por metro cuadrado», «¿qué distrito es el más caro?» | El precio de oferta por m² de Aptología con avisos, periodo y atribución (§13); sin cifra para el distrito, lo dice |
@@ -422,7 +474,7 @@ Los umbrales de campiña, comercial y centro histórico son convenciones del pro
 **Cómo se busca.**
 
 1. Se arma una cuadrícula de celdas de 250 m (`CONFIG.asistente.pasoCeldaM`) cuyo centro cae en una zona **construible** del plano (o también condicionada, si se pide). Si dos zonas se superponen gana la última, como en el plano. La cuadrícula es un **andamio interno**: nunca se muestra.
-2. En cada celda se evalúa cada criterio con las funciones de `Calculos` (haversine y área geodésica) sobre el OpenStreetMap congelado. Si la persona nombró un distrito, solo se evalúan las celdas de ese distrito.
+2. En cada celda se evalúa cada criterio con las funciones de `Calculos` (haversine y área geodésica) sobre el equipamiento congelado (RENIPRESS, ESCALE y el respaldo de OpenStreetMap). Si la persona nombró un distrito, solo se evalúan las celdas de ese distrito.
 3. Las celdas donde se cumple **todo a la vez** se juntan en **sectores**: zonas continuas (las celdas que se tocan, también por una esquina; `public/js/sectores.js`). El borde de cada sector es la unión de sus celdas, suavizada. Un sector de una sola celda no se muestra si hay otros más grandes.
 4. Cada sector se nombra con el **elemento con nombre más cercano** (colegio, parque, posta o paradero, a 500 m o menos; si la persona pidió un tipo, gana el de ese tipo). Si no hay ninguno con nombre, el sector queda sin nombre: no se inventan nombres ni calles, porque los datos no traen calles.
 5. La respuesta dice, por ejemplo, «Encontré 3 sectores de Paucarpata donde tienes a la vez un colegio inicial a menos de 500 m y un parque a menos de 300 m», con cada sector, su tamaño aproximado en hectáreas y lo que hay en su centro, y los botones «Ver en el mapa» y «Consultar este punto».
@@ -431,7 +483,7 @@ Los umbrales de campiña, comercial y centro histórico son convenciones del pro
 
 **Distritos.** Un distrito se reconoce por su nombre sin importar tildes, mayúsculas ni errores de tipeo razonables (`Distritos.buscarNombre`: distancia de edición proporcional al largo del nombre, con prueba contra palabras comunes para evitar falsos positivos). «Arequipa» a secas es la ciudad; el distrito se pide con «cercado» o «distrito de Arequipa». El archivo de límites trae 25 distritos, entre ellos los 21 del ámbito del PDM Arequipa 2016-2025 (memoria, cap. I, 5.1.2: Alto Selva Alegre, Arequipa, Cayma, Cerro Colorado, Characato, Jacobo Hunter, José Luis Bustamante y Rivero, Mariano Melgar, Miraflores, Mollebaya, Paucarpata, Sabandía, Sachaca, Socabaya, Tiabaya, Uchumayo, Yanahuara, Yura, Quequeña, Yarabamba y Chiguata). Los cuatro distritos de la provincia que no están en el archivo (Vítor y los tres de Siguas) no forman parte de Arequipa Metropolitana; el chat los reconoce y dice que no están en los datos.
 
-**Contar y perfil de un distrito.** «¿Cuántos colegios hay en Paucarpata?» cuenta los elementos de OpenStreetMap cuyo punto cae dentro del límite del distrito (`public/js/entidades.js`; un parque cuenta por el centro de su caja). Un colegio con varios niveles suma en cada uno, y los que no declaran su nivel se cuentan como primaria y secundaria (regla de `Calculos.nivelesEducativos`); el texto lo aclara. El perfil («quiero vivir en Paucarpata») agrega cómo se reparte la zonificación (puntos cada 300 m dentro del distrito, por tipo principal de zona) y qué cauces de la red de la ANA lo cruzan, y termina preguntando qué es lo primero para la persona, con botones que buscan **dentro de ese distrito**. «La mejor zona» sin distrito no elige una: explica que depende de lo que importe y pregunta qué importa. Si hay datos, el perfil suma dos líneas más: las **líneas de SmartBus que cruzan el distrito** (§6c) y el **precio de oferta por m²** de Aptología (§13). El precio solo existe para los distritos con cifra publicada (hoy tres); en los demás se omite, sin valores estimados.
+**Contar y perfil de un distrito.** «¿Cuántos colegios hay en Paucarpata?» cuenta los elementos (de RENIPRESS, ESCALE u OpenStreetMap de respaldo) cuyo punto cae dentro del límite del distrito (`public/js/entidades.js`; un parque cuenta por el centro de su caja). Un colegio con varios niveles suma en cada uno, y los de OpenStreetMap que no declaran su nivel se cuentan como primaria y secundaria (regla de `Calculos.nivelesEducativos`; los locales de ESCALE siempre dicen el suyo); el texto lo aclara. El perfil («quiero vivir en Paucarpata») agrega cómo se reparte la zonificación (puntos cada 300 m dentro del distrito, por tipo principal de zona) y qué cauces de la red de la ANA lo cruzan, y termina preguntando qué es lo primero para la persona, con botones que buscan **dentro de ese distrito**. «La mejor zona» sin distrito no elige una: explica que depende de lo que importe y pregunta qué importa. Si hay datos, el perfil suma dos líneas más: las **líneas de SmartBus que cruzan el distrito** (§6c) y el **precio de oferta por m²** de Aptología (§13). El precio solo existe para los distritos con cifra publicada (hoy tres); en los demás se omite, sin valores estimados.
 
 **Mapa por entidades.** El mapa dibuja lo que existe, no celdas (`public/js/capas.js` decide, `public/js/capas-ui.js` dibuja): colegios con un icono por nivel (inicial círculo, primaria cuadrado, secundaria hexágono) y, si son pocos, un círculo tenue con la distancia de referencia; establecimientos de salud y paraderos con su círculo de 1000 m y 400 m si son pocos; parques como polígonos verdes; solo las zonas del plano del tipo pedido (residencial, tranquila, campiña, comercial, centro histórico); quebradas como líneas; sismos como círculos de 3 a 16 px según la magnitud. En una búsqueda se dibujan las entidades que hacen que cada sector cumpla y **una sola región resaltada**, los sectores; lo que no cumple no se pinta. La leyenda explica cada capa en una línea. Con muchos puntos (más de 350) se usan círculos de lienzo en vez de iconos. Con las **líneas de bus** (preguntas sobre buses) se dibujan los recorridos de SmartBus, **un color por línea** (el mismo siempre) con una etiqueta con su nombre y una fila de leyenda por línea; con un punto elegido se dibuja además la parada más cercana de cada línea. El archivo de recorridos (4,9 MB) se baja solo cuando hay líneas que dibujar.
 
