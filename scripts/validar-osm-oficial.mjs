@@ -12,7 +12,7 @@
  *   --radios=50,100,200        radios (m) a barrer para emparejar por distancia (por defecto 50, 100 y 200)
  *   --umbral-nombre=0.9        parecido mínimo de nombres, de 0 a 1 (por defecto 0,9)
  *   --paso=500                 separación (m) de la malla de puntos para medir el cambio cumple / no cumple (por defecto 500)
- *   --incluir-consultorios     no excluir de RENIPRESS los consultorios (por defecto se excluyen)
+ *   --sin-consultorios         excluir de RENIPRESS los consultorios médicos (por defecto se incluyen, como en pnpm datos:oficial; la corrida del 2026-11-09 los excluía)
  *   --fecha-renipress=TEXTO    edición del archivo de RENIPRESS (p. ej. 2026-09), para dejarla en el informe
  *   --fecha-escale=TEXTO       fecha del padrón de ESCALE
  *   --salida=ruta.json         además del informe en pantalla, guarda el resultado completo en JSON
@@ -81,7 +81,13 @@ function main() {
   let renipress;
   let escale;
   try {
-    renipress = V.leerRenipress(leerTexto(rutaRenipress), { incluirConsultorios: Boolean(a['incluir-consultorios']) });
+    // La misma selección que arma pnpm datos:oficial (activos, categorías I-1 a III-E, sin servicio de apoyo ni centros odontológicos).
+    renipress = E.seleccionarSalud(leerTexto(rutaRenipress));
+    if (a['sin-consultorios']) {
+      const antes = renipress.registros.length;
+      renipress.registros = renipress.registros.filter((x) => !/consultorio/i.test(V.sinTildes(x.tipo || '')));
+      renipress.descartados.consultorios = antes - renipress.registros.length;
+    }
     escale = /\.dbf$/i.test(rutaEscale) ? E.seleccionarEscaleDbf(rutaEscale) : V.leerEscale(leerTexto(rutaEscale));
   } catch (err) {
     uso(err.message);
