@@ -112,6 +112,18 @@ describe('Equipamiento.evaluar: mercado, supermercado y mall son informativos', 
     const e = await ev({ malls: archivo([dentro]) });
     expect(e.mall.distanciaM).toBe(0);
   });
+  it('mallVerificado es el más cercano de la lista curada: OpenStreetMap llama mall también a galerías pequeñas', async () => {
+    const galeria = punto(alNorte(80), { fuente: 'OSM', osm: 'node/50', nombre: 'Galería Unicentro', tags: { shop: 'mall' } });
+    const e = await ev({ malls: archivo([galeria, MALL]) });
+    expect(e.mall.nombre).toBe('Galería Unicentro');
+    expect(e.mallVerificado).toMatchObject({ estado: 'INFORMATIVO', nombre: 'Mall Aventura', osm: 'way/3' });
+    expect(e.mallVerificado.verificado.nombre).toBe('Mall Aventura Arequipa');
+    expect(e.mallVerificado.metodo).toMatch(/confirmado/);
+  });
+  it('sin ningún mall verificado en el archivo, mallVerificado es SIN DATO', async () => {
+    const galeria = punto(alNorte(80), { fuente: 'OSM', osm: 'node/50', nombre: 'Galería Unicentro', tags: { shop: 'mall' } });
+    expect((await ev({ malls: archivo([galeria]) })).mallVerificado.estado).toBe('SIN DATO');
+  });
   it('nunca es NO CUMPLE aunque esté lejísimos', async () => {
     const lejos = punto(alNorte(30000), { fuente: 'OSM', osm: 'node/9', nombre: 'Mercado remoto', tags: { amenity: 'marketplace' } });
     expect((await ev({ mercados: archivo([lejos]) })).mercado.estado).toBe('INFORMATIVO');
@@ -268,6 +280,20 @@ describe('chat: mall, supermercado y mercado son datos informativos, no la zona 
     expect(t).toMatch(/informativ/i);
     expect(t).not.toMatch(/cumple|referencia \d/i);
     expect(t).not.toContain('Tottus'); // solo lo que se preguntó
+  });
+  it('si lo más cercano que OSM llama mall es una galería, da primero el mall confirmado y avisa de la otra', () => {
+    const galeria = informativo('Galería Unicentro', 80, { osm: 'node/50' });
+    const t = Asistente.responder({ tipo: 'comercio', comercio: ['mall'], criterios: [] }, { ...ctx, entorno: { ...entorno, mall: galeria, mallVerificado: entorno.mall } }).texto;
+    expect(t).toMatch(/mall confirmado más cercano a tu punto es Mall Aventura/);
+    expect(t).toContain('Galería Unicentro');
+    expect(t).toMatch(/galería o un centro comercial pequeño/);
+    expect(t).not.toMatch(/cumple/i);
+  });
+  it('si ningún mall confirmado está en OSM, avisa que el más cercano puede ser una galería', () => {
+    const galeria = informativo('Galería Unicentro', 80, { osm: 'node/50' });
+    const t = Asistente.responder({ tipo: 'comercio', comercio: ['mall'], criterios: [] }, { ...ctx, entorno: { ...entorno, mall: galeria, mallVerificado: { estado: 'SIN DATO', nombre: null, distanciaM: null, umbralM: null } } }).texto;
+    expect(t).toContain('Galería Unicentro');
+    expect(t).toMatch(/galería o un centro comercial pequeño/);
   });
   it('un mall verificado dice contra qué fuente se verificó', () => {
     expect(Asistente.responder({ tipo: 'comercio', comercio: ['mall'], criterios: [] }, ctx).texto).toContain('https://mallaventura.pe/arequipa/');

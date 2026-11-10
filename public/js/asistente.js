@@ -904,8 +904,14 @@ const Asistente = (() => {
       const def = C.COMERCIO[id];
       const r = c.entorno[id];
       if (!r || r.estado === 'SIN DATO' || r.distanciaM === null) return `${def.etiqueta}: sin dato en los datos que tengo (no significa que no exista).`;
-      const donde = r.distanciaM === 0 ? 'tu punto está dentro de su terreno' : `a ${fmtDist(r.distanciaM)} en línea recta${r.forma ? ' hasta su borde' : ''}`;
-      return `El ${def.corto} más cercano a tu punto es ${r.nombre || 'uno sin nombre'}, ${donde}. Fuente: ${fuenteComercio(r)}`;
+      const donde = (x) => (x.distanciaM === 0 ? 'tu punto está dentro de su terreno' : `a ${fmtDist(x.distanciaM)} en línea recta${x.forma ? ' hasta su borde' : ''}`);
+      const v = id === 'mall' ? c.entorno.mallVerificado : null;
+      if (v && v.estado !== 'SIN DATO' && v.distanciaM !== null) {
+        // OpenStreetMap etiqueta shop=mall también a galerías y centros comerciales pequeños: se da primero el mall confirmado con su fuente.
+        const otro = v.osm !== r.osm ? ` OpenStreetMap también etiqueta como mall a ${r.nombre || 'uno sin nombre'}, ${donde(r)} (puede ser una galería o un centro comercial pequeño).` : '';
+        return `El mall confirmado más cercano a tu punto es ${v.nombre || 'uno sin nombre'}, ${donde(v)}. Fuente: ${fuenteComercio(v)}${otro}`;
+      }
+      return `El ${def.corto} más cercano a tu punto es ${r.nombre || 'uno sin nombre'}, ${donde(r)}. Fuente: ${fuenteComercio(r)}${id === 'mall' ? ' Ninguno de los malls confirmados está en los datos de OpenStreetMap cerca de ti: este puede ser una galería o un centro comercial pequeño.' : ''}`;
     });
     return { texto: [...lineas, C.NOTA_COMERCIO].join('\n'), sugerencias: ['¿Hay una posta cerca?', 'Dame un resumen del punto'] };
   }
@@ -1412,6 +1418,7 @@ const Asistente = (() => {
         linea('Salud', e.salud),
         lineaConsultorio(e.consultorio),
         ...Object.keys(C.COMERCIO).map((id) => lineaComercio(id, e[id])),
+        e.mallVerificado && e.mallVerificado.estado !== 'SIN DATO' ? lineaComercio('mall', e.mallVerificado).replace('Mall (informativo)', 'Mall confirmado (informativo)') : null,
         `Colegios: ${colegios}.`,
         linea('Transporte', e.transporte),
         ...lineaLineas(e.transporte),
@@ -1736,7 +1743,7 @@ const Asistente = (() => {
   const LIM_OFICIAL = 'Los registros oficiales no ubican todos los establecimientos (cerca del 42 % de los de salud de Arequipa en RENIPRESS no trae coordenadas) y ESCALE ubica el local que reportó la UGEL. Un establecimiento oficial puede estar y no verse; uno de OpenStreetMap solo aparece donde no hay un punto oficial cerca.';
   const LIM_CONSULTORIO = 'Los consultorios médicos (RENIPRESS: clasificación «consultorios»; OpenStreetMap: amenity=doctors y healthcare=doctor) son una categoría aparte de los establecimientos de salud: son solo informativos, sin distancia de referencia (decisión pendiente), y no cuentan como «salud cerca».';
   const FUENTE_COMERCIO = 'Mercados, supermercados y malls: OpenStreetMap (ODbL), copia congelada con su fecha de extracción; los malls conocidos de Arequipa se contrastan con el sitio de cada mall o de su operador. El Censo Nacional de Mercados de Abastos 2016 (INEI, publicado por PRODUCE) no trae nombres ni coordenadas: solo sirve para comparar cuántos mercados había por distrito.';
-  const LIM_COMERCIO = 'Mercados, supermercados y malls son una categoría informativa, sin distancia de referencia (es una decisión pendiente): no se dice si están cerca o lejos y no suman al puntaje. OpenStreetMap puede no tener todos (en 2016 el censo contó más mercados que los mapeados) y etiqueta como mercado tanto un mercado de abastos como una feria; no distingue minorista de mayorista. «Sin dato» no significa que no exista.';
+  const LIM_COMERCIO = 'Mercados, supermercados y malls son una categoría informativa, sin distancia de referencia (es una decisión pendiente): no se dice si están cerca o lejos y no suman al puntaje. OpenStreetMap puede no tener todos y a veces etiqueta de más: por distrito, el número de mercados mapeados no coincide con el del censo de 2016 (en unos hay menos y en otros más), amenity=marketplace incluye ferias y comercios mal etiquetados, y shop=mall incluye galerías y centros comerciales pequeños, no solo malls. No distingue un mercado minorista de uno mayorista. «Sin dato» no significa que no exista.';
   const LIM_PLANO = 'El plano se extrajo de un PDF y cerca del borde entre dos zonas el resultado puede no ser exacto. La vigencia del PDM 2016-2025 es incierta y hay un PDM nuevo en trámite.';
   const FUENTE_ANA = 'Cauces congelados con su fecha de extracción: la red hidrográfica de la Autoridad Nacional del Agua (ANA, 2018), las quebradas y ríos del Instituto Geofísico del Perú (IGP, sin fecha de elaboración) y los cauces de OpenStreetMap (ODbL). Cada cauce dice de cuál fuente viene.';
   const FUENTE_IGP = 'Sismos reportados, Instituto Geofísico del Perú (IGP), congelados con su fecha de extracción.';

@@ -164,14 +164,15 @@ const Equipamiento = (() => {
    * Mercado, supermercado o mall más cercano: INFORMATIVO. No hay umbral (CONFIG.umbrales.mercado / supermercado / mall son null), así que no
    * hay cumple / no cumple. Los elementos pueden ser puntos o polígonos: del polígono se mide la distancia al BORDE (0 si el punto está dentro).
    */
-  function comercio(id, datos, punto) {
+  function comercio(id, datos, punto, soloVerificados = false) {
     const def = Calculos.COMERCIO[id];
-    return Calculos.evaluarMasCercanoForma(punto, datos.features, {
+    const features = soloVerificados ? datos.features.filter((f) => f.properties && f.properties.verificado) : datos.features;
+    return Calculos.evaluarMasCercanoForma(punto, features, {
       umbralM: CONFIG.umbrales[id],
       fuente: datos.fuente || CONFIG.equipamiento.fuente,
       fecha: datos.fecha,
       categoria: def.capa,
-      metodo: `Distancia en línea recta hasta el ${def.singular} más cercano; si es un polígono, hasta su borde (0 si el punto está dentro). ${origenDeLosDatos(datos)} Sin umbral: ${CONFIG.fuentesUmbral[id]}.`,
+      metodo: `Distancia en línea recta hasta el ${soloVerificados ? `${def.singular} confirmado con la fuente de cada uno (lista curada)` : def.singular} más cercano; si es un polígono, hasta su borde (0 si el punto está dentro). ${origenDeLosDatos(datos)} Sin umbral: ${CONFIG.fuentesUmbral[id]}.`,
     });
   }
 
@@ -245,11 +246,11 @@ const Equipamiento = (() => {
   }
 
   /** El más cercano de una categoría de comercio, sin respaldo en vivo: es un dato informativo y no vale una consulta a Overpass. Nunca rechaza. */
-  async function comercioCercano(id, punto) {
+  async function comercioCercano(id, punto, soloVerificados = false) {
     const def = Calculos.COMERCIO[id];
     try {
       const datos = await archivo(def.capa);
-      return datos ? comercio(id, datos, punto) : sinDato(`No se encontró el archivo de ${def.plural}.`, CONFIG.umbrales[id]);
+      return datos ? comercio(id, datos, punto, soloVerificados) : sinDato(`No se encontró el archivo de ${def.plural}.`, CONFIG.umbrales[id]);
     } catch (err) {
       console.error(`[Equipamiento] ${def.capa}`, err);
       return sinDato(err.message, CONFIG.umbrales[id]);
@@ -258,14 +259,14 @@ const Equipamiento = (() => {
 
   /**
    * Evalúa las variables del equipamiento para el punto.
-   * Devuelve { salud, consultorio, mercado, supermercado, mall (los cuatro informativos), educacion: { inicial, primaria, secundaria }, transporte, areaVerde }.
+   * Devuelve { salud, consultorio, mercado, supermercado, mall, mallVerificado (informativos; `mall` es todo lo que OSM etiqueta shop=mall, que incluye galerías pequeñas, y `mallVerificado` el más cercano de la lista curada de malls confirmados con su fuente), educacion: { inicial, primaria, secundaria }, transporte, areaVerde }.
    * `transporte.rutas` agrega las líneas de SmartBus que pasan a ≤ CONFIG.umbrales.transporte del punto (Rutas.cerca): el paradero
    * de OpenStreetMap y los recorridos de SmartBus son dos fuentes distintas y no se mezclan.
    */
   async function evaluar(lat, lon) {
     const punto = { lat, lon };
     const u = CONFIG.umbrales;
-    const [s, c, e, t, v, rutas, mer, sup, mal] = await Promise.all([
+    const [s, c, e, t, v, rutas, mer, sup, mal, malV] = await Promise.all([
       variable('salud', punto, salud, (m) => sinDato(m, u.salud)),
       consultorioCercano(punto),
       variable('educacion', punto, educacion, (m) => Object.fromEntries(NIVELES.map((n) => [n, sinDato(m, u.educacion[n])]))),
@@ -275,8 +276,9 @@ const Equipamiento = (() => {
       comercioCercano('mercado', punto),
       comercioCercano('supermercado', punto),
       comercioCercano('mall', punto),
+      comercioCercano('mall', punto, true),
     ]);
-    return { salud: s, consultorio: c, mercado: mer, supermercado: sup, mall: mal, educacion: e, transporte: { ...t, rutas }, areaVerde: v };
+    return { salud: s, consultorio: c, mercado: mer, supermercado: sup, mall: mal, mallVerificado: malV, educacion: e, transporte: { ...t, rutas }, areaVerde: v };
   }
 
   /**

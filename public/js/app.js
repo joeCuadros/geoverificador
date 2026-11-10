@@ -1199,7 +1199,10 @@
       const r = e[id];
       if (!r) return '';
       const def = Calculos.COMERCIO[id];
-      const verif = r.verificado ? `<p class="var-meta">Confirmado con <a href="${esc(r.verificado.url)}" target="_blank" rel="noopener">${esc(r.verificado.nombre)}</a> (${esc(r.verificado.entidad)}).</p>` : '';
+      const mv = id === 'mall' ? e.mallVerificado : null;
+      const otroMall = mv && mv.estado !== 'SIN DATO' && mv.distanciaM !== null && mv.osm !== r.osm
+        ? `<p class="var-meta"><b>Mall confirmado más cercano:</b> ${esc(mv.nombre)}, ${mv.distanciaM === 0 ? 'el punto está dentro de su terreno' : `${fmtDist(mv.distanciaM)} en línea recta${mv.forma ? ' hasta su borde' : ''}`} (<a href="${esc(mv.verificado.url)}" target="_blank" rel="noopener">${esc(mv.verificado.nombre)}</a>). OpenStreetMap etiqueta como mall también galerías y centros comerciales pequeños.</p>` : '';
+      const verif = otroMall + (r.verificado ? `<p class="var-meta">Confirmado con <a href="${esc(r.verificado.url)}" target="_blank" rel="noopener">${esc(r.verificado.nombre)}</a> (${esc(r.verificado.entidad)}).</p>` : '');
       return tarjetaVariable(VARIABLES[id], r.estado, lineaResumenInformativa(r),
         datoPrincipal(r)
         + (r.error ? '' : r.estado === 'SIN DATO' ? explicacion(r, def.plural) : `<p class="var-explica"><strong>Informativo.</strong> ${esc(Calculos.NOTA_COMERCIO.replace(/^Es informativo: /, ''))}</p>`)
@@ -1689,6 +1692,7 @@
       mercado: state.entorno && state.entorno.mercado && { ...state.entorno.mercado, forma: undefined }, // informativo, sin umbral
       supermercado: state.entorno && state.entorno.supermercado && { ...state.entorno.supermercado, forma: undefined }, // informativo, sin umbral
       mall: state.entorno && state.entorno.mall && { ...state.entorno.mall, forma: undefined }, // informativo, sin umbral
+      mall_confirmado: state.entorno && state.entorno.mallVerificado && { ...state.entorno.mallVerificado, forma: undefined }, // el más cercano de la lista curada de malls confirmados con su fuente
       educacion: state.entorno && state.entorno.educacion,
       transporte: state.entorno && state.entorno.transporte,
       area_verde: state.entorno && state.entorno.areaVerde && { ...state.entorno.areaVerde, forma: undefined },
