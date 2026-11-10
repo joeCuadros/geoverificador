@@ -7,17 +7,22 @@
  *   leerDbf(buffer) / leerDbfArchivo(ruta, opciones)          → { campos, filas } (DBF de ESCALE, CP850)
  *   listarEntradasZip(buffer) / extraerEntradaZip(zip, nombre, salida)
  *   ultimaEdicionRenipress(html) / ultimoPadronEscale(html)   → la edición más reciente publicada
- *   clasificarSalud(registro) / seleccionarSalud(csv, opciones) → establecimientos de salud que atienden a una persona
+ *   clasificarSalud(registro) / seleccionarSalud(csv, opciones) → establecimientos de salud y consultorios médicos (dos categorías)
  *   seleccionarEscale({ columnas, filas }, opciones) / seleccionarEscaleDbf(ruta, opciones)  → locales de educación básica regular
  *   featureSalud(r) / featureEscale(l)                         → Feature GeoJSON con la fuente y el código oficial
- *   fusionarSalud(oficiales, osm, { radioM }) / fusionarEducacion(...) → oficiales + respaldo de OSM + conteos
+ *   fusionarSalud(oficiales, osm, { radioM }) / fusionarSaludPorGrupo(...) / fusionarEducacion(...) → oficiales + respaldo de OSM + conteos
  *   procedencia({ ... })                                       → bloque `metadata` con fuentes, fechas, licencias y la regla
  *
  * Regla de salud (documentada en docs/METODOLOGIA.md): cuenta un registro de RENIPRESS ACTIVO, de la provincia de Arequipa, con
  * coordenadas dentro de los distritos, cuyo tipo de establecimiento sea «con internamiento» o «sin internamiento» y cuya categoría
  * sea de I-1 a III-E (norma técnica de categorías del MINSA, NTS 021-MINSA/DGSP-V.03). No cuenta el «servicio médico de apoyo»
  * (laboratorios, diagnóstico por imágenes, hemodiálisis, ópticas, traslado de pacientes: categoría 0) ni el centro odontológico
- * (una sola especialidad; OpenStreetMap también excluye al dentista, ver Calculos.FILTROS). El consultorio médico (I-1, I-2) sí cuenta.
+ * (una sola especialidad; OpenStreetMap también excluye al dentista, ver Calculos.FILTROS).
+ *
+ * Lo que cuenta se reparte en DOS categorías (clasificarSalud → `grupo`): «consultorio» si la clasificación de RENIPRESS dice
+ * CONSULTORIO (o, sin clasificación, el nombre lo dice) y «salud» (hospitales, clínicas, centros y puestos de salud, policlínicos…)
+ * en lo demás. La categoría I-n no decide: hay puestos de salud I-1 e I-2. En OpenStreetMap la misma repartición la hace
+ * Calculos.categoriaSalud (amenity=doctors y healthcare=doctor → consultorio). La deduplicación con OpenStreetMap es por categoría.
  */
 const fs = require('fs');
 const zlib = require('zlib');
@@ -187,34 +192,54 @@ function ultimoPadronEscale(html) {
 // tercer nivel III-1, III-2 y III-E. El «servicio médico de apoyo» no tiene categoría (RENIPRESS trae 0).
 const CATEGORIAS_SALUD = /^(I-[1-4]|II-[12E]|III-[12E])$/;
 
+const mayusculas = (texto) => V.sinTildes(texto || '').toUpperCase();
+
 /**
- * ¿Un registro de RENIPRESS es un establecimiento de salud para quien vive cerca? { incluir, motivo } con motivo
- * 'apoyo' | 'sinCategoria' | 'odontologico' cuando no.
+ * El texto con el que se reconoce el consultorio y el centro odontológico: la clasificación de RENIPRESS (`tipo`) y, solo si el
+ * registro no la trae, el nombre. Con clasificación, el nombre no cuenta («Policlínico con consultorios» es un policlínico).
  */
-function clasificarSalud(r) {
-  const tipo = V.sinTildes(r.tipoEstablecimiento || '').toUpperCase();
-  if (tipo && !/(CON|SIN) INTERNAMIENTO/.test(tipo)) return { incluir: false, motivo: 'apoyo' };
-  if (!CATEGORIAS_SALUD.test(String(r.categoria || '').trim().toUpperCase())) return { incluir: false, motivo: 'sinCategoria' };
-  if (/ODONTOLOG/.test(V.sinTildes(r.tipo || '').toUpperCase())) return { incluir: false, motivo: 'odontologico' };
-  return { incluir: true, motivo: null };
+const textoDeClase = (r) => mayusculas(r.tipo) || mayusculas(r.nombre);
+
+/**
+ * ¿Un registro de RENIPRESS es un consultorio médico? Sí si su clasificación contiene CONSULTORIO (p. ej. «CONSULTORIOS MEDICOS
+ * Y DE OTROS PROFESIONALES DE LA SALUD», I-1 a I-3) o, si no la trae, si lo dice el nombre. La categoría no decide.
+ */
+function esConsultorio(r) {
+  return /CONSULTORIO/.test(textoDeClase(r));
 }
 
 /**
- * Establecimientos de salud del CSV de RENIPRESS: activos, de la provincia de Arequipa, con coordenadas (NORTE y ESTE en grados
- * decimales) dentro de `dentro(lat, lon)` y de una categoría de atención (clasificarSalud). Devuelve { registros, descartados }.
+ * ¿Un registro de RENIPRESS cuenta para quien vive cerca, y en qué categoría? { incluir, motivo, grupo }:
+ *   incluir: true  → grupo 'salud' (establecimiento) o 'consultorio' (consultorio médico); motivo null.
+ *   incluir: false → motivo 'apoyo' | 'sinCategoria' | 'odontologico' (sin `grupo`).
+ */
+function clasificarSalud(r) {
+  const tipo = mayusculas(r.tipoEstablecimiento);
+  if (tipo && !/(CON|SIN) INTERNAMIENTO/.test(tipo)) return { incluir: false, motivo: 'apoyo' };
+  if (!CATEGORIAS_SALUD.test(String(r.categoria || '').trim().toUpperCase())) return { incluir: false, motivo: 'sinCategoria' };
+  const clase = textoDeClase(r);
+  if (/ODONTOLOG/.test(clase) || (!r.tipo && /\b(DENTAL|DENTISTA|ESTOMATOLOG\w*)\b/.test(clase))) return { incluir: false, motivo: 'odontologico' };
+  return { incluir: true, motivo: null, grupo: esConsultorio(r) ? 'consultorio' : 'salud' };
+}
+
+/**
+ * Establecimientos de salud y consultorios del CSV de RENIPRESS: activos, de la provincia de Arequipa, con coordenadas (NORTE y
+ * ESTE en grados decimales) dentro de `dentro(lat, lon)` y de una categoría de atención (clasificarSalud). Devuelve
+ * { registros (establecimientos de salud), consultorios (consultorios médicos), descartados }.
  */
 function seleccionarSalud(texto, { dentro = null, caja } = {}) {
   const r = V.leerRenipress(texto, { incluirConsultorios: true, dentro, ...(caja ? { caja } : {}) });
   const descartados = { ...r.descartados, apoyo: 0, sinCategoria: 0, odontologicos: 0 };
   const registros = [];
+  const consultorios = [];
   for (const x of r.registros) {
     const c = clasificarSalud(x);
-    if (c.incluir) registros.push(x);
+    if (c.incluir) (c.grupo === 'consultorio' ? consultorios : registros).push(x);
     else if (c.motivo === 'apoyo') descartados.apoyo++;
     else if (c.motivo === 'sinCategoria') descartados.sinCategoria++;
     else descartados.odontologicos++;
   }
-  return { registros, descartados, columnas: r.columnas };
+  return { registros, consultorios, descartados, columnas: r.columnas };
 }
 
 // -------------------------------------------------------------------------- Educación
@@ -321,6 +346,28 @@ function fusionarSalud(oficiales, osm, { radioM = 200, umbralNombre = 0.9 } = {}
   return { features: [...ofi, ...respaldo], conteo: { RENIPRESS: ofi.length, OSM: respaldo.length }, osm: stats, sinPunto };
 }
 
+/**
+ * Salud en dos categorías. Los establecimientos y los consultorios de RENIPRESS entran completos, cada uno en su grupo; de
+ * OpenStreetMap, cada elemento se reparte con Calculos.categoriaSalud y SOLO se descarta si un punto oficial de SU MISMA
+ * categoría está a `radioM` o menos (un consultorio de OSM junto a un hospital oficial se queda, y viceversa).
+ * Devuelve { salud, consultorios, sinCategoria }: cada grupo con la forma de fusionarSalud ({ features, conteo, osm, sinPunto }) y
+ * `sinCategoria` = elementos de OSM que no son ni establecimiento ni consultorio (no se añaden).
+ */
+function fusionarSaludPorGrupo(establecimientos, consultorios, osm, opciones = {}) {
+  const grupos = { salud: [], consultorio: [] };
+  let sinCategoria = 0;
+  for (const f of osm) {
+    const g = Calculos.categoriaSalud(f.properties && f.properties.tags);
+    if (g) grupos[g].push(f);
+    else sinCategoria++;
+  }
+  return {
+    salud: fusionarSalud(establecimientos, grupos.salud, opciones),
+    consultorios: fusionarSalud(consultorios, grupos.consultorio, opciones),
+    sinCategoria,
+  };
+}
+
 const NIVELES = ['inicial', 'primaria', 'secundaria'];
 
 /**
@@ -389,6 +436,6 @@ module.exports = {
   CP850_ALTO, CATEGORIAS_SALUD,
   decodificarCp850, cabeceraDbf, leerDbf, leerDbfArchivo, listarEntradasZip, extraerEntradaZip,
   ultimaEdicionRenipress, ultimoPadronEscale,
-  clasificarSalud, seleccionarSalud, seleccionarEscale, seleccionarEscaleDbf,
-  featureSalud, featureEscale, fusionarSalud, fusionarEducacion, procedencia,
+  esConsultorio, clasificarSalud, seleccionarSalud, seleccionarEscale, seleccionarEscaleDbf,
+  featureSalud, featureEscale, fusionarSalud, fusionarSaludPorGrupo, fusionarEducacion, procedencia,
 };

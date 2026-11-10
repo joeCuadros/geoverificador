@@ -5,15 +5,16 @@
  *
  * Uso:   node scripts/extraer-equipamiento.mjs      (o: pnpm datos:extraer)
  * Sale:  public/data/equipamiento/{transporte,areas_verdes}.geojson y, como COPIA DE OPENSTREETMAP (respaldo),
- *        public/data/equipamiento/osm/{salud,educacion}.geojson. Los archivos que lee la aplicación para salud y educación
- *        (public/data/equipamiento/{salud,educacion}.geojson) los arma scripts/descargar-equipamiento-oficial.mjs
+ *        public/data/equipamiento/osm/{salud,consultorios,educacion}.geojson. Los archivos que lee la aplicación para salud, consultorios
+ *        y educación (public/data/equipamiento/{salud,consultorios,educacion}.geojson) los arma scripts/descargar-equipamiento-oficial.mjs
  *        (pnpm datos:oficial) con RENIPRESS y ESCALE como fuente primaria y esta copia como respaldo: córrelo después.
  *
  * Decisiones:
  *  - UNA sola consulta a Overpass para toda la caja (la de CONFIG.viewbox), no una por categoría: es lo que pide la
  *    política de uso del servicio público. Luego los elementos se reparten por variable con las mismas reglas que usa
  *    el navegador (Calculos.categoriasDe), así que consulta y clasificación nunca se desincronizan.
- *  - Las etiquetas que entran en cada variable están en Calculos.FILTROS (public/js/calculos.js).
+ *  - Las etiquetas que entran en cada variable están en Calculos.FILTROS (public/js/calculos.js). Los consultorios (amenity=doctors,
+ *    healthcare=doctor) son una categoría aparte de la salud.
  *  - Salud, educación y transporte se guardan como puntos (nodo, o el centro de la vía o relación); las áreas verdes
  *    como polígonos (ensamblando las relaciones multipolígono), porque de ellas se calcula el área y la distancia al borde.
  *  - Solo se conservan el nombre y las etiquetas necesarias, con 5 decimales (≈ 1 m): archivos pequeños.
@@ -44,7 +45,7 @@ const FUENTE = 'OpenStreetMap (ODbL)';
 // ------------------------------------------------------------------ CONSULTA
 function construirConsulta() {
   const caja = `(${BBOX.join(',')})`;
-  const puntos = ['salud', 'educacion', 'transporte'].flatMap((cat) => Calculos.selectoresOverpass(cat).map((s) => `  nwr${s}${caja};`));
+  const puntos = ['salud', 'consultorios', 'educacion', 'transporte'].flatMap((cat) => Calculos.selectoresOverpass(cat).map((s) => `  nwr${s}${caja};`));
   const verdes = Calculos.selectoresOverpass('areasVerdes').flatMap((s) => [`  way${s}${caja};`, `  relation${s}${caja};`]);
   return [
     '[out:json][timeout:240][maxsize:1073741824];',
@@ -122,6 +123,7 @@ async function main() {
 
   const porVariable = {
     salud: puntos.filter((f) => Calculos.categoriasDe(f.properties.tags).includes('salud')),
+    consultorios: puntos.filter((f) => Calculos.categoriasDe(f.properties.tags).includes('consultorios')),
     educacion: puntos.filter((f) => Calculos.categoriasDe(f.properties.tags).includes('educacion')),
     transporte: puntos.filter((f) => Calculos.categoriasDe(f.properties.tags).includes('transporte')),
     areas_verdes: poligonos,
@@ -132,9 +134,9 @@ async function main() {
 
   await mkdir(join(SALIDA, 'osm'), { recursive: true });
   console.log(`\nDatos de OSM al ${metadata.osm_base ?? 's. d.'}; extracción del ${fecha}. Elementos sin geometría utilizable (p. ej. relaciones sin cerrar): ${metadata.sin_geometria_utilizable}.`);
-  // Salud y educación quedan como copia de OSM (el respaldo); la aplicación lee la fusión con RENIPRESS y ESCALE.
-  for (const [nombre, features] of Object.entries(porVariable)) await guardar(nombre, features, metadata, nombre === 'salud' || nombre === 'educacion' ? 'osm' : '');
-  console.log('\nAhora corre «pnpm datos:oficial» para volver a armar salud.geojson y educacion.geojson con los registros oficiales.');
+  // Salud, consultorios y educación quedan como copia de OSM (el respaldo); la aplicación lee la fusión con RENIPRESS y ESCALE.
+  for (const [nombre, features] of Object.entries(porVariable)) await guardar(nombre, features, metadata, nombre === 'salud' || nombre === 'consultorios' || nombre === 'educacion' ? 'osm' : '');
+  console.log('\nAhora corre «pnpm datos:oficial» para volver a armar salud.geojson, consultorios.geojson y educacion.geojson con los registros oficiales.');
 }
 
 main().catch((err) => {

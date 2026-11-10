@@ -51,7 +51,7 @@ const volcan = json('data/peligro_volcanico_misti.geojson');
 const e030 = json('data/zonas_sismicas_e030.json');
 const precios = json('data/precios_m2_distrito.json');
 const riesgoCenepred = json('data/riesgo_cenepred_fen2027.json');
-const equipamiento = Object.fromEntries(['salud', 'educacion', 'transporte', 'areas_verdes'].map((n) => [n, json(`data/equipamiento/${n}.geojson`)]));
+const equipamiento = Object.fromEntries(['salud', 'consultorios', 'educacion', 'transporte', 'areas_verdes'].map((n) => [n, json(`data/equipamiento/${n}.geojson`)]));
 
 // ------------------------------------------------------------------ A. Integridad
 console.log('\n== A. Integridad de los archivos ==');
@@ -227,7 +227,7 @@ console.log('\n== A. Integridad de los archivos ==');
   for (const [nombre, fc] of Object.entries(equipamiento)) {
     const f = fc.features;
     const m = fc.metadata || {};
-    const oficial = nombre === 'salud' || nombre === 'educacion';
+    const oficial = nombre === 'salud' || nombre === 'consultorios' || nombre === 'educacion';
     if (!oficial) comprobar(`Equipamiento/${nombre}: metadata con fuente ODbL, fecha de extracción y consulta`, m.fuente === 'OpenStreetMap (ODbL)' && /^\d{4}-\d{2}-\d{2}$/.test(m.fecha_extraccion) && typeof m.consulta === 'string' && m.consulta.includes('[out:json]'), m.fecha_extraccion);
     comprobar(`Equipamiento/${nombre}: metadata.registros coincide con el número de features`, m.registros === f.length && f.length > 0, `${f.length}`);
     if (!oficial) comprobar(`Equipamiento/${nombre}: id de OSM único, con nombre y etiquetas`, new Set(f.map((x) => x.properties.osm)).size === f.length && f.every((x) => /^(node|way|relation)\/\d+$/.test(x.properties.osm) && 'nombre' in x.properties && x.properties.tags));
@@ -239,13 +239,25 @@ console.log('\n== A. Integridad de los archivos ==');
     }
   }
   const esOsm = (x) => x.properties.fuente === 'OSM';
-  const sinSalud = equipamiento.salud.features.filter((x) => esOsm(x) && !(['hospital', 'clinic', 'doctors'].includes(x.properties.tags.amenity) || x.properties.tags.healthcare));
-  comprobar('Equipamiento/salud: todo elemento de OpenStreetMap tiene amenity=hospital|clinic|doctors o healthcare', sinSalud.length === 0);
+  // Salud y consultorios son dos categorías: el consultorio (amenity=doctors, healthcare=doctor) no es un establecimiento de salud.
+  const CalcOsm = createRequire(import.meta.url)('../public/js/calculos.js');
+  const sinSalud = equipamiento.salud.features.filter((x) => esOsm(x) && !(['hospital', 'clinic'].includes(x.properties.tags.amenity) || (x.properties.tags.healthcare && x.properties.tags.healthcare !== 'doctor')));
+  comprobar('Equipamiento/salud: todo elemento de OpenStreetMap tiene amenity=hospital|clinic o healthcare distinto de doctor', sinSalud.length === 0);
+  comprobar('Equipamiento/salud: ningún elemento de OpenStreetMap es un consultorio (categoriaSalud = salud)', equipamiento.salud.features.filter(esOsm).every((x) => CalcOsm.categoriaSalud(x.properties.tags) === 'salud'));
+  comprobar('Equipamiento/consultorios: todo elemento de OpenStreetMap es amenity=doctors o healthcare=doctor (categoriaSalud = consultorio)', equipamiento.consultorios.features.filter(esOsm).every((x) => CalcOsm.categoriaSalud(x.properties.tags) === 'consultorio'));
+  const claseConsultorio = (x) => /CONSULTORIO/i.test((x.properties.clasificacion || x.properties.nombre || '').normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
+  const ofiSalud = equipamiento.salud.features.filter((x) => x.properties.fuente === 'RENIPRESS');
+  const ofiConsultorios = equipamiento.consultorios.features.filter((x) => x.properties.fuente === 'RENIPRESS');
+  comprobar('Equipamiento/consultorios: todo punto de RENIPRESS dice CONSULTORIO en su clasificación (o en su nombre si no la trae) y ninguno de salud.geojson lo dice', ofiConsultorios.length > 0 && ofiConsultorios.every(claseConsultorio) && !ofiSalud.some(claseConsultorio), `${ofiConsultorios.length} consultorios, ${ofiSalud.length} establecimientos`);
+  const codigosSalud = new Set(ofiSalud.map((x) => x.properties.codigo_renipress));
+  comprobar('Equipamiento/consultorios: ningún código de RENIPRESS está a la vez en salud.geojson y en consultorios.geojson', !ofiConsultorios.some((x) => codigosSalud.has(x.properties.codigo_renipress)));
+  comprobar('Equipamiento/consultorios: ningún elemento de OpenStreetMap está a la vez en salud.geojson y en consultorios.geojson', !equipamiento.consultorios.features.filter(esOsm).some((x) => equipamiento.salud.features.some((y) => esOsm(y) && y.properties.osm === x.properties.osm)));
 
   // Salud y educación: RENIPRESS y ESCALE como fuente primaria, OpenStreetMap solo de respaldo (scripts/descargar-equipamiento-oficial.mjs).
   const NIVELES_V = ['inicial', 'primaria', 'secundaria'];
   const REGLAS = {
     salud: { oficial: 'RENIPRESS', codigo: 'codigo_renipress', licencia: /ODC-By/ },
+    consultorios: { oficial: 'RENIPRESS', codigo: 'codigo_renipress', licencia: /ODC-By/ },
     educacion: { oficial: 'ESCALE', codigo: 'codigo_local', licencia: /Acuerdo de uso de datos/ },
   };
   for (const [nombre, r] of Object.entries(REGLAS)) {
@@ -266,7 +278,7 @@ console.log('\n== A. Integridad de los archivos ==');
     // Ningún elemento de OSM debe tener un punto oficial de la misma categoría a 200 m o menos (es la regla de deduplicación).
     const hav = (la1, lo1, la2, lo2) => { const r = (d) => (d * Math.PI) / 180; const a = Math.sin(r(la2 - la1) / 2) ** 2 + Math.cos(r(la1)) * Math.cos(r(la2)) * Math.sin(r(lo2 - lo1) / 2) ** 2; return 2 * 6371008.8 * Math.asin(Math.min(1, Math.sqrt(a))); };
     const dentroDeRadio = (x, o) => hav(x.geometry.coordinates[1], x.geometry.coordinates[0], o.geometry.coordinates[1], o.geometry.coordinates[0]) <= 200;
-    const repetidos = f.filter(esOsm).filter((x) => ofi.some((o) => (nombre === 'salud' || x.properties.niveles.some((n) => o.properties.niveles.includes(n))) && dentroDeRadio(x, o)));
+    const repetidos = f.filter(esOsm).filter((x) => ofi.some((o) => (nombre !== 'educacion' || x.properties.niveles.some((n) => o.properties.niveles.includes(n))) && dentroDeRadio(x, o)));
     comprobar(`Equipamiento/${nombre}: ningún elemento de OpenStreetMap tiene un punto oficial de la misma categoría a 200 m o menos`, repetidos.length === 0, `${repetidos.length}`);
   }
   comprobar('Equipamiento/educacion: los niveles de cada local (ESCALE y respaldo) son inicial, primaria o secundaria, y no vacíos', equipamiento.educacion.features.every((x) => Array.isArray(x.properties.niveles) && x.properties.niveles.length > 0 && x.properties.niveles.every((n) => NIVELES_V.includes(n))));

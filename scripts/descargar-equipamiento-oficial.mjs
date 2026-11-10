@@ -1,8 +1,10 @@
 /**
- * descargar-equipamiento-oficial.mjs — Arma el equipamiento de SALUD y de EDUCACIÓN con los registros oficiales como fuente
- * primaria y OpenStreetMap como respaldo, y lo escribe en los mismos archivos que lee la aplicación:
- *   public/data/equipamiento/salud.geojson      RENIPRESS (SUSALUD), conjunto de datos de datosabiertos.gob.pe
- *   public/data/equipamiento/educacion.geojson  Padrón de instituciones educativas de ESCALE (MINEDU)
+ * descargar-equipamiento-oficial.mjs — Arma el equipamiento de SALUD, de CONSULTORIOS
+ * MÉDICOS y de EDUCACIÓN con los registros oficiales como fuente primaria y OpenStreetMap como respaldo, y lo escribe en los
+ * mismos archivos que lee la aplicación:
+ *   public/data/equipamiento/salud.geojson         RENIPRESS (SUSALUD), datosabiertos.gob.pe: establecimientos de salud (hospitales, clínicas, centros y puestos…)
+ *   public/data/equipamiento/consultorios.geojson  RENIPRESS (SUSALUD): consultorios médicos, categoría aparte (informativa, sin umbral)
+ *   public/data/equipamiento/educacion.geojson     Padrón de instituciones educativas de ESCALE (MINEDU)
  *
  * Uso:   node scripts/descargar-equipamiento-oficial.mjs      (o: pnpm datos:oficial)
  * Opciones:
@@ -12,16 +14,20 @@
  *   --escale=ruta.zip|dbf  usa ese archivo en vez de descargarlo (con --fecha-escale=AAAA-MM-DD si el nombre no la trae)
  *
  * Requiere la copia de OpenStreetMap de salud y educación (public/data/equipamiento/osm, de `pnpm datos:extraer`): es el respaldo.
+ * Si existe osm/consultorios.geojson se suma a osm/salud.geojson y el conjunto se reparte con Calculos.categoriaSalud (así sirve
+ * también la copia anterior, que traía los consultorios dentro de la salud).
  *
  * Qué hace (reglas en docs/METODOLOGIA.md §3.2 y §3.3):
  *  - Descarga con cortesía: una solicitud a la vez, con pausa entre solicitudes, identificándose, con reintentos de espera
  *    creciente. Las descargas quedan en la caché local .cache-equipamiento-oficial/ (no se sube al repositorio).
  *  - Salud: del CSV de RENIPRESS deja los establecimientos ACTIVOS de la provincia de Arequipa con coordenadas (NORTE = latitud
  *    y ESTE = longitud, en grados decimales) dentro de los polígonos de los distritos, de tipo «con internamiento» o «sin
- *    internamiento» y categoría I-1 a III-E. Excluye el servicio médico de apoyo y el centro odontológico.
+ *    internamiento» y categoría I-1 a III-E. Excluye el servicio médico de apoyo y el centro odontológico. Lo que queda se
+ *    reparte en dos categorías: «consultorio» (la clasificación de RENIPRESS dice CONSULTORIO) y «salud» (todo lo demás).
  *  - Educación: del Padron_web.dbf de ESCALE deja los locales ACTIVOS de la provincia de Arequipa con coordenadas, de educación
  *    básica regular (inicial, primaria, secundaria), públicos y privados, uno por código de local.
- *  - Fusión: entra todo punto oficial; de OpenStreetMap, solo lo que ningún punto oficial de la misma categoría cubre a `radio` m.
+ *  - Fusión por categoría: entra todo punto oficial; de OpenStreetMap, solo lo que ningún punto oficial de la MISMA categoría (salud,
+ *    consultorio o, en educación, nivel) cubre a `radio` m.
  *  - Cada elemento lleva `fuente` (RENIPRESS | ESCALE | OSM) y su código oficial; el bloque `metadata` lleva las direcciones,
  *    fechas y licencias de cada fuente, los conteos por fuente y la regla de deduplicación.
  *  - Si algo falla (red, formato, archivo vacío) NO se escribe nada y se sale con código 1, diciendo el error exacto.
@@ -58,7 +64,13 @@ const REGLA_SALUD =
   'Registros de RENIPRESS con ESTADO = ACTIVO, de la provincia de Arequipa, con NORTE (latitud) y ESTE (longitud) en grados decimales dentro de los polígonos de ' +
   'los distritos (public/data/distritos_aqp.geojson), de tipo de establecimiento «con internamiento» o «sin internamiento» y categoría I-1, I-2, I-3, I-4, II-1, II-2, ' +
   'II-E, III-1, III-2 o III-E (NTS 021-MINSA/DGSP-V.03). Se excluyen el servicio médico de apoyo (laboratorios, diagnóstico por imágenes, hemodiálisis, ópticas y ' +
-  'traslado de pacientes; categoría 0) y el centro odontológico. El consultorio médico (I-1, I-2) se incluye.';
+  'traslado de pacientes; categoría 0) y el centro odontológico. Este archivo trae solo los establecimientos de salud: el consultorio médico (clasificación con la palabra ' +
+  'CONSULTORIO) es otra categoría y está en consultorios.geojson.';
+const REGLA_CONSULTORIOS =
+  'Registros de RENIPRESS que pasan la misma selección que la salud (ESTADO = ACTIVO, provincia de Arequipa, coordenadas dentro de los distritos, con o sin internamiento, ' +
+  'categoría I-1 a III-E, sin servicio médico de apoyo ni centro odontológico) y cuya clasificación contiene CONSULTORIO («CONSULTORIOS MEDICOS Y DE OTROS PROFESIONALES ' +
+  'DE LA SALUD»); si el registro no trae clasificación, cuenta el nombre. La categoría I-n no decide: hay puestos de salud I-1 e I-2. Es una variable informativa: no tiene ' +
+  'umbral ni entra en el puntaje.';
 const REGLA_EDUCACION =
   'Instituciones del Padron_web.dbf con ESTADO = Activo, de la provincia de Arequipa, con NLAT_IE y NLONG_IE dentro de los polígonos de los distritos y de educación ' +
   'básica regular: NIV_MOD A1, A2 y A3 = inicial, B0 = primaria, F0 = secundaria (pares NIV_MOD / D_NIV_MOD observados en el propio padrón). Se excluyen A5 (programa ' +
@@ -191,6 +203,20 @@ function leerOsm(nombre) {
   return fc;
 }
 
+/**
+ * La salud de OpenStreetMap, con los consultorios dentro: osm/salud.geojson y, si existe, osm/consultorios.geojson (sin repetir
+ * por identificador de OSM). El reparto en las dos categorías lo hace Calculos.categoriaSalud al fusionar.
+ */
+function leerOsmSalud() {
+  const salud = leerOsm('salud');
+  const ruta = join(SALIDA, 'osm', 'consultorios.geojson');
+  if (!existsSync(ruta)) return salud;
+  const extra = JSON.parse(readFileSync(ruta, 'utf8'));
+  if (!extra || !Array.isArray(extra.features)) throw new Error(`${ruta} no es un GeoJSON válido.`);
+  const vistos = new Set(salud.features.map((f) => f.properties.osm));
+  return { ...salud, features: [...salud.features, ...extra.features.filter((f) => !vistos.has(f.properties.osm))] };
+}
+
 function leerTexto(ruta) {
   const buf = readFileSync(ruta);
   const utf8 = buf.toString('utf8');
@@ -212,7 +238,7 @@ async function main() {
   if (!(radioM > 0)) throw new Error('--radio debe ser un número de metros mayor que 0.');
   mkdirSync(CACHE, { recursive: true });
 
-  const osmSalud = leerOsm('salud');
+  const osmSalud = leerOsmSalud();
   const osmEdu = leerOsm('educacion');
   const dentro = dentroDeDistritos();
 
@@ -221,21 +247,21 @@ async function main() {
 
   console.log('\nLeyendo RENIPRESS…');
   const salud = E.seleccionarSalud(leerTexto(ren.ruta), { dentro });
-  console.log(`  ${salud.descartados.total} filas; quedan ${salud.registros.length} establecimientos.`);
+  console.log(`  ${salud.descartados.total} filas; quedan ${salud.registros.length} establecimientos de salud y ${salud.consultorios.length} consultorios médicos.`);
   console.log('Leyendo el padrón de ESCALE (DBF de unos 290 MB, por bloques)…');
   const edu = E.seleccionarEscaleDbf(esc.ruta, { dentro });
   console.log(`  ${edu.totalPadron} registros del país, ${edu.filasProvincia} de la provincia; quedan ${edu.locales.length} locales (${edu.iies} instituciones).`);
-  if (salud.registros.length === 0 || edu.locales.length === 0) {
-    throw new Error(`Después de filtrar quedaron ${salud.registros.length} establecimientos de salud y ${edu.locales.length} locales educativos: revisa los archivos. No se escribió nada.`);
+  if (salud.registros.length === 0 || salud.consultorios.length === 0 || edu.locales.length === 0) {
+    throw new Error(`Después de filtrar quedaron ${salud.registros.length} establecimientos de salud, ${salud.consultorios.length} consultorios y ${edu.locales.length} locales educativos: revisa los archivos. No se escribió nada.`);
   }
 
-  const fSalud = E.fusionarSalud(salud.registros.map(E.featureSalud), osmSalud.features, { radioM });
+  const porGrupo = E.fusionarSaludPorGrupo(salud.registros.map(E.featureSalud), salud.consultorios.map(E.featureSalud), osmSalud.features, { radioM });
+  const fSalud = porGrupo.salud;
+  const fConsultorios = porGrupo.consultorios;
   const fEdu = E.fusionarEducacion(edu.locales.map(E.featureEscale), osmEdu.features, { radioM });
 
   const osmFuente = (fc) => ({ fecha: fc.metadata.fecha_extraccion, osm_base: fc.metadata.osm_base ?? null, url: fc.metadata.servidor ?? null, consulta: 'copia de public/data/equipamiento/osm' });
-  const metaSalud = E.procedencia({
-    categoria: 'salud',
-    oficial: {
+  const oficialRenipress = {
       id: 'RENIPRESS',
       nombre: 'RENIPRESS (SUSALUD)',
       entidad: 'Superintendencia Nacional de Salud - SUSALUD (publicado en datosabiertos.gob.pe)',
@@ -248,7 +274,10 @@ async function main() {
       atribucion: 'Fuente: RENIPRESS, Superintendencia Nacional de Salud (SUSALUD), datosabiertos.gob.pe',
       filas_archivo: salud.descartados.total,
       coordenadas: 'columnas NORTE (latitud) y ESTE (longitud), grados decimales; alrededor del 42 % de los registros de Arequipa no las trae y no puede ubicarse',
-    },
+  };
+  const metaSalud = E.procedencia({
+    categoria: 'salud',
+    oficial: oficialRenipress,
     osm: osmFuente(osmSalud),
     conteo: fSalud.conteo,
     radioM,
@@ -256,6 +285,18 @@ async function main() {
     descartes: salud.descartados,
     osmDescartes: fSalud.osm,
   });
+  metaSalud.consultorios_aparte = { archivo: 'consultorios.geojson', registros: fConsultorios.features.length, osm_sin_categoria: porGrupo.sinCategoria };
+  const metaConsultorios = E.procedencia({
+    categoria: 'consultorios',
+    oficial: oficialRenipress,
+    osm: osmFuente(osmSalud),
+    conteo: fConsultorios.conteo,
+    radioM,
+    regla: REGLA_CONSULTORIOS,
+    descartes: salud.descartados,
+    osmDescartes: fConsultorios.osm,
+  });
+  metaConsultorios.informativo = 'Sin umbral: variable informativa, no entra en el puntaje ni en la búsqueda de zonas del asistente.';
   const metaEdu = E.procedencia({
     categoria: 'educacion',
     oficial: {
@@ -287,9 +328,11 @@ async function main() {
   await mkdir(SALIDA, { recursive: true });
   console.log('\nEscribiendo:');
   await guardar('salud', fSalud.features, metaSalud);
+  await guardar('consultorios', fConsultorios.features, metaConsultorios);
   await guardar('educacion', fEdu.features, metaEdu);
 
   console.log(`\nSalud: ${fSalud.conteo.RENIPRESS} de RENIPRESS + ${fSalud.conteo.OSM} de OpenStreetMap (de ${fSalud.osm.total} de OSM: ${fSalud.osm.descartadas} descartadas a ${radioM} m, ${fSalud.osm.porNombreYDistancia} también por nombre).`);
+  console.log(`Consultorios: ${fConsultorios.conteo.RENIPRESS} de RENIPRESS + ${fConsultorios.conteo.OSM} de OpenStreetMap (de ${fConsultorios.osm.total} de OSM: ${fConsultorios.osm.descartadas} descartadas a ${radioM} m, ${fConsultorios.osm.porNombreYDistancia} también por nombre). De OSM sin categoría de salud: ${porGrupo.sinCategoria}.`);
   console.log(`Educación: ${fEdu.conteo.ESCALE} locales de ESCALE + ${fEdu.conteo.OSM} de OpenStreetMap (de ${fEdu.osm.total} de OSM: ${fEdu.osm.descartadas} descartadas, ${fEdu.osm.sinNivelBasico} sin nivel básico).`);
   console.log('  Por nivel (ESCALE / OSM):', ['inicial', 'primaria', 'secundaria'].map((n) => `${n} ${fEdu.porNivel.ESCALE[n]} / ${fEdu.porNivel.OSM[n]}`).join(' · '));
 }

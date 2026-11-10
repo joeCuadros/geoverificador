@@ -174,8 +174,25 @@ describe('clasificarSalud', () => {
   it('el centro odontológico no cuenta (solo atiende una especialidad; OpenStreetMap también excluye al dentista)', () => {
     expect(E.clasificarSalud(r({ tipo: 'CENTRO ODONTOLOGICO' }))).toEqual({ incluir: false, motivo: 'odontologico' });
   });
-  it('el consultorio médico (I-1, I-2) cuenta: es atención ambulatoria', () => {
-    expect(E.clasificarSalud(r({ tipo: 'CONSULTORIOS MEDICOS Y DE OTROS PROFESIONALES DE LA SALUD', categoria: 'I-1' })).incluir).toBe(true);
+  it('un establecimiento cuenta en el grupo «salud»', () => {
+    expect(E.clasificarSalud(r({}))).toEqual({ incluir: true, motivo: null, grupo: 'salud' });
+    for (const tipo of ['HOSPITALES O CLINICAS DE ATENCION GENERAL', 'CENTROS DE SALUD O CENTROS MEDICOS', 'PUESTOS DE SALUD O POSTAS DE SALUD', 'POLICLINICOS', 'CENTROS MEDICOS ESPECIALIZADOS', 'INSTITUTOS DE SALUD ESPECIALIZADOS']) {
+      expect(E.clasificarSalud(r({ tipo })).grupo).toBe('salud');
+    }
+  });
+  it('el consultorio médico (clasificación «CONSULTORIOS MEDICOS Y DE OTROS PROFESIONALES DE LA SALUD») es del grupo «consultorio», no de «salud»', () => {
+    const tipo = 'CONSULTORIOS MEDICOS Y DE OTROS PROFESIONALES DE LA SALUD';
+    for (const categoria of ['I-1', 'I-2', 'I-3']) expect(E.clasificarSalud(r({ tipo, categoria }))).toEqual({ incluir: true, motivo: null, grupo: 'consultorio' });
+    expect(E.clasificarSalud(r({ tipo: 'Consultorios médicos' })).grupo).toBe('consultorio'); // con tildes y en minúsculas
+  });
+  it('la categoría sola no decide: un puesto de salud I-1 o I-2 sigue siendo «salud»', () => {
+    for (const categoria of ['I-1', 'I-2']) expect(E.clasificarSalud(r({ tipo: 'PUESTOS DE SALUD O POSTAS DE SALUD', categoria })).grupo).toBe('salud');
+  });
+  it('sin clasificación, el nombre dice si es un consultorio; un consultorio dental sigue siendo odontológico', () => {
+    expect(E.clasificarSalud(r({ tipo: null, categoria: 'I-2', nombre: 'DENSOMED CONSULTORIO DE DIAGNOSTICO DE OSTEOPOROSIS' })).grupo).toBe('consultorio');
+    expect(E.clasificarSalud(r({ tipo: null, categoria: 'I-1', nombre: 'Consultorio Dental Characato Salud' }))).toEqual({ incluir: false, motivo: 'odontologico' });
+    expect(E.clasificarSalud(r({ tipo: null, categoria: 'I-3', nombre: 'Clínica del Sur' })).grupo).toBe('salud'); // sin la palabra consultorio
+    expect(E.clasificarSalud(r({ tipo: 'POLICLINICOS', categoria: 'I-3', nombre: 'Policlínico con consultorios' })).grupo).toBe('salud'); // si hay clasificación, el nombre no cuenta
   });
 });
 
@@ -186,8 +203,16 @@ describe('seleccionarSalud', () => {
     const h = s.registros.find((x: { id: string }) => x.id === '00001');
     expect(h).toMatchObject({ lat: -16.4075, lon: -71.5275, nombre: 'HOSPITAL REGIONAL HONORIO DELGADO', categoria: 'III-1', distrito: 'AREQUIPA' });
   });
-  it('deja los activos de la provincia con coordenadas dentro del distrito y de una categoría de atención', () => {
-    expect(s.registros.map((x: { id: string }) => x.id)).toEqual(['00001', '00002', '00003', '00004']);
+  it('deja como establecimientos de salud los activos de la provincia con coordenadas dentro del distrito y de una categoría de atención, sin consultorios', () => {
+    expect(s.registros.map((x: { id: string }) => x.id)).toEqual(['00001', '00002', '00003']);
+  });
+  it('los consultorios médicos van aparte, en su propia lista', () => {
+    expect(s.consultorios.map((x: { id: string }) => x.id)).toEqual(['00004']);
+    expect(s.consultorios[0]).toMatchObject({ tipo: 'CONSULTORIOS MEDICOS Y DE OTROS PROFESIONALES DE LA SALUD', categoria: 'I-1' });
+  });
+  it('ningún registro está en las dos listas', () => {
+    const ids = [...s.registros, ...s.consultorios].map((x: { id: string }) => x.id);
+    expect(new Set(ids).size).toBe(ids.length);
   });
   it('cuenta lo descartado por cada causa', () => {
     expect(s.descartados).toMatchObject({
@@ -201,7 +226,7 @@ describe('seleccionarSalud', () => {
     expect(ids).not.toContain('00009');
   });
   it('conserva el código, la categoría y la clasificación de RENIPRESS', () => {
-    expect(s.registros.find((x: { id: string }) => x.id === '00004')).toMatchObject({ tipo: 'CONSULTORIOS MEDICOS Y DE OTROS PROFESIONALES DE LA SALUD', categoria: 'I-1' });
+    expect(s.registros.find((x: { id: string }) => x.id === '00002')).toMatchObject({ tipo: 'CENTROS DE SALUD O CENTROS MEDICOS', categoria: 'I-3' });
   });
   it('un archivo con NORTE y ESTE en metros (UTM) se rechaza diciendo qué falta', () => {
     expect(() => E.seleccionarSalud('COD_IPRESS;NOMBRE;NORTE;ESTE\n1;X;8000000;230000\n')).toThrow(/latitud/);
@@ -362,6 +387,39 @@ describe('fusionarSalud: RENIPRESS primero, OpenStreetMap como respaldo', () => 
   it('un elemento de OpenStreetMap que no es un punto no se puede ubicar y no se añade', () => {
     const linea = { type: 'Feature', properties: { osm: 'way/9', nombre: 'X', tags: { amenity: 'clinic' } }, geometry: { type: 'LineString', coordinates: [[0, 0], [1, 1]] } };
     expect(E.fusionarSalud(oficiales, [linea], { radioM: 200 }).conteo.OSM).toBe(0);
+  });
+});
+
+describe('fusionarSaludPorGrupo: la deduplicación con OpenStreetMap es por categoría', () => {
+  const oficialConsultorio = (cod: string, nombre: string, metrosAlEste: number) =>
+    E.featureSalud({ id: cod, nombre, lat: LAT, lon: LON + dLon(metrosAlEste, LAT), categoria: 'I-1', tipo: 'CONSULTORIOS MEDICOS Y DE OTROS PROFESIONALES DE LA SALUD', distrito: 'X' });
+  const establecimientos = [oficialSalud('R1', 'Clínica Alfa', 0)];
+  const consultorios = [oficialConsultorio('C1', 'Consultorio Dr. Bravo', 5000)];
+  const osm = [
+    osmPunto('node/1', 'Consultorio Otro', 100, { amenity: 'doctors' }), // consultorio de OSM a 100 m de un ESTABLECIMIENTO oficial: se queda (otra categoría)
+    osmPunto('node/2', 'Clínica Otra', 5100, { amenity: 'clinic' }), // clínica de OSM a 100 m de un CONSULTORIO oficial: se queda (otra categoría)
+    osmPunto('node/3', 'Clínica Alfa II', 80, { amenity: 'clinic' }), // misma categoría y a 80 m: se descarta
+    osmPunto('node/4', 'Dr. Bravo', 5050, { healthcare: 'doctor' }), // misma categoría y a 50 m: se descarta
+    osmPunto('node/5', 'Centro Médico X', 3000, { healthcare: 'centre' }), // establecimiento lejos de todo: se queda
+    osmPunto('node/6', 'Dr. Lejano', 3100, { amenity: 'doctors', healthcare: 'doctor' }), // consultorio lejos de todo: se queda
+    osmPunto('node/7', 'Clínica con médico', 1500, { amenity: 'clinic', healthcare: 'doctor' }), // hospital o clinic manda: es un establecimiento
+    osmPunto('node/8', 'Dentista', 2000, { healthcare: 'dentist' }), // no es salud ni consultorio
+  ];
+  const r = E.fusionarSaludPorGrupo(establecimientos, consultorios, osm, { radioM: 200 });
+  const osmDe = (g: { features: Array<{ properties: { fuente: string; osm: string } }> }) => g.features.filter((f) => f.properties.fuente === 'OSM').map((f) => f.properties.osm);
+
+  it('un punto de OpenStreetMap se descarta solo si hay un oficial de su MISMA categoría a 200 m o menos', () => {
+    expect(osmDe(r.salud)).toEqual(['node/2', 'node/5', 'node/7']);
+    expect(osmDe(r.consultorios)).toEqual(['node/1', 'node/6']);
+  });
+  it('lo oficial entra completo en su grupo', () => {
+    expect(r.salud.conteo).toEqual({ RENIPRESS: 1, OSM: 3 });
+    expect(r.consultorios.conteo).toEqual({ RENIPRESS: 1, OSM: 2 });
+  });
+  it('cuenta lo descartado por grupo y lo que no era de ninguno', () => {
+    expect(r.salud.osm).toMatchObject({ total: 4, conservadas: 3, descartadas: 1 });
+    expect(r.consultorios.osm).toMatchObject({ total: 3, conservadas: 2, descartadas: 1 });
+    expect(r.sinCategoria).toBe(1);
   });
 });
 

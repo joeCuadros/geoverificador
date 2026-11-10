@@ -171,6 +171,21 @@ describe('evaluarMasCercano (salud, transporte, cada nivel educativo)', () => {
     expect(r.distanciaM).toBeNull();
   });
 
+  it('sin umbral (null) es INFORMATIVO: da el más cercano y su distancia, y nunca CUMPLE ni NO CUMPLE', () => {
+    const sinUmbral = { ...opciones, umbralM: null };
+    const cerca = Calculos.evaluarMasCercano(P, [en(5000, 'Lejano'), en(120, 'Consultorio Cercano')], sinUmbral);
+    expect(cerca).toMatchObject({ estado: 'INFORMATIVO', nombre: 'Consultorio Cercano', umbralM: null });
+    expect(cerca.distanciaM).toBeCloseTo(120, 0);
+    const lejos = Calculos.evaluarMasCercano(P, [en(25000, 'Muy lejos')], sinUmbral);
+    expect(lejos.estado).toBe('INFORMATIVO');
+    expect(lejos.distanciaM).toBeCloseTo(25000, -1);
+  });
+
+  it('sin umbral y sin candidatos es SIN DATO, aunque la búsqueda tenga un alcance', () => {
+    expect(Calculos.evaluarMasCercano(P, [], { ...opciones, umbralM: null }).estado).toBe('SIN DATO');
+    expect(Calculos.evaluarMasCercano(P, [], { ...opciones, umbralM: null, alcanceM: 5000 }).estado).toBe('SIN DATO');
+  });
+
   it('un establecimiento sin nombre se identifica como tal', () => {
     const r = Calculos.evaluarMasCercano(P, [en(100, null)], opciones);
     expect(r.nombre).toBe('Sin nombre en OSM');
@@ -222,11 +237,34 @@ describe('nivelesEducativos (reglas por etiquetas de OSM)', () => {
 });
 
 describe('clasificación de etiquetas y consulta Overpass', () => {
-  it('reconoce salud: hospital, clinic, doctors y healthcare=*', () => {
-    expect(Calculos.categoriasDe({ amenity: 'hospital' })).toContain('salud');
-    expect(Calculos.categoriasDe({ amenity: 'clinic' })).toContain('salud');
-    expect(Calculos.categoriasDe({ amenity: 'doctors' })).toContain('salud');
-    expect(Calculos.categoriasDe({ healthcare: 'centre' })).toContain('salud');
+  it('reconoce salud: hospital, clinic y healthcare=* (salvo doctor)', () => {
+    expect(Calculos.categoriasDe({ amenity: 'hospital' })).toEqual(['salud']);
+    expect(Calculos.categoriasDe({ amenity: 'clinic' })).toEqual(['salud']);
+    expect(Calculos.categoriasDe({ healthcare: 'centre' })).toEqual(['salud']);
+    expect(Calculos.categoriasDe({ healthcare: 'hospital' })).toEqual(['salud']);
+  });
+
+  it('amenity=doctors y healthcare=doctor son consultorios, no establecimientos de salud', () => {
+    expect(Calculos.categoriasDe({ amenity: 'doctors' })).toEqual(['consultorios']);
+    expect(Calculos.categoriasDe({ healthcare: 'doctor' })).toEqual(['consultorios']);
+    expect(Calculos.categoriasDe({ amenity: 'doctors', healthcare: 'doctor' })).toEqual(['consultorios']);
+  });
+
+  it('si un elemento es a la vez hospital o clinic y doctor, manda el establecimiento: no se cuenta dos veces', () => {
+    expect(Calculos.categoriasDe({ amenity: 'clinic', healthcare: 'doctor' })).toEqual(['salud']);
+    expect(Calculos.categoriasDe({ amenity: 'hospital', healthcare: 'doctor' })).toEqual(['salud']);
+    expect(Calculos.categoriasDe({ amenity: 'doctors', healthcare: 'centre' })).toEqual(['salud']);
+  });
+
+  it('categoriaSalud reparte la salud de OpenStreetMap en «salud» y «consultorio» (y null si no es ninguna)', () => {
+    expect(Calculos.categoriaSalud({ amenity: 'doctors' })).toBe('consultorio');
+    expect(Calculos.categoriaSalud({ healthcare: 'doctor' })).toBe('consultorio');
+    expect(Calculos.categoriaSalud({ amenity: 'hospital' })).toBe('salud');
+    expect(Calculos.categoriaSalud({ amenity: 'clinic', healthcare: 'doctor' })).toBe('salud');
+    expect(Calculos.categoriaSalud({ healthcare: 'yes' })).toBe('salud');
+    expect(Calculos.categoriaSalud({ healthcare: 'dentist' })).toBeNull();
+    expect(Calculos.categoriaSalud({ amenity: 'school' })).toBeNull();
+    expect(Calculos.categoriaSalud(undefined)).toBeNull();
   });
 
   it('healthcare=pharmacy, dentist o laboratory no cuentan como establecimiento de salud', () => {
@@ -254,8 +292,9 @@ describe('clasificación de etiquetas y consulta Overpass', () => {
 
   it('arma selectores Overpass a partir de los mismos filtros', () => {
     const sel = Calculos.selectoresOverpass('salud');
-    expect(sel).toContain('["amenity"~"^(hospital|clinic|doctors)$"]');
-    expect(sel.some((s: string) => s.startsWith('["healthcare"]'))).toBe(true);
+    expect(sel).toContain('["amenity"~"^(hospital|clinic)$"]');
+    expect(sel.some((s: string) => s.startsWith('["healthcare"]') && s.includes('doctor'))).toBe(true); // healthcare=doctor queda fuera de salud
+    expect(Calculos.selectoresOverpass('consultorios')).toEqual(['["amenity"="doctors"]', '["healthcare"="doctor"]']);
   });
 });
 

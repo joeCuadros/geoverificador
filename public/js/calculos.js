@@ -168,17 +168,25 @@ const Calculos = (() => {
    *   excluir  → valores que no son un establecimiento (p. ej. una farmacia no es un centro de atención).
    */
   const FILTROS = {
+    // Establecimientos de salud (hospitales, clínicas, centros y puestos de salud, policlínicos…). El consultorio médico
+    // (amenity=doctors, healthcare=doctor) es otra categoría: ver `consultorios`.
     salud: [
-      { clave: 'amenity', valores: ['hospital', 'clinic', 'doctors'] },
+      { clave: 'amenity', valores: ['hospital', 'clinic'] },
       // healthcare=* salvo lo que no es un centro de atención general: farmacia, óptica, medicina alternativa, banco de
-      // sangre, laboratorio y consultas de una sola especialidad paramédica u odontológica.
+      // sangre, laboratorio, consultas de una sola especialidad paramédica u odontológica y el consultorio médico (doctor).
       {
         clave: 'healthcare',
         excluir: [
           'pharmacy', 'optometrist', 'alternative', 'blood_donation', 'laboratory', 'sample_collection', 'dentist',
-          'physiotherapist', 'occupational_therapist', 'psychotherapist', 'speech_therapist', 'audiologist', 'podiatrist',
+          'physiotherapist', 'occupational_therapist', 'psychotherapist', 'speech_therapist', 'audiologist', 'podiatrist', 'doctor',
         ],
       },
+    ],
+    // Consultorios médicos: categoría APARTE de la salud. Son informativos (no tienen umbral; ver CONFIG.umbrales.consultorio).
+    // Si un elemento es además hospital, clinic u otro healthcare=*, manda el establecimiento (ver categoriasDe).
+    consultorios: [
+      { clave: 'amenity', valores: ['doctors'] },
+      { clave: 'healthcare', valores: ['doctor'] },
     ],
     educacion: [{ clave: 'amenity', valores: ['school', 'kindergarten'] }],
     transporte: [
@@ -206,7 +214,19 @@ const Calculos = (() => {
   /** Variables a las que pertenece un elemento según sus etiquetas ([] si a ninguna). */
   function categoriasDe(tags) {
     const t = tags || {};
-    return Object.keys(FILTROS).filter((cat) => FILTROS[cat].some((f) => coincide(t, f)));
+    const cats = Object.keys(FILTROS).filter((cat) => FILTROS[cat].some((f) => coincide(t, f)));
+    // Un elemento que es hospital, clinic u otro healthcare=* Y TAMBIÉN doctor es un establecimiento: no se cuenta dos veces.
+    return cats.includes('salud') ? cats.filter((c) => c !== 'consultorios') : cats;
+  }
+
+  /**
+   * Reparte la salud de OpenStreetMap en las dos categorías: 'salud' (establecimiento) o 'consultorio' (amenity=doctors,
+   * healthcare=doctor); null si no es ninguna de las dos. Es la misma regla de categoriasDe.
+   */
+  function categoriaSalud(tags) {
+    const cats = categoriasDe(tags);
+    if (cats.includes('salud')) return 'salud';
+    return cats.includes('consultorios') ? 'consultorio' : null;
   }
 
   /** Etiqueta «clave=valor» con la que un elemento entra en la variable (la primera regla que coincide), o null. */
@@ -334,9 +354,13 @@ const Calculos = (() => {
    *   NO CUMPLE   más lejos que el umbral; o, si la búsqueda cubrió un `alcanceM` mayor que el umbral y no halló nada,
    *               sin distancia (hay algo más allá del alcance, o nada).
    *   SIN DATO    no hay candidatos y no se sabe qué tanto se buscó.
+   *   INFORMATIVO sin umbral (`umbralM` null): da el más cercano y su distancia, sin cumple / no cumple (p. ej. el consultorio médico).
    */
   function evaluarMasCercano(punto, candidatos, opciones) {
-    const { umbralM, fuente, fecha, metodo, alcanceM } = opciones;
+    const { fuente, fecha, metodo, alcanceM } = opciones;
+    // Sin umbral (null) la variable es INFORMATIVA: se da el más cercano y su distancia, sin cumple / no cumple.
+    const informativo = !esNumero(opciones.umbralM);
+    const umbralM = informativo ? null : opciones.umbralM;
     const base = { umbralM, fuente, fecha, metodo };
     let mejor = null;
     let mejorD = Infinity;
@@ -346,11 +370,11 @@ const Calculos = (() => {
       if (d < mejorD) { mejor = c; mejorD = d; }
     }
     if (!mejor) {
-      const cubierto = esNumero(alcanceM) && alcanceM >= umbralM;
+      const cubierto = !informativo && esNumero(alcanceM) && alcanceM >= umbralM;
       return { estado: cubierto ? 'NO CUMPLE' : 'SIN DATO', nombre: null, distanciaM: null, ...base, lat: null, lon: null, osm: null, etiqueta: null, fuenteElemento: null, codigo: null, categoria: null, gestion: null };
     }
     return {
-      estado: mejorD <= umbralM ? 'CUMPLE' : 'NO CUMPLE',
+      estado: informativo ? 'INFORMATIVO' : mejorD <= umbralM ? 'CUMPLE' : 'NO CUMPLE',
       nombre: mejor.nombre || SIN_NOMBRE,
       distanciaM: mejorD,
       ...base,
@@ -740,6 +764,7 @@ const Calculos = (() => {
     areaGeometriaM2,
     centroDe,
     categoriasDe,
+    categoriaSalud,
     etiquetaDe,
     selectoresOverpass,
     nivelesEducativos,
