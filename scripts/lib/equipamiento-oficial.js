@@ -201,6 +201,22 @@ const mayusculas = (texto) => V.sinTildes(texto || '').toUpperCase();
 const textoDeClase = (r) => mayusculas(r.tipo) || mayusculas(r.nombre);
 
 /**
+ * Palabras con las que un nombre dental deja de ser «solo dental»: dice que además hay medicina u otros servicios (p. ej.
+ * «Policlínico X - Medicina y Odontología», «Hospital … servicio de odontología», «Centro de Salud …»). «Clínica» y «policlínico»
+ * solos NO bastan: «Clínica Dental del Sur» y «Policlínico Dental» son dentales. «Salud» sola tampoco («Consultorio Dental Characato Salud»).
+ */
+const MULTIESPECIALIDAD = /\b(MEDICINA|MEDICO|MEDICOS|MEDICA|MEDICAS|HOSPITAL|ESPECIALIDADES|MULTIESPECIALIDAD\w*|(CENTRO|PUESTO|POSTA) DE SALUD)\b/;
+
+/**
+ * ¿El NOMBRE de un registro de RENIPRESS es solo dental? Reutiliza la regla de OpenStreetMap (Calculos.esDental: dental,
+ * odontolog… o dentist…, sin distinguir mayúsculas ni tildes) y la aplica aunque la clasificación sea de consultorio o de
+ * policlínico, salvo que el nombre diga también que es un establecimiento general (MULTIESPECIALIDAD).
+ */
+function esNombreDental(nombre) {
+  return Calculos.esDental({}, nombre) && !MULTIESPECIALIDAD.test(mayusculas(nombre));
+}
+
+/**
  * ¿Un registro de RENIPRESS es un consultorio médico? Sí si su clasificación contiene CONSULTORIO (p. ej. «CONSULTORIOS MEDICOS
  * Y DE OTROS PROFESIONALES DE LA SALUD», I-1 a I-3) o, si no la trae, si lo dice el nombre. La categoría no decide.
  */
@@ -218,7 +234,7 @@ function clasificarSalud(r) {
   if (tipo && !/(CON|SIN) INTERNAMIENTO/.test(tipo)) return { incluir: false, motivo: 'apoyo' };
   if (!CATEGORIAS_SALUD.test(String(r.categoria || '').trim().toUpperCase())) return { incluir: false, motivo: 'sinCategoria' };
   const clase = textoDeClase(r);
-  if (/ODONTOLOG/.test(clase) || (!r.tipo && /\b(DENTAL|DENTISTA|ESTOMATOLOG\w*)\b/.test(clase))) return { incluir: false, motivo: 'odontologico' };
+  if (/ODONTOLOG/.test(clase) || esNombreDental(r.nombre) || (!r.tipo && /\b(DENTAL|DENTISTA|ESTOMATOLOG\w*)\b/.test(clase))) return { incluir: false, motivo: 'odontologico' };
   return { incluir: true, motivo: null, grupo: esConsultorio(r) ? 'consultorio' : 'salud' };
 }
 
@@ -445,6 +461,6 @@ module.exports = {
   CP850_ALTO, CATEGORIAS_SALUD,
   decodificarCp850, cabeceraDbf, leerDbf, leerDbfArchivo, listarEntradasZip, extraerEntradaZip,
   ultimaEdicionRenipress, ultimoPadronEscale,
-  esConsultorio, clasificarSalud, seleccionarSalud, seleccionarEscale, seleccionarEscaleDbf,
+  esConsultorio, esNombreDental, clasificarSalud, seleccionarSalud, seleccionarEscale, seleccionarEscaleDbf,
   featureSalud, featureEscale, fusionarSalud, repartirSaludOsm, fusionarSaludPorGrupo, fusionarEducacion, procedencia,
 };
