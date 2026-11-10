@@ -106,10 +106,13 @@ describe('Asistente.interpretar', () => {
     expect(por.residencial).toBe(1);
   });
 
-  it('«tranquilo» y «mall» son aproximaciones y se declaran como tales', () => {
-    const r = Asistente.interpretar('quiero un lugar tranquilo cerca de un mall');
+  it('«tranquilo» y «zona comercial» son aproximaciones y se declaran como tales; «mall» ya no es una de ellas', () => {
+    const r = Asistente.interpretar('quiero un lugar tranquilo cerca de una zona comercial');
     expect(ids(r)).toEqual(['comercial', 'tranquilo']);
     expect(r.aproximados.sort()).toEqual(['comercial', 'tranquilo']);
+    const m = Asistente.interpretar('quiero un lugar tranquilo cerca de un mall');
+    expect(ids(m)).toEqual(['tranquilo']);
+    expect(m.comercio).toEqual(['mall']);
   });
 
   it('«barrio tradicional» se aproxima con el centro histórico', () => {
@@ -550,7 +553,8 @@ describe('Asistente.formatearBusqueda', () => {
     const dos = Asistente.formatearBusqueda(resultado, { aproximados: ['tranquilo', 'comercial'], temaNoSoportado: null, radioGlobalM: null });
     expect(dos.texto).toMatch(/son aproximaciones/);
     expect(dos.texto).toMatch(/ruido/);
-    expect(dos.texto).toMatch(/centros comerciales/);
+    expect(dos.texto).toMatch(/zona comercial del plano/);
+    expect(dos.texto).toMatch(/no un mall/);
   });
 
   it('sin áreas lo dice y sugiere aflojar los criterios', () => {

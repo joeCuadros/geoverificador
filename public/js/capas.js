@@ -5,6 +5,7 @@
  *   colegios    → los colegios mismos, con un icono por nivel (y un círculo tenue con la distancia de referencia si son pocos)
  *   salud       → los establecimientos de salud (círculo de 1000 m si son pocos)
  *   consultorios → los consultorios médicos, aparte de la salud y solo informativos: sin círculo (no hay distancia de referencia)
+ *   mercados, supermercados, malls → comercio, solo informativo: sin círculo (no hay distancia de referencia); el mall se dibuja como polígono si OSM lo tiene
  *   paraderos   → los paraderos (círculo de 400 m si son pocos)
  *   parques     → los parques, como polígonos rellenos
  *   residencial, tranquilo, campina, comercial, historico → solo los polígonos de esas zonas del plano
@@ -36,6 +37,9 @@ const Capas = (() => {
     { id: 'colegios', etiqueta: 'Colegios', grupo: 'servicio' },
     { id: 'salud', etiqueta: 'Salud', grupo: 'servicio' },
     { id: 'consultorios', etiqueta: 'Consultorios médicos', grupo: 'servicio' }, // aparte de la salud, informativa: sin círculo de distancia
+    { id: 'mercados', etiqueta: 'Mercados', grupo: 'servicio' }, // comercio: informativo, sin círculo de distancia
+    { id: 'supermercados', etiqueta: 'Supermercados', grupo: 'servicio' },
+    { id: 'malls', etiqueta: 'Malls (centros comerciales)', grupo: 'servicio' },
     { id: 'paraderos', etiqueta: 'Paraderos', grupo: 'servicio' },
     { id: 'parques', etiqueta: 'Parques', grupo: 'servicio' },
     { id: 'residencial', etiqueta: 'Zona residencial', grupo: 'zona' },
@@ -71,7 +75,8 @@ const Capas = (() => {
         k.niveles = NIVELES.filter((n) => (k.niveles || []).includes(n) || niveles.includes(n));
         k.umbralPorNivel = { ...(k.umbralPorNivel || {}), ...(c.umbralPorNivel || {}) };
         if (!c.umbralPorNivel && typeof c.umbralEfectivoM === 'number') niveles.forEach((n) => { k.umbralPorNivel[n] = c.umbralEfectivoM; });
-      } else if (c.id === 'consultorios') capa('consultorios'); // solo del mapa del chat (no es un criterio de búsqueda)
+      } else if (c.id === 'mercados' || c.id === 'supermercados' || c.id === 'malls') capa(c.id); // solo del mapa del chat (no son un criterio de búsqueda)
+      else if (c.id === 'consultorios') capa('consultorios'); // solo del mapa del chat (no es un criterio de búsqueda)
       else if (c.id === 'salud') capa('salud').umbralM = c.umbralEfectivoM;
       else if (c.id === 'transporte') capa('paraderos').umbralM = c.umbralEfectivoM;
       else if (c.id === 'areaVerde') capa('parques').umbralM = c.umbralEfectivoM;
@@ -169,7 +174,7 @@ const Capas = (() => {
 
     // Cómo se nombra cada capa en el resumen: [singular, plural].
     const NOMBRES = {
-      colegios: ['colegio', 'colegios'], salud: ['establecimiento de salud', 'establecimientos de salud'], consultorios: ['consultorio médico', 'consultorios médicos'], paraderos: ['paradero', 'paraderos'], parques: ['parque', 'parques'],
+      colegios: ['colegio', 'colegios'], salud: ['establecimiento de salud', 'establecimientos de salud'], consultorios: ['consultorio médico', 'consultorios médicos'], mercados: ['mercado', 'mercados'], supermercados: ['supermercado', 'supermercados'], malls: ['mall', 'malls'], paraderos: ['paradero', 'paraderos'], parques: ['parque', 'parques'],
       residencial: ['zona residencial', 'zonas residenciales'], tranquilo: ['zona tranquila', 'zonas tranquilas'], campina: ['zona de campiña', 'zonas de campiña'],
       comercial: ['zona comercial', 'zonas comerciales'], historico: ['zona del centro histórico', 'zonas del centro histórico'],
       quebradas: ['tramo de quebrada o río', 'tramos de quebradas y ríos'], sismos: ['sismo', 'sismos'], volcan: ['zona de peligro volcánico', 'zonas de peligro volcánico'], cenepred_inundacion: ['distrito coloreado por su riesgo ante inundaciones', 'distritos coloreados por su riesgo ante inundaciones'], cenepred_mm: ['distrito coloreado por su riesgo ante movimientos en masa', 'distritos coloreados por su riesgo ante movimientos en masa'], lineas: ['línea de bus', 'líneas de bus'], sectores: ['sector', 'sectores'],
@@ -215,6 +220,19 @@ const Capas = (() => {
           titulo: p.nombre || 'Consultorio médico sin nombre', detalle: 'Consultorio médico',
         })); // sin radioM: no hay distancia de referencia, así que tampoco se dibuja un círculo
         cuenta('consultorios', elegidos.length, `Consultorios médicos: ${elegidos.length}`);
+      } else if (id === 'mercados' || id === 'supermercados' || id === 'malls') {
+        // Comercio: informativo (sin umbral). Un punto, o el centro de un polígono (que además se dibuja): sin radioM, así que tampoco hay círculo.
+        const def = Object.values(C.COMERCIO).find((d) => d.capa === id);
+        const tipo = Object.keys(C.COMERCIO).find((k) => C.COMERCIO[k].capa === id);
+        const elegidos = (datos[id] || []).filter((p) => enArea(p.lat, p.lon));
+        elegidos.forEach((p) => {
+          puntos.push({
+            capa: id, tipo, subtipo: id, lat: p.lat, lon: p.lon, nombre: p.nombre, osm: p.osm, fuente: 'OSM', fuenteTexto: C.textoFuenteComercio(p), verificado: p.verificado || null,
+            titulo: p.nombre || `${def.etiqueta} sin nombre en OpenStreetMap`, detalle: def.etiqueta,
+          });
+          if (p.forma) poligonos.push({ capa: id, geometry: p.forma, nombre: p.nombre, osm: p.osm, titulo: p.nombre || `${def.etiqueta} sin nombre en OpenStreetMap`, detalle: def.etiqueta });
+        });
+        cuenta(id, elegidos.length, `${def.cortos.charAt(0).toUpperCase()}${def.cortos.slice(1)}${id === 'malls' ? ' (centros comerciales)' : ''}: ${elegidos.length}`);
       } else if (id === 'parques') {
         const umbral = typeof capa.umbralM === 'number' ? capa.umbralM : u.areaVerde.distanciaM;
         const elegidos = (datos.verdes || []).filter((v) => {
@@ -331,7 +349,7 @@ const Capas = (() => {
     const resumen = !leyenda.length && !vacias.length && !sinDatos.length
       ? (cajaArea ? 'Marqué el distrito en el mapa. Elige arriba qué quieres ver dentro de él.' : '')
       : vacias.length && !leyenda.length
-      ? `En esta zona no hay ${vacias.map((v) => ({ colegios: 'colegios', salud: 'establecimientos de salud', consultorios: 'consultorios médicos', paraderos: 'paraderos', parques: 'parques', volcan: 'zonas de peligro volcánico' }[v] || v)).join(' ni ')} en los datos.`
+      ? `En esta zona no hay ${vacias.map((v) => ({ colegios: 'colegios', salud: 'establecimientos de salud', consultorios: 'consultorios médicos', mercados: 'mercados', supermercados: 'supermercados', malls: 'malls', paraderos: 'paraderos', parques: 'parques', volcan: 'zonas de peligro volcánico' }[v] || v)).join(' ni ')} en los datos.`
       : `Muestro ${listaEs(porCapa.map((l) => `${l.n} ${nombreDe(l.capa, l.n)}`))}.${vacias.length ? ` No hay ${listaEs(vacias.map((v) => nombreDe(v, 2)))} en esta zona.` : ''}`;
     return { puntos, circulos, poligonos, lineas, sismos: sism, peligroVolcan, riesgoDistritos, sectores: regiones, lineasBus, paradasBus, leyenda, vacias, sinDatos, resumen, limites };
   }

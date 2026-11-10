@@ -71,7 +71,8 @@ const Asistente = (() => {
     ['areaVerde', /\b(areas? verdes?|parques?|espacios? verdes?|zonas? verdes?|jardin(?:es)?|verde)\b/g],
     ['campina', /\b(campina|campo|agricol\w*|chacras?|rural|sembrios?|cultivos?)\b/g],
     ['tranquilo', /\b(tranquil\w*|silenci\w*|calma|calmad\w*|sin ruido|poco ruido|paz)\b/g],
-    ['comercial', /\b(malls?|centros? comercial(?:es)?|supermercados?|comercios?|tiendas|shopping|compras)\b/g],
+    // La ZONA comercial del plano (aproximada). Mall, centro comercial, supermercado y mercado ya no son este criterio: son datos informativos propios (ver RE.comercio).
+    ['comercial', /\b(comercial(?:es)?|comercios?|tiendas|compras)\b/g],
     ['historico', /\b(tradicional(?:es)?|historic\w*|casco|barrios? antiguos?|sillar)\b/g],
     ['residencial', /\b(residencial(?:es)?|viviendas?|casas?)\b/g],
   ];
@@ -128,6 +129,9 @@ const Asistente = (() => {
     cenepredTodos: /\b(?:que|cuales|cuantos)\s+distritos\b|\btodos\s+los\s+distritos\b|\bcada\s+distrito\b|\bentre\s+los\s+distritos\b/,
     // Consultorio médico (informativo, aparte de la salud). «Centro médico» es un establecimiento de salud: se quita antes de buscar «médico» (ver mencionaConsultorio).
     consultorio: /\b(consultorios?|medic[oa]s?|doctor(?:es)?)\b/,
+    // Comercio (informativo): mercado de abastos, supermercado y mall (centro comercial). «Supermercado» no cuenta como «mercado» (el \b lo separa).
+    comercio: { mercado: /\b(mercados?|mercadillos?)\b/, supermercado: /\b(super\s?mercados?|hipermercados?)\b/, mall: /\b(malls?|centros? comercial(?:es)?|shopping|outlets?)\b/ },
+    comercioTodo: /\b(mercados?|mercadillos?|super\s?mercados?|hipermercados?|malls?|centros? comercial(?:es)?|shopping|outlets?)\b/g,
     quebrada: /\b(quebradas?|torrenteras?|cauces?|huaycos?|huaicos?|aluvion\w*|rios?|rio chili)\b/,
     sismos: /\b(sismos?|sismic\w*|temblor\w*|terremoto\w*)\b/,
     peligros: /\b(peligros?|riesgos?|derrumbes?|deslizamientos?|caida de rocas|geologic\w*)\b/,
@@ -151,7 +155,7 @@ const Asistente = (() => {
   /** Criterios que aparecen en una frase, sin repetir y respetando que un nivel explícito reemplaza a «colegio». */
   function criteriosEn(frase) {
     const ids = new Set();
-    let resto = frase;
+    let resto = frase.replace(RE.comercioTodo, ' '); // mall, centro comercial, supermercado y mercado son datos informativos, no un criterio de búsqueda
     PATRONES.forEach(([id, re]) => {
       if (new RegExp(re.source).test(resto)) {
         ids.add(id);
@@ -225,6 +229,17 @@ const Asistente = (() => {
     return RE.consultorio.test(normalizar(texto).replace(/\bcentros? medic[oa]s?\b/g, ' '));
   }
 
+  /** Qué categorías de comercio nombra la frase, en el orden fijo mercado, supermercado, mall (ids de Calculos.COMERCIO). */
+  function comercioEn(texto) {
+    const t = normalizar(texto);
+    return Object.keys(RE.comercio).filter((id) => RE.comercio[id].test(t));
+  }
+
+  /** ¿La frase habla de un mercado, un supermercado o un mall (centro comercial)? */
+  function mencionaComercio(texto) {
+    return comercioEn(texto).length > 0;
+  }
+
   /**
    * Convierte lo escrito en una intención.
    *   ctx: { hayPunto?: boolean, ultimaBusqueda?: { criterios } }
@@ -239,11 +254,12 @@ const Asistente = (() => {
     const intencion = {
       tipo: 'desconocido', modo: 'nuevo', criterios: [], radioGlobalM: null, lote: null, incluirCondicional: false,
       temaNoSoportado: null, aproximados: [], limitarAlPunto: false, distrito: null, distritoFuera: false, distritoTexto: null, todosPrecio: false,
-      volcanTipos: [], cenepredFenomenos: [], cenepredMapa: false, cenepredTodos: false, consultorio: false,
+      volcanTipos: [], cenepredFenomenos: [], cenepredMapa: false, cenepredTodos: false, consultorio: false, comercio: [],
     };
     let t = normalizar(texto);
     if (!t) return intencion;
     intencion.consultorio = mencionaConsultorio(t);
+    intencion.comercio = comercioEn(t);
     t = t.replace(/(\d),(\d)/g, '$1.$2'); // «1,5 km»: la coma decimal no debe partir la frase
     NUMEROS.forEach(([re, v]) => { t = t.replace(re, v); });
 
@@ -301,6 +317,15 @@ const Asistente = (() => {
       const pideZonas = (RE.busqueda.test(t) && !RE.contar.test(t) && !RE.punto.test(t)) || (ultima && (RE.agregar.test(t) || RE.prioridad.test(t)));
       if (pideZonas) return { ...intencion, tipo: 'no_soportado', temaNoSoportado: 'consultorio_busqueda', aproximados: [], limitarAlPunto: false };
       return { ...intencion, tipo: 'consultorio', aproximados: [], limitarAlPunto: false };
+    }
+
+    // Comercio (mercado, supermercado, mall): informativo, como el consultorio. Sin otros criterios es una pregunta suya (el más cercano a tu punto o
+    // cuántos hay en un distrito); pedir zonas «cerca de un mall» no se puede porque no hay una distancia de referencia. Con otros criterios la
+    // búsqueda sigue sin él (la respuesta lo avisa con notaComercio).
+    if (intencion.comercio.length > 0 && !hayCriterios && !RE.fuentes.test(t)) {
+      const pideZonas = (RE.busqueda.test(t) && !RE.contar.test(t) && !RE.punto.test(t)) || (ultima && (RE.agregar.test(t) || RE.prioridad.test(t)));
+      if (pideZonas) return { ...intencion, tipo: 'no_soportado', temaNoSoportado: 'comercio_busqueda', aproximados: [], limitarAlPunto: false };
+      return { ...intencion, tipo: 'comercio', aproximados: [], limitarAlPunto: false };
     }
 
     // Peligro volcánico del Misti: se atiende antes que perfil, líneas y quebradas («¿Paucarpata está en peligro por el Misti?» no es un perfil).
@@ -434,6 +459,7 @@ const Asistente = (() => {
    * Ordena los datos de OpenStreetMap y de zonificación para evaluarlos rápido.
    *   entrada: { salud, educacion, transporte, areasVerdes } (listas de Feature, como los archivos congelados)
    *            + consultorios?: lista de Feature de los consultorios médicos (informativos: solo se muestran y se cuentan)
+   *            + mercados?, supermercados?, malls?: listas de Feature (puntos o polígonos; informativos, como los consultorios)
    *            + cauces?: [{ nombre, geometry }] (líneas de la red hidrográfica de la ANA; solo para «lejos de quebradas»)
    *   zonas:   [{ codigo, bbox, polys, regla }] (Zonificacion.zonas)
    */
@@ -446,6 +472,15 @@ const Asistente = (() => {
     });
     return b;
   };
+
+  /** Mercados, supermercados o malls: puntos o polígonos; `lat`/`lon` ubican el marcador (el centro del polígono) y `forma` guarda el polígono. */
+  const comercioDe = (lista) => (lista || []).filter((f) => f && f.geometry).map((f) => {
+    const punto = f.geometry.type === 'Point';
+    const c = punto ? { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0] } : C.centroDe(f.geometry);
+    if (!c) return null;
+    const p = f.properties || {};
+    return { lat: c.lat, lon: c.lon, nombre: p.nombre || null, osm: p.osm || null, tags: p.tags || {}, fuente: C.fuenteDe(p), codigo: null, categoria: null, gestion: null, forma: punto ? null : f.geometry, verificado: p.verificado || null };
+  }).filter(Boolean);
 
   function prepararDatos(entrada, zonas, umbrales) {
     const e = entrada || {};
@@ -471,6 +506,9 @@ const Asistente = (() => {
     return {
       salud: (e.salud || []).filter(esPunto).map(puntoDe),
       consultorios: (e.consultorios || []).filter(esPunto).map(puntoDe), // categoría aparte, informativa: ninguna búsqueda la usa
+      mercados: comercioDe(e.mercados), // comercio: informativo, ninguna búsqueda lo usa
+      supermercados: comercioDe(e.supermercados),
+      malls: comercioDe(e.malls),
       colegios,
       colegiosLista,
       verdesTodos,
@@ -822,6 +860,61 @@ const Asistente = (() => {
     };
   }
 
+  // ---------------------------------------------------------- Comercio (informativo)
+
+  /** Cómo se dice de dónde sale un mercado, supermercado o mall: OpenStreetMap y, si está en la lista curada, la fuente que lo confirma. */
+  function fuenteComercio(r) {
+    const osm = r.osm ? ` (${r.osm})` : '';
+    const v = r.verificado ? ` Confirmado como ${r.verificado.nombre} en ${r.verificado.url}.` : '';
+    return `OpenStreetMap${osm}.${v}`;
+  }
+
+  /** Una línea con el más cercano de una categoría de comercio, sin veredicto: «Mercado (informativo): X a 300 m». */
+  function lineaComercio(id, r) {
+    if (!r) return null;
+    const def = C.COMERCIO[id];
+    if (r.estado === 'SIN DATO' || r.distanciaM === null) return `${def.etiqueta} (informativo): sin dato en los datos que tengo.`;
+    return `${def.etiqueta} (informativo): ${r.nombre || 'sin nombre'} ${r.distanciaM === 0 ? 'con tu punto dentro de su terreno' : `a ${fmtDist(r.distanciaM)}`}.${r.verificado ? ' Verificado con su fuente.' : ''}`;
+  }
+
+  /** Respuestas sobre mercados, supermercados y malls (informativos): el más cercano de un punto o cuántos hay en un distrito. Nunca dicen cumple / no cumple. */
+  function respuestaComercio(intencion, c) {
+    const ids = intencion.comercio && intencion.comercio.length ? intencion.comercio : Object.keys(C.COMERCIO);
+    if (intencion.distrito) {
+      const t = c.distritoTitulo || Dist().titulo(intencion.distrito);
+      if (intencion.distritoFuera) return { texto: textoDistritoFuera(t), sugerencias: SUGERENCIAS_BASE };
+      if (!c.comercio) return { texto: `Todavía estoy contando lo de ${t}; vuelve a preguntar en unos segundos.`, sugerencias: [] };
+      const lineas = ids.map((id) => {
+        const def = C.COMERCIO[id];
+        const k = c.comercio[id];
+        if (!k) return `${def.etiqueta}: todavía no tengo ese dato.`;
+        if (k.total === 0) return `En ${t} no encontré ${def.plural} en mis datos: puede que existan sin estar mapeados.`;
+        const fuentes = Object.entries(k.fuentes || {}).map(([f, n]) => `${f === 'OSM' ? 'OpenStreetMap' : f}: ${n}`).join(', ');
+        return `En ${t} hay ${plural(k.total, def.singular, def.plural)} (${fuentes}; ${c.fecha || 'sin fecha'}; puede faltar alguno).`;
+      });
+      return {
+        texto: [...lineas, C.NOTA_COMERCIO, 'Los marqué en el mapa.'].join('\n'),
+        sugerencias: [`Cuéntame de ${t}`, `¿Cuántos colegios hay en ${t}?`],
+        mapa: { distrito: intencion.distrito, capas: ids.map((id) => C.COMERCIO[id].capa) },
+      };
+    }
+    if (!c.punto) return { texto: `Elige un punto en el mapa para ver ${ids.length > 1 ? 'qué hay' : `cuál es el ${C.COMERCIO[ids[0]].corto} más cercano`}, o pregúntame por un distrito: «¿cuántos mercados hay en Cayma?».`, sugerencias: SUGERENCIAS_BASE };
+    if (!c.entorno) return { texto: 'Todavía estoy calculando los servicios cercanos a tu punto; vuelve a preguntar en unos segundos.', sugerencias: [] };
+    const lineas = ids.map((id) => {
+      const def = C.COMERCIO[id];
+      const r = c.entorno[id];
+      if (!r || r.estado === 'SIN DATO' || r.distanciaM === null) return `${def.etiqueta}: sin dato en los datos que tengo (no significa que no exista).`;
+      const donde = r.distanciaM === 0 ? 'tu punto está dentro de su terreno' : `a ${fmtDist(r.distanciaM)} en línea recta${r.forma ? ' hasta su borde' : ''}`;
+      return `El ${def.corto} más cercano a tu punto es ${r.nombre || 'uno sin nombre'}, ${donde}. Fuente: ${fuenteComercio(r)}`;
+    });
+    return { texto: [...lineas, C.NOTA_COMERCIO].join('\n'), sugerencias: ['¿Hay una posta cerca?', 'Dame un resumen del punto'] };
+  }
+
+  /** Aviso cuando una búsqueda nombra un mall, supermercado o mercado: la búsqueda sigue sin él. */
+  function notaComercio() {
+    return 'Mercados, supermercados y malls no entran en la búsqueda: son datos informativos (no hay una distancia de referencia, es una decisión pendiente). Busqué solo por lo demás. Pregúntame aparte por el más cercano a tu punto: «¿hay un mall cerca de mi punto?».';
+  }
+
   /** Línea del resumen del punto: el consultorio más cercano, aparte de la salud y sin veredicto; null si no se calculó. */
   function lineaConsultorio(r) {
     if (!r) return null;
@@ -1169,6 +1262,7 @@ const Asistente = (() => {
     '• Zonificación: plano y reglamento del PDM Arequipa 2016-2025 (O.M. 961-MPA, con la zonificación restituida por la 975-MPA). Es referencial.',
     '• Salud: RENIPRESS (SUSALUD, licencia ODC-By) y colegios: padrón de ESCALE (MINEDU), como fuente primaria, con su fecha. OpenStreetMap (ODbL) solo de respaldo, donde ningún registro oficial tiene un punto a 200 m; cada establecimiento dice de cuál es.',
     '• Paraderos y áreas verdes: OpenStreetMap (ODbL), copia congelada con su fecha de extracción. Algo que falte en el mapa puede existir.',
+    '• Mercados, supermercados y malls: OpenStreetMap (ODbL), informativos y sin umbral; el CENAMA 2016 (INEI, PRODUCE) solo se usa para contar mercados por distrito. Los malls conocidos se contrastan con la fuente de cada uno.',
     '• Líneas de transporte (recorridos y paradas): SmartBus (smartbus.app), usados con su autorización verbal (confirmación escrita pendiente). Sin frecuencias ni horarios.',
     '• Umbrales: colegios 500 m inicial, 1500 m primaria y 3000 m secundaria (MINEDU); área verde ≥ 0,5 ha a 300 m (OMS Europa); salud 1000 m, paradero 400 m y borde de zona 20 m son convenciones del proyecto.',
     '• Peligro volcánico del Misti: zonas del Instituto Geofísico del Perú (IGP), sin fecha de elaboración en el servicio; el mapa oficial de referencia es el de INGEMMET (Boletín n.° 100, 2025). Es informativo, no una evaluación de riesgo.',
@@ -1182,7 +1276,7 @@ const Asistente = (() => {
   // Por qué lo «aproximado» no es un dato medido (se dice solo de lo que la persona pidió).
   const MOTIVO_APROXIMADO = {
     tranquilo: 'no hay datos de ruido',
-    comercial: 'no hay datos de centros comerciales',
+    comercial: 'es la zona comercial del plano de zonificación, no un mall, un supermercado ni un mercado',
     historico: 'no hay datos de barrios tradicionales',
   };
 
@@ -1229,6 +1323,7 @@ const Asistente = (() => {
     precio: 'No tengo el precio de una casa, un terreno ni un alquiler en particular, ni puedo decirte qué zona es más barata. Solo conozco el precio de oferta por m² promedio de algunos distritos (Aptología): pregúntame «¿cuánto cuesta el m² en Cayma?».',
     volcan_busqueda: 'Todavía no puedo buscar zonas según el peligro volcánico. Sí puedo decirte en qué zonas de peligro del Misti cae tu punto («¿hay lahares cerca de mi punto?») o qué parte de un distrito cae en cada una («¿Paucarpata está en peligro por el Misti?»).',
     cenepred_busqueda: 'Todavía no puedo buscar zonas según el riesgo de inundación o de movimientos en masa. Sí puedo decirte qué estima el CENEPRED para el distrito de tu punto («¿qué dice el CENEPRED de mi punto?») o para un distrito («¿Paucarpata se inunda?»).',
+    comercio_busqueda: 'No puedo buscar zonas «cerca de un mall, un supermercado o un mercado»: son datos informativos, porque no hay una distancia de referencia (es una decisión pendiente) y no los uso para elegir un lugar. Sí puedo decirte cuál es el más cercano a tu punto («¿hay un mall y un mercado cerca de mi punto?») o cuántos hay en un distrito («¿cuántos mercados hay en Cayma?»). Es informativo: no dice si está cerca o lejos.',
     consultorio_busqueda: 'No puedo buscar zonas «cerca de un consultorio»: el consultorio médico es una categoría aparte de los establecimientos de salud y es solo informativo, porque no hay una distancia de referencia (es una decisión pendiente). Sí puedo decirte el consultorio más cercano a tu punto («¿hay un consultorio cerca?») o cuántos hay en un distrito («¿cuántos consultorios hay en Cayma?»); para buscar zonas usa «posta», «hospital» o «centro de salud».',
     ruido: 'No tengo datos de ruido. «Zona tranquila» es solo una aproximación con la zonificación (residencial de densidad baja o media 1), no una medición.',
   };
@@ -1243,13 +1338,14 @@ const Asistente = (() => {
     const fin = (texto, sugerencias = SUGERENCIAS_BASE) => ({ texto, sugerencias });
 
     if (tipo === 'saludo') return fin('¡Hola! Soy el asistente de GeoVerificador. Puedo contarte lo que hay en tu punto (zona y servicios cercanos) o buscar zonas de Arequipa según lo que te importa: colegio, posta, área verde, transporte, campiña, zona residencial. Todo con los mismos datos de la ficha.');
-    if (tipo === 'ayuda') return fin('Puedo:\n• Buscar zonas: «busco cerca de un colegio y un parque, lo más importante es el parque» o «posta y paradero en un radio de 1 km».\n• Contarte de tu punto: «¿qué zona es?», «¿hay un colegio cerca?», «dame un resumen».\n• Consultorios médicos (aparte de la salud, solo informativos): «¿hay un consultorio cerca?» o «¿cuántos consultorios hay en Cayma?».\n• Líneas de transporte: «¿qué buses pasan por aquí?» o «¿qué líneas pasan por Paucarpata?».\n• Peligro volcánico del Misti: «¿hay lahares cerca de mi punto?» o «¿Paucarpata está en peligro por el Misti?».\n• Riesgo ante El Niño por distrito (CENEPRED): «¿Paucarpata se inunda?», «riesgo de huaico en Sachaca» o «¿qué dice el CENEPRED de mi punto?».\n• Calcular: «¿cuánto puedo construir en un lote de 200 m²?».\n• Decirte el precio de oferta por m² promedio de un distrito: «¿cuánto cuesta el m² en Cayma?».\n• Explicar el PDM nuevo y de dónde salen los datos.\nNo tengo datos de seguridad ni ruido, ni el precio de una casa o un terreno en particular.');
+    if (tipo === 'ayuda') return fin('Puedo:\n• Buscar zonas: «busco cerca de un colegio y un parque, lo más importante es el parque» o «posta y paradero en un radio de 1 km».\n• Contarte de tu punto: «¿qué zona es?», «¿hay un colegio cerca?», «dame un resumen».\n• Consultorios médicos (aparte de la salud, solo informativos): «¿hay un consultorio cerca?» o «¿cuántos consultorios hay en Cayma?».\n• Mercados, supermercados y malls (solo informativos, sin distancia de referencia): «¿hay un mall y un mercado cerca de mi punto?» o «¿cuántos mercados hay en Cayma?».\n• Líneas de transporte: «¿qué buses pasan por aquí?» o «¿qué líneas pasan por Paucarpata?».\n• Peligro volcánico del Misti: «¿hay lahares cerca de mi punto?» o «¿Paucarpata está en peligro por el Misti?».\n• Riesgo ante El Niño por distrito (CENEPRED): «¿Paucarpata se inunda?», «riesgo de huaico en Sachaca» o «¿qué dice el CENEPRED de mi punto?».\n• Calcular: «¿cuánto puedo construir en un lote de 200 m²?».\n• Decirte el precio de oferta por m² promedio de un distrito: «¿cuánto cuesta el m² en Cayma?».\n• Explicar el PDM nuevo y de dónde salen los datos.\nNo tengo datos de seguridad ni ruido, ni el precio de una casa o un terreno en particular.');
     if (tipo === 'fuentes') return fin(TEXTO_FUENTES);
     if (tipo === 'no_soportado') return fin(`${TEMAS[intencion.temaNoSoportado] || 'Eso no está en los datos que uso.'}\nSí puedo ayudarte con la zonificación y con la cercanía a colegios, salud, transporte y áreas verdes.`);
     if (tipo === 'desconocido') return fin('No entendí eso. Puedes pedirme, por ejemplo:', SUGERENCIAS_BASE);
     if (tipo === 'pdm') return fin(textoPDM(c.estadoPDM));
     if (tipo === 'contar') return respuestaContar(intencion, c);
     if (tipo === 'consultorio') return respuestaConsultorio(intencion, c);
+    if (tipo === 'comercio') return respuestaComercio(intencion, c);
     if (tipo === 'perfil') return respuestaPerfil(intencion, c);
     if (tipo === 'mejor_zona') return respuestaMejorZona();
     if (tipo === 'distrito_desconocido') return fin('No reconozco «' + (intencion.distritoTexto || 'ese lugar') + '» como un distrito de la provincia de Arequipa. Puedes escribir, por ejemplo, Cayma, Paucarpata o Cerro Colorado.');
@@ -1315,6 +1411,7 @@ const Asistente = (() => {
         `Tu punto${c.distrito ? ` está en ${titulo(c.distrito)},` : ''} zona ${zonaTxt}.`,
         linea('Salud', e.salud),
         lineaConsultorio(e.consultorio),
+        ...Object.keys(C.COMERCIO).map((id) => lineaComercio(id, e[id])),
         `Colegios: ${colegios}.`,
         linea('Transporte', e.transporte),
         ...lineaLineas(e.transporte),
@@ -1594,7 +1691,7 @@ const Asistente = (() => {
   const EN_FRASE = {
     salud: 'posta', colegio: 'colegio', inicial: 'colegio inicial', primaria: 'colegio de primaria', secundaria: 'colegio de secundaria',
     transporte: 'paradero', areaVerde: 'parque', residencial: 'zona residencial', tranquilo: 'zona tranquila',
-    campina: 'campiña', comercial: 'centro comercial', historico: 'centro histórico', lejosQuebrada: 'lejos de quebradas',
+    campina: 'campiña', comercial: 'zona comercial', historico: 'centro histórico', lejosQuebrada: 'lejos de quebradas',
   };
   // En la lista, «lejos de quebradas» lleva su distancia mínima («a más de 200 m»); en «lo más importante es…» va sin ella.
   const enFrase = (c) => (c.id === 'lejosQuebrada' && esNumero(c.umbralM) ? `lejos de quebradas a más de ${fmtRadioFrase(c.umbralM)}` : EN_FRASE[c.id]);
@@ -1638,6 +1735,8 @@ const Asistente = (() => {
   const LIM_OSM = 'OpenStreetMap es colaborativo: lo que no figura puede existir. «Sin dato» no significa que no exista.';
   const LIM_OFICIAL = 'Los registros oficiales no ubican todos los establecimientos (cerca del 42 % de los de salud de Arequipa en RENIPRESS no trae coordenadas) y ESCALE ubica el local que reportó la UGEL. Un establecimiento oficial puede estar y no verse; uno de OpenStreetMap solo aparece donde no hay un punto oficial cerca.';
   const LIM_CONSULTORIO = 'Los consultorios médicos (RENIPRESS: clasificación «consultorios»; OpenStreetMap: amenity=doctors y healthcare=doctor) son una categoría aparte de los establecimientos de salud: son solo informativos, sin distancia de referencia (decisión pendiente), y no cuentan como «salud cerca».';
+  const FUENTE_COMERCIO = 'Mercados, supermercados y malls: OpenStreetMap (ODbL), copia congelada con su fecha de extracción; los malls conocidos de Arequipa se contrastan con el sitio de cada mall o de su operador. El Censo Nacional de Mercados de Abastos 2016 (INEI, publicado por PRODUCE) no trae nombres ni coordenadas: solo sirve para comparar cuántos mercados había por distrito.';
+  const LIM_COMERCIO = 'Mercados, supermercados y malls son una categoría informativa, sin distancia de referencia (es una decisión pendiente): no se dice si están cerca o lejos y no suman al puntaje. OpenStreetMap puede no tener todos (en 2016 el censo contó más mercados que los mapeados) y etiqueta como mercado tanto un mercado de abastos como una feria; no distingue minorista de mayorista. «Sin dato» no significa que no exista.';
   const LIM_PLANO = 'El plano se extrajo de un PDF y cerca del borde entre dos zonas el resultado puede no ser exacto. La vigencia del PDM 2016-2025 es incierta y hay un PDM nuevo en trámite.';
   const FUENTE_ANA = 'Cauces congelados con su fecha de extracción: la red hidrográfica de la Autoridad Nacional del Agua (ANA, 2018), las quebradas y ríos del Instituto Geofísico del Perú (IGP, sin fecha de elaboración) y los cauces de OpenStreetMap (ODbL). Cada cauce dice de cuál fuente viene.';
   const FUENTE_IGP = 'Sismos reportados, Instituto Geofísico del Perú (IGP), congelados con su fecha de extracción.';
@@ -1652,7 +1751,7 @@ const Asistente = (() => {
   const SERVICIOS = {
     porque: ['Se mide la distancia en línea recta desde tu punto hasta el elemento más cercano de cada tipo y se compara con la distancia de referencia (umbral).'],
     fuente: [FUENTE_SERVICIOS, FUENTE_UMBRALES],
-    limites: [LIM_RECTA, LIM_OFICIAL, LIM_CONSULTORIO, LIM_OSM, LIM_REFERENCIAL],
+    limites: [LIM_RECTA, LIM_OFICIAL, LIM_CONSULTORIO, LIM_COMERCIO, LIM_OSM, LIM_REFERENCIAL],
   };
   const EXPLICACIONES = {
     saludo: GENERICO,
@@ -1661,8 +1760,8 @@ const Asistente = (() => {
     no_soportado: GENERICO,
     fuentes: {
       porque: ['Resume de dónde sale cada dato de la ficha y qué umbral se usa.'],
-      fuente: [FUENTE_PLANO, FUENTE_SERVICIOS, FUENTE_UMBRALES],
-      limites: [LIM_RECTA, LIM_OFICIAL, LIM_CONSULTORIO, LIM_OSM, LIM_REFERENCIAL],
+      fuente: [FUENTE_PLANO, FUENTE_SERVICIOS, FUENTE_COMERCIO, FUENTE_UMBRALES],
+      limites: [LIM_RECTA, LIM_OFICIAL, LIM_CONSULTORIO, LIM_COMERCIO, LIM_OSM, LIM_REFERENCIAL],
     },
     pdm: {
       porque: ['Muestra el aviso sobre el estado del PDM nuevo que registra la herramienta, con su fuente y su fecha. No lo interpreta.'],
@@ -1705,6 +1804,11 @@ const Asistente = (() => {
       limites: [LIM_CENEPRED, 'El nivel es uno solo por distrito: no distingue entre una calle y otra ni mira tu predio.'],
     },
     servicio: SERVICIOS,
+    comercio: {
+      porque: ['Busca el mercado, supermercado o mall más cercano a tu punto (o cuenta los del distrito) y dice su distancia en línea recta; de un mall o mercado con forma en el mapa, hasta su borde. No lo compara con ninguna distancia de referencia, porque no hay una.'],
+      fuente: [FUENTE_COMERCIO],
+      limites: [LIM_COMERCIO, LIM_RECTA, LIM_REFERENCIAL],
+    },
     consultorio: {
       porque: ['Busca el consultorio médico más cercano a tu punto (o cuenta los del distrito) y dice su distancia en línea recta. No lo compara con ninguna distancia de referencia, porque no hay una.'],
       fuente: ['Consultorios médicos: RENIPRESS (SUSALUD, ODC-By), como fuente primaria; OpenStreetMap (ODbL) solo de respaldo donde ningún consultorio oficial tiene un punto a 200 m. Copias congeladas con su fecha.'],
@@ -1775,6 +1879,9 @@ const Asistente = (() => {
     prepararDatos,
     mencionaConsultorio,
     notaConsultorio,
+    mencionaComercio,
+    comercioEn,
+    notaComercio,
     generarCeldas,
     evaluarCelda,
     buscar,

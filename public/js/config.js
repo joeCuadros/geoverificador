@@ -111,6 +111,13 @@ const CONFIG = {
     // responsable del proyecto (ninguna norma la fija). Con null la variable es INFORMATIVA: se muestra el más cercano y su distancia,
     // sin cumple / no cumple, sin efecto en el puntaje ni en la búsqueda de zonas del asistente. No inventar un valor aquí.
     consultorio: null,
+    // Mercado de abastos, supermercado y mall (centro comercial): categorías INFORMATIVAS, sin umbral. El valor es una decisión de la persona
+    // responsable del proyecto. Referencia propuesta: ninguna en metros con fuente verificada (docs/METODOLOGIA.md §6.4: el Sistema Nacional de
+    // Estándares de Urbanismo, MVCS 2011, es una propuesta preliminar que fija población por equipamiento, no un radio de influencia en metros).
+    // Con null se muestra el más cercano y su distancia, sin cumple / no cumple, sin efecto en el puntaje ni en la búsqueda de zonas. No inventar un valor aquí.
+    mercado: null,       // pendiente de decisión del usuario; referencia propuesta: ninguna verificada
+    supermercado: null,  // pendiente de decisión del usuario; referencia propuesta: ninguna verificada
+    mall: null,          // pendiente de decisión del usuario; referencia propuesta: ninguna verificada
     educacion: { inicial: 500, primaria: 1500, secundaria: 3000 }, // V3
     transporte: 400, // V4 (convención del proyecto)
     areaVerde: { distanciaM: 300, areaMinM2: 5000, areaGrandeM2: 10000 }, // V5: ≥ 0,5 ha a ≤ 300 m; sensibilidad: ≥ 1 ha
@@ -119,6 +126,9 @@ const CONFIG = {
     bordeZona: 'Convención del proyecto',
     salud: 'Convención del proyecto',
     consultorio: 'Sin umbral: pendiente de una decisión del proyecto; se muestra solo como dato informativo',
+    mercado: 'Sin umbral: pendiente de decisión del usuario; referencia propuesta: ninguna con fuente verificada en metros; se muestra solo como dato informativo',
+    supermercado: 'Sin umbral: pendiente de decisión del usuario; referencia propuesta: ninguna con fuente verificada en metros; se muestra solo como dato informativo',
+    mall: 'Sin umbral: pendiente de decisión del usuario; referencia propuesta: ninguna con fuente verificada en metros; se muestra solo como dato informativo',
     educacion: 'MINEDU, numeral 7.1, Cuadro N.° 1, distancias referenciales: inicial 500 m (RVM 104-2019-MINEDU), primaria 1500 m y secundaria 3000 m (RVM 208-2019-MINEDU)',
     transporte: 'Convención del proyecto',
     areaVerde: 'Indicador básico de la OMS Europa (2016), «Urban green spaces and health», p. 39: un espacio verde de al menos 0,5 ha a 300 m en línea recta; es un indicador de monitoreo, no una norma peruana',
@@ -160,6 +170,9 @@ const CONFIG = {
     archivos: {
       salud: 'data/equipamiento/salud.geojson',
       consultorios: 'data/equipamiento/consultorios.geojson', // consultorios médicos: informativos, aparte de la salud
+      mercados: 'data/equipamiento/mercados.geojson', // mercados de abastos: informativos (scripts/descargar-comercio.mjs)
+      supermercados: 'data/equipamiento/supermercados.geojson', // supermercados: informativos, aparte de los mercados
+      malls: 'data/equipamiento/malls.geojson', // malls (centros comerciales): informativos; polígonos donde OSM los tiene
       educacion: 'data/equipamiento/educacion.geojson',
       transporte: 'data/equipamiento/transporte.geojson',
       areasVerdes: 'data/equipamiento/areas_verdes.geojson',

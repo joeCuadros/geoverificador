@@ -93,10 +93,10 @@
 
   // Documentación automática de lo que realmente se consulta (mismas definiciones que usan la extracción y la clasificación)
   const code = (v) => `<code>${esc(v)}</code>`;
-  const NOMBRE_VARIABLE = { salud: 'Salud', consultorios: 'Consultorios médicos (aparte de la salud, informativos)', educacion: 'Educación', transporte: 'Transporte', areasVerdes: 'Áreas verdes' };
+  const NOMBRE_VARIABLE = { salud: 'Salud', consultorios: 'Consultorios médicos (aparte de la salud, informativos)', mercados: 'Mercados de abastos (informativos)', supermercados: 'Supermercados (informativos)', malls: 'Malls o centros comerciales (informativos)', educacion: 'Educación', transporte: 'Transporte', areasVerdes: 'Áreas verdes' };
   $('filters-doc').innerHTML = Object.entries(Calculos.FILTROS).map(([cat, filtros]) => `
     <h4>${NOMBRE_VARIABLE[cat]}</h4>
-    <ul>${filtros.map((f) => `<li>${code(f.clave)} = ${f.valores ? f.valores.map(code).join(', ') : `cualquier valor${f.excluir ? ` salvo ${f.excluir.map(code).join(', ')}` : ''}`}</li>`).join('')}</ul>`).join('')
+    <ul>${filtros.map((f) => `<li>${code(f.clave)} = ${f.valores ? f.valores.map(code).join(', ') : `cualquier valor${f.excluir ? ` salvo ${f.excluir.map(code).join(', ')}` : ''}`}${f.nombre ? ` y nombre que cumpla ${code(f.nombre)}` : ''}</li>`).join('')}</ul>`).join('')
     + `<h4>Niveles educativos</h4>
     <ul>
       <li>${code('amenity')} = ${code('kindergarten')} → inicial.</li>
@@ -107,6 +107,7 @@
     <ul>
       <li>Salud: ${CONFIG.umbrales.salud} m (${esc(CONFIG.fuentesUmbral.salud.toLowerCase())}); solo establecimientos de salud.</li>
       <li>Consultorio médico: sin umbral (${esc(CONFIG.fuentesUmbral.consultorio.toLowerCase())}).</li>
+      <li>Mercado, supermercado y mall: sin umbral (${esc(CONFIG.fuentesUmbral.mercado.toLowerCase())}).</li>
       <li>Educación: inicial ${CONFIG.umbrales.educacion.inicial} m, primaria ${CONFIG.umbrales.educacion.primaria} m, secundaria ${CONFIG.umbrales.educacion.secundaria} m (${esc(CONFIG.fuentesUmbral.educacion)}).</li>
       <li>Transporte: ${CONFIG.umbrales.transporte} m (${esc(CONFIG.fuentesUmbral.transporte.toLowerCase())}).</li>
       <li>Área verde: al menos ${CONFIG.umbrales.areaVerde.areaMinM2} m² a ${CONFIG.umbrales.areaVerde.distanciaM} m (${esc(CONFIG.fuentesUmbral.areaVerde)}).</li>
@@ -145,6 +146,9 @@
   const VARIABLES = {
     salud: { titulo: 'Salud', icono: 'salud' },
     consultorio: { titulo: 'Consultorio médico', icono: 'salud' },
+    mercado: { titulo: 'Mercado de abastos', icono: 'comercio' },
+    supermercado: { titulo: 'Supermercado', icono: 'comercio' },
+    mall: { titulo: 'Mall (centro comercial)', icono: 'comercio' },
     educacion: { titulo: 'Colegio', icono: 'colegio' },
     transporte: { titulo: 'Paradero', icono: 'paradero' },
     areaVerde: { titulo: 'Área verde', icono: 'verde' },
@@ -696,6 +700,7 @@
       const t = (r) => `${r.estado.toLowerCase()}${r.distanciaM !== null ? `, ${fmtDist(r.distanciaM)}` : ''}`;
       partes.push(`Salud: ${t(e.salud)}`);
       if (e.consultorio) partes.push(`Consultorio médico (informativo): ${e.consultorio.distanciaM !== null ? fmtDist(e.consultorio.distanciaM) : 'sin dato'}`);
+      Object.keys(Calculos.COMERCIO).forEach((id) => { if (e[id]) partes.push(`${Calculos.COMERCIO[id].etiqueta} (informativo): ${e[id].distanciaM !== null ? fmtDist(e[id].distanciaM) : 'sin dato'}`); });
       const niv = Equipamiento.NIVELES;
       partes.push(`Colegio: ${niv.filter((n) => e.educacion[n].estado === 'CUMPLE').length} de ${niv.length} niveles cumplen`);
       partes.push(`Paradero: ${t(e.transporte)}`);
@@ -1098,6 +1103,9 @@
   const QUE_NO_CUBRE = {
     salud: 'Cuenta los establecimientos de salud activos de RENIPRESS (SUSALUD) con categoría I-1 a III-E y coordenadas (hospitales, clínicas, centros y puestos de salud, policlínicos…), sin los consultorios médicos, que son otra categoría, y los de OpenStreetMap solo donde RENIPRESS no tiene un punto de salud a 200 m. Cerca del 42 % de los establecimientos de Arequipa en RENIPRESS no trae coordenadas y no puede contarse. No dice si atiende emergencias ni su horario, y la distancia es en línea recta, no recorrido a pie.',
     consultorio: 'Cuenta los consultorios médicos activos de RENIPRESS (SUSALUD) —su clasificación dice «consultorios»— y los de OpenStreetMap (amenity=doctors, healthcare=doctor) solo donde RENIPRESS no tiene un consultorio a 200 m. Tampoco trae las coordenadas de todos. No dice la especialidad, el horario ni si atiende al público.',
+    mercado: 'Cuenta los elementos de OpenStreetMap con amenity=marketplace, que incluye mercados de abastos, ferias y mercadillos: no distingue minorista de mayorista y puede faltar alguno (el censo de mercados de 2016 del INEI solo sirve para contar por distrito, no trae ubicaciones). Sin distancia de referencia.',
+    supermercado: 'Cuenta los elementos de OpenStreetMap con shop=supermarket, aparte de los mercados. No incluye tiendas de conveniencia ni bodegas, y puede faltar alguno. Sin distancia de referencia.',
+    mall: 'Cuenta los elementos de OpenStreetMap con shop=mall y los terrenos comerciales (landuse=retail) con nombre de mall o centro comercial; los malls conocidos de Arequipa se contrastan con la fuente de cada uno. Si OSM tiene el edificio, la distancia se mide hasta su borde. Sin distancia de referencia.',
     educacion: 'Cuenta los locales activos de educación básica regular del padrón de ESCALE (MINEDU), públicos y privados, con el nivel de cada institución. OpenStreetMap solo completa donde ESCALE no tiene un local del mismo nivel a 200 m, y allí casi no etiqueta el nivel: uno sin nivel se toma como candidato a primaria y secundaria. La ubicación es la del local que reportó la UGEL; no dice si hay vacantes.',
     transporte: 'Un paradero no es un servicio: el de OpenStreetMap no dice qué líneas lo usan, su horario ni su frecuencia, y las paradas informales (combis, micros) rara vez están completas.',
     rutas: 'Son los recorridos que SmartBus publicó en la fecha indicada, no un servicio garantizado: no traen frecuencias ni horarios, y un cambio de ruta por tramos puede no estar reflejado. La distancia es al trazado, no a donde se puede subir. Una línea de otra empresa que SmartBus no publica no aparece.',
@@ -1186,6 +1194,18 @@
       + (cons.error ? '' : cons.estado === 'SIN DATO' ? explicacion(cons, 'consultorios médicos') : `<p class="var-explica"><strong>Informativo.</strong> ${esc(Calculos.NOTA_CONSULTORIO.replace(/^Es informativo: /, ''))}</p>`)
       + etiq(cons) + detalleDato(cons, QUE_NO_CUBRE.consultorio), cons.estado === 'INFORMATIVO' ? 'Informativo' : null) : '';
 
+    // Mercado, supermercado y mall: categorías informativas (sin umbral): no suman al estado de nada. Del mall se mide la distancia al borde de su polígono.
+    const comercio = Object.keys(Calculos.COMERCIO).map((id) => {
+      const r = e[id];
+      if (!r) return '';
+      const def = Calculos.COMERCIO[id];
+      const verif = r.verificado ? `<p class="var-meta">Confirmado con <a href="${esc(r.verificado.url)}" target="_blank" rel="noopener">${esc(r.verificado.nombre)}</a> (${esc(r.verificado.entidad)}).</p>` : '';
+      return tarjetaVariable(VARIABLES[id], r.estado, lineaResumenInformativa(r),
+        datoPrincipal(r)
+        + (r.error ? '' : r.estado === 'SIN DATO' ? explicacion(r, def.plural) : `<p class="var-explica"><strong>Informativo.</strong> ${esc(Calculos.NOTA_COMERCIO.replace(/^Es informativo: /, ''))}</p>`)
+        + verif + detalleDato(r, QUE_NO_CUBRE[id]), r.estado === 'INFORMATIVO' ? 'Informativo' : null);
+    }).join('');
+
     const niveles = Equipamiento.NIVELES.map((n) => {
       const r = e.educacion[n];
       return `<div class="var-nivel">
@@ -1218,7 +1238,7 @@
       + `<p class="var-meta">Criterio: un área verde de al menos ${fmtNum(u.areaMinM2)} m² a ${u.distanciaM} m o menos.</p>` + sens
       + detalleDato(v, QUE_NO_CUBRE.areaVerde));
 
-    $('entorno').innerHTML = salud + consultorio + educacion + transporte + areaVerde + '<div id="card-quebradas"></div>';
+    $('entorno').innerHTML = salud + consultorio + comercio + educacion + transporte + areaVerde + '<div id="card-quebradas"></div>';
     renderQuebradas(); // llega aparte (archivo congelado de la ANA)
     $('entorno').setAttribute('aria-busy', 'false');
     $('entorno-toggle').hidden = false;
@@ -1531,6 +1551,7 @@
     const filas = [
       { v: VARIABLES.salud, r: e.salud, rotulo: 'Salud' },
       ...(e.consultorio ? [{ v: VARIABLES.consultorio, r: e.consultorio, rotulo: 'Consultorio médico' }] : []),
+      ...Object.keys(Calculos.COMERCIO).filter((id) => e[id]).map((id) => ({ v: VARIABLES[id], r: e[id], rotulo: Calculos.COMERCIO[id].etiqueta })),
       ...Equipamiento.NIVELES.map((n) => ({ v: VARIABLES.educacion, r: e.educacion[n], rotulo: `Colegio ${n}` })),
       { v: VARIABLES.transporte, r: e.transporte, rotulo: 'Paradero' },
       { v: VARIABLES.areaVerde, r: e.areaVerde, rotulo: 'Área verde' },
@@ -1598,6 +1619,7 @@
     if (e) {
       resumen.push(['Salud', linea(e.salud)]);
       if (e.consultorio) resumen.push(['Consultorio médico (informativo)', linea(e.consultorio)]);
+      Object.keys(Calculos.COMERCIO).forEach((id) => { if (e[id]) resumen.push([`${Calculos.COMERCIO[id].etiqueta} (informativo)`, linea(e[id])]); });
       Equipamiento.NIVELES.forEach((n) => resumen.push([`Educación ${n}`, linea(e.educacion[n])]));
       resumen.push(['Transporte', linea(e.transporte)]);
       if (e.transporte.rutas && !e.transporte.rutas.error) resumen.push(['Líneas de transporte', Rutas.resumen(e.transporte.rutas, 12)]);
@@ -1664,6 +1686,9 @@
       zonificacion_proyectada: avisoPDM,
       salud: state.entorno && state.entorno.salud,
       consultorio: state.entorno && state.entorno.consultorio, // informativo, sin umbral
+      mercado: state.entorno && state.entorno.mercado && { ...state.entorno.mercado, forma: undefined }, // informativo, sin umbral
+      supermercado: state.entorno && state.entorno.supermercado && { ...state.entorno.supermercado, forma: undefined }, // informativo, sin umbral
+      mall: state.entorno && state.entorno.mall && { ...state.entorno.mall, forma: undefined }, // informativo, sin umbral
       educacion: state.entorno && state.entorno.educacion,
       transporte: state.entorno && state.entorno.transporte,
       area_verde: state.entorno && state.entorno.areaVerde && { ...state.entorno.areaVerde, forma: undefined },

@@ -55,7 +55,7 @@ const AsistenteLLM = (() => {
         criterios: {
           type: 'array',
           items: { type: 'string', enum: CRITERIOS },
-          description: 'Lo que la persona quiere tener cerca (buscar) o los servicios por los que pregunta (servicio_cercano). colegio sin nivel = inicial o primaria. tranquilo, comercial e historico son aproximaciones con la zonificación.',
+          description: 'Lo que la persona quiere tener cerca (buscar) o los servicios por los que pregunta (servicio_cercano). colegio sin nivel = inicial o primaria. tranquilo, comercial (la zona comercial del plano, no un mall, un supermercado ni un mercado) e historico son aproximaciones con la zonificación.',
         },
         prioridades: {
           type: 'array',

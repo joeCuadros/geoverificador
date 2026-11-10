@@ -110,6 +110,32 @@ const Reporte = (() => {
     return `<table class="rp-tabla">${filas.join('')}</table><p class="rp-nota">${esc(CALC.NOTA_CONSULTORIO)} ${esc(r.metodo)}</p>`;
   }
 
+  /**
+   * Mercado, supermercado y mall más cercanos: categorías INFORMATIVAS (sin umbral, sin cumple / no cumple), una tabla por categoría.
+   * Del mall (o del mercado) con polígono la distancia es al borde. Un mall confirmado con su fuente la cita.
+   */
+  function comercio(d) {
+    const v = d.variables || {};
+    const bloques = Object.entries(CALC.COMERCIO).filter(([id]) => v[id]).map(([id, def]) => {
+      const r = v[id];
+      if (r.error) return `<p class="rp-muted"><strong>${esc(def.etiqueta)}</strong></p><table class="rp-tabla">${fila('Resultado', `No se pudo obtener el dato: ${esc(r.error)}`)}</table>`;
+      const filas = [fila(def.etiqueta, r.estado === 'SIN DATO' ? estado('SIN DATO') : estado('INFORMATIVO'))];
+      if (r.nombre) filas.push(fila('Más cercano', esc(r.nombre)));
+      filas.push(fila('Distancia', r.distanciaM === null ? 'Sin dato' : r.distanciaM === 0 ? 'El punto está dentro del terreno' : `${dist(r.distanciaM)} en línea recta${r.forma ? ' hasta su borde' : ''}`));
+      if (r.osm) filas.push(fila('Fuente', `OpenStreetMap (${esc(r.osm)})`));
+      if (r.verificado) filas.push(fila('Confirmado con', `${esc(r.verificado.nombre)}: ${esc(r.verificado.url)}`));
+      return `<table class="rp-tabla">${filas.join('')}</table>`;
+    });
+    const metodo = Object.keys(CALC.COMERCIO).map((id) => v[id] && v[id].metodo).find(Boolean);
+    return `${bloques.join('')}<p class="rp-nota">${esc(CALC.NOTA_COMERCIO)}${metodo ? ` ${esc(metodo)}` : ''}</p>`;
+  }
+
+  const hayComercio = (d) => Boolean(d.variables && Object.keys(CALC.COMERCIO).some((id) => d.variables[id]));
+  const fuenteComercio = (d) => {
+    const r = Object.keys(CALC.COMERCIO).map((id) => d.variables[id]).find((x) => x && x.fuente);
+    return r ? fuenteDe(r) : '';
+  };
+
   function educacion(d) {
     const e = d.variables && d.variables.educacion;
     if (!e) return sinResultado;
@@ -330,6 +356,7 @@ const Reporte = (() => {
       ['Zonificación vigente y proyectada', '#4f46e5', zonificacion(d), d.fuentes.zonificacion],
       ['Salud', '#c2410c', salud(d), d.variables ? fuenteDe(d.variables.salud) : ''],
       ...(d.variables && d.variables.consultorio ? [['Consultorio médico (informativo)', '#b45309', consultorio(d), fuenteDe(d.variables.consultorio)]] : []),
+      ...(hayComercio(d) ? [['Comercio: mercado, supermercado y mall (informativo)', '#be185d', comercio(d), fuenteComercio(d)]] : []),
       ['Educación por nivel', '#7c3aed', educacion(d), d.variables ? fuenteDe(d.variables.educacion.inicial) : ''],
       ['Transporte', '#1d4ed8', transporte(d), d.variables ? [fuenteDe(d.variables.transporte), d.variables.transporte.rutas && !d.variables.transporte.rutas.error ? `${d.variables.transporte.rutas.atribucion || 'Rutas: SmartBus (smartbus.app)'}` : ''].filter(Boolean).join('; ') : ''],
       ['Área verde', '#15803d', areaVerde(d), d.variables ? fuenteDe(d.variables.areaVerde) : ''],
@@ -355,6 +382,7 @@ const Reporte = (() => {
       'Todas las distancias son en línea recta, no recorrido a pie. Los umbrales de salud (1000 m), transporte (400 m) y borde de zona (20 m) son convenciones del proyecto; los de educación son distancias referenciales de las normas del MINEDU (RVM 104-2019 y 208-2019, numeral 7.1) y el de área verde es un indicador de la OMS Europa (2016), no una norma peruana.',
       'Los locales de ESCALE dicen su nivel. Los colegios de OpenStreetMap que completan el mapa casi no lo etiquetan: uno sin nivel se toma como candidato a primaria y secundaria, lo que puede sobrestimar la oferta de un nivel.',
       ...(d.variables && d.variables.consultorio ? ['El consultorio médico es una categoría aparte de los establecimientos de salud y es solo informativo: no tiene una distancia de referencia (es una decisión pendiente), así que no se dice si está cerca o lejos, no suma a ningún puntaje y no cuenta como «salud cerca».'] : []),
+      ...(hayComercio(d) ? ['Mercados, supermercados y malls son informativos: no tienen una distancia de referencia (es una decisión pendiente), así que no se dice si están cerca o lejos y no suman a ningún puntaje. Salen de OpenStreetMap, que puede no tenerlos todos (el censo de mercados de 2016 contó más mercados de los que hay mapeados) y no distingue un mercado de abastos de una feria; de un mall con forma en el mapa la distancia es al borde.'] : []),
       'Quebradas y cauces: no existe una distancia normativa a una quebrada, así que el estado es INFORMATIVO salvo que la persona fije su propio umbral («según tu umbral»). Los cauces vienen de la ANA, el IGP y OpenStreetMap; ninguna fuente es completa, no son un mapa de peligro y no delimitan la faja marginal.',
       'El contexto de riesgo (peligros geológicos de INGEMMET, sismos reportados por el IGP en el periodo indicado y zonas de peligro volcánico del Misti del IGP, de escala regional y sin fecha de elaboración, y el escenario de riesgo del CENEPRED ante El Niño, que es una estimación por distrito) es informativo: no es una evaluación del predio, no predice sismos, erupciones ni lluvias y que no haya registros o zonas no significa que el lugar sea seguro.',
       'El precio de oferta por m² del distrito (Aptología, CC BY 4.0) es informativo: son precios pedidos en avisos, no de cierre, y es la mediana del distrito, no el precio de este inmueble. Solo hay cifra en los distritos con al menos 30 avisos.',

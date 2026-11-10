@@ -1345,6 +1345,10 @@ summary { -webkit-tap-highlight-color: transparent; }
 .ent-salud span { background: #b0272b; border-radius: 4px; }
 .ent-consultorio span { background: #0f6b6b; border-radius: 50% 50% 4px 50%; }
 .ent-paradero span { background: #3b4a5a; border-radius: 12px 12px 4px 4px; }
+.ent-mercado span { background: #9a3412; border-radius: 4px 12px 4px 12px; }
+.ent-supermercado span { background: #065f46; border-radius: 4px; transform: rotate(45deg); }
+.ent-supermercado span::first-line { transform: rotate(-45deg); }
+.ent-mall span { background: #9d174d; border-radius: 4px; width: 28px; font-size: .625rem; }
 .leyenda-estados li.ley-item { display: flex; align-items: center; gap: 10px; }
 .muestra-ent { display: inline-flex; align-items: center; gap: 3px; min-width: 30px; flex: none; }
 .mu-ico { display: grid; place-items: center; width: 17px; height: 17px; border-radius: 50%; color: #fff; font: 800 .625rem/1 var(--font-body, system-ui, sans-serif); }
@@ -1354,6 +1358,9 @@ summary { -webkit-tap-highlight-color: transparent; }
 .mu-salud { background: #b0272b; border-radius: 3px; }
 .mu-consultorio { background: #0f6b6b; border-radius: 50% 50% 3px 50%; }
 .mu-paradero { background: #3b4a5a; border-radius: 8px 8px 3px 3px; }
+.mu-mercado { background: #9a3412; border-radius: 3px 8px 3px 8px; }
+.mu-supermercado { background: #065f46; border-radius: 3px; }
+.mu-mall { background: #9d174d; border-radius: 3px; width: 22px; font-size: .5rem; }
 .mu-bloque { display: inline-block; width: 20px; height: 12px; border-radius: 2px; opacity: .55; }
 .mu-linea { display: inline-block; width: 24px; height: 3px; background: #1f6fb2; border-radius: 2px; }
 .mu-linea-bus { display: inline-block; width: 24px; height: 4px; border-radius: 2px; }

@@ -123,10 +123,17 @@ describe('Asistente.textoDeConsulta', () => {
   });
 });
 
-describe('Asistente.interpretar: «centro comercial» en singular', () => {
-  it('se entiende igual que «centros comerciales» (antes solo reconocía el plural)', () => {
-    expect(ids(Asistente.interpretar('busco cerca de un centro comercial'))).toEqual(['comercial']);
-    expect(ids(Asistente.interpretar('busco cerca de centros comerciales'))).toEqual(['comercial']);
+describe('Asistente.interpretar: «centro comercial» ya no es la zona comercial del plano', () => {
+  it('un centro comercial (singular o plural) es un dato informativo propio, no un criterio de búsqueda (antes era un sustituto con la zona comercial del plano)', () => {
+    for (const t of ['busco cerca de un centro comercial', 'busco cerca de centros comerciales']) {
+      const i = Asistente.interpretar(t);
+      expect(ids(i)).toEqual([]);
+      expect(i.comercio).toEqual(['mall']);
+      expect(i.tipo).toBe('no_soportado');
+    }
+  });
+  it('«zona comercial» sigue siendo la zona del plano', () => {
+    expect(ids(Asistente.interpretar('busco una zona comercial'))).toEqual(['comercial']);
   });
 });
 

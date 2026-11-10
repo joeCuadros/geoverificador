@@ -78,6 +78,13 @@ const Entidades = (() => {
     return { total: lista.length, fuentes: porFuente(lista), lista };
   }
 
+  /** Los mercados, supermercados o malls del distrito (`id`: mercado | supermercado | mall; informativos): { total, fuentes, lista }. Un polígono cuenta por su centro. */
+  function contarComercio(datos, polys, id) {
+    const dentro = contenedor(polys);
+    const lista = (datos[C.COMERCIO[id].capa] || []).filter((p) => dentro(p.lat, p.lon));
+    return { total: lista.length, fuentes: porFuente(lista), lista };
+  }
+
   const ordenados = (lista) => lista.sort((a, b) => a.distanciaM - b.distanciaM);
 
   /**
@@ -196,7 +203,7 @@ const Entidades = (() => {
     return { conteo: contar(datos, polys, opciones), zonas: mezclaZonas(zonas, polys, opciones), cauces: caucesEnDistrito(cauces, polys) };
   }
 
-  return { enDistrito, contar, contarConsultorios, cercaDe, fraseColegios, contenedor, mezclaZonas, caucesEnDistrito, perfil, tipoDeZona, NIVELES };
+  return { enDistrito, contar, contarConsultorios, contarComercio, cercaDe, fraseColegios, contenedor, mezclaZonas, caucesEnDistrito, perfil, tipoDeZona, NIVELES };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = Entidades;
