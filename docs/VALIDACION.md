@@ -261,6 +261,33 @@ Opciones: `--radios=50,100,200` (m), `--umbral-nombre=0.9`, `--paso=500` (separa
 
 **Límites del método:** la precisión es una cota baja (un establecimiento real de OSM que el registro no incluye, o que se llama distinto, cuenta como no emparejado) y conviene revisar a mano una muestra de los no emparejados. Las coordenadas de ESCALE son las del local, reportadas por la UGEL, y pueden estar desplazadas. OSM etiqueta poco el nivel de los colegios: la ficha supone primaria y secundaria cuando no hay etiqueta, y este informe usa la misma regla. Si OSM no basta, la decisión posterior (a fijar por el equipo) es usar RENIPRESS y ESCALE como fuente primaria y mostrar la fuente y la fecha de cada dato.
 
+### 3.5 Mercados de OpenStreetMap frente al CENAMA 2016 (cobertura, 2026-11-10)
+
+**Qué se midió.** El Censo Nacional de Mercados de Abastos 2016 (INEI/PRODUCE) es una tabla anonimizada sin nombres ni coordenadas (`docs/METODOLOGIA.md` §6.5.5), así que **no se puede emparejar mercado con mercado ni medir exactitud de posición**. Solo se compara el conteo por distrito del censo (provincia de Arequipa: 89 mercados) con los elementos `amenity=marketplace` de OSM dentro de los distritos (89 tras unir repetidos), con el mismo recorte de la caja metropolitana. Resultado completo: `docs/validacion/cenama-cobertura.json` (`pnpm datos:comercio`).
+
+| Distrito | CENAMA 2016 | OSM |
+|---|---|---|
+| Alto Selva Alegre | 4 | 2 |
+| Arequipa | 8 | 20 |
+| Cayma | 6 | 6 |
+| Cerro Colorado | 13 | 8 |
+| Characato | 0 | 1 |
+| Jacobo Hunter | 4 | 3 |
+| José Luis Bustamante y Rivero | 19 | 26 |
+| La Joya | 2 | 0 |
+| Mariano Melgar | 5 | 3 |
+| Miraflores | 7 | 5 |
+| Paucarpata | 14 | 7 |
+| Sabandía | 0 | 1 |
+| Santa Rita de Siguas (fuera de los 25 distritos del proyecto) | 1 | 0 |
+| Socabaya | 1 | 0 |
+| Tiabaya | 1 | 1 |
+| Yanahuara | 2 | 4 |
+| Yura | 2 | 2 |
+| **Total** | **89** | **89** |
+
+**Cómo leerlo.** Los dos totales coinciden por casualidad, no por cobertura: **solo 3 de los 17 distritos de la tabla coinciden** (Cayma, Tiabaya y Yura). En 9 hay menos mercados en OSM que en el censo (Paucarpata 7 frente a 14, Cerro Colorado 8 frente a 13, Alto Selva Alegre, Mariano Melgar, Miraflores, Jacobo Hunter, Socabaya, La Joya y Santa Rita de Siguas) y en 5 hay más (Arequipa 20 frente a 8, José Luis Bustamante y Rivero 26 frente a 19, Yanahuara, y Characato y Sabandía, que el censo no registra). Una parte de lo que sobra son galerías, ferias y comercios que OSM etiqueta como mercado (hay cuatro «Botica Dermia»), pero no se revisó caso por caso. Tampoco son los mismos mercados: el censo es de 2016 y OSM de 2026. **Límites:** (1) el conteo no demuestra que sean los mismos mercados, ni que falte o sobre alguno; (2) el CENAMA solo cuenta mercados de abastos formales censados en 2016; (3) OSM etiqueta distinto (ferias, galerías); (4) no hay umbral de aceptación fijado antes de medir, así que no se declara «aprobado» ni «rechazado»: es una descripción. La conclusión que sí se sostiene es que **OSM no reproduce el censo por distrito**, de modo que el conteo de mercados por distrito del chat es el de OSM y lo dice.
+
 ## 4. Riesgos para la validez (amenazas conocidas)
 
 | Amenaza | Efecto | Qué se hace |

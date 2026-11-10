@@ -215,6 +215,9 @@ Descarga: `node scripts/descargar-delitos.mjs` → `public/data/delitos_aqp.geoj
 |---|---|---|---|
 | V2 Salud | RENIPRESS, categorías I-1 a III-E, **sin consultorios médicos** (§6.1); respaldo: `amenity=hospital, clinic` y `healthcare=*` salvo `doctor` | 1000 m | Convención del proyecto |
 | C1 Consultorio médico (informativo) | RENIPRESS, clasificación «consultorios» (§6.1); respaldo: `amenity=doctors` y `healthcare=doctor` | Ninguno: decisión pendiente | `CONFIG.umbrales.consultorio` es `null` y `CONFIG.fuentesUmbral.consultorio` lo dice |
+| C2 Mercado de abastos (informativo) | `amenity=marketplace` de OpenStreetMap (§6.5) | Ninguno: decisión pendiente | `CONFIG.umbrales.mercado` es `null`; propuesta: ninguna verificada en metros (§6.5.6) |
+| C3 Supermercado (informativo) | `shop=supermarket` de OpenStreetMap (§6.5) | Ninguno: decisión pendiente | `CONFIG.umbrales.supermercado` es `null` (§6.5.6) |
+| C4 Mall (informativo) | `shop=mall` y terrenos o edificios comerciales con nombre de mall, de OpenStreetMap, con la lista curada de malls confirmados con su fuente; distancia al borde del polígono (§6.5) | Ninguno: decisión pendiente | `CONFIG.umbrales.mall` es `null` (§6.5.6) |
 | V3 Educación inicial | ESCALE, niveles `A1`, `A2` y `A3` (§6.2); respaldo: `amenity=kindergarten`; `amenity=school` con `isced:level=0` o `school=kindergarten` | 500 m | MINEDU, numeral 7.1, Cuadro N.° 1 (RVM 104-2019 para inicial; RVM 208-2019 para primaria y secundaria; distancias referenciales) |
 | V3 Educación primaria | ESCALE, nivel `B0`; respaldo: `amenity=school` con `isced:level=1` o `school=primary`; sin etiqueta de nivel | 1500 m | ídem |
 | V3 Educación secundaria | ESCALE, nivel `F0`; respaldo: `amenity=school` con `isced:level=2 o 3` o `school=secondary`; sin etiqueta de nivel | 3000 m | ídem |
@@ -283,6 +286,61 @@ Entra **todo** punto oficial. De OpenStreetMap se añade un elemento solo si **n
 - **OpenStreetMap:** ODbL, © colaboradores de OpenStreetMap.
 
 La ficha, los popups del mapa, el chat y el informe imprimible dicen de qué fuente es cada establecimiento y su código («RENIPRESS (SUSALUD) · código 00001231 · categoría I-3»; «ESCALE (MINEDU) · código modular 0100001 · pública»; «OpenStreetMap (respaldo: no hay un punto oficial cerca) · node/…»). Las pruebas están en `test/equipamiento-fuentes.spec.ts` y `test/fuentes-visualizacion.spec.ts`.
+
+### 6.5 Mercados, supermercados y malls (informativos)
+
+Tres categorías nuevas, **solo informativas** como el consultorio: la ficha, el mapa (una capa propia, con su icono y su leyenda), el chat y el informe dan el más cercano y su distancia con el estado `INFORMATIVO` (o `SIN DATO`), sin decir cumple ni no cumple, sin efecto en el puntaje ni en la búsqueda de zonas del asistente. `CONFIG.umbrales.mercado`, `supermercado` y `mall` son `null` (§6.5.4). Los datos los arma `pnpm datos:comercio` (`scripts/descargar-comercio.mjs`; lógica y pruebas en `scripts/lib/comercio.js`, `test/comercio.spec.ts` y `test/comercio-ui.spec.ts`).
+
+**6.5.1 Qué entra en cada categoría.** Las etiquetas están en `Calculos.FILTROS` (única definición: de ahí salen la consulta, la clasificación y la lista de la pantalla):
+
+| Categoría | Archivo | Etiquetas de OpenStreetMap |
+|---|---|---|
+| Mercado (de abastos) | `mercados.geojson` | `amenity=marketplace` |
+| Supermercado (aparte de los mercados) | `supermercados.geojson` | `shop=supermarket` |
+| Mall (centro comercial) | `malls.geojson` | `shop=mall`; y `landuse=retail` o `building=retail\|commercial` **con nombre** de mall (`mall`, `centro comercial`, `shopping`, `outlet` o el de un mall conocido de Arequipa) |
+
+La extracción es **una sola consulta a Overpass** para la caja de Arequipa metropolitana (la de `CONFIG.viewbox`), con tiempo máximo, reintentos de espera creciente, un User-Agent propio y la respuesta guardada en `.cache-comercio/` (fuera del repositorio, en `.gitignore`); `out geom` entrega puntos, vías y relaciones con su forma. Solo se conserva lo que cae dentro de los polígonos de los 25 distritos de `distritos_aqp.geojson`. Un mismo lugar mapeado dos veces (el cartel y el edificio, o el edificio y su terreno) cuenta una: dos elementos son el mismo si sus nombres coinciden (uno contiene al otro como palabras, o parecido ≥ 0,9) y están a 150 m o menos (a 30 m si alguno no tiene nombre); queda el polígono antes que el punto, y en los malls el edificio `shop=mall` antes que el terreno `landuse=retail`; el elemento descartado queda en `osm_asociados`. Cada elemento lleva `fuente` (`OSM`), `osm` (tipo/id), `nombre` (o `null` si OSM no lo tiene) y las etiquetas; el bloque `metadata` lleva la consulta, la fecha, la base de OSM, la licencia (ODbL), la regla y los conteos.
+
+**6.5.2 Polígonos y distancia al borde.** Donde OSM tiene el edificio o el terreno, el elemento es un polígono y la distancia se mide **hasta su borde** (0 si el punto está dentro), no hasta su centro (`Calculos.evaluarMasCercanoForma`, con la misma proyección local de las áreas verdes): medir al centro «cortaría» un mall de varias hectáreas y diría que está lejos cuando el punto está pegado a su entrada. En el mapa el polígono se dibuja y el marcador va en el centro de su caja.
+
+**6.5.3 Resultado de la extracción (2026-11-10).** Se consultó `overpass.openstreetmap.fr` (el script lo tiene como espejo de respaldo) porque `overpass-api.de` respondió HTTP 502 y 504 a todos los intentos durante más de una hora; **ese espejo tiene datos de OpenStreetMap al 2026-09-26**, más viejos que la copia de salud y educación (2026-10-28).
+
+| Categoría | Elementos de OSM | Tras unir repetidos | Con polígono | Sin nombre en OSM | Fuente |
+|---|---|---|---|---|---|
+| Mercados | 94 | **89** | 58 | 16 | OSM 89 |
+| Supermercados | 35 | **32** | 4 | 3 | OSM 32 |
+| Malls | 54 | **51** | 28 | 2 | OSM 51 |
+
+Cuatro advertencias sobre lo que OSM etiqueta así (no se corrigieron a mano, para que el archivo siga siendo reproducible):
+
+- `shop=mall` incluye, junto a Real Plaza o Mall Aventura, **galerías y centros comerciales pequeños** (en el centro hay decenas, muchas como un punto), y el «mall más cercano» al centro de la ciudad es una galería (Unicentro, a unos 150 m de la Plaza de Armas). Por eso cada resultado de la ficha, del chat y del informe da **también el mall confirmado más cercano** (`mallVerificado`, de la lista de abajo) y avisa que el otro puede ser una galería.
+- `amenity=marketplace` incluye ferias y comercios mal etiquetados (cuatro puntos «Botica Dermia») y no distingue mercados minoristas de mayoristas.
+- Mallplaza Arequipa no figura en OSM con una etiqueta que lo clasifique como mall (ni como `shop=mall` ni como terreno o edificio comercial con su nombre): no se dibuja ni se mide. No se le inventó una ubicación.
+- La caja es la de Arequipa metropolitana: lo que queda fuera de ella (La Joya, Santa Rita de Siguas) no está.
+
+**6.5.4 Lista curada de malls (verificados el 2026-11-10).** Cada mall se contrasta con la fuente de su operador y con OpenStreetMap; la fuente confirma que existe y dónde está, pero **la ubicación y la forma son siempre las de OSM** (si OSM no lo tiene, no se dibuja). Quedan en `malls.geojson` → `metadata.curados`:
+
+| Mall | Dirección según su fuente | Fuente (enlace) | En OSM |
+|---|---|---|---|
+| Mall Aventura Arequipa | Av. Porongoche N.° 500, Paucarpata | Sitio oficial: https://mallaventura.pe/arequipa/ | Sí, polígono `way/437694283` («Mall Aventura Plaza») |
+| Real Plaza Arequipa | Av. Ejército N.° 1009, Cayma | Sitio oficial: https://www.realplaza.com/arequipa | Sí, polígono `way/285363096` |
+| Mallplaza Arequipa | Av. Ejército 793, Cayma | Sitio oficial: https://www.mallplaza.com/pe/arequipa | **No** |
+| OutletArauco Arequipa (antes Parque Lambramani) | Av. Los Incas, Arequipa | Sitio oficial: https://arequipa.outletarauco.pe/ (`parquelambramani.com` redirige a él; según Peru Retail, 2024, es el Parque Lambramani remodelado) | Sí, polígono `way/320096861` |
+| Arequipa Center | Av. Aviación 602, Cerro Colorado | **Solo prensa**: Peru Retail, 2018-10-16, https://www.peru-retail.com/centros-comerciales-arequipa/ (Cencosud); no se encontró un sitio oficial | Sí, polígono `way/327630517` |
+
+«Mall Plaza Cayma» no existe con ese nombre: el centro comercial de Cayma de esa empresa es Mallplaza Arequipa, de la lista. Peru Retail menciona un «Mall Aventura Plaza Cayma» (anunciado); no está en OSM ni se verificó con una fuente actual, así que no está en la lista.
+
+**6.5.5 El Censo Nacional de Mercados de Abastos 2016 (CENAMA).** Fuente: INEI (levantamiento del 2016-11-24 al 2017-01-16) a pedido del Ministerio de la Producción, publicado por PRODUCE en datosabiertos.gob.pe (licencia ODC-By): https://www.datosabiertos.gob.pe/dataset/censo-nacional-de-mercado-de-abastos-cenama-2016-ministerio-de-la-producci%C3%B3n-produce, archivo `dat_cenamav3.csv` (barra vertical), con su diccionario y metadatos. **Es una tabla anonimizada: 2 612 mercados del país, sin nombre, dirección ni coordenadas** (solo departamento, provincia, distrito, ubigeo, tipo de mercado, año de inicio, puestos, servicios, trabajadores e ingresos; el identificador es un hash). No sirve como fuente primaria de ubicación ni se puede emparejar un mercado con otro; se usa **solo para medir cobertura**: cuántos mercados había por distrito en 2016 frente a cuántos tiene OSM. La provincia de Arequipa tiene **89 mercados** (64 minoristas, 24 mixtos y 1 mayorista). Resultado completo en `docs/validacion/cenama-cobertura.json` y en `docs/VALIDACION.md` §3.5. Los microdatos en Stata del INEI (https://proyectos.inei.gob.pe/microdatos/) que menciona la ficha del dataset no se revisaron.
+
+**6.5.6 Umbrales: PROPUESTA, no decisión.** El valor es una decisión de la persona responsable del proyecto y no hay uno por omisión. Lo que se buscó y lo que se encontró:
+
+- **Sistema Nacional de Estándares de Urbanismo (MVCS, 2011).** Lo que circula con ese nombre es el *Documento de trabajo, Propuesta Preliminar* (febrero de 2011, Ministerio de Vivienda, Construcción y Saneamiento): no se encontró el PDF en vivienda.gob.pe, solo copias de terceros (la leída: https://pdfcoffee.com/sistema-nacional-de-estandares-de-urbanismodoc-3-pdf-free.html, sin paginación). En el capítulo de equipamiento comercial **no fija un radio de influencia en metros**: dice que, aunque existen dos fuentes (el SISNE anterior y el RNE), no hay un estándar específico para el equipamiento comercial —el SISNE anterior «no responde a la realidad actual» y el RNE se refiere sobre todo a establecimientos privados—, y reúne indicadores de **población por equipamiento**, tomados de la Sociedad de Urbanistas del Perú para Lima (mercado barrial 8 800 hab.; núcleo comercial complementario 35 200 hab.; y 300 000 y 600 000 hab. para el comercio interdistrital y el centro comercial metropolitano, en el orden en que salen en la copia, que perdió el formato de la tabla). Define el radio de influencia solo como concepto («depende de la movilidad, el clima, la geografía, la densidad…»). Una cifra de «16 m para un mercado barrial» y «80 m para una feria» que circula en una presentación de terceros (equipamiento urbano de Cutervo) **no aparece** en la copia revisada y no se usa.
+- **Reglamento Nacional de Edificaciones, Norma A.070 «Comercio».** Define tienda, mercado minorista y mayorista, supermercado, centro comercial, y fija aforo y estacionamientos; **no fija distancias de cercanía**.
+- **Otros países.** El mismo documento toma como referencia el Sistema Normativo de Equipamiento Urbano de SEDESOL (México), pero en la copia revisada la tabla de comercio no trae cifras legibles y no se encontró el original; no son normas peruanas y no se propone ninguna cifra de ahí.
+
+**Conclusión: no hay una referencia verificada en metros que proponer** para mercado, supermercado ni mall. La alternativa que sí tiene fuente es la contraria: indicadores de población por equipamiento (cuántos habitantes por mercado), que se podrían calcular por distrito pero que **no** son una distancia. Hasta que la persona fije un valor y su fuente, `CONFIG.umbrales.mercado`, `supermercado` y `mall` son `null` y las tres categorías son informativas.
+
+**En el chat.** «¿Hay un mall y un mercado cerca de mi punto?» y «¿cuántos mercados hay en Cayma?» las responde el motor de reglas (no se mandan al modelo de lenguaje) con el más cercano y su fuente, o el total por distrito, y dicen que es informativo. «Busco una zona cerca de un mall» no se puede y lo dice; en una búsqueda con otros criterios se busca sin ellos y se avisa. Se **quitó el sustituto anterior**: «mall», «centro comercial» y «supermercado» ya no significan «cerca de una zona comercial del plano de zonificación»; la zona comercial del plano sigue siendo el criterio `comercial` (aproximado) solo cuando la frase dice «zona comercial», «comercio», «tiendas» o «compras».
 
 ## 6b. Zonificación: alerta de borde y PDM proyectado (V1a y V1b)
 
@@ -370,6 +428,7 @@ Las filas de peligros (módulo), zona sísmica, denuncias y riesgos corresponden
 npm install
 npm run datos:extraer                 # OpenStreetMap, una consulta: transporte, áreas verdes y la copia de respaldo en equipamiento/osm
 npm run datos:oficial                 # RENIPRESS y ESCALE + respaldo de OSM -> public/data/equipamiento/{salud,educacion}.geojson
+npm run datos:comercio                # mercados, supermercados y malls (una consulta a Overpass, con caché) + CENAMA 2016 -> public/data/equipamiento/{mercados,supermercados,malls}.geojson y docs/validacion/cenama-cobertura.json
 node --use-system-ca scripts/descargar-peligros.mjs   # public/data/peligros_aqp.geojson (no sobrescribe un archivo con más registros)
 node scripts/descargar-quebradas.mjs  # public/data/quebradas_aqp.geojson (ANA, IGP y OpenStreetMap)
 node scripts/descargar-peligro-volcanico.mjs  # public/data/peligro_volcanico_misti.geojson (IGP)
