@@ -25,9 +25,9 @@
   "distritos": 25,
   "manzanas": 31277,
   "con_datos": 11250,
-  "viviendas": 264564,
-  "ocupadas": 221676,
-  "personas": 894354,
+  "viviendas": 261067,
+  "ocupadas": 219013,
+  "personas": 885018,
   "bytes": 11333806
  },
  "distritos": [
@@ -43,10 +43,14 @@
    ],
    "manzanas": 826,
    "con_datos": 488,
-   "sin_poligono_en_redatam": 5,
-   "viviendas": 16998,
-   "ocupadas": 13427,
-   "personas": 51543,
+   "sin_poligono_en_redatam": {
+    "manzanas": 5,
+    "viviendas": 220,
+    "personas": 577
+   },
+   "viviendas": 16778,
+   "ocupadas": 13264,
+   "personas": 50966,
    "fuera_de_manzana": {
     "filas": 16,
     "viviendas": 1272,
@@ -67,10 +71,14 @@
    ],
    "manzanas": 2107,
    "con_datos": 873,
-   "sin_poligono_en_redatam": 3,
-   "viviendas": 20282,
-   "ocupadas": 17542,
-   "personas": 75194,
+   "sin_poligono_en_redatam": {
+    "manzanas": 3,
+    "viviendas": 53,
+    "personas": 142
+   },
+   "viviendas": 20229,
+   "ocupadas": 17501,
+   "personas": 75052,
    "fuera_de_manzana": {
     "filas": 28,
     "viviendas": 8447,
@@ -91,10 +99,14 @@
    ],
    "manzanas": 2451,
    "con_datos": 1151,
-   "sin_poligono_en_redatam": 6,
-   "viviendas": 25184,
-   "ocupadas": 20695,
-   "personas": 80273,
+   "sin_poligono_en_redatam": {
+    "manzanas": 6,
+    "viviendas": 128,
+    "personas": 382
+   },
+   "viviendas": 25056,
+   "ocupadas": 20587,
+   "personas": 79891,
    "fuera_de_manzana": {
     "filas": 35,
     "viviendas": 7937,
@@ -115,10 +127,14 @@
    ],
    "manzanas": 5809,
    "con_datos": 2398,
-   "sin_poligono_en_redatam": 27,
-   "viviendas": 53148,
-   "ocupadas": 43462,
-   "personas": 161842,
+   "sin_poligono_en_redatam": {
+    "manzanas": 27,
+    "viviendas": 739,
+    "personas": 1814
+   },
+   "viviendas": 52409,
+   "ocupadas": 42882,
+   "personas": 160028,
    "fuera_de_manzana": {
     "filas": 76,
     "viviendas": 27083,
@@ -139,10 +155,14 @@
    ],
    "manzanas": 699,
    "con_datos": 138,
-   "sin_poligono_en_redatam": 8,
-   "viviendas": 2922,
-   "ocupadas": 1994,
-   "personas": 7120,
+   "sin_poligono_en_redatam": {
+    "manzanas": 8,
+    "viviendas": 204,
+    "personas": 461
+   },
+   "viviendas": 2718,
+   "ocupadas": 1863,
+   "personas": 6659,
    "fuera_de_manzana": {
     "filas": 9,
     "viviendas": 3483,
@@ -163,7 +183,11 @@
    ],
    "manzanas": 258,
    "con_datos": 21,
-   "sin_poligono_en_redatam": 0,
+   "sin_poligono_en_redatam": {
+    "manzanas": 0,
+    "viviendas": 0,
+    "personas": 0
+   },
    "viviendas": 323,
    "ocupadas": 245,
    "personas": 1022,
@@ -187,10 +211,14 @@
    ],
    "manzanas": 1040,
    "con_datos": 503,
-   "sin_poligono_en_redatam": 9,
-   "viviendas": 11003,
-   "ocupadas": 9788,
-   "personas": 44795,
+   "sin_poligono_en_redatam": {
+    "manzanas": 9,
+    "viviendas": 154,
+    "personas": 471
+   },
+   "viviendas": 10849,
+   "ocupadas": 9664,
+   "personas": 44324,
    "fuera_de_manzana": {
     "filas": 13,
     "viviendas": 2101,
@@ -211,10 +239,14 @@
    ],
    "manzanas": 2079,
    "con_datos": 324,
-   "sin_poligono_en_redatam": 2,
-   "viviendas": 6157,
-   "ocupadas": 4967,
-   "personas": 17189,
+   "sin_poligono_en_redatam": {
+    "manzanas": 2,
+    "viviendas": 45,
+    "personas": 105
+   },
+   "viviendas": 6112,
+   "ocupadas": 4931,
+   "personas": 17084,
    "fuera_de_manzana": {
     "filas": 31,
     "viviendas": 11699,
@@ -235,10 +267,14 @@
    ],
    "manzanas": 1483,
    "con_datos": 590,
-   "sin_poligono_en_redatam": 4,
-   "viviendas": 13815,
-   "ocupadas": 11963,
-   "personas": 49990,
+   "sin_poligono_en_redatam": {
+    "manzanas": 4,
+    "viviendas": 88,
+    "personas": 240
+   },
+   "viviendas": 13727,
+   "ocupadas": 11896,
+   "personas": 49750,
    "fuera_de_manzana": {
     "filas": 22,
     "viviendas": 6762,
@@ -259,10 +295,14 @@
    ],
    "manzanas": 908,
    "con_datos": 543,
-   "sin_poligono_en_redatam": 1,
-   "viviendas": 15810,
-   "ocupadas": 13654,
-   "personas": 56604,
+   "sin_poligono_en_redatam": {
+    "manzanas": 1,
+    "viviendas": 45,
+    "personas": 186
+   },
+   "viviendas": 15765,
+   "ocupadas": 13610,
+   "personas": 56418,
    "fuera_de_manzana": {
     "filas": 15,
     "viviendas": 2026,
@@ -283,10 +323,14 @@
    ],
    "manzanas": 359,
    "con_datos": 29,
-   "sin_poligono_en_redatam": 7,
-   "viviendas": 943,
-   "ocupadas": 638,
-   "personas": 1668,
+   "sin_poligono_en_redatam": {
+    "manzanas": 7,
+    "viviendas": 230,
+    "personas": 412
+   },
+   "viviendas": 713,
+   "ocupadas": 486,
+   "personas": 1256,
    "fuera_de_manzana": {
     "filas": 3,
     "viviendas": 1733,
@@ -307,10 +351,14 @@
    ],
    "manzanas": 2703,
    "con_datos": 1266,
-   "sin_poligono_en_redatam": 16,
-   "viviendas": 28421,
-   "ocupadas": 25254,
-   "personas": 117375,
+   "sin_poligono_en_redatam": {
+    "manzanas": 16,
+    "viviendas": 632,
+    "personas": 1831
+   },
+   "viviendas": 27789,
+   "ocupadas": 24787,
+   "personas": 115544,
    "fuera_de_manzana": {
     "filas": 39,
     "viviendas": 7680,
@@ -331,7 +379,11 @@
    ],
    "manzanas": 61,
    "con_datos": 0,
-   "sin_poligono_en_redatam": 0,
+   "sin_poligono_en_redatam": {
+    "manzanas": 0,
+    "viviendas": 0,
+    "personas": 0
+   },
    "viviendas": 0,
    "ocupadas": 0,
    "personas": 0,
@@ -355,7 +407,11 @@
    ],
    "manzanas": 68,
    "con_datos": 0,
-   "sin_poligono_en_redatam": 0,
+   "sin_poligono_en_redatam": {
+    "manzanas": 0,
+    "viviendas": 0,
+    "personas": 0
+   },
    "viviendas": 0,
    "ocupadas": 0,
    "personas": 0,
@@ -379,10 +435,14 @@
    ],
    "manzanas": 442,
    "con_datos": 33,
-   "sin_poligono_en_redatam": 3,
-   "viviendas": 834,
-   "ocupadas": 551,
-   "personas": 1306,
+   "sin_poligono_en_redatam": {
+    "manzanas": 3,
+    "viviendas": 63,
+    "personas": 101
+   },
+   "viviendas": 771,
+   "ocupadas": 503,
+   "personas": 1205,
    "fuera_de_manzana": {
     "filas": 8,
     "viviendas": 3810,
@@ -403,7 +463,11 @@
    ],
    "manzanas": 262,
    "con_datos": 38,
-   "sin_poligono_en_redatam": 0,
+   "sin_poligono_en_redatam": {
+    "manzanas": 0,
+    "viviendas": 0,
+    "personas": 0
+   },
    "viviendas": 718,
    "ocupadas": 594,
    "personas": 2581,
@@ -427,10 +491,14 @@
    ],
    "manzanas": 871,
    "con_datos": 276,
-   "sin_poligono_en_redatam": 12,
-   "viviendas": 5530,
-   "ocupadas": 4473,
-   "personas": 18026,
+   "sin_poligono_en_redatam": {
+    "manzanas": 12,
+    "viviendas": 198,
+    "personas": 570
+   },
+   "viviendas": 5332,
+   "ocupadas": 4331,
+   "personas": 17456,
    "fuera_de_manzana": {
     "filas": 12,
     "viviendas": 2410,
@@ -451,7 +519,11 @@
    ],
    "manzanas": 70,
    "con_datos": 2,
-   "sin_poligono_en_redatam": 0,
+   "sin_poligono_en_redatam": {
+    "manzanas": 0,
+    "viviendas": 0,
+    "personas": 0
+   },
    "viviendas": 23,
    "ocupadas": 18,
    "personas": 64,
@@ -475,10 +547,14 @@
    ],
    "manzanas": 1760,
    "con_datos": 836,
-   "sin_poligono_en_redatam": 8,
-   "viviendas": 18103,
-   "ocupadas": 15074,
-   "personas": 64671,
+   "sin_poligono_en_redatam": {
+    "manzanas": 8,
+    "viviendas": 169,
+    "personas": 429
+   },
+   "viviendas": 17934,
+   "ocupadas": 14960,
+   "personas": 64242,
    "fuera_de_manzana": {
     "filas": 21,
     "viviendas": 4140,
@@ -499,10 +575,14 @@
    ],
    "manzanas": 575,
    "con_datos": 183,
-   "sin_poligono_en_redatam": 4,
-   "viviendas": 2928,
-   "ocupadas": 2583,
-   "personas": 11785,
+   "sin_poligono_en_redatam": {
+    "manzanas": 4,
+    "viviendas": 74,
+    "personas": 258
+   },
+   "viviendas": 2854,
+   "ocupadas": 2516,
+   "personas": 11527,
    "fuera_de_manzana": {
     "filas": 9,
     "viviendas": 1404,
@@ -523,10 +603,14 @@
    ],
    "manzanas": 830,
    "con_datos": 159,
-   "sin_poligono_en_redatam": 11,
-   "viviendas": 2686,
-   "ocupadas": 2344,
-   "personas": 9372,
+   "sin_poligono_en_redatam": {
+    "manzanas": 11,
+    "viviendas": 197,
+    "personas": 651
+   },
+   "viviendas": 2489,
+   "ocupadas": 2167,
+   "personas": 8721,
    "fuera_de_manzana": {
     "filas": 10,
     "viviendas": 2963,
@@ -547,10 +631,14 @@
    ],
    "manzanas": 403,
    "con_datos": 250,
-   "sin_poligono_en_redatam": 1,
-   "viviendas": 8501,
-   "ocupadas": 6796,
-   "personas": 23986,
+   "sin_poligono_en_redatam": {
+    "manzanas": 1,
+    "viviendas": 17,
+    "personas": 50
+   },
+   "viviendas": 8484,
+   "ocupadas": 6783,
+   "personas": 23936,
    "fuera_de_manzana": {
     "filas": 7,
     "viviendas": 570,
@@ -571,10 +659,14 @@
    ],
    "manzanas": 235,
    "con_datos": 5,
-   "sin_poligono_en_redatam": 1,
-   "viviendas": 146,
-   "ocupadas": 89,
-   "personas": 291,
+   "sin_poligono_en_redatam": {
+    "manzanas": 1,
+    "viviendas": 31,
+    "personas": 90
+   },
+   "viviendas": 115,
+   "ocupadas": 65,
+   "personas": 201,
    "fuera_de_manzana": {
     "filas": 5,
     "viviendas": 1742,
@@ -595,10 +687,14 @@
    ],
    "manzanas": 3786,
    "con_datos": 362,
-   "sin_poligono_en_redatam": 5,
-   "viviendas": 7300,
-   "ocupadas": 5555,
-   "personas": 18668,
+   "sin_poligono_en_redatam": {
+    "manzanas": 5,
+    "viviendas": 77,
+    "personas": 167
+   },
+   "viviendas": 7223,
+   "ocupadas": 5504,
+   "personas": 18501,
    "fuera_de_manzana": {
     "filas": 51,
     "viviendas": 27480,
@@ -619,10 +715,14 @@
    ],
    "manzanas": 1192,
    "con_datos": 782,
-   "sin_poligono_en_redatam": 5,
-   "viviendas": 22789,
-   "ocupadas": 19970,
-   "personas": 78989,
+   "sin_poligono_en_redatam": {
+    "manzanas": 5,
+    "viviendas": 133,
+    "personas": 399
+   },
+   "viviendas": 22656,
+   "ocupadas": 19856,
+   "personas": 78590,
    "fuera_de_manzana": {
     "filas": 18,
     "viviendas": 1077,

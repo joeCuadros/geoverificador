@@ -404,6 +404,10 @@ input[type="search"]:focus-visible, input[type="number"]:focus-visible, select:f
 .var-vacio { margin: 0; color: var(--ink-2); font-size: .9375rem; }
 .var-meta { margin: 0; font-size: .8125rem; line-height: 1.45; color: var(--muted); }
 .var-meta b { font-weight: 650; color: var(--ink-2); }
+.var-sub { margin: .75rem 0 .25rem; font-size: .8125rem; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; color: var(--muted); }
+.var-tabla { width: 100%; border-collapse: collapse; font-size: .9375rem; }
+.var-tabla th, .var-tabla td { padding: .3rem .25rem; text-align: left; border-bottom: 1px solid var(--line, rgba(127, 127, 127, .25)); }
+.var-tabla td { font-weight: 650; white-space: nowrap; text-align: right; }
 .var-rutas { display: grid; gap: 6px; padding-top: 10px; border-top: 1px solid var(--line); }
 .var-rutas-t { margin: 0; font-size: .9375rem; color: var(--ink-2); }
 .var-rutas-lista { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }

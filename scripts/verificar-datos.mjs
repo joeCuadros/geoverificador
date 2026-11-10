@@ -705,6 +705,78 @@ const dentro = (x, y, anillos) => vueltas(x, y, anillos[0]) && !anillos.slice(1)
   console.log(`INFO  Electricidad: ${f.length} concesiones (${Object.entries(m.conteo_por_concesionaria).map(([k, v]) => `${k} ${v}`).join(', ')}); descargado el ${m.fecha_descarga}; dentro de una concesión: ${dentroN} de ${N_E} puntos al azar de la caja`);
 }
 
+// B7c. Censo por manzana (INEI, REDATAM 2017; scripts/descargar-censo-servicios.mjs): los archivos y el módulo del navegador frente al número de vueltas.
+// Es INFORMATIVO: son cifras de la manzana en 2017, no de un predio.
+{
+  const CalcM = createRequire(import.meta.url)('../public/js/calculos.js');
+  const idx = json('data/censo/index.json');
+  const polisM = (g) => (g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : []);
+  comprobar('Censo: el índice trae el año (2017), la fuente INEI, los enlaces de REDATAM y del WFS, la fecha de descarga, el universo, los campos y lo que NO dice (el 2025)',
+    idx.anio_censo === 2017 && /INEI/.test(idx.fuente || '') && /^https:\/\/censos2017\.inei\.gob\.pe\//.test(idx.url_redatam || '') && /geoespacial\.inei\.gob\.pe/.test(idx.url_poligonos || '') && /^\d{4}-\d{2}-\d{2}$/.test(idx.fecha_descarga || '') && /ocupadas con personas presentes/.test(idx.universo || '') && /2025/.test(idx.no_dice || '') && ['id', 'v', 'h', 'p', 'o', 'l', 'ad', 'af', 'sd', 'sf'].every((k) => idx.campos[k]));
+  let manzanasN = 0;
+  let conDatosN = 0;
+  let incoherentesN = 0;
+  let idsRepetidos = 0;
+  let fueraDeCaja = 0;
+  let anillosMalos = 0;
+  let sumaPers = 0;
+  let sumaViv = 0;
+  const todas = new Map();
+  const vistos = new Set();
+  const tilesOk = idx.distritos.every((d) => {
+    const crudo = leer(`data/censo/${d.archivo}`);
+    const fc = JSON.parse(crudo);
+    const [w, s, e, n] = d.caja;
+    let pers = 0;
+    let viv = 0;
+    let con = 0;
+    for (const f of fc.features) {
+      const p = f.properties;
+      if (vistos.has(p.id)) idsRepetidos++;
+      vistos.add(p.id);
+      const ps = polisM(f.geometry);
+      if (!ps.length || !ps.every((q) => q.every((a) => a.length >= 4 && a[0][0] === a.at(-1)[0] && a[0][1] === a.at(-1)[1]))) anillosMalos++;
+      if (!ps.every((q) => q.every((a) => a.every(([x, y]) => x >= w && x <= e && y >= s && y <= n && x > -73 && x < -70 && y > -17.5 && y < -15.5)))) fueraDeCaja++;
+      if (typeof p.o === 'number') {
+        con++;
+        pers += p.p;
+        viv += p.v;
+        if (!(p.l <= p.o && p.ad + p.af <= p.o && p.sd + p.sf <= p.o && p.o <= p.v && p.l >= 0 && p.ad >= 0 && p.af >= 0 && p.sd >= 0 && p.sf >= 0)) incoherentesN++;
+      }
+      todas.set(p.id, f);
+    }
+    manzanasN += fc.features.length;
+    conDatosN += con;
+    sumaPers += pers;
+    sumaViv += viv;
+    return fc.features.length === d.manzanas && con === d.con_datos && pers === d.personas && viv === d.viviendas && fc.metadata.ubigeo === d.ubigeo && fc.metadata.anio === 2017;
+  });
+  comprobar('Censo: cada pieza por distrito coincide con el índice (manzanas, con cifras, viviendas, personas, ubigeo y año)', tilesOk && manzanasN === idx.totales.manzanas && conDatosN === idx.totales.con_datos && sumaPers === idx.totales.personas && sumaViv === idx.totales.viviendas, `${manzanasN} manzanas, ${conDatosN} con cifras`);
+  comprobar('Censo: las manzanas son polígonos con anillos cerrados dentro de la caja de su distrito, con idmanzana único', anillosMalos === 0 && fueraDeCaja === 0 && idsRepetidos === 0);
+  comprobar('Censo: en toda manzana con cifras, con alumbrado ≤ ocupadas, agua de red ≤ ocupadas, desagüe de red ≤ ocupadas y ocupadas ≤ viviendas contadas (nada negativo)', incoherentesN === 0);
+  comprobar('Censo: los distritos del índice son de la provincia de Arequipa y están en los límites del proyecto', idx.distritos.every((d) => /^0401\d\d$/.test(d.ubigeo)));
+  // La manzana de un punto: el módulo del navegador frente al número de vueltas, en 300 puntos al azar de la caja del Cercado.
+  const cercado = idx.distritos.find((d) => d.ubigeo === '040101');
+  const feats = JSON.parse(leer(`data/censo/${cercado.archivo}`)).features;
+  let discrepan = 0;
+  let dentroN = 0;
+  const N_C = 300;
+  for (let i = 0; i < N_C; i++) {
+    const lon = cercado.caja[0] + azar() * (cercado.caja[2] - cercado.caja[0]);
+    const lat = cercado.caja[1] + azar() * (cercado.caja[3] - cercado.caja[1]);
+    const ref = feats.find((f) => polisM(f.geometry).some((p) => dentro(lon, lat, p)));
+    const nav = CalcM.evaluarManzana({ lat, lon }, feats, { anio: 2017, cercanaM: 0.0001, minViviendas: 5 }); // cercanaM casi 0: solo «dentro»
+    const idNav = nav.modo === 'dentro' ? nav.manzana : null;
+    if (ref) dentroN++;
+    if ((ref ? ref.properties.id : null) !== idNav) discrepan++;
+  }
+  comprobar(`Censo: la manzana que contiene a ${N_C} puntos al azar del Cercado coincide con el número de vueltas`, discrepan === 0 && dentroN > 0, `${dentroN} dentro de alguna manzana, ${discrepan} discrepancias`);
+  const plaza = CalcM.evaluarManzana({ lat: -16.3989, lon: -71.5369 }, feats, { anio: 2017, cercanaM: 30, minViviendas: 5 });
+  comprobar('Censo: la Plaza de Armas de Arequipa cae en (o junto a) una manzana del Cercado', plaza.modo === 'dentro' || plaza.modo === 'cercana', `modo ${plaza.modo}, manzana ${plaza.manzana}`);
+  const fuera = idx.distritos.reduce((t, d) => ({ viv: t.viv + d.fuera_de_manzana.viviendas, per: t.per + d.fuera_de_manzana.personas }), { viv: 0, per: 0 });
+  console.log(`INFO  Censo 2017: ${idx.totales.distritos} distritos, ${idx.totales.manzanas} manzanas (${idx.totales.con_datos} con cifras), ${idx.totales.viviendas} viviendas y ${idx.totales.personas} personas en manzanas; fuera de manzana (sin polígono): ${fuera.viv} viviendas, ${fuera.per} personas; ${(idx.totales.bytes / 1048576).toFixed(1)} MB`);
+}
+
 // B7a. Peligro volcánico: el módulo del navegador frente a un recuento independiente (número de vueltas, sin índice de cajas).
 {
   const Vol = app('Volcan');

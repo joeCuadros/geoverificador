@@ -125,6 +125,8 @@ const CONFIG = {
     mall: null,          // pendiente de decisión del usuario; referencia propuesta: ninguna verificada
     // Electricidad: área de concesión de distribución (MINEM-DGE). INFORMATIVA: ninguna distancia aplica; dentro o fuera de una concesión no es una conexión.
     electricidad: null,
+    // Servicios de la manzana según el censo (alumbrado, agua y desagüe por red pública): INFORMATIVOS, sin umbral. Son cifras de un año de censo, no una norma.
+    censo: null,
     educacion: { inicial: 500, primaria: 1500, secundaria: 3000 }, // V3
     transporte: 400, // V4 (convención del proyecto)
     areaVerde: { distanciaM: 300, areaMinM2: 5000, areaGrandeM2: 10000 }, // V5: ≥ 0,5 ha a ≤ 300 m; sensibilidad: ≥ 1 ha
@@ -139,6 +141,7 @@ const CONFIG = {
     mercado: 'Sin umbral: pendiente de decisión del usuario; referencia propuesta: ninguna con fuente verificada en metros; se muestra solo como dato informativo',
     supermercado: 'Sin umbral: pendiente de decisión del usuario; referencia propuesta: ninguna con fuente verificada en metros; se muestra solo como dato informativo',
     mall: 'Sin umbral: pendiente de decisión del usuario; referencia propuesta: ninguna con fuente verificada en metros; se muestra solo como dato informativo',
+    censo: 'Sin umbral: son cifras del censo de la manzana (año 2017), no una distancia ni una norma; se muestran solo como dato informativo',
     electricidad: 'Sin umbral: no aplica una distancia de referencia; dentro o fuera de un área de concesión no es una conexión; se muestra solo como dato informativo',
     educacion: 'MINEDU, numeral 7.1, Cuadro N.° 1, distancias referenciales: inicial 500 m (RVM 104-2019-MINEDU), primaria 1500 m y secundaria 3000 m (RVM 208-2019-MINEDU)',
     transporte: 'Convención del proyecto',
@@ -173,6 +176,29 @@ const CONFIG = {
     separacionPuntosM: 600, // distancia mínima entre esos puntos
     radioAreaM: 3000,       // radio de la búsqueda con «cerca de mi punto» cuando no se dice cuánto
     umbralesZona: { campina: 500, comercial: 600, historico: 800 },
+  },
+
+  // Censo por MANZANA (INEI, REDATAM): alumbrado, agua y desagüe por red pública, viviendas y personas. Congelado por distrito con scripts/descargar-censo-servicios.mjs
+  // (pnpm datos:censo): un índice con la procedencia y una pieza por distrito que se carga solo cuando el punto cae en él. Es INFORMATIVO: cifras de la manzana en el
+  // año del censo, nunca «tu predio tiene». El censo de 2025 ya se levantó, pero el INEI solo ha publicado sus resultados por departamento (REDATAM 2025 y su
+  // geoservidor piden iniciar sesión), así que el único dato de 2025 que se usa es el del departamento, de la nota de prensa del INEI.
+  censo: {
+    indiceUrl: 'data/censo/index.json',
+    carpetaUrl: 'data/censo/',
+    anio: 2017,
+    manzanaCercanaM: 30, // un punto en la calle se asigna a la manzana más cercana si su borde está a esta distancia o menos (convención del proyecto)
+    minViviendasPct: 5, // con menos viviendas ocupadas no se da el porcentaje (señalaría a una vivienda; convención del proyecto, el INEI no lo suprime)
+    // Censos Nacionales 2025, departamento de Arequipa (viviendas particulares con ocupantes presentes), nota de prensa del INEI del 17-07-2026. Es el único dato de 2025 que usa el proyecto.
+    departamento2025: {
+      anio: 2025,
+      departamento: 'Arequipa',
+      aguaDentro: 71.8, // % con agua conectada a la red pública dentro de la vivienda
+      higienicoDentro: 69.6, // % con servicio higiénico conectado a la red pública dentro de la vivienda
+      alumbrado: 92.6, // % con alumbrado eléctrico por red pública
+      universo: 'viviendas particulares con ocupantes presentes',
+      fuente: 'INEI, Censos Nacionales 2025, nota de prensa del 17 de julio de 2026',
+      url: 'https://www.gob.pe/institucion/inei/noticias/1420177-censos-nacionales-2025-poblacion-total-de-arequipa-alcanza-1-millon-815-mil-habitantes',
+    },
   },
 
   // Equipamiento de OpenStreetMap: archivos congelados con scripts/extraer-equipamiento.mjs (pnpm datos:extraer).

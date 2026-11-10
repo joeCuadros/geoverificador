@@ -8,6 +8,8 @@
  * Cada resultado trae { estado, nombre, distanciaM, umbralM, fuente, fecha, metodo, ... } con estado
  * CUMPLE | NO CUMPLE | SIN DATO. Las distancias son en línea recta, no recorrido a pie.
  *
+ * Además, los servicios de la manzana según el censo (`censo`: alumbrado, agua y desagüe por red pública; INFORMATIVOS, cifras de 2017 de la manzana, no del predio).
+ *
  * Además, la electricidad (`electricidad`: ¿dentro de un área de concesión de distribución?, INFORMATIVA y sin umbral; una concesión no es una conexión).
  *
  * Además, las tres necesidades de comercio (`abastecimiento`, `compras_ocio`, `comercio_barrio`; ver Calculos.COMERCIO): INFORMATIVAS como el consultorio (sin umbral;
@@ -309,6 +311,43 @@ const Equipamiento = (() => {
     }
   }
 
+  // ------------------------------------------------------------- Censo por manzana
+
+  const jsonCensos = new Map(); // url → promesa con el JSON (o null si falta): el índice y las piezas por distrito se leen una sola vez
+  function leerJson(url) {
+    if (!jsonCensos.has(url)) {
+      jsonCensos.set(url, fetch(url).then((r) => (r.ok ? r.json() : null)).catch(() => null).then((d) => {
+        if (!d) jsonCensos.delete(url); // si falló, la próxima vez se reintenta
+        return d;
+      }));
+    }
+    return jsonCensos.get(url);
+  }
+
+  /**
+   * Los servicios de la manzana del punto según el censo (INEI, REDATAM): INFORMATIVO, sin respaldo en vivo. Lee el índice y SOLO la pieza del distrito cuya caja
+   * contiene el punto (un punto pegado al límite puede traer dos). Nunca rechaza. Son cifras de la manzana en el año del censo, no del predio.
+   */
+  async function censoPorManzana(punto) {
+    const c = CONFIG.censo;
+    const metodo = (indice) => `Se busca la manzana del censo ${c.anio} (INEI) que contiene el punto (o la más cercana a ${c.manzanaCercanaM} m o menos, si está en la calle) y se dan sus conteos de viviendas ocupadas con personas presentes: porcentaje con alumbrado eléctrico, agua y servicio higiénico por red pública. ${indice ? `Datos congelados de REDATAM, descargados el ${indice.fecha_descarga || 'sin fecha'}.` : 'No se encontró el archivo del censo por manzana.'} ${CONFIG.fuentesUmbral.censo}. Esto no dice cómo está un predio en particular ni cómo está hoy.`;
+    const opc = (indice, extra = {}) => ({ anio: c.anio, fuente: (indice && indice.fuente) || 'INEI, Censos Nacionales 2017 (REDATAM)', fecha: (indice && indice.fecha_descarga) || null, metodo: metodo(indice), cercanaM: c.manzanaCercanaM, minViviendas: c.minViviendasPct, ...extra });
+    try {
+      const indice = await leerJson(c.indiceUrl);
+      if (!indice || !Array.isArray(indice.distritos)) return Calculos.evaluarManzana(punto, [], opc(null, { motivoVacio: 'sin_archivo' }));
+      const mLat = c.manzanaCercanaM / ((Math.PI / 180) * Calculos.RADIO_TIERRA_M);
+      const mLon = mLat / Math.max(0.2, Math.cos((punto.lat * Math.PI) / 180));
+      const piezas = indice.distritos.filter((d) => punto.lon >= d.caja[0] - mLon && punto.lon <= d.caja[2] + mLon && punto.lat >= d.caja[1] - mLat && punto.lat <= d.caja[3] + mLat);
+      if (piezas.length === 0) return Calculos.evaluarManzana(punto, [], opc(indice, { motivoVacio: 'fuera_de_manzanas' }));
+      const cargadas = await Promise.all(piezas.map((d) => leerJson(`${c.carpetaUrl}${d.archivo}`)));
+      if (cargadas.some((x) => !x)) return Calculos.evaluarManzana(punto, [], opc(indice, { motivoVacio: 'sin_archivo' }));
+      return Calculos.evaluarManzana(punto, cargadas.flatMap((x) => x.features), opc(indice));
+    } catch (err) {
+      console.error('[Equipamiento] censo', err);
+      return Calculos.evaluarManzana(punto, [], opc(null, { motivoVacio: 'sin_archivo' }));
+    }
+  }
+
   /**
    * Evalúa las variables del equipamiento para el punto.
    * Devuelve { salud, consultorio, abastecimiento, compras_ocio, comercio_barrio (las tres necesidades de comercio, informativas: ver Calculos.COMERCIO; `abastecimiento.porTipo` trae el mercado y el supermercado más cercanos), electricidad (informativa: área de concesión eléctrica; ver Calculos.evaluarConcesion), educacion: { inicial, primaria, secundaria }, transporte, areaVerde }.
@@ -318,7 +357,7 @@ const Equipamiento = (() => {
   async function evaluar(lat, lon) {
     const punto = { lat, lon };
     const u = CONFIG.umbrales;
-    const [s, c, e, t, v, rutas, comercioNecesidades, elec] = await Promise.all([
+    const [s, c, e, t, v, rutas, comercioNecesidades, elec, cen] = await Promise.all([
       variable('salud', punto, salud, (m) => sinDato(m, u.salud)),
       consultorioCercano(punto),
       variable('educacion', punto, educacion, (m) => Object.fromEntries(NIVELES.map((n) => [n, sinDato(m, u.educacion[n])]))),
@@ -327,8 +366,9 @@ const Equipamiento = (() => {
       lineasCerca(punto),
       comercioPorNecesidad(punto),
       electricidadPorConcesion(punto),
+      censoPorManzana(punto),
     ]);
-    return { salud: s, consultorio: c, ...comercioNecesidades, electricidad: elec, educacion: e, transporte: { ...t, rutas }, areaVerde: v };
+    return { salud: s, consultorio: c, ...comercioNecesidades, electricidad: elec, censo: cen, educacion: e, transporte: { ...t, rutas }, areaVerde: v };
   }
 
   /**

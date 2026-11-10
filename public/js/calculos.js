@@ -667,6 +667,108 @@ const Calculos = (() => {
     return `Tu punto está fuera de las áreas de concesión de distribución eléctrica de los datos; la más cercana es la de ${r.concesionaria || 'una empresa'}, a ${distTxt(r.distanciaM)} de su borde. Eso no significa que no haya servicio: el registro puede tener los bordes poco precisos o no incluir alguna zona, y tampoco dice si un predio está conectado.`;
   }
 
+  // ------------------------------------------- Servicios de la manzana según el censo (alumbrado, agua, desagüe)
+
+  /**
+   * Una sola redacción de qué dicen y qué NO dicen las cifras del censo por manzana, para la ficha, el chat y el informe. Son cifras de una manzana en el
+   * año del censo (hoy 2017: el censo 2025 todavía no está abierto por manzana), no de un predio ni de hoy: nunca «tu predio tiene…».
+   */
+  const NOTA_CENSO = 'Es informativo: son cifras del Censo Nacional de 2017 (INEI) para toda la manzana, calculadas sobre las viviendas ocupadas con personas presentes que se censaron; no dicen si un predio en particular está conectado, ni cómo está hoy (han pasado años y la ciudad creció). El censo de 2025 ya se levantó, pero el INEI todavía no abre sus resultados por manzana. No suman al puntaje ni a la búsqueda de zonas.';
+
+  const bboxCache = new WeakMap();
+  function cajaGeometria(g) {
+    let b = bboxCache.get(g);
+    if (!b) {
+      b = [Infinity, Infinity, -Infinity, -Infinity];
+      for (const anillos of poligonosDe(g)) {
+        for (const [x, y] of anillos[0] || []) {
+          if (x < b[0]) b[0] = x;
+          if (y < b[1]) b[1] = y;
+          if (x > b[2]) b[2] = x;
+          if (y > b[3]) b[3] = y;
+        }
+      }
+      bboxCache.set(g, b);
+    }
+    return b;
+  }
+
+  const pctDe = (n, de, min) => (de >= min && de > 0 ? Math.round((1000 * n) / de) / 10 : null);
+
+  /** Las clases del mapa coroplético del censo (% de viviendas ocupadas con el servicio): el índice de una clase es su posición. */
+  const CLASES_CENSO = ['Menos de 50 %', '50 a 79 %', '80 a 94 %', '95 % o más'];
+  const claseCenso = (pct) => (pct === null || pct === undefined ? null : pct < 50 ? 0 : pct < 80 ? 1 : pct < 95 ? 2 : 3);
+
+  /**
+   * Los tres servicios de una manzana a partir de sus conteos (`o` ocupadas con personas presentes; `l` alumbrado; `ad` / `af` agua por red pública dentro / fuera de
+   * la vivienda pero dentro de la edificación; `sd` / `sf` ídem desagüe): { pocas, luz: { n, pct }, agua: { dentro, fuera, n, pct, pctDentro }, desague: { … } }.
+   * Con menos de `minViviendas` ocupadas no se da el porcentaje (null).
+   */
+  function serviciosDeManzana(p, minViviendas = 5) {
+    const serv = (dentro, fuera) => ({ dentro, fuera, n: dentro + fuera, pct: pctDe(dentro + fuera, p.o, minViviendas), pctDentro: pctDe(dentro, p.o, minViviendas) });
+    return { pocas: p.o < minViviendas, luz: { n: p.l, pct: pctDe(p.l, p.o, minViviendas) }, agua: serv(p.ad, p.af), desague: serv(p.sd, p.sf) };
+  }
+
+  /**
+   * ¿En qué manzana del censo cae el punto y qué dicen sus cifras? Puro y sin umbral: INFORMATIVO (o SIN DATO).
+   *   features: [Feature Polygon / MultiPolygon { properties { id, v, h, p, o, l, ad, af, sd, sf } }]  (los campos de scripts/descargar-censo-servicios.mjs)
+   *   opciones: { anio, fuente, fecha, metodo, cercanaM = 30, minViviendas = 5, motivoVacio }
+   * Si el punto está dentro de un polígono, esa manzana (`modo: 'dentro'`). Si cae en la calle, la manzana más cercana a `cercanaM` m o menos
+   * (`modo: 'cercana'`, con la distancia al borde); más lejos, SIN DATO (fuera del área urbana censada).
+   * Porcentajes sobre `o` (viviendas ocupadas con personas presentes); con menos de `minViviendas` no se da el porcentaje (`pocas`): con 1 o 2 viviendas
+   * un porcentaje señalaría a una vivienda. Devuelve { estado, modo, distanciaM, manzana, anio, motivo, viviendas, hogares, personas, ocupadas, pocas,
+   * luz: { n, pct }, agua: { dentro, fuera, n, pct, pctDentro }, desague: { … }, umbralM, fuente, fecha, metodo }.
+   */
+  function evaluarManzana(punto, features, opciones = {}) {
+    const { anio = null, fuente = null, fecha = null, metodo = null, cercanaM = 30, minViviendas = 5, motivoVacio = 'sin_archivo' } = opciones;
+    const base = { umbralM: null, anio, fuente, fecha, metodo, modo: null, distanciaM: null, manzana: null, motivo: null, tieneCifras: false, viviendas: null, hogares: null, personas: null, ocupadas: null, pocas: false, luz: null, agua: null, desague: null };
+    const validos = (features || []).filter((f) => f && f.geometry && /^(Multi)?Polygon$/.test(f.geometry.type) && f.properties);
+    if (validos.length === 0) return { ...base, estado: 'SIN DATO', motivo: motivoVacio };
+    // La caja del punto agrandada `cercanaM` metros: lo que queda fuera no puede estar tan cerca.
+    const mLat = cercanaM / ((Math.PI / 180) * R);
+    const mLon = mLat / Math.max(0.2, Math.cos((punto.lat * Math.PI) / 180));
+    let mejor = null;
+    let mejorD = Infinity;
+    for (const f of validos) {
+      const b = cajaGeometria(f.geometry);
+      if (punto.lon < b[0] - mLon || punto.lon > b[2] + mLon || punto.lat < b[1] - mLat || punto.lat > b[3] + mLat) continue;
+      const d = distanciaAGeometriaM(punto.lat, punto.lon, f.geometry);
+      if (d < mejorD) { mejor = f; mejorD = d; if (d === 0) break; }
+    }
+    if (!mejor || mejorD > cercanaM) return { ...base, estado: 'SIN DATO', motivo: 'fuera_de_manzanas' };
+    const p = mejor.properties;
+    const r = { ...base, modo: mejorD === 0 ? 'dentro' : 'cercana', distanciaM: mejorD, manzana: p.id ?? null };
+    if (typeof p.o !== 'number') return { ...r, estado: 'SIN DATO', motivo: 'manzana_sin_cifras' };
+    return { ...r, estado: 'INFORMATIVO', tieneCifras: true, viviendas: p.v ?? null, hogares: p.h ?? null, personas: p.p ?? null, ocupadas: p.o, ...serviciosDeManzana(p, minViviendas) };
+  }
+
+  const pctTxt = (x) => `${String(x).replace('.', ',')} %`;
+
+  /** La frase sobre un resultado de evaluarManzana: de la manzana y del año del censo, nunca «tu predio tiene…». */
+  function textoCenso(r) {
+    if (!r || r.estado === 'SIN DATO' || !r.tieneCifras) {
+      const motivo = r && r.motivo;
+      if (motivo === 'fuera_de_manzanas') return 'Censo de población y vivienda: tu punto no cae en una manzana del censo (el INEI solo publica el área urbana).';
+      if (motivo === 'manzana_sin_cifras') return `Censo de población y vivienda: la manzana existe en el mapa del INEI pero el censo${r.anio ? ` ${r.anio}` : ''} no contó viviendas en ella, así que no hay cifras.`;
+      return 'Censo de población y vivienda: sin dato; no pude leer los archivos del censo por manzana.';
+    }
+    const donde = r.modo === 'cercana' ? `La manzana más cercana a tu punto (a ${Math.round(r.distanciaM)} m de su borde)` : 'En la manzana de tu punto';
+    if (r.pocas) return `${donde}, el censo ${r.anio} contó solo ${r.ocupadas} ${r.ocupadas === 1 ? 'vivienda ocupada' : 'viviendas ocupadas'}: son pocas para dar un porcentaje sin señalar a una vivienda, así que no lo muestro.`;
+    const aguaTxt = r.agua.pctDentro !== null && r.agua.pctDentro !== r.agua.pct ? `${pctTxt(r.agua.pct)} con agua por red pública (${pctTxt(r.agua.pctDentro)} dentro de la vivienda)` : `${pctTxt(r.agua.pct)} con agua por red pública`;
+    return `${donde}, el ${pctTxt(r.luz.pct)} de las ${r.ocupadas} viviendas ocupadas censadas en ${r.anio} tenía alumbrado eléctrico por red pública, el ${aguaTxt} y el ${pctTxt(r.desague.pct)} desagüe por red pública. Son cifras de ${r.anio} de la manzana, no de tu predio ni de hoy.`;
+  }
+
+  /**
+   * La frase del censo 2025 del DEPARTAMENTO (único dato de 2025 que usa el proyecto; `dep` es CONFIG.censo.departamento2025). Dice que es del departamento, no de la manzana.
+   * `cual`: 'luz' (alumbrado) o 'agua' (agua y servicio higiénico).
+   */
+  function textoCenso2025(dep, cual) {
+    if (!dep) return '';
+    const n = (x) => String(x).replace('.', ',');
+    const que = cual === 'luz' ? `el ${n(dep.alumbrado)} % tiene alumbrado eléctrico por red pública` : `el ${n(dep.aguaDentro)} % tiene agua conectada a la red pública dentro de la vivienda y el ${n(dep.higienicoDentro)} % servicio higiénico conectado a la red pública dentro de la vivienda`;
+    return `Para ubicarte: según el censo ${dep.anio}, en el departamento de ${dep.departamento} (${dep.universo}) ${que}. Es un dato del departamento (${dep.fuente}), no de tu manzana.`;
+  }
+
   /**
    * V5 Área verde: CUMPLE si hay un polígono de ≥ areaMinM2 a ≤ distanciaMaxM del punto (0 si el punto está dentro).
    * Indicador básico de la OMS Europa (2016): un espacio verde de al menos 0,5 ha a 300 m.
@@ -1073,6 +1175,13 @@ const Calculos = (() => {
     evaluarConcesion,
     textoElectricidad,
     NOTA_ELECTRICIDAD,
+    NOTA_CENSO,
+    evaluarManzana,
+    serviciosDeManzana,
+    claseCenso,
+    CLASES_CENSO,
+    textoCenso,
+    textoCenso2025,
   };
 })();
 

@@ -107,6 +107,7 @@
     <ul>
       <li>Salud: ${CONFIG.umbrales.salud} m (${esc(CONFIG.fuentesUmbral.salud.toLowerCase())}); solo establecimientos de salud.</li>
       <li>Consultorio médico: sin umbral (${esc(CONFIG.fuentesUmbral.consultorio.toLowerCase())}).</li>
+      <li>Servicios de la manzana según el censo (alumbrado, agua y desagüe por red pública): sin umbral (${esc(CONFIG.fuentesUmbral.censo.toLowerCase())}).</li>
       <li>Electricidad (área de concesión de distribución): sin umbral (${esc(CONFIG.fuentesUmbral.electricidad.toLowerCase())}).</li>
       <li>Abastecimiento (mercados y supermercados), compras y ocio (malls confirmados) y comercio de barrio (galerías): sin umbral (${esc(CONFIG.fuentesUmbral.abastecimiento.toLowerCase())}).</li>
       <li>Educación: inicial ${CONFIG.umbrales.educacion.inicial} m, primaria ${CONFIG.umbrales.educacion.primaria} m, secundaria ${CONFIG.umbrales.educacion.secundaria} m (${esc(CONFIG.fuentesUmbral.educacion)}).</li>
@@ -147,7 +148,7 @@
   const VARIABLES = {
     salud: { titulo: 'Salud', icono: 'salud' },
     consultorio: { titulo: 'Consultorio médico', icono: 'salud' },
-    electricidad: { titulo: 'Electricidad: área de concesión de distribución', icono: 'electricidad' },
+    electricidad: { titulo: 'Servicios básicos: luz, agua y desagüe', icono: 'electricidad' },
     abastecimiento: { titulo: 'Abastecimiento (comida): mercados y supermercados', icono: 'comercio' },
     compras_ocio: { titulo: 'Compras y ocio: malls', icono: 'comercio' },
     comercio_barrio: { titulo: 'Comercio de barrio: galerías', icono: 'comercio' },
@@ -702,6 +703,7 @@
       const t = (r) => `${r.estado.toLowerCase()}${r.distanciaM !== null ? `, ${fmtDist(r.distanciaM)}` : ''}`;
       partes.push(`Salud: ${t(e.salud)}`);
       if (e.consultorio) partes.push(`Consultorio médico (informativo): ${e.consultorio.distanciaM !== null ? fmtDist(e.consultorio.distanciaM) : 'sin dato'}`);
+      if (e.censo) partes.push(`Servicios de la manzana (censo ${e.censo.anio}, informativo): ${e.censo.tieneCifras && !e.censo.pocas ? `luz ${e.censo.luz.pct} %, agua ${e.censo.agua.pct} %, desagüe ${e.censo.desague.pct} %` : 'sin porcentaje'}`);
       if (e.electricidad) partes.push(`Electricidad (informativo): ${e.electricidad.dentro === null ? 'sin dato' : e.electricidad.dentro ? `dentro del área de concesión de ${e.electricidad.concesionarias.join(' y ')}` : `fuera de las áreas de concesión, a ${fmtDist(e.electricidad.distanciaM)} del borde`}`);
       Object.keys(Calculos.COMERCIO).forEach((id) => { if (e[id]) partes.push(`${Calculos.COMERCIO[id].etiqueta} (informativo): ${e[id].distanciaM !== null ? fmtDist(e[id].distanciaM) : 'sin dato'}`); });
       const niv = Equipamiento.NIVELES;
@@ -1106,6 +1108,7 @@
   const QUE_NO_CUBRE = {
     salud: 'Cuenta los establecimientos de salud activos de RENIPRESS (SUSALUD) con categoría I-1 a III-E y coordenadas (hospitales, clínicas, centros y puestos de salud, policlínicos…), sin los consultorios médicos, que son otra categoría, y los de OpenStreetMap solo donde RENIPRESS no tiene un punto de salud a 200 m. Cerca del 42 % de los establecimientos de Arequipa en RENIPRESS no trae coordenadas y no puede contarse. No dice si atiende emergencias ni su horario, y la distancia es en línea recta, no recorrido a pie.',
     consultorio: 'Cuenta los consultorios médicos activos de RENIPRESS (SUSALUD) —su clasificación dice «consultorios»— y los de OpenStreetMap (amenity=doctors, healthcare=doctor) solo donde RENIPRESS no tiene un consultorio a 200 m. Tampoco trae las coordenadas de todos. No dice la especialidad, el horario ni si atiende al público.',
+    censo: 'Son cifras del Censo Nacional de 2017 (INEI, REDATAM) de toda la manzana, sobre las viviendas particulares ocupadas con personas presentes que se censaron. No son de un predio ni de hoy: pasaron años y la ciudad creció. Solo cubre el área urbana; una manzana que el censo no contó queda sin cifras (no es un cero) y con menos de 5 viviendas ocupadas no se da el porcentaje. El censo de 2025 ya se levantó, pero el INEI todavía no abre sus resultados por manzana (REDATAM 2025 pide iniciar sesión): del 2025 solo se muestra el dato del departamento.',
     electricidad: 'Dice si el punto cae dentro de un polígono de concesión de distribución eléctrica del registro del MINEM (SEAL en Arequipa y, si toca la zona, otras empresas): a quién le corresponde dar el servicio ahí. NO dice si el predio está conectado, si hay red en la calle ni si el suministro es continuo; la cobertura real vendría de un censo que aún no tenemos. Los polígonos son poco detallados y su borde puede ser impreciso: un punto fuera no significa que no haya servicio.',
     abastecimiento: 'Cuenta los mercados (amenity=marketplace, que incluye mercados de abastos, ferias y mercadillos: no distingue minorista de mayorista) y los supermercados (shop=supermarket, sin tiendas de conveniencia ni bodegas) de OpenStreetMap, y puede faltar alguno (el censo de mercados de 2016 del INEI solo sirve para contar por distrito, no trae ubicaciones). Un supermercado dentro de un mall es el punto de abastecimiento; el mall, no. Sin distancia de referencia.',
     compras_ocio: 'Cuenta solo los malls confirmados con la fuente de cada uno (lista curada) que OpenStreetMap tiene ubicados; uno confirmado que OpenStreetMap no tiene (por ejemplo Mallplaza) no se mide. Si OpenStreetMap tiene el edificio, la distancia se mide hasta su borde. No cuenta las galerías ni los centros comerciales pequeños. Sin distancia de referencia.',
@@ -1201,7 +1204,8 @@
     // Electricidad: ¿dentro de un área de concesión de distribución? Informativa. Una concesión no es una conexión: nunca se dice «tiene luz».
     const el = e.electricidad;
     const nombreConc = (r) => (r.concesionarias && r.concesionarias.length ? r.concesionarias.join(' y ') : r.concesionaria || 'una empresa');
-    const electricidad = el ? tarjetaVariable(VARIABLES.electricidad, el.estado,
+    const bloqueElec = (estado, resumen, cuerpo) => ({ estado, resumen, cuerpo });
+    const concesion = el ? bloqueElec(el.estado,
       el.error ? 'No se pudo obtener el dato' : el.dentro === null ? 'Sin dato'
         : el.dentro ? `Dentro del área de concesión de ${nombreConc(el)} · no es una conexión`
           : `Fuera de las áreas de concesión · a ${fmtDist(el.distanciaM)} del borde de la de ${nombreConc(el)}`,
@@ -1213,7 +1217,31 @@
           : `<div class="var-dato"><p class="var-dist">${fmtDist(el.distanciaM)} <small>hasta el borde de la concesión más cercana</small></p><p class="var-nombre">${esc(nombreConc(el))}${el.nombre ? ` · ${esc(el.nombre)}` : ''}</p></div>`)
       + (el.dentro === null ? '' : `<p class="var-explica"><strong>Informativo.</strong> ${esc(Calculos.textoElectricidad(el))}</p>`)
       + `<p class="var-explica">${esc(Calculos.NOTA_ELECTRICIDAD)}</p>`
-      + detalleDato(el, QUE_NO_CUBRE.electricidad), el.estado === 'INFORMATIVO' ? 'Informativo' : null) : '';
+      + detalleDato(el, QUE_NO_CUBRE.electricidad)) : null;
+
+    // Censo por manzana (INEI, 2017): alumbrado, agua y desagüe por red pública de la MANZANA del punto. Informativo; nunca «tu predio tiene».
+    const ce = e.censo;
+    const dep25 = CONFIG.censo.departamento2025;
+    const pctC = (x) => (x === null || x === undefined ? '—' : `${String(x).replace('.', ',')} %`);
+    const resumenCenso = !ce ? '' : ce.estado === 'SIN DATO' || !ce.tieneCifras ? 'sin cifras para esta manzana'
+      : ce.pocas ? `solo ${ce.ocupadas} viviendas ocupadas (sin porcentaje)` : `luz ${pctC(ce.luz.pct)}, agua ${pctC(ce.agua.pct)}, desagüe ${pctC(ce.desague.pct)}`;
+    const censoHtml = !ce ? '' : `<h4 class="var-sub">Lo que dijo el censo de ${ce.anio} sobre tu manzana</h4>`
+      + (ce.tieneCifras && !ce.pocas
+        ? `<table class="var-tabla"><tbody>
+            <tr><th scope="row">Alumbrado eléctrico por red pública</th><td>${pctC(ce.luz.pct)}</td></tr>
+            <tr><th scope="row">Agua por red pública</th><td>${pctC(ce.agua.pct)}${ce.agua.pctDentro !== null && ce.agua.pctDentro !== ce.agua.pct ? ` <small>(${pctC(ce.agua.pctDentro)} dentro de la vivienda)</small>` : ''}</td></tr>
+            <tr><th scope="row">Desagüe por red pública</th><td>${pctC(ce.desague.pct)}${ce.desague.pctDentro !== null && ce.desague.pctDentro !== ce.desague.pct ? ` <small>(${pctC(ce.desague.pctDentro)} dentro de la vivienda)</small>` : ''}</td></tr>
+          </tbody></table>
+          <p class="var-meta">Sobre ${fmtNum(ce.ocupadas)} viviendas ocupadas con personas presentes (${fmtNum(ce.viviendas)} contadas, ${fmtNum(ce.personas)} personas) en la manzana ${esc(ce.manzana)}${ce.modo === 'cercana' ? `; tu punto está en la calle, a ${fmtDist(ce.distanciaM)} de su borde` : ''}. Censo ${ce.anio}, INEI.</p>`
+        : '')
+      + `<p class="var-explica"><strong>Informativo.</strong> ${esc(Calculos.textoCenso(ce))}</p>`
+      + `<p class="var-explica">${esc(Calculos.NOTA_CENSO.replace(/^Es informativo: /, ''))}</p>`
+      + (dep25 ? `<p class="var-meta"><b>Censo ${dep25.anio} (más reciente), departamento de ${esc(dep25.departamento)}:</b> ${pctC(dep25.alumbrado)} con alumbrado eléctrico, ${pctC(dep25.aguaDentro)} con agua de red pública dentro de la vivienda y ${pctC(dep25.higienicoDentro)} con servicio higiénico de red pública dentro de la vivienda (${esc(dep25.universo)}). Es un dato del departamento, no de tu manzana; <a href="${esc(dep25.url)}" target="_blank" rel="noopener">fuente: ${esc(dep25.fuente)}</a>.</p>` : '')
+      + detalleDato(ce, QUE_NO_CUBRE.censo);
+    const partesResumen = [concesion ? concesion.resumen : null, ce ? `manzana, censo ${ce.anio}: ${resumenCenso}` : null].filter(Boolean);
+    const hayInfo = (concesion && concesion.estado === 'INFORMATIVO') || (ce && ce.estado === 'INFORMATIVO');
+    const electricidad = concesion || ce ? tarjetaVariable(VARIABLES.electricidad, hayInfo ? 'INFORMATIVO' : 'SIN DATO', partesResumen.join(' · '),
+      (concesion ? `<h4 class="var-sub">Electricidad: área de concesión de distribución</h4>${concesion.cuerpo}` : '') + censoHtml, hayInfo ? 'Informativo' : null) : '';
 
     // Abastecimiento, compras y ocio, comercio de barrio: necesidades informativas (sin umbral): no suman al estado de nada. Del mall o la galería se mide la distancia al borde de su polígono.
     const dentroDe = (x) => (x && x.dentroDeMall ? `dentro de ${esc(x.dentroDeMall.nombre || 'un mall')}` : '');
@@ -1651,6 +1679,7 @@
     if (e) {
       resumen.push(['Salud', linea(e.salud)]);
       if (e.consultorio) resumen.push(['Consultorio médico (informativo)', linea(e.consultorio)]);
+      if (e.censo) resumen.push([`Servicios de la manzana (censo ${e.censo.anio}, informativo)`, e.censo.tieneCifras && !e.censo.pocas ? `Alumbrado ${e.censo.luz.pct} % · agua ${e.censo.agua.pct} % · desagüe ${e.censo.desague.pct} % de ${e.censo.ocupadas} viviendas ocupadas (manzana, no predio)` : 'Sin porcentaje para esta manzana']);
       if (e.electricidad) resumen.push(['Electricidad (informativo)', e.electricidad.dentro === null ? 'Sin dato' : `${e.electricidad.dentro ? `Dentro del área de concesión de ${e.electricidad.concesionarias.join(' y ')}` : `Fuera de las áreas de concesión; ${fmtDist(e.electricidad.distanciaM)} hasta el borde de la de ${e.electricidad.concesionaria || 'una empresa'}`} · no es una conexión`]);
       Object.keys(Calculos.COMERCIO).forEach((id) => { if (e[id]) resumen.push([`${Calculos.COMERCIO[id].etiqueta} (informativo)`, linea(e[id])]); });
       Equipamiento.NIVELES.forEach((n) => resumen.push([`Educación ${n}`, linea(e.educacion[n])]));
@@ -1690,6 +1719,7 @@
       potencial: zonaOk && lote > 0 ? Zonificacion.potencial(r, lote) : null,
       avisoPDM,
       variables: e,
+      departamento2025: CONFIG.censo.departamento2025, // único dato del censo 2025 que se usa (departamento)
       cauce: state.cauce,                 // quebradas: INFORMATIVO, o cumple / no cumple según el umbral de la persona
       contextoRiesgo: state.contextoRiesgo, // peligros geológicos y sismos (informativo)
       precio: state.precio,               // precio de oferta por m² del distrito (informativo, Aptología CC BY 4.0)
@@ -1719,6 +1749,7 @@
       zonificacion_proyectada: avisoPDM,
       salud: state.entorno && state.entorno.salud,
       consultorio: state.entorno && state.entorno.consultorio, // informativo, sin umbral
+      censo_manzana: state.entorno && state.entorno.censo, // informativo, sin umbral: cifras de la manzana en el año del censo (2017), no del predio
       electricidad: state.entorno && state.entorno.electricidad, // informativo, sin umbral: un área de concesión no es una conexión
       abastecimiento: state.entorno && state.entorno.abastecimiento && { ...state.entorno.abastecimiento, forma: undefined, porTipo: state.entorno.abastecimiento.porTipo && Object.fromEntries(Object.entries(state.entorno.abastecimiento.porTipo).map(([k, x]) => [k, { ...x, forma: undefined }])) }, // mercados + supermercados; informativo, sin umbral
       compras_ocio: state.entorno && state.entorno.compras_ocio && { ...state.entorno.compras_ocio, forma: undefined }, // solo malls confirmados con su fuente; informativo, sin umbral

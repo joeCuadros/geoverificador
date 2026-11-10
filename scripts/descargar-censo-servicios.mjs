@@ -155,19 +155,22 @@ async function main() {
     const sinPoligono = [...registros.keys()].filter((id) => !ids.has(id));
     const conDatos = features.filter((f) => f.properties.v !== undefined).length;
     const sumas = { viviendas: 0, ocupadas: 0, personas: 0 };
-    registros.forEach((r) => { sumas.viviendas += r.viv; sumas.ocupadas += r.ocup; sumas.personas += r.pers; });
+    const sinPoligonoSumas = { manzanas: sinPoligono.length, viviendas: 0, personas: 0 }; // manzanas que REDATAM cuenta y el WFS no dibuja: no se pueden mapear
+    registros.forEach((r) => {
+      if (ids.has(r.id)) { sumas.viviendas += r.viv; sumas.ocupadas += r.ocup; sumas.personas += r.pers; } else { sinPoligonoSumas.viviendas += r.viv; sinPoligonoSumas.personas += r.pers; }
+    });
     // Control cruzado: las manzanas + lo contado fuera de manzana suman el TOTAL que REDATAM da para el distrito.
     const iViv = cont.cabecera.findIndex((c) => /^vivienda$/i.test(c));
     const iPer = cont.cabecera.findIndex((c) => /poblaci/i.test(c));
     const totalViv = cont.total ? cont.total[iViv] : null;
     const totalPer = cont.total ? cont.total[iPer] : null;
-    const cuadra = totalViv === sumas.viviendas + sinManzana.viviendas && totalPer === sumas.personas + sinManzana.personas;
-    console.log(`  ${features.length} manzanas (${conDatos} con cifras del censo; ${sinPoligono.length} de REDATAM sin polígono); fuera de manzana: ${sinManzana.viviendas} viviendas, ${sinManzana.personas} personas; ${cuadra ? 'los totales cuadran con REDATAM' : `LOS TOTALES NO CUADRAN (REDATAM ${totalViv} viviendas / ${totalPer} personas; aquí ${sumas.viviendas + sinManzana.viviendas} / ${sumas.personas + sinManzana.personas})`}; categorías de agua incoherentes: ${incoherentes}`);
+    const cuadra = totalViv === sumas.viviendas + sinPoligonoSumas.viviendas + sinManzana.viviendas && totalPer === sumas.personas + sinPoligonoSumas.personas + sinManzana.personas;
+    console.log(`  ${features.length} manzanas (${conDatos} con cifras del censo; ${sinPoligono.length} de REDATAM sin polígono); fuera de manzana: ${sinManzana.viviendas} viviendas, ${sinManzana.personas} personas; ${cuadra ? 'los totales cuadran con REDATAM' : `LOS TOTALES NO CUADRAN (REDATAM ${totalViv} viviendas / ${totalPer} personas; aquí ${sumas.viviendas + sinPoligonoSumas.viviendas + sinManzana.viviendas} / ${sumas.personas + sinPoligonoSumas.personas + sinManzana.personas})`}; categorías de agua incoherentes: ${incoherentes}`);
     if (!cuadra) throw new Error(`Los totales de ${d.nombre} no cuadran con REDATAM. No se escribió nada.`);
 
     const cuerpo = `{"type":"FeatureCollection","metadata":${JSON.stringify({ ubigeo: d.ubigeo, distrito: d.nombre, anio: 2017, campos: 'Ver index.json', fecha_descarga: fecha })},"features":[\n${features.map((f) => JSON.stringify(f)).join(',\n')}\n]}\n`;
     piezas.push({
-      ubigeo: d.ubigeo, distrito: d.nombre, archivo: `manzanas/${d.ubigeo}.json`, caja: cajaDe(features), manzanas: features.length, con_datos: conDatos, sin_poligono_en_redatam: sinPoligono.length,
+      ubigeo: d.ubigeo, distrito: d.nombre, archivo: `manzanas/${d.ubigeo}.json`, caja: cajaDe(features), manzanas: features.length, con_datos: conDatos, sin_poligono_en_redatam: sinPoligonoSumas,
       viviendas: sumas.viviendas, ocupadas: sumas.ocupadas, personas: sumas.personas, fuera_de_manzana: sinManzana, categorias_incoherentes: incoherentes, bytes: Buffer.byteLength(cuerpo), cuerpo,
     });
   }

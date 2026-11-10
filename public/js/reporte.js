@@ -163,6 +163,27 @@ const Reporte = (() => {
     return `<table class="rp-tabla">${filas.join('')}</table><p class="rp-nota">${esc(CALC.NOTA_ELECTRICIDAD)} ${esc(r.metodo || '')}</p>`;
   }
 
+  /**
+   * Servicios de la manzana según el censo (INEI): alumbrado, agua y desagüe por red pública. INFORMATIVOS (sin umbral). Son cifras de TODA la manzana en el año del
+   * censo (hoy 2017), sobre las viviendas ocupadas con personas presentes que se censaron: no son de un predio ni de hoy. Con menos de 5 viviendas no hay porcentaje.
+   */
+  function censo(d) {
+    const r = d.variables && d.variables.censo;
+    if (!r) return '';
+    const filas = [fila('Estado', r.estado === 'SIN DATO' ? estado('SIN DATO') : estado('INFORMATIVO'))];
+    const p = (x) => (x === null || x === undefined ? 'sin porcentaje' : `${String(x).replace('.', ',')} %`);
+    if (r.tieneCifras) {
+      filas.push(fila('Manzana', `${esc(r.manzana)} · ${r.modo === 'cercana' ? `la más cercana, a ${dist(r.distanciaM)} de su borde (el punto está en la calle)` : 'el punto está dentro'}`));
+      filas.push(fila(`Viviendas ocupadas con personas presentes (censo ${r.anio})`, `${esc(r.ocupadas)} (de ${esc(r.viviendas)} viviendas contadas; ${esc(r.personas)} personas)`));
+      filas.push(fila('Alumbrado eléctrico por red pública', p(r.luz.pct)));
+      filas.push(fila('Agua por red pública', `${p(r.agua.pct)}${r.agua.pctDentro !== null && r.agua.pctDentro !== r.agua.pct ? ` (${p(r.agua.pctDentro)} dentro de la vivienda)` : ''}`));
+      filas.push(fila('Desagüe por red pública', `${p(r.desague.pct)}${r.desague.pctDentro !== null && r.desague.pctDentro !== r.desague.pct ? ` (${p(r.desague.pctDentro)} dentro de la vivienda)` : ''}`));
+    }
+    filas.push(fila('Resultado', esc(CALC.textoCenso(r))));
+    const dep = d.departamento2025 ? ` ${esc(CALC.textoCenso2025(d.departamento2025, 'agua'))} ${esc(CALC.textoCenso2025(d.departamento2025, 'luz'))}` : '';
+    return `<table class="rp-tabla">${filas.join('')}</table><p class="rp-nota">${esc(CALC.NOTA_CENSO)} ${esc(r.metodo || '')}${dep}</p>`;
+  }
+
   const hayComercio = (d) => Boolean(d.variables && Object.keys(CALC.COMERCIO).some((id) => d.variables[id]));
   const fuenteComercio = (d) => {
     const r = Object.keys(CALC.COMERCIO).map((id) => d.variables[id]).find((x) => x && x.fuente);
@@ -391,6 +412,7 @@ const Reporte = (() => {
       ...(d.variables && d.variables.consultorio ? [['Consultorio médico (informativo)', '#b45309', consultorio(d), fuenteDe(d.variables.consultorio)]] : []),
       ...(hayComercio(d) ? [['Comercio por necesidad: abastecimiento, compras y ocio, comercio de barrio (informativo)', '#be185d', comercio(d), fuenteComercio(d)]] : []),
       ...(d.variables && d.variables.electricidad ? [['Electricidad (informativo)', '#ca8a04', electricidad(d), fuenteDe(d.variables.electricidad)]] : []),
+      ...(d.variables && d.variables.censo ? [[`Servicios de la manzana (censo ${d.variables.censo.anio || 2017}, informativo)`, '#0e7490', censo(d), d.variables.censo.fuente ? fuenteDe(d.variables.censo) : '']] : []),
       ['Educación por nivel', '#7c3aed', educacion(d), d.variables ? fuenteDe(d.variables.educacion.inicial) : ''],
       ['Transporte', '#1d4ed8', transporte(d), d.variables ? [fuenteDe(d.variables.transporte), d.variables.transporte.rutas && !d.variables.transporte.rutas.error ? `${d.variables.transporte.rutas.atribucion || 'Rutas: SmartBus (smartbus.app)'}` : ''].filter(Boolean).join('; ') : ''],
       ['Área verde', '#15803d', areaVerde(d), d.variables ? fuenteDe(d.variables.areaVerde) : ''],
@@ -416,6 +438,7 @@ const Reporte = (() => {
       'Todas las distancias son en línea recta, no recorrido a pie. Los umbrales de salud (1000 m), transporte (400 m) y borde de zona (20 m) son convenciones del proyecto; los de educación son distancias referenciales de las normas del MINEDU (RVM 104-2019 y 208-2019, numeral 7.1) y el de área verde es un indicador de la OMS Europa (2016), no una norma peruana.',
       'Los locales de ESCALE dicen su nivel. Los colegios de OpenStreetMap que completan el mapa casi no lo etiquetan: uno sin nivel se toma como candidato a primaria y secundaria, lo que puede sobrestimar la oferta de un nivel.',
       ...(d.variables && d.variables.consultorio ? ['El consultorio médico es una categoría aparte de los establecimientos de salud y es solo informativo: no tiene una distancia de referencia (es una decisión pendiente), así que no se dice si está cerca o lejos, no suma a ningún puntaje y no cuenta como «salud cerca».'] : []),
+      ...(d.variables && d.variables.censo ? ['Servicios de la manzana: alumbrado, agua y desagüe por red pública según el censo de 2017 del INEI (REDATAM), solo área urbana. Son cifras de toda la manzana, calculadas sobre las viviendas ocupadas con personas presentes que se censaron, no de un predio ni de hoy; con menos de 5 viviendas no se da el porcentaje. El censo de 2025 ya se levantó pero el INEI todavía no lo abre por manzana. Es informativo y no suma a ningún puntaje.'] : []),
       ...(d.variables && d.variables.electricidad ? ['Electricidad: el área de concesión de distribución eléctrica (MINEM, Dirección General de Electricidad) dice a qué empresa le corresponde dar el servicio en esa zona; una concesión no es una conexión: no dice que el predio esté conectado ni que haya red en su calle, y los polígonos del registro son poco detallados (su borde puede ser impreciso). La cobertura real de conexión vendría de un censo (INEI) que este proyecto aún no tiene. Es informativo y no suma a ningún puntaje.'] : []),
       ...(hayComercio(d) ? ['El comercio se ordena por necesidad —abastecimiento (mercados y supermercados), compras y ocio (solo los malls confirmados con su fuente) y comercio de barrio (el resto de lo que se etiqueta mall)— y es informativo: no tiene una distancia de referencia (es una decisión pendiente), así que no se dice si está cerca o lejos y no suma a ningún puntaje. Un supermercado dentro de un mall cuenta como abastecimiento; el mall, no. Sale de OpenStreetMap, que puede no tenerlos todos (por distrito, el número de mercados mapeados no coincide con el del censo de 2016), etiqueta de más —amenity=marketplace incluye ferias y comercios mal etiquetados y shop=mall incluye galerías pequeñas, no solo malls— y no distingue un mercado minorista de uno mayorista; de un mall con forma en el mapa la distancia es al borde.'] : []),
       'Quebradas y cauces: no existe una distancia normativa a una quebrada, así que el estado es INFORMATIVO salvo que la persona fije su propio umbral («según tu umbral»). Los cauces vienen de la ANA, el IGP y OpenStreetMap; ninguna fuente es completa, no son un mapa de peligro y no delimitan la faja marginal.',

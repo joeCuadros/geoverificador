@@ -14,15 +14,17 @@ const CapasUI = (() => {
 
   // Un color por tipo de entidad; los colegios además cambian de forma/letra por nivel (nunca solo el color).
   const COLOR = {
-    inicial: '#9a4d00', primaria: '#1c3a6b', secundaria: '#6b2d7a', salud: '#b0272b', consultorio: '#0f6b6b', mercado: '#9a3412', supermercado: '#065f46', mall: '#9d174d', galeria: '#a16207', electricidad: '#b45309', abastecimiento: '#9a3412', compras_ocio: '#9d174d', comercio_barrio: '#a16207', paradero: '#3b4a5a', parques: '#2f7d3b', quebradas: '#1f6fb2',
+    inicial: '#9a4d00', primaria: '#1c3a6b', secundaria: '#6b2d7a', salud: '#b0272b', consultorio: '#0f6b6b', mercado: '#9a3412', supermercado: '#065f46', mall: '#9d174d', galeria: '#a16207', electricidad: '#b45309', censo_pocas: '#9ca3af', abastecimiento: '#9a3412', compras_ocio: '#9d174d', comercio_barrio: '#a16207', paradero: '#3b4a5a', parques: '#2f7d3b', quebradas: '#1f6fb2',
     sismos: '#c2570c', volcan_alto: '#a31621', volcan_moderado: '#e07b00', volcan_bajo: '#e9c046', sectores: '#0b5d4f', residencial: '#b88a2e', tranquilo: '#8a6d1f', campina: '#6f9a2f', comercial: '#7a4fa0', historico: '#a0422f',
   };
   const LETRA = { inicial: 'I', primaria: 'P', secundaria: 'S', salud: '+', consultorio: 'C', mercado: 'M', supermercado: 'S', mall: 'CC', galeria: 'G', paradero: 'B' };
   const CAPAS_COMERCIO = ['abastecimiento', 'compras_ocio', 'comercio_barrio']; // las tres necesidades de comercio, informativas: polígono con popup, sin círculo
   // Riesgo de los distritos ante El Niño (CENEPRED): de menor a mayor. La leyenda lleva además el texto y los nombres, así que el color no es lo único que informa.
+  // Mapa coroplético del censo por manzana: de menos a más viviendas con el servicio (claro a oscuro); las manzanas con pocas viviendas, en gris. El color nunca es lo único: la leyenda y el popup dicen el porcentaje.
+  const COLOR_CENSO = ['#e0f2fe', '#7dd3fc', '#0284c7', '#0c4a6e'];
   const COLOR_RIESGO = { Bajo: '#6aa84f', Medio: '#e9c046', Alto: '#e07b00', 'Muy alto': '#a31621' };
 
-  let api = null; // { map, datos(opciones: { rutas, volcan, cenepred, electricidad }): Promise<{ datos, zonas, cauces, sismos, volcan, cenepred, rutas, umbrales, fecha }>, mapaVisible? }
+  let api = null; // { map, datos(opciones: { rutas, volcan, cenepred, electricidad, censo }): Promise<{ datos, zonas, cauces, sismos, volcan, cenepred, rutas, umbrales, fecha }>, mapaVisible? }
   let grupo = null;
   let activas = []; // capas elegidas con los chips: [{ id }]
   let contexto = null; // lo que vino del chat: { capas, distrito, sectores }
@@ -100,6 +102,12 @@ const CapasUI = (() => {
     grupo.clearLayers();
     sectorCapas.clear();
     // Concesiones eléctricas: polígonos enteros del registro, con borde visible y un popup que dice que NO es una conexión.
+    // Manzanas del censo: coroplético por el % de viviendas con el servicio; lienzo (miles de polígonos) con un popup que dice el porcentaje y el año.
+    r.poligonos.filter((p) => /^censo_/.test(p.capa)).forEach((p) => {
+      const c = p.clase === null ? COLOR.censo_pocas : COLOR_CENSO[p.clase];
+      L.geoJSON({ type: 'Feature', geometry: p.geometry }, { style: { color: '#334155', weight: 0.6, fillColor: c, fillOpacity: 0.75 }, renderer: renderers.zonas, pane: 'capasZonas' })
+        .bindPopup(popup(p.titulo, `${p.detalle}. Cifra de la manzana en el año del censo, no de un predio ni de hoy.`, null)).addTo(grupo);
+    });
     r.poligonos.filter((p) => p.capa === 'electricidad').forEach((p) => {
       L.geoJSON({ type: 'Feature', geometry: p.geometry }, { style: { color: COLOR.electricidad, weight: 2, dashArray: '6 4', fillColor: COLOR.electricidad, fillOpacity: 0.08 }, pane: 'capasZonas' })
         .bindPopup(popup(p.titulo, `${p.detalle}. Es el área en que esa empresa debe dar el servicio; no dice que un predio esté conectado.`, null)).addTo(grupo);
@@ -108,7 +116,7 @@ const CapasUI = (() => {
       L.geoJSON({ type: 'Feature', geometry: p.geometry }, { style: { color: COLOR[p.capa], weight: 2, fillColor: COLOR[p.capa], fillOpacity: 0.3 }, pane: 'capasParques' })
         .bindPopup(popup(p.titulo, `${p.detalle} (forma en OpenStreetMap; la distancia se mide hasta su borde)`, p.osm)).addTo(grupo);
     });
-    r.poligonos.filter((p) => p.capa !== 'parques' && p.capa !== 'electricidad' && !CAPAS_COMERCIO.includes(p.capa)).forEach((p) => {
+    r.poligonos.filter((p) => p.capa !== 'parques' && p.capa !== 'electricidad' && !/^censo_/.test(p.capa) && !CAPAS_COMERCIO.includes(p.capa)).forEach((p) => {
       L.geoJSON({ type: 'Feature', geometry: p.geometry }, { style: { color: COLOR[p.capa], weight: 1, fillColor: COLOR[p.capa], fillOpacity: 0.38 }, renderer: renderers.zonas, pane: 'capasZonas', interactive: false }).addTo(grupo);
     });
     r.poligonos.filter((p) => p.capa === 'parques').forEach((p) => {
@@ -178,7 +186,7 @@ const CapasUI = (() => {
     sismos: '<span class="mu-sismo"></span>',
     sectores: '<span class="mu-sector"></span>',
   };
-  const muestraDe = (capa, l = null) => (capa === 'volcan' && l ? `<span class="mu-bloque" style="background:${COLOR[`volcan_${l.nivel}`]}"></span>` : null) || (/^cenepred_/.test(capa) && l ? `<span class="mu-bloque" style="background:${COLOR_RIESGO[l.nivel]}"></span>` : null) || MUESTRA[capa] || `<span class="mu-bloque" style="background:${COLOR[capa] || '#777'}"></span>`;
+  const muestraDe = (capa, l = null) => (/^censo_/.test(capa) && l ? `<span class="mu-bloque" style="background:${l.clase === null ? COLOR.censo_pocas : COLOR_CENSO[l.clase]};opacity:.9;border:1px solid #334155"></span>` : null) || (capa === 'volcan' && l ? `<span class="mu-bloque" style="background:${COLOR[`volcan_${l.nivel}`]}"></span>` : null) || (/^cenepred_/.test(capa) && l ? `<span class="mu-bloque" style="background:${COLOR_RIESGO[l.nivel]}"></span>` : null) || MUESTRA[capa] || `<span class="mu-bloque" style="background:${COLOR[capa] || '#777'}"></span>`;
 
   function limpiarLeyenda() {
     $('leyenda').hidden = true;
@@ -198,11 +206,12 @@ const CapasUI = (() => {
       return filas.join('');
     };
     $('leyenda-estados').innerHTML = r.leyenda.map(itemDe).join('')
-      + r.sinDatos.map((c) => `<li class="ley-item leyenda-error"><span class="ley-txt">${c === 'lineas' ? 'No pude leer los recorridos de SmartBus, así que no los dibujo.' : `No pude leer el archivo de ${c === 'sismos' ? 'sismos' : c === 'electricidad' ? 'concesiones eléctricas' : c === 'volcan' ? 'peligro volcánico' : c === 'cenepred' ? 'riesgo de los distritos (CENEPRED)' : 'quebradas'}, así que no lo dibujo.`}</span></li>`).join('');
+      + r.sinDatos.map((c) => `<li class="ley-item leyenda-error"><span class="ley-txt">${c === 'lineas' ? 'No pude leer los recorridos de SmartBus, así que no los dibujo.' : `No pude leer el archivo de ${c === 'sismos' ? 'sismos' : c === 'electricidad' ? 'concesiones eléctricas' : c === 'censo' ? 'censo por manzana (o el mapa abarca demasiados distritos: acerca el mapa a uno o dos)' : c === 'volcan' ? 'peligro volcánico' : c === 'cenepred' ? 'riesgo de los distritos (CENEPRED)' : 'quebradas'}, así que no lo dibujo.`}</span></li>`).join('');
     const fuentes = [];
     if (r.leyenda.some((l) => ['colegios', 'salud', 'consultorios', 'paraderos', 'parques'].includes(l.capa))) fuentes.push(`Colegios: padrón de ESCALE (MINEDU). Salud y consultorios médicos (dos categorías; el consultorio es informativo, sin círculo de distancia): RENIPRESS (SUSALUD). Paraderos y parques: OpenStreetMap (ODbL), que en colegios, salud y consultorios solo completa donde no hay un punto oficial de la misma categoría a 200 m. Datos al ${fecha || 'sin fecha'}; cada punto dice su fuente al tocarlo. Puede faltar alguno.`);
     if (r.leyenda.some((l) => CAPAS_COMERCIO.includes(l.capa))) fuentes.push('Abastecimiento (mercados y supermercados), compras y ocio (malls confirmados con su fuente) y comercio de barrio (galerías): OpenStreetMap (ODbL), solo informativos (sin distancia de referencia ni círculo); de un mall o una galería con forma en el mapa la distancia es al borde, no al centro. Puede faltar alguno.');
     if (r.leyenda.some((l) => l.capa === 'electricidad')) fuentes.push('Concesión eléctrica: áreas de concesión de distribución del MINEM (Dirección General de Electricidad), datosabiertos.gob.pe, licencia ODC-By. Dicen a qué empresa le corresponde dar el servicio, no si un predio está conectado; los polígonos son poco detallados y su borde puede ser impreciso.');
+    if (r.leyenda.some((l) => /^censo_/.test(l.capa))) fuentes.push('Censo por manzana: Censos Nacionales 2017 del INEI (REDATAM), % de viviendas ocupadas con personas presentes con alumbrado, agua o desagüe por red pública. Son cifras de 2017 de la manzana, no de un predio ni de hoy; solo área urbana. El censo de 2025 aún no está abierto por manzana.');
     if (r.leyenda.some((l) => ['residencial', 'tranquilo', 'campina', 'comercial', 'historico'].includes(l.capa))) fuentes.push('Zonas: plano del PDM Arequipa 2016-2025 (referencial).');
     if (r.leyenda.some((l) => l.capa === 'quebradas')) fuentes.push('Quebradas y ríos: cauces de la ANA (red de 2018), el IGP y OpenStreetMap (ODbL); cada tramo dice su fuente al tocarlo. Ninguna fuente es completa ni es un mapa de peligro.');
     if (r.leyenda.some((l) => l.capa === 'lineas')) fuentes.push('Líneas de bus: Rutas: SmartBus (smartbus.app), recorridos publicados usados con autorización verbal; sin frecuencias ni horarios.' + (r.paradasBus.length ? ' La parada es la más cercana en línea recta.' : ''));
@@ -218,6 +227,17 @@ const CapasUI = (() => {
   // ------------------------------------------------------------------- Dibujar
   const caja = (b) => L.latLngBounds([[b[1], b[0]], [b[3], b[2]]]);
 
+  /** La vista del censo por manzana: la caja del distrito elegido o, si no hay, lo que se ve del mapa ([oeste, sur, este, norte]). */
+  function vistaCenso() {
+    const distrito = contexto && contexto.distrito;
+    if (distrito) {
+      const polys = Distritos.poligonos(distrito);
+      if (polys && polys.length) { const pts = polys.flatMap((p) => p[0]); return [Math.min(...pts.map((c) => c[0])), Math.min(...pts.map((c) => c[1])), Math.max(...pts.map((c) => c[0])), Math.max(...pts.map((c) => c[1]))]; }
+    }
+    const b = api.map.getBounds();
+    return [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
+  }
+
   async function aplicar({ encuadrar = true } = {}) {
     const mia = ++secuencia;
     dibujarChips();
@@ -227,12 +247,12 @@ const CapasUI = (() => {
     $('leyenda-resumen').textContent = 'Preparando el mapa…';
     $('leyenda').hidden = false;
     try {
-      const d = await api.datos({ rutas: capas.some((c) => c.id === 'lineas'), volcan: capas.some((c) => c.id === 'volcan'), electricidad: capas.some((c) => c.id === 'electricidad'), cenepred: capas.some((c) => /^cenepred_/.test(c.id)) });
+      const d = await api.datos({ rutas: capas.some((c) => c.id === 'lineas'), volcan: capas.some((c) => c.id === 'volcan'), electricidad: capas.some((c) => c.id === 'electricidad'), censo: capas.some((c) => /^censo_/.test(c.id)) ? vistaCenso() : null, cenepred: capas.some((c) => /^cenepred_/.test(c.id)) });
       if (mia !== secuencia) return;
       const distrito = contexto && contexto.distrito;
       const polys = distrito ? Distritos.poligonos(distrito) : null;
       const r = Capas.construir({
-        capas, datos: d.datos, zonas: d.zonas, cauces: d.cauces, sismos: d.sismos, volcan: d.volcan, electricidad: d.electricidad, cenepred: d.cenepred, rutas: d.rutas, umbrales: d.umbrales,
+        capas, datos: d.datos, zonas: d.zonas, cauces: d.cauces, sismos: d.sismos, volcan: d.volcan, electricidad: d.electricidad, censo: d.censo, cenepred: d.cenepred, rutas: d.rutas, umbrales: d.umbrales,
         area: polys && polys.length ? { polys } : null, sectores: contexto && contexto.sectores && contexto.sectores.length ? contexto.sectores : null,
       });
       ultimo = r;
