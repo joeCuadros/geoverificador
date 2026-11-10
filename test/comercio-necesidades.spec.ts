@@ -107,6 +107,38 @@ describe('Calculos.mallQueContiene: el supermercado dentro de un mall', () => {
   });
 });
 
+describe('Calculos.agruparComercio: lo excluido expresamente no es comercio de ninguna necesidad', () => {
+  const NATURA = punto(alNorte(520), { fuente: 'OSM', osm: 'node/30', nombre: 'Santa Natura', tags: { shop: 'supermarket' } }); // dentro del mall, pero vende productos naturales
+  const g = Calculos.agruparComercio({ mercados: [MERCADO], supermercados: [SUPER_DENTRO, NATURA], malls: [MALL, GALERIA] });
+  const todos = (x: any) => [...x.abastecimiento, ...x.compras_ocio, ...x.comercio_barrio].map((f: any) => f.properties.osm);
+
+  it('Santa Natura (tienda de productos naturales etiquetada shop=supermarket) no está en ninguno de los tres grupos, ni en el de barrio', () => {
+    expect(todos(g)).not.toContain('node/30');
+    expect(g.abastecimiento.map((f: any) => f.properties.osm).sort()).toEqual(['node/1', 'node/20']);
+  });
+  it('no distingue mayúsculas ni tildes', () => {
+    for (const nombre of ['SANTA NATURA', 'santa natura', 'Santa Natúra', 'Santa Natura Arequipa Center']) {
+      const x = Calculos.agruparComercio({ supermercados: [punto(alNorte(10), { fuente: 'OSM', osm: 'node/31', nombre, tags: { shop: 'supermarket' } })] });
+      expect(todos(x)).toEqual([]);
+    }
+  });
+  it('es una regla estrecha: otros supermercados, con nombres parecidos o sin nombre, se quedan', () => {
+    for (const nombre of ['Santa Rosa', 'Natura', 'Santa Catalina Market', null]) {
+      const x = Calculos.agruparComercio({ supermercados: [punto(alNorte(10), { fuente: 'OSM', osm: 'node/32', nombre, tags: { shop: 'supermarket' } })] });
+      expect(todos(x)).toEqual(['node/32']);
+    }
+  });
+  it('la exclusión es una lista con nombre y motivo (no un id fijo) y solo tiene Santa Natura', () => {
+    expect(Calculos.COMERCIO_EXCLUIDOS).toHaveLength(1);
+    expect(Calculos.COMERCIO_EXCLUIDOS[0]).toMatchObject({ capa: 'supermercados', nombre: 'santa natura' });
+    expect(Calculos.COMERCIO_EXCLUIDOS[0].motivo).toMatch(/productos naturales/i);
+  });
+  it('solo se excluye de la capa que dice la regla: un mall con ese nombre no se toca', () => {
+    const x = Calculos.agruparComercio({ malls: [punto(alNorte(10), { fuente: 'OSM', osm: 'node/33', nombre: 'Santa Natura', tags: { shop: 'mall' } })] });
+    expect(todos(x)).toEqual(['node/33']);
+  });
+});
+
 describe('Calculos.agruparComercio: reparte por necesidad sin cortar ni mover nada', () => {
   const g = Calculos.agruparComercio({ mercados: [MERCADO], supermercados: [SUPER_DENTRO, SUPER_FUERA], malls: [MALL, GALERIA, GALERIA_POLIGONO] });
   const osm = (lista: any[]) => lista.map((f) => f.properties.osm as string).sort((a, b) => a.localeCompare(b));
@@ -536,7 +568,10 @@ describe('datos reales: el reparto por necesidad cubre todo y es coherente', () 
   const g = Calculos.agruparComercio({ mercados, supermercados, malls });
 
   it('cada elemento cae en exactamente un grupo y ninguno se pierde', () => {
-    expect(g.abastecimiento.length).toBe(mercados.length + supermercados.length);
+    const excluidos = supermercados.filter((f: any) => /santa natura/i.test(f.properties.nombre || '')).length;
+    expect(excluidos).toBe(1);
+    expect(g.abastecimiento.length).toBe(mercados.length + supermercados.length - excluidos);
+    expect([...g.abastecimiento, ...g.compras_ocio, ...g.comercio_barrio].some((f: any) => /santa natura/i.test(f.properties.nombre || ''))).toBe(false);
     expect(g.compras_ocio.length + g.comercio_barrio.length).toBe(malls.length);
   });
   it('compras_ocio son exactamente los malls con fuente (verificado); el resto son galerías', () => {

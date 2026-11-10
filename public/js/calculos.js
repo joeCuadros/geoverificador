@@ -484,6 +484,22 @@ const Calculos = (() => {
     return null;
   }
 
+  /**
+   * Lo que OpenStreetMap etiqueta como mercado, supermercado o mall pero no es comercio de ninguna de las tres necesidades, y por eso no aparece en
+   * NINGÚN grupo (tampoco en comercio de barrio). Regla estrecha y a propósito: una lista de nombres, no de ids, para que valga aunque se vuelva a
+   * extraer. `nombre` es un texto que debe estar en el nombre del elemento, sin tildes ni mayúsculas; `capa`, la capa de OSM donde se aplica.
+   *   Santa Natura: tienda de productos naturales etiquetada shop=supermarket; no es un punto de abastecimiento de comida.
+   */
+  const COMERCIO_EXCLUIDOS = [
+    { capa: 'supermercados', nombre: 'santa natura', motivo: 'tienda de productos naturales etiquetada shop=supermarket en OpenStreetMap; no es un punto de abastecimiento de comida' },
+  ];
+
+  /** ¿La regla COMERCIO_EXCLUIDOS deja fuera este elemento de la capa `capa` (mercados | supermercados | malls)? */
+  function esComercioExcluido(capa, props) {
+    const nombre = props && props.nombre ? sinTildes(props.nombre) : '';
+    return nombre !== '' && COMERCIO_EXCLUIDOS.some((x) => x.capa === capa && nombre.includes(x.nombre));
+  }
+
   const posicionDe = (g) => (g.type === 'Point' ? { lat: g.coordinates[1], lon: g.coordinates[0] } : centroDe(g));
 
   /**
@@ -504,7 +520,7 @@ const Calculos = (() => {
    * Reparte los mercados, supermercados y malls (listas de Feature, como los archivos congelados) por necesidad: { abastecimiento, compras_ocio, comercio_barrio }.
    * Cada Feature conserva su geometría y sus propiedades (no se recorta ni se mueve nada) y suma `tipo` (mercado | supermercado | mall) y `necesidad`;
    * un supermercado suma además `dentro_de_mall`: { osm, nombre, verificado } del mall en cuyo polígono está su punto (el centro de la caja si es un
-   * polígono), o null. Es la única definición del reparto: la usan la ficha, el mapa, el conteo por distrito, el chat y el informe.
+   * polígono), o null. Lo de COMERCIO_EXCLUIDOS (Santa Natura) no entra en ningún grupo. Es la única definición del reparto: la usan la ficha, el mapa, el conteo por distrito, el chat y el informe.
    */
   function agruparComercio(entrada) {
     const e = entrada || {};
@@ -513,6 +529,7 @@ const Calculos = (() => {
     const grupos = { abastecimiento: [], compras_ocio: [], comercio_barrio: [] };
     for (const capa of ['mercados', 'supermercados', 'malls']) {
       for (const f of validos(e[capa])) {
+        if (esComercioExcluido(capa, f.properties)) continue;
         const necesidad = necesidadComercio(capa, f.properties);
         const extra = { tipo: TIPO_DE_CAPA[capa], necesidad };
         if (capa === 'supermercados') {
@@ -983,6 +1000,8 @@ const Calculos = (() => {
     NOTA_COMERCIO,
     COMERCIO,
     COMERCIO_TIPO,
+    COMERCIO_EXCLUIDOS,
+    esComercioExcluido,
     necesidadComercio,
     mallQueContiene,
     agruparComercio,
