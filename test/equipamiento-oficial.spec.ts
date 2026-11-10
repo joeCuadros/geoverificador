@@ -433,6 +433,22 @@ describe('repartirSaludOsm', () => {
   });
 });
 
+describe('repartirSaludOsm: lo dental de OpenStreetMap no entra ni en salud ni en consultorios', () => {
+  const f = (osm: string, tags: Record<string, string>, nombre: string | null = null) => ({ type: 'Feature', properties: { osm, nombre, tags }, geometry: { type: 'Point', coordinates: [0, 0] } });
+  const r = E.repartirSaludOsm([
+    f('a', { amenity: 'doctors' }, 'Consultorio Dental'),
+    f('b', { amenity: 'doctors', 'healthcare:speciality': 'dentistry' }, 'Dr. Sonrisa'),
+    f('c', { amenity: 'clinic' }, 'Clínica Odontológica Arequipa'),
+    f('d', { amenity: 'doctors' }, 'Consultorio Dr. Bravo'),
+    f('e', { amenity: 'clinic' }, 'Clínica Internacional'),
+  ]);
+  it('descarta lo dental por nombre o por etiqueta y lo cuenta como sin categoría', () => {
+    expect(r.consultorios.map((x: { properties: { osm: string } }) => x.properties.osm)).toEqual(['d']);
+    expect(r.salud.map((x: { properties: { osm: string } }) => x.properties.osm)).toEqual(['e']);
+    expect(r.sinCategoria).toBe(3);
+  });
+});
+
 describe('fusionarEducacion: ESCALE primero, OpenStreetMap como respaldo por nivel', () => {
   const oficiales = [oficialColegio('L1', 'Colegio Alfa', ['primaria', 'secundaria'], 0), oficialColegio('L2', 'Jardín Bravo', ['inicial'], 3000)];
   const osm = [

@@ -267,6 +267,43 @@ describe('clasificación de etiquetas y consulta Overpass', () => {
     expect(Calculos.categoriaSalud(undefined)).toBeNull();
   });
 
+  describe('lo odontológico de OpenStreetMap no es salud ni consultorio médico', () => {
+    it('esDental reconoce amenity=dentist, healthcare=dentist y healthcare:speciality con dentistry', () => {
+      expect(Calculos.esDental({ amenity: 'dentist' })).toBe(true);
+      expect(Calculos.esDental({ healthcare: 'dentist' })).toBe(true);
+      expect(Calculos.esDental({ amenity: 'doctors', 'healthcare:speciality': 'dentistry' })).toBe(true);
+      expect(Calculos.esDental({ amenity: 'clinic', 'healthcare:speciality': 'general;Dentistry' })).toBe(true);
+      expect(Calculos.esDental({ amenity: 'doctors', 'healthcare:speciality': 'orthodontics;dental_oral_maxillo_facial_surgery' })).toBe(true);
+    });
+    it('esDental reconoce el nombre con dental, odontolog… o dentist…, sin importar mayúsculas ni tildes', () => {
+      expect(Calculos.esDental({ amenity: 'doctors' }, 'Consultorio Dental')).toBe(true);
+      expect(Calculos.esDental({ amenity: 'doctors' }, 'CLINICA ODONTOLOGICA SONRISA')).toBe(true);
+      expect(Calculos.esDental({ amenity: 'clinic' }, 'Clínica Odontológica del Sur')).toBe(true);
+      expect(Calculos.esDental({ amenity: 'doctors' }, 'Dentista Dr. Pérez')).toBe(true);
+      expect(Calculos.esDental({ healthcare: 'doctor' }, 'Centro DENTAL Arequipa')).toBe(true);
+    });
+    it('esDental no marca como dental lo que no lo es', () => {
+      expect(Calculos.esDental({ amenity: 'doctors' }, 'Consultorio Dr. Bravo')).toBe(false);
+      expect(Calculos.esDental({ amenity: 'clinic', 'healthcare:speciality': 'cardiology' })).toBe(false);
+      expect(Calculos.esDental({ amenity: 'hospital' }, 'Hospital Goyeneche')).toBe(false);
+      expect(Calculos.esDental({ amenity: 'doctors' }, null)).toBe(false);
+      expect(Calculos.esDental(undefined, undefined)).toBe(false);
+    });
+    it('categoriasDe y categoriaSalud dejan fuera de salud y de consultorios lo dental', () => {
+      expect(Calculos.categoriasDe({ amenity: 'doctors' }, 'Consultorio Dental')).toEqual([]);
+      expect(Calculos.categoriasDe({ amenity: 'doctors', 'healthcare:speciality': 'dentistry' })).toEqual([]);
+      expect(Calculos.categoriasDe({ amenity: 'doctors', healthcare: 'dentist' })).toEqual([]);
+      expect(Calculos.categoriasDe({ amenity: 'clinic' }, 'Clínica Odontológica Sonrisa')).toEqual([]);
+      expect(Calculos.categoriaSalud({ amenity: 'doctors' }, 'Consultorio Dental')).toBeNull();
+      expect(Calculos.categoriaSalud({ amenity: 'doctors' }, 'Consultorio Dr. Bravo')).toBe('consultorio');
+      expect(Calculos.categoriaSalud({ amenity: 'clinic' }, 'Clínica Internacional')).toBe('salud');
+    });
+    it('osmAFeatures conserva healthcare:speciality para poder reconocer lo dental', () => {
+      const f = Calculos.osmAFeatures([{ type: 'node', id: 1, lat: -16.4, lon: -71.5, tags: { amenity: 'doctors', 'healthcare:speciality': 'dentistry', name: 'X' } }], 'puntos');
+      expect(f[0].properties.tags['healthcare:speciality']).toBe('dentistry');
+    });
+  });
+
   it('healthcare=pharmacy, dentist o laboratory no cuentan como establecimiento de salud', () => {
     expect(Calculos.categoriasDe({ amenity: 'pharmacy', healthcare: 'pharmacy' })).not.toContain('salud');
     expect(Calculos.categoriasDe({ healthcare: 'dentist' })).not.toContain('salud');

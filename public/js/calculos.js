@@ -201,7 +201,7 @@ const Calculos = (() => {
 
   // Etiquetas que se conservan en los archivos congelados (el resto no hace falta y los haría pesar más).
   const ETIQUETAS_GUARDADAS = [
-    'amenity', 'healthcare', 'isced:level', 'school', 'leisure', 'landuse', 'highway', 'public_transport',
+    'amenity', 'healthcare', 'healthcare:speciality', 'isced:level', 'school', 'leisure', 'landuse', 'highway', 'public_transport',
   ];
 
   function coincide(tags, filtro) {
@@ -211,20 +211,39 @@ const Calculos = (() => {
     return !(filtro.excluir || []).includes(v);
   }
 
-  /** Variables a las que pertenece un elemento según sus etiquetas ([] si a ninguna). */
-  function categoriasDe(tags) {
+  const sinTildes = (t) => String(t).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+  /**
+   * ¿Es un servicio odontológico? RENIPRESS ya deja fuera el centro odontológico; en OpenStreetMap un consultorio dental suele venir
+   * como amenity=doctors, así que se reconoce por cualquiera de estas señales: amenity=dentist, healthcare=dentist, healthcare:speciality
+   * con «dentistry» (o «dental…», p. ej. dental_oral_maxillo_facial_surgery) o un nombre con dental, odontolog… o dentist…
+   * (sin distinguir mayúsculas ni tildes). Lo dental no es salud ni consultorio médico.
+   */
+  function esDental(tags, nombre) {
     const t = tags || {};
-    const cats = Object.keys(FILTROS).filter((cat) => FILTROS[cat].some((f) => coincide(t, f)));
+    if (t.amenity === 'dentist' || t.healthcare === 'dentist') return true;
+    if (/dentistry|dental/.test(sinTildes(t['healthcare:speciality'] ?? ''))) return true;
+    return nombre ? /dental|odontolog|dentist/.test(sinTildes(nombre)) : false;
+  }
+
+  /**
+   * Variables a las que pertenece un elemento según sus etiquetas ([] si a ninguna). `nombre` (opcional) es el nombre en OSM:
+   * sirve para reconocer lo dental (esDental), que se deja fuera de la salud y de los consultorios.
+   */
+  function categoriasDe(tags, nombre) {
+    const t = tags || {};
+    let cats = Object.keys(FILTROS).filter((cat) => FILTROS[cat].some((f) => coincide(t, f)));
+    if (esDental(t, nombre)) cats = cats.filter((c) => c !== 'salud' && c !== 'consultorios');
     // Un elemento que es hospital, clinic u otro healthcare=* Y TAMBIÉN doctor es un establecimiento: no se cuenta dos veces.
     return cats.includes('salud') ? cats.filter((c) => c !== 'consultorios') : cats;
   }
 
   /**
    * Reparte la salud de OpenStreetMap en las dos categorías: 'salud' (establecimiento) o 'consultorio' (amenity=doctors,
-   * healthcare=doctor); null si no es ninguna de las dos. Es la misma regla de categoriasDe.
+   * healthcare=doctor); null si no es ninguna de las dos (ni lo dental). Es la misma regla de categoriasDe.
    */
-  function categoriaSalud(tags) {
-    const cats = categoriasDe(tags);
+  function categoriaSalud(tags, nombre) {
+    const cats = categoriasDe(tags, nombre);
     if (cats.includes('salud')) return 'salud';
     return cats.includes('consultorios') ? 'consultorio' : null;
   }
@@ -782,6 +801,7 @@ const Calculos = (() => {
     avisoPDMProyectado,
     modulosEfectivos,
     osmAFeatures,
+    esDental,
     FUENTES_ELEMENTO,
     fuenteDe,
     nivelesDe,

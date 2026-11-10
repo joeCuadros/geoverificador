@@ -353,7 +353,7 @@ function fusionarSalud(oficiales, osm, { radioM = 200, umbralNombre = 0.9 } = {}
 function repartirSaludOsm(osm) {
   const out = { salud: [], consultorios: [], sinCategoria: 0 };
   for (const f of osm) {
-    const g = Calculos.categoriaSalud(f.properties && f.properties.tags);
+    const g = Calculos.categoriaSalud(f.properties && f.properties.tags, f.properties && f.properties.nombre);
     if (g === 'salud') out.salud.push(f);
     else if (g === 'consultorio') out.consultorios.push(f);
     else out.sinCategoria++;

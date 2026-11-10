@@ -119,13 +119,13 @@ async function main() {
   // Elementos de la primera salida (con `center`) y de la segunda (con `geometry`/`members`).
   const puntos = Calculos.osmAFeatures(data.elements.filter((e) => e.type === 'node' || e.center), 'puntos');
   const poligonos = Calculos.osmAFeatures(data.elements.filter((e) => e.type !== 'node' && (e.geometry || e.members)), 'poligonos')
-    .filter((f) => Calculos.categoriasDe(f.properties.tags).includes('areasVerdes'));
+    .filter((f) => Calculos.categoriasDe(f.properties.tags, f.properties.nombre).includes('areasVerdes'));
 
   const porVariable = {
-    salud: puntos.filter((f) => Calculos.categoriasDe(f.properties.tags).includes('salud')),
-    consultorios: puntos.filter((f) => Calculos.categoriasDe(f.properties.tags).includes('consultorios')),
-    educacion: puntos.filter((f) => Calculos.categoriasDe(f.properties.tags).includes('educacion')),
-    transporte: puntos.filter((f) => Calculos.categoriasDe(f.properties.tags).includes('transporte')),
+    salud: puntos.filter((f) => Calculos.categoriasDe(f.properties.tags, f.properties.nombre).includes('salud')),
+    consultorios: puntos.filter((f) => Calculos.categoriasDe(f.properties.tags, f.properties.nombre).includes('consultorios')),
+    educacion: puntos.filter((f) => Calculos.categoriasDe(f.properties.tags, f.properties.nombre).includes('educacion')),
+    transporte: puntos.filter((f) => Calculos.categoriasDe(f.properties.tags, f.properties.nombre).includes('transporte')),
     areas_verdes: poligonos,
   };
   metadata.sin_geometria_utilizable = data.elements.length - puntos.length - poligonos.length;

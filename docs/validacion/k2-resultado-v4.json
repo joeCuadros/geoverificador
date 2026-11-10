@@ -1,0 +1,688 @@
+{
+  "generado": "2026-11-10T11:08:09.684Z",
+  "parametros": {
+    "radiosM": [
+      50,
+      100,
+      200
+    ],
+    "umbralNombre": 0.9,
+    "paso": 500
+  },
+  "resultado": {
+    "radiosM": [
+      50,
+      100,
+      200
+    ],
+    "umbralNombre": 0.9,
+    "puntos": 1536,
+    "salud": {
+      "oficiales": 256,
+      "osm": 127,
+      "metricas": [
+        {
+          "radioM": 50,
+          "oficiales": 256,
+          "osm": 127,
+          "osmConNombre": 121,
+          "osmSinNombre": 6,
+          "emparejados": 54,
+          "exhaustividad": 0.2109375,
+          "precision": 0.4462809917355372,
+          "desfaseMedianaM": 14.19095249561868,
+          "desfaseP90M": 30.41343250198403
+        },
+        {
+          "radioM": 100,
+          "oficiales": 256,
+          "osm": 127,
+          "osmConNombre": 121,
+          "osmSinNombre": 6,
+          "emparejados": 56,
+          "exhaustividad": 0.21875,
+          "precision": 0.4628099173553719,
+          "desfaseMedianaM": 15.050952664581274,
+          "desfaseP90M": 36.713294070528946
+        },
+        {
+          "radioM": 200,
+          "oficiales": 256,
+          "osm": 127,
+          "osmConNombre": 121,
+          "osmSinNombre": 6,
+          "emparejados": 58,
+          "exhaustividad": 0.2265625,
+          "precision": 0.4793388429752066,
+          "desfaseMedianaM": 15.822107059620208,
+          "desfaseP90M": 43.56399765717263
+        }
+      ],
+      "porDistrito": [
+        {
+          "distrito": "PAUCARPATA",
+          "oficiales": 65,
+          "emparejados": 11,
+          "exhaustividad": 0.16923076923076924
+        },
+        {
+          "distrito": "AREQUIPA",
+          "oficiales": 49,
+          "emparejados": 7,
+          "exhaustividad": 0.14285714285714285
+        },
+        {
+          "distrito": "YANAHUARA",
+          "oficiales": 24,
+          "emparejados": 2,
+          "exhaustividad": 0.08333333333333333
+        },
+        {
+          "distrito": "CERRO COLORADO",
+          "oficiales": 18,
+          "emparejados": 8,
+          "exhaustividad": 0.4444444444444444
+        },
+        {
+          "distrito": "CAYMA",
+          "oficiales": 15,
+          "emparejados": 6,
+          "exhaustividad": 0.4
+        },
+        {
+          "distrito": "JOSE LUIS BUSTAMANTE Y RIVERO",
+          "oficiales": 14,
+          "emparejados": 3,
+          "exhaustividad": 0.21428571428571427
+        },
+        {
+          "distrito": "SOCABAYA",
+          "oficiales": 11,
+          "emparejados": 5,
+          "exhaustividad": 0.45454545454545453
+        },
+        {
+          "distrito": "JACOBO HUNTER",
+          "oficiales": 10,
+          "emparejados": 2,
+          "exhaustividad": 0.2
+        },
+        {
+          "distrito": "MARIANO MELGAR",
+          "oficiales": 9,
+          "emparejados": 2,
+          "exhaustividad": 0.2222222222222222
+        },
+        {
+          "distrito": "MIRAFLORES",
+          "oficiales": 8,
+          "emparejados": 2,
+          "exhaustividad": 0.25
+        },
+        {
+          "distrito": "ALTO SELVA ALEGRE",
+          "oficiales": 7,
+          "emparejados": 2,
+          "exhaustividad": 0.2857142857142857
+        },
+        {
+          "distrito": "UCHUMAYO",
+          "oficiales": 5,
+          "emparejados": 2,
+          "exhaustividad": 0.4
+        },
+        {
+          "distrito": "YURA",
+          "oficiales": 4,
+          "emparejados": 1,
+          "exhaustividad": 0.25
+        },
+        {
+          "distrito": "MOLLEBAYA",
+          "oficiales": 2,
+          "emparejados": 1,
+          "exhaustividad": 0.5
+        },
+        {
+          "distrito": "CHIGUATA",
+          "oficiales": 2,
+          "emparejados": 1,
+          "exhaustividad": 0.5
+        },
+        {
+          "distrito": "TIABAYA",
+          "oficiales": 2,
+          "emparejados": 1,
+          "exhaustividad": 0.5
+        },
+        {
+          "distrito": "POCSI",
+          "oficiales": 2,
+          "emparejados": 0,
+          "exhaustividad": 0
+        },
+        {
+          "distrito": "SACHACA",
+          "oficiales": 2,
+          "emparejados": 1,
+          "exhaustividad": 0.5
+        },
+        {
+          "distrito": "YARABAMBA",
+          "oficiales": 2,
+          "emparejados": 0,
+          "exhaustividad": 0
+        },
+        {
+          "distrito": "SABANDIA",
+          "oficiales": 1,
+          "emparejados": 0,
+          "exhaustividad": 0
+        },
+        {
+          "distrito": "CHARACATO",
+          "oficiales": 1,
+          "emparejados": 1,
+          "exhaustividad": 1
+        },
+        {
+          "distrito": "POLOBAYA",
+          "oficiales": 1,
+          "emparejados": 0,
+          "exhaustividad": 0
+        },
+        {
+          "distrito": "SANTA RITA DE SIHUAS",
+          "oficiales": 1,
+          "emparejados": 0,
+          "exhaustividad": 0
+        },
+        {
+          "distrito": "QUEQUENA",
+          "oficiales": 1,
+          "emparejados": 0,
+          "exhaustividad": 0
+        }
+      ],
+      "impacto": {
+        "umbralM": 1000,
+        "puntos": 1536,
+        "cambian": 172,
+        "osmCumpleOficialNo": 22,
+        "oficialCumpleOsmNo": 150,
+        "porcentajeCambian": 0.11197916666666667,
+        "diferenciaMedianaM": 70.51045090040145,
+        "diferenciaP90M": 1539.6555709640288
+      }
+    },
+    "consultorios": {
+      "oficiales": 237,
+      "osm": 36,
+      "metricas": [
+        {
+          "radioM": 50,
+          "oficiales": 237,
+          "osm": 36,
+          "osmConNombre": 35,
+          "osmSinNombre": 1,
+          "emparejados": 0,
+          "exhaustividad": 0,
+          "precision": 0,
+          "desfaseMedianaM": null,
+          "desfaseP90M": null
+        },
+        {
+          "radioM": 100,
+          "oficiales": 237,
+          "osm": 36,
+          "osmConNombre": 35,
+          "osmSinNombre": 1,
+          "emparejados": 0,
+          "exhaustividad": 0,
+          "precision": 0,
+          "desfaseMedianaM": null,
+          "desfaseP90M": null
+        },
+        {
+          "radioM": 200,
+          "oficiales": 237,
+          "osm": 36,
+          "osmConNombre": 35,
+          "osmSinNombre": 1,
+          "emparejados": 0,
+          "exhaustividad": 0,
+          "precision": 0,
+          "desfaseMedianaM": null,
+          "desfaseP90M": null
+        }
+      ],
+      "porDistrito": [
+        {
+          "distrito": "AREQUIPA",
+          "oficiales": 78,
+          "emparejados": 0,
+          "exhaustividad": 0
+        },
+        {
+          "distrito": "YANAHUARA",
+          "oficiales": 51,
+          "emparejados": 0,
+          "exhaustividad": 0
+        },
+        {
+          "distrito": "PAUCARPATA",
+          "oficiales": 22,
+          "emparejados": 0,
+          "exhaustividad": 0
+        },
+        {
+          "distrito": "CERRO COLORADO",
+          "oficiales": 21,
+          "emparejados": 0,
+          "exhaustividad": 0
+        },
+        {
+          "distrito": "JOSE LUIS BUSTAMANTE Y RIVERO",
+          "oficiales": 20,
+          "emparejados": 0,
+          "exhaustividad": 0
+        },
+        {
+          "distrito": "CAYMA",
+          "oficiales": 13,
+          "emparejados": 0,
+          "exhaustividad": 0
+        },
+        {
+          "distrito": "MARIANO MELGAR",
+          "oficiales": 8,
+          "emparejados": 0,
+          "exhaustividad": 0
+        },
+        {
+          "distrito": "MIRAFLORES",
+          "oficiales": 8,
+          "emparejados": 0,
+          "exhaustividad": 0
+        },
+        {
+          "distrito": "SOCABAYA",
+          "oficiales": 4,
+          "emparejados": 0,
+          "exhaustividad": 0
+        },
+        {
+          "distrito": "ALTO SELVA ALEGRE",
+          "oficiales": 4,
+          "emparejados": 0,
+          "exhaustividad": 0
+        },
+        {
+          "distrito": "SACHACA",
+          "oficiales": 4,
+          "emparejados": 0,
+          "exhaustividad": 0
+        },
+        {
+          "distrito": "JACOBO HUNTER",
+          "oficiales": 2,
+          "emparejados": 0,
+          "exhaustividad": 0
+        },
+        {
+          "distrito": "UCHUMAYO",
+          "oficiales": 1,
+          "emparejados": 0,
+          "exhaustividad": 0
+        },
+        {
+          "distrito": "YURA",
+          "oficiales": 1,
+          "emparejados": 0,
+          "exhaustividad": 0
+        }
+      ]
+    },
+    "educacion": {
+      "oficiales": 1508,
+      "iies": 2569,
+      "osm": 2151,
+      "metricas": [
+        {
+          "radioM": 50,
+          "oficiales": 1508,
+          "osm": 2151,
+          "osmConNombre": 2115,
+          "osmSinNombre": 36,
+          "emparejados": 963,
+          "exhaustividad": 0.6385941644562334,
+          "precision": 0.4553191489361702,
+          "desfaseMedianaM": 5.661213938070458,
+          "desfaseP90M": 25.515932665182014
+        },
+        {
+          "radioM": 100,
+          "oficiales": 1508,
+          "osm": 2151,
+          "osmConNombre": 2115,
+          "osmSinNombre": 36,
+          "emparejados": 1028,
+          "exhaustividad": 0.6816976127320955,
+          "precision": 0.48605200945626476,
+          "desfaseMedianaM": 6.16459991096403,
+          "desfaseP90M": 37.916517358142094
+        },
+        {
+          "radioM": 200,
+          "oficiales": 1508,
+          "osm": 2151,
+          "osmConNombre": 2115,
+          "osmSinNombre": 36,
+          "emparejados": 1048,
+          "exhaustividad": 0.6949602122015915,
+          "precision": 0.4955082742316785,
+          "desfaseMedianaM": 6.290961142064187,
+          "desfaseP90M": 43.728313798711014
+        }
+      ],
+      "porDistrito": [
+        {
+          "distrito": "CERRO COLORADO",
+          "oficiales": 292,
+          "emparejados": 213,
+          "exhaustividad": 0.7294520547945206
+        },
+        {
+          "distrito": "AREQUIPA",
+          "oficiales": 189,
+          "emparejados": 133,
+          "exhaustividad": 0.7037037037037037
+        },
+        {
+          "distrito": "PAUCARPATA",
+          "oficiales": 147,
+          "emparejados": 101,
+          "exhaustividad": 0.6870748299319728
+        },
+        {
+          "distrito": "CAYMA",
+          "oficiales": 121,
+          "emparejados": 96,
+          "exhaustividad": 0.7933884297520661
+        },
+        {
+          "distrito": "JOSE LUIS BUSTAMANTE Y RIVERO",
+          "oficiales": 110,
+          "emparejados": 75,
+          "exhaustividad": 0.6818181818181818
+        },
+        {
+          "distrito": "SOCABAYA",
+          "oficiales": 102,
+          "emparejados": 66,
+          "exhaustividad": 0.6470588235294118
+        },
+        {
+          "distrito": "ALTO SELVA ALEGRE",
+          "oficiales": 91,
+          "emparejados": 50,
+          "exhaustividad": 0.5494505494505495
+        },
+        {
+          "distrito": "MARIANO MELGAR",
+          "oficiales": 76,
+          "emparejados": 51,
+          "exhaustividad": 0.6710526315789473
+        },
+        {
+          "distrito": "MIRAFLORES",
+          "oficiales": 74,
+          "emparejados": 45,
+          "exhaustividad": 0.6081081081081081
+        },
+        {
+          "distrito": "JACOBO HUNTER",
+          "oficiales": 62,
+          "emparejados": 45,
+          "exhaustividad": 0.7258064516129032
+        },
+        {
+          "distrito": "YURA",
+          "oficiales": 46,
+          "emparejados": 31,
+          "exhaustividad": 0.6739130434782609
+        },
+        {
+          "distrito": "YANAHUARA",
+          "oficiales": 45,
+          "emparejados": 30,
+          "exhaustividad": 0.6666666666666666
+        },
+        {
+          "distrito": "SACHACA",
+          "oficiales": 43,
+          "emparejados": 33,
+          "exhaustividad": 0.7674418604651163
+        },
+        {
+          "distrito": "TIABAYA",
+          "oficiales": 32,
+          "emparejados": 24,
+          "exhaustividad": 0.75
+        },
+        {
+          "distrito": "UCHUMAYO",
+          "oficiales": 20,
+          "emparejados": 17,
+          "exhaustividad": 0.85
+        },
+        {
+          "distrito": "CHARACATO",
+          "oficiales": 20,
+          "emparejados": 11,
+          "exhaustividad": 0.55
+        },
+        {
+          "distrito": "CHIGUATA",
+          "oficiales": 9,
+          "emparejados": 7,
+          "exhaustividad": 0.7777777777777778
+        },
+        {
+          "distrito": "SABANDIA",
+          "oficiales": 8,
+          "emparejados": 6,
+          "exhaustividad": 0.75
+        },
+        {
+          "distrito": "MOLLEBAYA",
+          "oficiales": 7,
+          "emparejados": 4,
+          "exhaustividad": 0.5714285714285714
+        },
+        {
+          "distrito": "YARABAMBA",
+          "oficiales": 6,
+          "emparejados": 3,
+          "exhaustividad": 0.5
+        },
+        {
+          "distrito": "QUEQUENA",
+          "oficiales": 4,
+          "emparejados": 3,
+          "exhaustividad": 0.75
+        },
+        {
+          "distrito": "POCSI",
+          "oficiales": 2,
+          "emparejados": 2,
+          "exhaustividad": 1
+        },
+        {
+          "distrito": "POLOBAYA",
+          "oficiales": 2,
+          "emparejados": 2,
+          "exhaustividad": 1
+        }
+      ],
+      "porNivel": {
+        "inicial": {
+          "oficiales": 1221,
+          "osm": 1191,
+          "metricas": [
+            {
+              "radioM": 50,
+              "oficiales": 1221,
+              "osm": 1191,
+              "osmConNombre": 1185,
+              "osmSinNombre": 6,
+              "emparejados": 754,
+              "exhaustividad": 0.6175266175266175,
+              "precision": 0.6362869198312237,
+              "desfaseMedianaM": 5.464643767086592,
+              "desfaseP90M": 19.154408436731117
+            },
+            {
+              "radioM": 100,
+              "oficiales": 1221,
+              "osm": 1191,
+              "osmConNombre": 1185,
+              "osmSinNombre": 6,
+              "emparejados": 795,
+              "exhaustividad": 0.6511056511056511,
+              "precision": 0.6708860759493671,
+              "desfaseMedianaM": 5.661152250549586,
+              "desfaseP90M": 29.057600115913857
+            },
+            {
+              "radioM": 200,
+              "oficiales": 1221,
+              "osm": 1191,
+              "osmConNombre": 1185,
+              "osmSinNombre": 6,
+              "emparejados": 812,
+              "exhaustividad": 0.665028665028665,
+              "precision": 0.6852320675105485,
+              "desfaseMedianaM": 5.777765272192754,
+              "desfaseP90M": 35.646516491007866
+            }
+          ],
+          "impacto": {
+            "umbralM": 500,
+            "puntos": 1536,
+            "cambian": 100,
+            "osmCumpleOficialNo": 27,
+            "oficialCumpleOsmNo": 73,
+            "porcentajeCambian": 0.06510416666666667,
+            "diferenciaMedianaM": 14.255884760455444,
+            "diferenciaP90M": 356.22464558842444
+          }
+        },
+        "primaria": {
+          "oficiales": 823,
+          "osm": 892,
+          "metricas": [
+            {
+              "radioM": 50,
+              "oficiales": 823,
+              "osm": 892,
+              "osmConNombre": 862,
+              "osmSinNombre": 30,
+              "emparejados": 498,
+              "exhaustividad": 0.6051032806804374,
+              "precision": 0.5777262180974478,
+              "desfaseMedianaM": 7.748143455840237,
+              "desfaseP90M": 33.950940591434914
+            },
+            {
+              "radioM": 100,
+              "oficiales": 823,
+              "osm": 892,
+              "osmConNombre": 862,
+              "osmSinNombre": 30,
+              "emparejados": 552,
+              "exhaustividad": 0.6707168894289186,
+              "precision": 0.6403712296983759,
+              "desfaseMedianaM": 10.01006686442543,
+              "desfaseP90M": 48.311313519616945
+            },
+            {
+              "radioM": 200,
+              "oficiales": 823,
+              "osm": 892,
+              "osmConNombre": 862,
+              "osmSinNombre": 30,
+              "emparejados": 563,
+              "exhaustividad": 0.68408262454435,
+              "precision": 0.6531322505800464,
+              "desfaseMedianaM": 10.664722137960725,
+              "desfaseP90M": 52.94306272626934
+            }
+          ],
+          "impacto": {
+            "umbralM": 1500,
+            "puntos": 1536,
+            "cambian": 85,
+            "osmCumpleOficialNo": 30,
+            "oficialCumpleOsmNo": 55,
+            "porcentajeCambian": 0.055338541666666664,
+            "diferenciaMedianaM": 20.26181047530028,
+            "diferenciaP90M": 406.429678000821
+          }
+        },
+        "secundaria": {
+          "oficiales": 523,
+          "osm": 556,
+          "metricas": [
+            {
+              "radioM": 50,
+              "oficiales": 523,
+              "osm": 556,
+              "osmConNombre": 526,
+              "osmSinNombre": 30,
+              "emparejados": 281,
+              "exhaustividad": 0.5372848948374761,
+              "precision": 0.5342205323193916,
+              "desfaseMedianaM": 10.184903069479594,
+              "desfaseP90M": 36.982741373247485
+            },
+            {
+              "radioM": 100,
+              "oficiales": 523,
+              "osm": 556,
+              "osmConNombre": 526,
+              "osmSinNombre": 30,
+              "emparejados": 323,
+              "exhaustividad": 0.6175908221797323,
+              "precision": 0.6140684410646388,
+              "desfaseMedianaM": 14.369878432359876,
+              "desfaseP90M": 55.07339426527115
+            },
+            {
+              "radioM": 200,
+              "oficiales": 523,
+              "osm": 556,
+              "osmConNombre": 526,
+              "osmSinNombre": 30,
+              "emparejados": 330,
+              "exhaustividad": 0.6309751434034416,
+              "precision": 0.6273764258555133,
+              "desfaseMedianaM": 15.339295487674555,
+              "desfaseP90M": 58.83279885048208
+            }
+          ],
+          "impacto": {
+            "umbralM": 3000,
+            "puntos": 1536,
+            "cambian": 73,
+            "osmCumpleOficialNo": 3,
+            "oficialCumpleOsmNo": 70,
+            "porcentajeCambian": 0.047526041666666664,
+            "diferenciaMedianaM": 31.537048643768713,
+            "diferenciaP90M": 727.7631320615811
+          }
+        }
+      }
+    }
+  }
+}

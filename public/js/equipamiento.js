@@ -55,7 +55,7 @@ const Equipamiento = (() => {
     const consulta = Services.buildOverpassQuery(categoria, punto.lat, punto.lon, radio);
     const r = await Services.overpassWithFallback(CONFIG.overpassEndpoints[0].url, consulta);
     const modo = categoria === 'areasVerdes' ? 'poligonos' : 'puntos';
-    const features = Calculos.osmAFeatures(r.data.elements, modo).filter((f) => Calculos.categoriasDe(f.properties.tags).includes(categoria));
+    const features = Calculos.osmAFeatures(r.data.elements, modo).filter((f) => Calculos.categoriasDe(f.properties.tags, f.properties.nombre).includes(categoria));
     const base = r.data.osm3s && r.data.osm3s.timestamp_osm_base;
     return { features, fecha: base ? base.slice(0, 10) : new Date().toISOString().slice(0, 10), origen: 'overpass', alcanceM: radio };
   }
