@@ -174,6 +174,32 @@ describe('clasificarSalud', () => {
   it('el centro odontológico no cuenta (solo atiende una especialidad; OpenStreetMap también excluye al dentista)', () => {
     expect(E.clasificarSalud(r({ tipo: 'CENTRO ODONTOLOGICO' }))).toEqual({ incluir: false, motivo: 'odontologico' });
   });
+  describe('el nombre dental (la misma regla de OpenStreetMap: Calculos.esDental)', () => {
+    const consultorio = 'CONSULTORIOS MEDICOS Y DE OTROS PROFESIONALES DE LA SALUD';
+    const odonto = { incluir: false, motivo: 'odontologico' };
+    it('un consultorio cuya clasificación NO dice odontológico pero cuyo nombre es dental o odontológico no cuenta ni como consultorio ni como salud', () => {
+      for (const nombre of ['CONSULTORIO DENTAL SAN JOSE SAC', 'Consultorio Odontológico Cornejo', 'CONSULTORIO ODONTOLOGICO "VIDADENT"', 'Dental Socabaya', 'IMPLANT DENTISTRY', 'Mister Dentist', 'JK Odontología', 'santé dental']) {
+        expect(E.clasificarSalud(r({ tipo: consultorio, categoria: 'I-1', nombre }))).toEqual(odonto);
+      }
+    });
+    it('también si la clasificación es de policlínico o de clínica, pero el nombre es solo dental', () => {
+      expect(E.clasificarSalud(r({ tipo: 'POLICLINICOS', nombre: 'Policlínico Dental Arequipa' }))).toEqual(odonto);
+      expect(E.clasificarSalud(r({ tipo: 'CENTROS MEDICOS ESPECIALIZADOS', nombre: 'CLINICA ODONTOLOGICA DEL SUR' }))).toEqual(odonto);
+      expect(E.clasificarSalud(r({ tipo: consultorio, categoria: 'I-1', nombre: 'Consultorio Dental Characato Salud' }))).toEqual(odonto); // «salud» sola no basta
+    });
+    it('un establecimiento general que además ofrece odontología (medicina, médico, hospital, centro o puesto de salud, especialidades) se queda', () => {
+      expect(E.clasificarSalud(r({ tipo: 'POLICLINICOS', nombre: 'Policlínico X - Medicina y Odontología' }))).toEqual({ incluir: true, motivo: null, grupo: 'salud' });
+      expect(E.clasificarSalud(r({ tipo: 'POLICLINICOS', nombre: 'POLICLINICO SAN JOSE ESPECIALIDADES Y ODONTOLOGIA' })).grupo).toBe('salud');
+      expect(E.clasificarSalud(r({ tipo: 'HOSPITALES O CLINICAS DE ATENCION GENERAL', nombre: 'HOSPITAL DE LA SOLIDARIDAD - SERVICIO DE ODONTOLOGIA' })).grupo).toBe('salud');
+      expect(E.clasificarSalud(r({ tipo: 'CENTROS DE SALUD O CENTROS MEDICOS', nombre: 'CENTRO DE SALUD DENTAL Y MEDICO' })).grupo).toBe('salud');
+      expect(E.clasificarSalud(r({ tipo: consultorio, categoria: 'I-1', nombre: 'Consultorio Medicina General y Odontología' })).grupo).toBe('consultorio');
+    });
+    it('lo que no es dental por el nombre no se toca (ni con sufijos parecidos que no son la palabra)', () => {
+      expect(E.clasificarSalud(r({ tipo: consultorio, categoria: 'I-1', nombre: 'CONSULTORIO MEDICO DR. BRAVO' })).grupo).toBe('consultorio');
+      expect(E.clasificarSalud(r({ tipo: consultorio, categoria: 'I-1', nombre: 'Consultorio Pediátrico Los Andes' })).grupo).toBe('consultorio');
+      expect(E.clasificarSalud(r({ tipo: 'POLICLINICOS', nombre: null })).grupo).toBe('salud');
+    });
+  });
   it('un establecimiento cuenta en el grupo «salud»', () => {
     expect(E.clasificarSalud(r({}))).toEqual({ incluir: true, motivo: null, grupo: 'salud' });
     for (const tipo of ['HOSPITALES O CLINICAS DE ATENCION GENERAL', 'CENTROS DE SALUD O CENTROS MEDICOS', 'PUESTOS DE SALUD O POSTAS DE SALUD', 'POLICLINICOS', 'CENTROS MEDICOS ESPECIALIZADOS', 'INSTITUTOS DE SALUD ESPECIALIZADOS']) {
