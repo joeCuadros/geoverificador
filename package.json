@@ -18,6 +18,7 @@
     "datos:comercio": "node scripts/descargar-comercio.mjs",
     "datos:electricidad": "node scripts/descargar-concesiones-electricas.mjs",
     "datos:censo": "node scripts/descargar-censo-servicios.mjs",
+    "datos:rutas-osm": "node scripts/descargar-rutas-osm.mjs",
     "datos:rutas": "node scripts/descargar-rutas-smartbus.mjs",
     "datos:verificar": "node scripts/verificar-datos.mjs",
     "datos:validar-osm": "node scripts/validar-zonificacion-osm.mjs",
