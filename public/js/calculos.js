@@ -434,20 +434,98 @@ const Calculos = (() => {
     };
   }
 
-  // ----------------------------------------------- Comercio: mercados, supermercados y malls
+  // ----------------------------------------------- Comercio por NECESIDAD (mercados, supermercados y malls)
 
   /**
-   * Una sola redacción de por qué mercados, supermercados y malls son informativos, para la ficha, el chat y el informe. No hay umbral
-   * (decisión pendiente): no se dice si están cerca o lejos y no suman al puntaje ni a la búsqueda de zonas.
+   * El comercio se organiza por lo que la persona necesita, no por la etiqueta de OpenStreetMap. Las tres necesidades son INFORMATIVAS (sin
+   * umbral: ninguna norma peruana fija metros para un mercado o un mall) y no suman al puntaje ni a la búsqueda de zonas.
+   *   abastecimiento   comida, a escala de barrio: mercados (amenity=marketplace) + supermercados (shop=supermarket). Un supermercado dentro del polígono
+   *                    de un mall es el punto de abastecimiento; el mall, no.
+   *   compras_ocio     compras y ocio, a escala metropolitana: SOLO los malls confirmados con su fuente (lista curada, propiedad `verificado`).
+   *   comercio_barrio  el resto de lo que OSM etiqueta shop=mall (galerías y centros comerciales pequeños).
+   * `capa` es el id de la capa del mapa; `capas`, los archivos de datos de donde sale.
    */
-  /** Las tres categorías de comercio: id de la variable, capa del mapa y cómo se nombran. */
   const COMERCIO = {
-    mercado: { capa: 'mercados', singular: 'mercado de abastos', plural: 'mercados de abastos', corto: 'mercado', cortos: 'mercados', etiqueta: 'Mercado' },
-    supermercado: { capa: 'supermercados', singular: 'supermercado', plural: 'supermercados', corto: 'supermercado', cortos: 'supermercados', etiqueta: 'Supermercado' },
-    mall: { capa: 'malls', singular: 'mall (centro comercial)', plural: 'malls (centros comerciales)', corto: 'mall', cortos: 'malls', etiqueta: 'Mall' },
+    abastecimiento: {
+      capa: 'abastecimiento', capas: ['mercados', 'supermercados'], escala: 'barrio', etiqueta: 'Abastecimiento (comida)',
+      singular: 'punto de abastecimiento', plural: 'puntos de abastecimiento', corto: 'punto de abastecimiento', cortos: 'puntos de abastecimiento',
+      alcance: 'Cuenta los mercados (amenity=marketplace) y los supermercados (shop=supermarket) de OpenStreetMap. Un supermercado dentro del polígono de un mall es el punto de abastecimiento: el mall no lo es.',
+    },
+    compras_ocio: {
+      capa: 'compras_ocio', capas: ['malls'], escala: 'metropolitana', etiqueta: 'Compras y ocio',
+      singular: 'mall confirmado', plural: 'malls confirmados', corto: 'mall', cortos: 'malls',
+      alcance: 'Cuenta solo los malls confirmados con la fuente de cada uno (lista curada) y ubicados en OpenStreetMap; la distancia es al borde de su polígono. Un mall confirmado que OpenStreetMap no tiene no se mide.',
+    },
+    comercio_barrio: {
+      capa: 'comercio_barrio', capas: ['malls'], escala: 'barrio', etiqueta: 'Comercio de barrio',
+      singular: 'galería o centro comercial pequeño', plural: 'galerías y centros comerciales pequeños', corto: 'galería', cortos: 'galerías',
+      alcance: 'Cuenta lo que OpenStreetMap etiqueta shop=mall (o terreno comercial con nombre de mall) y no está en la lista de malls confirmados: galerías y centros comerciales pequeños, que son comercio de barrio.',
+    },
   };
 
-  const NOTA_COMERCIO = 'Es informativo: mercados, supermercados y malls no tienen una distancia de referencia (es una decisión pendiente), así que no se dice si están cerca o lejos, no suman al puntaje ni a la búsqueda de zonas y no se elige un lugar por ellos.';
+  /** Las categorías de OSM de las que sale el comercio: nombre de cada una (el abastecimiento muestra el más cercano de mercado y de supermercado). */
+  const COMERCIO_TIPO = {
+    mercado: { capa: 'mercados', singular: 'mercado de abastos', plural: 'mercados de abastos', etiqueta: 'Mercado' },
+    supermercado: { capa: 'supermercados', singular: 'supermercado', plural: 'supermercados', etiqueta: 'Supermercado' },
+    mall: { capa: 'malls', singular: 'mall (centro comercial)', plural: 'malls (centros comerciales)', etiqueta: 'Mall' },
+  };
+  const TIPO_DE_CAPA = { mercados: 'mercado', supermercados: 'supermercado', malls: 'mall' };
+  const CAPA_DE_TIPO = { mercado: 'mercados', supermercado: 'supermercados', mall: 'malls' };
+
+  const NOTA_COMERCIO = 'Es informativo: el abastecimiento (mercados y supermercados), las compras y el ocio (malls) y el comercio de barrio (galerías) no tienen una distancia de referencia (es una decisión pendiente), así que no se dice si están cerca o lejos, no suman al puntaje ni a la búsqueda de zonas y no se elige un lugar por ellos.';
+
+  /**
+   * A qué necesidad pertenece un elemento de una capa de OSM (`capa`: mercados | supermercados | malls; `props`: sus propiedades): mercados y
+   * supermercados son abastecimiento; un mall con `verificado` (lista curada, con su fuente) es compras_ocio y cualquier otro shop=mall, comercio_barrio.
+   */
+  function necesidadComercio(capa, props) {
+    if (capa === 'mercados' || capa === 'supermercados') return 'abastecimiento';
+    if (capa === 'malls') return props && props.verificado ? 'compras_ocio' : 'comercio_barrio';
+    return null;
+  }
+
+  const posicionDe = (g) => (g.type === 'Point' ? { lat: g.coordinates[1], lon: g.coordinates[0] } : centroDe(g));
+
+  /**
+   * El mall (Feature con polígono) que contiene al punto { lat, lon }, o null. Un mall que es solo un punto no contiene nada. Si dos polígonos lo
+   * contienen, gana el confirmado con su fuente.
+   */
+  function mallQueContiene(punto, malls) {
+    let hallado = null;
+    for (const m of malls || []) {
+      const g = m && m.geometry;
+      if (!g || g.type === 'Point' || !poligonosDe(g).some((anillos) => puntoEnPoligono(punto.lat, punto.lon, anillos))) continue;
+      if (!hallado || (m.properties && m.properties.verificado && !(hallado.properties && hallado.properties.verificado))) hallado = m;
+    }
+    return hallado;
+  }
+
+  /**
+   * Reparte los mercados, supermercados y malls (listas de Feature, como los archivos congelados) por necesidad: { abastecimiento, compras_ocio, comercio_barrio }.
+   * Cada Feature conserva su geometría y sus propiedades (no se recorta ni se mueve nada) y suma `tipo` (mercado | supermercado | mall) y `necesidad`;
+   * un supermercado suma además `dentro_de_mall`: { osm, nombre, verificado } del mall en cuyo polígono está su punto (el centro de la caja si es un
+   * polígono), o null. Es la única definición del reparto: la usan la ficha, el mapa, el conteo por distrito, el chat y el informe.
+   */
+  function agruparComercio(entrada) {
+    const e = entrada || {};
+    const validos = (lista) => (lista || []).filter((f) => f && f.geometry);
+    const malls = validos(e.malls);
+    const grupos = { abastecimiento: [], compras_ocio: [], comercio_barrio: [] };
+    for (const capa of ['mercados', 'supermercados', 'malls']) {
+      for (const f of validos(e[capa])) {
+        const necesidad = necesidadComercio(capa, f.properties);
+        const extra = { tipo: TIPO_DE_CAPA[capa], necesidad };
+        if (capa === 'supermercados') {
+          const c = posicionDe(f.geometry);
+          const m = c ? mallQueContiene(c, malls) : null;
+          const mp = m && m.properties;
+          extra.dentro_de_mall = m ? { osm: mp.osm ?? null, nombre: mp.nombre ?? null, verificado: Boolean(mp.verificado) } : null;
+        }
+        grupos[necesidad].push({ ...f, properties: { ...f.properties, ...extra } });
+      }
+    }
+    return grupos;
+  }
 
   /**
    * De dónde sale un mercado, supermercado o mall: OpenStreetMap es su fuente (no un respaldo) y, si el mall está en la lista curada,
@@ -464,8 +542,9 @@ const Calculos = (() => {
    * se mide la distancia al BORDE (0 si el punto está dentro), no al centro, para no «cortar» un mall o un mercado grande.
    *   features: [Feature { properties { nombre, osm?, fuente?, codigo?, verificado?, tags? }, geometry }]
    *   opciones: { umbralM, fuente, fecha, metodo, categoria? }   (sin umbral numérico → INFORMATIVO)
-   * Devuelve { estado, nombre, distanciaM, umbralM, fuente, fecha, metodo, lat, lon, osm, etiqueta, fuenteElemento, codigo, forma, verificado }
-   * (`lat` y `lon` ubican el marcador: el punto, o el centro de la caja del polígono; `forma` es el polígono, o null si es un punto).
+   * Devuelve { estado, nombre, distanciaM, umbralM, fuente, fecha, metodo, lat, lon, osm, etiqueta, fuenteElemento, codigo, forma, verificado, tipo, dentroDeMall }
+   * (`lat` y `lon` ubican el marcador: el punto, o el centro de la caja del polígono; `forma` es el polígono, o null si es un punto;
+   * `tipo` y `dentroDeMall` salen de agruparComercio: mercado | supermercado | mall, y el mall que contiene al supermercado).
    */
   function evaluarMasCercanoForma(punto, features, opciones) {
     const { fuente, fecha, metodo, categoria } = opciones;
@@ -483,7 +562,7 @@ const Calculos = (() => {
       if (d < mejorD) { mejor = f; mejorD = d; }
     }
     if (!mejor) {
-      return { estado: 'SIN DATO', nombre: null, distanciaM: null, ...base, lat: null, lon: null, osm: null, etiqueta: null, fuenteElemento: null, codigo: null, forma: null, verificado: null };
+      return { estado: 'SIN DATO', nombre: null, distanciaM: null, ...base, lat: null, lon: null, osm: null, etiqueta: null, fuenteElemento: null, codigo: null, forma: null, verificado: null, tipo: null, dentroDeMall: null };
     }
     const p = mejor.properties || {};
     const g = mejor.geometry;
@@ -497,12 +576,14 @@ const Calculos = (() => {
       lat: c ? c.lat : null,
       lon: c ? c.lon : null,
       osm: p.osm ?? null,
-      etiqueta: categoria ? etiquetaDe(p.tags, categoria) : null,
+      etiqueta: categoria || CAPA_DE_TIPO[p.tipo] ? etiquetaDe(p.tags, categoria || CAPA_DE_TIPO[p.tipo]) : null,
       fuenteElemento: p.fuente ?? null,
       osmPrimaria: p.fuente === 'OSM' || p.fuente === undefined,
       codigo: p.codigo ?? null,
       forma: esPunto ? null : g,
       verificado: p.verificado ?? null,
+      tipo: p.tipo ?? null,
+      dentroDeMall: p.dentro_de_mall ?? null,
     };
   }
 
@@ -901,6 +982,10 @@ const Calculos = (() => {
     NOTA_CONSULTORIO,
     NOTA_COMERCIO,
     COMERCIO,
+    COMERCIO_TIPO,
+    necesidadComercio,
+    mallQueContiene,
+    agruparComercio,
     textoFuenteComercio,
     evaluarMasCercanoForma,
   };

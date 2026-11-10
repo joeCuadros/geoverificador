@@ -115,6 +115,11 @@ const CONFIG = {
     // responsable del proyecto. Referencia propuesta: ninguna en metros con fuente verificada (docs/METODOLOGIA.md §6.4: el Sistema Nacional de
     // Estándares de Urbanismo, MVCS 2011, es una propuesta preliminar que fija población por equipamiento, no un radio de influencia en metros).
     // Con null se muestra el más cercano y su distancia, sin cumple / no cumple, sin efecto en el puntaje ni en la búsqueda de zonas. No inventar un valor aquí.
+    // El comercio se organiza por NECESIDAD (Calculos.COMERCIO): abastecimiento (mercados + supermercados), compras_ocio (malls confirmados) y
+    // comercio_barrio (galerías). Las tres son informativas y sus umbrales son null; mercado, supermercado y mall son los de cada categoría de OSM.
+    abastecimiento: null,    // pendiente de decisión del usuario; referencia propuesta: ninguna verificada
+    compras_ocio: null,      // pendiente de decisión del usuario; referencia propuesta: ninguna verificada
+    comercio_barrio: null,   // pendiente de decisión del usuario; referencia propuesta: ninguna verificada
     mercado: null,       // pendiente de decisión del usuario; referencia propuesta: ninguna verificada
     supermercado: null,  // pendiente de decisión del usuario; referencia propuesta: ninguna verificada
     mall: null,          // pendiente de decisión del usuario; referencia propuesta: ninguna verificada
@@ -126,6 +131,9 @@ const CONFIG = {
     bordeZona: 'Convención del proyecto',
     salud: 'Convención del proyecto',
     consultorio: 'Sin umbral: pendiente de una decisión del proyecto; se muestra solo como dato informativo',
+    abastecimiento: 'Sin umbral: pendiente de decisión del usuario; referencia propuesta: ninguna con fuente verificada en metros; se muestra solo como dato informativo',
+    compras_ocio: 'Sin umbral: pendiente de decisión del usuario; referencia propuesta: ninguna con fuente verificada en metros; se muestra solo como dato informativo',
+    comercio_barrio: 'Sin umbral: pendiente de decisión del usuario; referencia propuesta: ninguna con fuente verificada en metros; se muestra solo como dato informativo',
     mercado: 'Sin umbral: pendiente de decisión del usuario; referencia propuesta: ninguna con fuente verificada en metros; se muestra solo como dato informativo',
     supermercado: 'Sin umbral: pendiente de decisión del usuario; referencia propuesta: ninguna con fuente verificada en metros; se muestra solo como dato informativo',
     mall: 'Sin umbral: pendiente de decisión del usuario; referencia propuesta: ninguna con fuente verificada en metros; se muestra solo como dato informativo',

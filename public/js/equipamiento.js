@@ -8,8 +8,8 @@
  * Cada resultado trae { estado, nombre, distanciaM, umbralM, fuente, fecha, metodo, ... } con estado
  * CUMPLE | NO CUMPLE | SIN DATO. Las distancias son en línea recta, no recorrido a pie.
  *
- * Además, el mercado, el supermercado y el mall más cercanos (`mercado`, `supermercado`, `mall`): INFORMATIVOS como el consultorio (sin umbral; del polígono
- * de un mall se mide la distancia al borde).
+ * Además, las tres necesidades de comercio (`abastecimiento`, `compras_ocio`, `comercio_barrio`; ver Calculos.COMERCIO): INFORMATIVAS como el consultorio (sin umbral;
+ * del polígono de un mall se mide la distancia al borde).
  *
  * Además, el consultorio médico más cercano (`consultorio`): una categoría APARTE de la salud, INFORMATIVA (sin umbral: la distancia
  * de referencia es una decisión pendiente; estado INFORMATIVO | SIN DATO). La salud se evalúa solo con establecimientos.
@@ -161,18 +161,19 @@ const Equipamiento = (() => {
   }
 
   /**
-   * Mercado, supermercado o mall más cercano: INFORMATIVO. No hay umbral (CONFIG.umbrales.mercado / supermercado / mall son null), así que no
+   * Una necesidad de comercio (abastecimiento | compras_ocio | comercio_barrio): INFORMATIVA. No hay umbral (CONFIG.umbrales.* son null), así que no
    * hay cumple / no cumple. Los elementos pueden ser puntos o polígonos: del polígono se mide la distancia al BORDE (0 si el punto está dentro).
+   *   archivos: los archivos de los que sale la necesidad (para la fuente, la fecha y de dónde son los datos).
    */
-  function comercio(id, datos, punto, soloVerificados = false) {
+  function comercio(id, archivosDe, features, punto, umbralM = CONFIG.umbrales[id], que = Calculos.COMERCIO[id].singular) {
     const def = Calculos.COMERCIO[id];
-    const features = soloVerificados ? datos.features.filter((f) => f.properties && f.properties.verificado) : datos.features;
+    const datos = archivosDe[0];
+    const fechas = archivosDe.map((d) => d.fecha).filter(Boolean).sort();
     return Calculos.evaluarMasCercanoForma(punto, features, {
-      umbralM: CONFIG.umbrales[id],
+      umbralM,
       fuente: datos.fuente || CONFIG.equipamiento.fuente,
-      fecha: datos.fecha,
-      categoria: def.capa,
-      metodo: `Distancia en línea recta hasta el ${soloVerificados ? `${def.singular} confirmado con la fuente de cada uno (lista curada)` : def.singular} más cercano; si es un polígono, hasta su borde (0 si el punto está dentro). ${origenDeLosDatos(datos)} Sin umbral: ${CONFIG.fuentesUmbral[id]}.`,
+      fecha: fechas.length ? fechas[fechas.length - 1] : null,
+      metodo: `Distancia en línea recta hasta el ${que} más cercano; si es un polígono, hasta su borde (0 si el punto está dentro). ${origenDeLosDatos(datos)} ${def.alcance} Sin umbral: ${CONFIG.fuentesUmbral[id]}.`,
     });
   }
 
@@ -245,40 +246,66 @@ const Equipamiento = (() => {
     }
   }
 
-  /** El más cercano de una categoría de comercio, sin respaldo en vivo: es un dato informativo y no vale una consulta a Overpass. Nunca rechaza. */
-  async function comercioCercano(id, punto, soloVerificados = false) {
-    const def = Calculos.COMERCIO[id];
+  /**
+   * Las tres necesidades de comercio para el punto, sin respaldo en vivo: son datos informativos y no valen una consulta a Overpass. Nunca rechaza.
+   * Cada una pide los archivos de los que sale (abastecimiento: mercados y supermercados; compras_ocio y comercio_barrio: malls); si falta alguno, esa necesidad
+   * dice SIN DATO en vez de calcularse con la mitad. El abastecimiento suma además el más cercano de cada tipo (`porTipo`: mercado y supermercado).
+   */
+  async function comercioPorNecesidad(punto) {
+    const ids = Object.keys(Calculos.COMERCIO);
+    let leidos;
     try {
-      const datos = await archivo(def.capa);
-      return datos ? comercio(id, datos, punto, soloVerificados) : sinDato(`No se encontró el archivo de ${def.plural}.`, CONFIG.umbrales[id]);
+      const nombres = Object.values(Calculos.COMERCIO_TIPO).map((t) => t.capa);
+      leidos = Object.fromEntries(await Promise.all(nombres.map(async (c) => [c, await archivo(c)])));
     } catch (err) {
-      console.error(`[Equipamiento] ${def.capa}`, err);
-      return sinDato(err.message, CONFIG.umbrales[id]);
+      console.error('[Equipamiento] comercio', err);
+      return Object.fromEntries(ids.map((id) => [id, sinDato(err.message, CONFIG.umbrales[id])]));
     }
+    const grupos = Calculos.agruparComercio(Object.fromEntries(Object.entries(leidos).map(([c, d]) => [c, d ? d.features : []])));
+    const out = {};
+    for (const id of ids) {
+      const def = Calculos.COMERCIO[id];
+      const faltan = def.capas.filter((c) => !leidos[c]);
+      if (faltan.length) {
+        out[id] = sinDato(`No se encontró el archivo de ${faltan.map((c) => Object.values(Calculos.COMERCIO_TIPO).find((x) => x.capa === c).plural).join(' ni de ')}.`, CONFIG.umbrales[id]);
+        continue;
+      }
+      const archivosDe = def.capas.map((c) => leidos[c]);
+      try {
+        out[id] = comercio(id, archivosDe, grupos[id], punto);
+        if (id === 'abastecimiento') {
+          out[id].porTipo = Object.fromEntries(['mercado', 'supermercado'].map((tipo) => {
+            const t = Calculos.COMERCIO_TIPO[tipo];
+            return [tipo, comercio(id, [leidos[t.capa]], grupos[id].filter((f) => f.properties.tipo === tipo), punto, CONFIG.umbrales[tipo], t.singular)];
+          }));
+        }
+      } catch (err) {
+        console.error(`[Equipamiento] ${id}`, err);
+        out[id] = sinDato(err.message, CONFIG.umbrales[id]);
+      }
+    }
+    return out;
   }
 
   /**
    * Evalúa las variables del equipamiento para el punto.
-   * Devuelve { salud, consultorio, mercado, supermercado, mall, mallVerificado (informativos; `mall` es todo lo que OSM etiqueta shop=mall, que incluye galerías pequeñas, y `mallVerificado` el más cercano de la lista curada de malls confirmados con su fuente), educacion: { inicial, primaria, secundaria }, transporte, areaVerde }.
+   * Devuelve { salud, consultorio, abastecimiento, compras_ocio, comercio_barrio (las tres necesidades de comercio, informativas: ver Calculos.COMERCIO; `abastecimiento.porTipo` trae el mercado y el supermercado más cercanos), educacion: { inicial, primaria, secundaria }, transporte, areaVerde }.
    * `transporte.rutas` agrega las líneas de SmartBus que pasan a ≤ CONFIG.umbrales.transporte del punto (Rutas.cerca): el paradero
    * de OpenStreetMap y los recorridos de SmartBus son dos fuentes distintas y no se mezclan.
    */
   async function evaluar(lat, lon) {
     const punto = { lat, lon };
     const u = CONFIG.umbrales;
-    const [s, c, e, t, v, rutas, mer, sup, mal, malV] = await Promise.all([
+    const [s, c, e, t, v, rutas, comercioNecesidades] = await Promise.all([
       variable('salud', punto, salud, (m) => sinDato(m, u.salud)),
       consultorioCercano(punto),
       variable('educacion', punto, educacion, (m) => Object.fromEntries(NIVELES.map((n) => [n, sinDato(m, u.educacion[n])]))),
       variable('transporte', punto, transporte, (m) => sinDato(m, u.transporte)),
       variable('areasVerdes', punto, areaVerde, (m) => ({ ...sinDato(m, u.areaVerde.distanciaM), areaM2: null, cumple1ha: false })),
       lineasCerca(punto),
-      comercioCercano('mercado', punto),
-      comercioCercano('supermercado', punto),
-      comercioCercano('mall', punto),
-      comercioCercano('mall', punto, true),
+      comercioPorNecesidad(punto),
     ]);
-    return { salud: s, consultorio: c, mercado: mer, supermercado: sup, mall: mal, mallVerificado: malV, educacion: e, transporte: { ...t, rutas }, areaVerde: v };
+    return { salud: s, consultorio: c, ...comercioNecesidades, educacion: e, transporte: { ...t, rutas }, areaVerde: v };
   }
 
   /**
@@ -303,7 +330,7 @@ const Equipamiento = (() => {
 
   /** Los archivos de mercados, supermercados y malls tal como se leyeron: { mercados, supermercados, malls }, cada uno { features, fecha, origen } o null si falta. */
   async function comercioDatos() {
-    const ids = Object.values(Calculos.COMERCIO).map((d) => d.capa);
+    const ids = Object.values(Calculos.COMERCIO_TIPO).map((d) => d.capa);
     const lista = await Promise.all(ids.map((c) => archivo(c).catch(() => null)));
     return Object.fromEntries(ids.map((c, i) => [c, lista[i]]));
   }

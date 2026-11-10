@@ -14,11 +14,11 @@ const CapasUI = (() => {
 
   // Un color por tipo de entidad; los colegios además cambian de forma/letra por nivel (nunca solo el color).
   const COLOR = {
-    inicial: '#9a4d00', primaria: '#1c3a6b', secundaria: '#6b2d7a', salud: '#b0272b', consultorio: '#0f6b6b', mercado: '#9a3412', supermercado: '#065f46', mall: '#9d174d', mercados: '#9a3412', supermercados: '#065f46', malls: '#9d174d', paradero: '#3b4a5a', parques: '#2f7d3b', quebradas: '#1f6fb2',
+    inicial: '#9a4d00', primaria: '#1c3a6b', secundaria: '#6b2d7a', salud: '#b0272b', consultorio: '#0f6b6b', mercado: '#9a3412', supermercado: '#065f46', mall: '#9d174d', galeria: '#a16207', abastecimiento: '#9a3412', compras_ocio: '#9d174d', comercio_barrio: '#a16207', paradero: '#3b4a5a', parques: '#2f7d3b', quebradas: '#1f6fb2',
     sismos: '#c2570c', volcan_alto: '#a31621', volcan_moderado: '#e07b00', volcan_bajo: '#e9c046', sectores: '#0b5d4f', residencial: '#b88a2e', tranquilo: '#8a6d1f', campina: '#6f9a2f', comercial: '#7a4fa0', historico: '#a0422f',
   };
-  const LETRA = { inicial: 'I', primaria: 'P', secundaria: 'S', salud: '+', consultorio: 'C', mercado: 'M', supermercado: 'S', mall: 'CC', paradero: 'B' };
-  const CAPAS_COMERCIO = ['mercados', 'supermercados', 'malls']; // informativas: polígono con popup, sin círculo
+  const LETRA = { inicial: 'I', primaria: 'P', secundaria: 'S', salud: '+', consultorio: 'C', mercado: 'M', supermercado: 'S', mall: 'CC', galeria: 'G', paradero: 'B' };
+  const CAPAS_COMERCIO = ['abastecimiento', 'compras_ocio', 'comercio_barrio']; // las tres necesidades de comercio, informativas: polígono con popup, sin círculo
   // Riesgo de los distritos ante El Niño (CENEPRED): de menor a mayor. La leyenda lleva además el texto y los nombres, así que el color no es lo único que informa.
   const COLOR_RIESGO = { Bajo: '#6aa84f', Medio: '#e9c046', Alto: '#e07b00', 'Muy alto': '#a31621' };
 
@@ -163,9 +163,9 @@ const CapasUI = (() => {
     colegios: '<span class="mu-ico mu-i">I</span><span class="mu-ico mu-p">P</span><span class="mu-ico mu-s">S</span>',
     salud: '<span class="mu-ico mu-salud">+</span>',
     consultorios: '<span class="mu-ico mu-consultorio">C</span>',
-    mercados: '<span class="mu-ico mu-mercado">M</span>',
-    supermercados: '<span class="mu-ico mu-supermercado">S</span>',
-    malls: '<span class="mu-ico mu-mall">CC</span>',
+    abastecimiento: '<span class="mu-ico mu-mercado">M</span><span class="mu-ico mu-supermercado">S</span>',
+    compras_ocio: '<span class="mu-ico mu-mall">CC</span>',
+    comercio_barrio: '<span class="mu-ico mu-galeria">G</span>',
     paraderos: '<span class="mu-ico mu-paradero">B</span>',
     parques: '<span class="mu-bloque" style="background:#2f7d3b"></span>',
     quebradas: '<span class="mu-linea"></span>',
@@ -195,7 +195,7 @@ const CapasUI = (() => {
       + r.sinDatos.map((c) => `<li class="ley-item leyenda-error"><span class="ley-txt">${c === 'lineas' ? 'No pude leer los recorridos de SmartBus, así que no los dibujo.' : `No pude leer el archivo de ${c === 'sismos' ? 'sismos' : c === 'volcan' ? 'peligro volcánico' : c === 'cenepred' ? 'riesgo de los distritos (CENEPRED)' : 'quebradas'}, así que no lo dibujo.`}</span></li>`).join('');
     const fuentes = [];
     if (r.leyenda.some((l) => ['colegios', 'salud', 'consultorios', 'paraderos', 'parques'].includes(l.capa))) fuentes.push(`Colegios: padrón de ESCALE (MINEDU). Salud y consultorios médicos (dos categorías; el consultorio es informativo, sin círculo de distancia): RENIPRESS (SUSALUD). Paraderos y parques: OpenStreetMap (ODbL), que en colegios, salud y consultorios solo completa donde no hay un punto oficial de la misma categoría a 200 m. Datos al ${fecha || 'sin fecha'}; cada punto dice su fuente al tocarlo. Puede faltar alguno.`);
-    if (r.leyenda.some((l) => CAPAS_COMERCIO.includes(l.capa))) fuentes.push('Mercados, supermercados y malls: OpenStreetMap (ODbL), solo informativos (sin distancia de referencia ni círculo); de un mall con forma en el mapa la distancia es al borde, no al centro. Puede faltar alguno.');
+    if (r.leyenda.some((l) => CAPAS_COMERCIO.includes(l.capa))) fuentes.push('Abastecimiento (mercados y supermercados), compras y ocio (malls confirmados con su fuente) y comercio de barrio (galerías): OpenStreetMap (ODbL), solo informativos (sin distancia de referencia ni círculo); de un mall o una galería con forma en el mapa la distancia es al borde, no al centro. Puede faltar alguno.');
     if (r.leyenda.some((l) => ['residencial', 'tranquilo', 'campina', 'comercial', 'historico'].includes(l.capa))) fuentes.push('Zonas: plano del PDM Arequipa 2016-2025 (referencial).');
     if (r.leyenda.some((l) => l.capa === 'quebradas')) fuentes.push('Quebradas y ríos: cauces de la ANA (red de 2018), el IGP y OpenStreetMap (ODbL); cada tramo dice su fuente al tocarlo. Ninguna fuente es completa ni es un mapa de peligro.');
     if (r.leyenda.some((l) => l.capa === 'lineas')) fuentes.push('Líneas de bus: Rutas: SmartBus (smartbus.app), recorridos publicados usados con autorización verbal; sin frecuencias ni horarios.' + (r.paradasBus.length ? ' La parada es la más cercana en línea recta.' : ''));

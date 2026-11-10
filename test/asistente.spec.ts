@@ -112,7 +112,7 @@ describe('Asistente.interpretar', () => {
     expect(r.aproximados.sort()).toEqual(['comercial', 'tranquilo']);
     const m = Asistente.interpretar('quiero un lugar tranquilo cerca de un mall');
     expect(ids(m)).toEqual(['tranquilo']);
-    expect(m.comercio).toEqual(['mall']);
+    expect(m.comercio).toEqual(['compras_ocio']);
   });
 
   it('«barrio tradicional» se aproxima con el centro histórico', () => {

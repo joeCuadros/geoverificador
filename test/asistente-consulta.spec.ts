@@ -128,7 +128,7 @@ describe('Asistente.interpretar: «centro comercial» ya no es la zona comercial
     for (const t of ['busco cerca de un centro comercial', 'busco cerca de centros comerciales']) {
       const i = Asistente.interpretar(t);
       expect(ids(i)).toEqual([]);
-      expect(i.comercio).toEqual(['mall']);
+      expect(i.comercio).toEqual(['compras_ocio']);
       expect(i.tipo).toBe('no_soportado');
     }
   });

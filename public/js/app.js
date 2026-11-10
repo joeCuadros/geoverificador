@@ -93,7 +93,7 @@
 
   // Documentación automática de lo que realmente se consulta (mismas definiciones que usan la extracción y la clasificación)
   const code = (v) => `<code>${esc(v)}</code>`;
-  const NOMBRE_VARIABLE = { salud: 'Salud', consultorios: 'Consultorios médicos (aparte de la salud, informativos)', mercados: 'Mercados de abastos (informativos)', supermercados: 'Supermercados (informativos)', malls: 'Malls o centros comerciales (informativos)', educacion: 'Educación', transporte: 'Transporte', areasVerdes: 'Áreas verdes' };
+  const NOMBRE_VARIABLE = { salud: 'Salud', consultorios: 'Consultorios médicos (aparte de la salud, informativos)', mercados: 'Mercados de abastos (abastecimiento, informativos)', supermercados: 'Supermercados (abastecimiento, informativos)', malls: 'Malls o centros comerciales (compras y ocio si están confirmados con su fuente; si no, comercio de barrio; informativos)', educacion: 'Educación', transporte: 'Transporte', areasVerdes: 'Áreas verdes' };
   $('filters-doc').innerHTML = Object.entries(Calculos.FILTROS).map(([cat, filtros]) => `
     <h4>${NOMBRE_VARIABLE[cat]}</h4>
     <ul>${filtros.map((f) => `<li>${code(f.clave)} = ${f.valores ? f.valores.map(code).join(', ') : `cualquier valor${f.excluir ? ` salvo ${f.excluir.map(code).join(', ')}` : ''}`}${f.nombre ? ` y nombre que cumpla ${code(f.nombre)}` : ''}</li>`).join('')}</ul>`).join('')
@@ -107,7 +107,7 @@
     <ul>
       <li>Salud: ${CONFIG.umbrales.salud} m (${esc(CONFIG.fuentesUmbral.salud.toLowerCase())}); solo establecimientos de salud.</li>
       <li>Consultorio médico: sin umbral (${esc(CONFIG.fuentesUmbral.consultorio.toLowerCase())}).</li>
-      <li>Mercado, supermercado y mall: sin umbral (${esc(CONFIG.fuentesUmbral.mercado.toLowerCase())}).</li>
+      <li>Abastecimiento (mercados y supermercados), compras y ocio (malls confirmados) y comercio de barrio (galerías): sin umbral (${esc(CONFIG.fuentesUmbral.abastecimiento.toLowerCase())}).</li>
       <li>Educación: inicial ${CONFIG.umbrales.educacion.inicial} m, primaria ${CONFIG.umbrales.educacion.primaria} m, secundaria ${CONFIG.umbrales.educacion.secundaria} m (${esc(CONFIG.fuentesUmbral.educacion)}).</li>
       <li>Transporte: ${CONFIG.umbrales.transporte} m (${esc(CONFIG.fuentesUmbral.transporte.toLowerCase())}).</li>
       <li>Área verde: al menos ${CONFIG.umbrales.areaVerde.areaMinM2} m² a ${CONFIG.umbrales.areaVerde.distanciaM} m (${esc(CONFIG.fuentesUmbral.areaVerde)}).</li>
@@ -146,9 +146,9 @@
   const VARIABLES = {
     salud: { titulo: 'Salud', icono: 'salud' },
     consultorio: { titulo: 'Consultorio médico', icono: 'salud' },
-    mercado: { titulo: 'Mercado de abastos', icono: 'comercio' },
-    supermercado: { titulo: 'Supermercado', icono: 'comercio' },
-    mall: { titulo: 'Mall (centro comercial)', icono: 'comercio' },
+    abastecimiento: { titulo: 'Abastecimiento (comida): mercados y supermercados', icono: 'comercio' },
+    compras_ocio: { titulo: 'Compras y ocio: malls', icono: 'comercio' },
+    comercio_barrio: { titulo: 'Comercio de barrio: galerías', icono: 'comercio' },
     educacion: { titulo: 'Colegio', icono: 'colegio' },
     transporte: { titulo: 'Paradero', icono: 'paradero' },
     areaVerde: { titulo: 'Área verde', icono: 'verde' },
@@ -1103,9 +1103,9 @@
   const QUE_NO_CUBRE = {
     salud: 'Cuenta los establecimientos de salud activos de RENIPRESS (SUSALUD) con categoría I-1 a III-E y coordenadas (hospitales, clínicas, centros y puestos de salud, policlínicos…), sin los consultorios médicos, que son otra categoría, y los de OpenStreetMap solo donde RENIPRESS no tiene un punto de salud a 200 m. Cerca del 42 % de los establecimientos de Arequipa en RENIPRESS no trae coordenadas y no puede contarse. No dice si atiende emergencias ni su horario, y la distancia es en línea recta, no recorrido a pie.',
     consultorio: 'Cuenta los consultorios médicos activos de RENIPRESS (SUSALUD) —su clasificación dice «consultorios»— y los de OpenStreetMap (amenity=doctors, healthcare=doctor) solo donde RENIPRESS no tiene un consultorio a 200 m. Tampoco trae las coordenadas de todos. No dice la especialidad, el horario ni si atiende al público.',
-    mercado: 'Cuenta los elementos de OpenStreetMap con amenity=marketplace, que incluye mercados de abastos, ferias y mercadillos: no distingue minorista de mayorista y puede faltar alguno (el censo de mercados de 2016 del INEI solo sirve para contar por distrito, no trae ubicaciones). Sin distancia de referencia.',
-    supermercado: 'Cuenta los elementos de OpenStreetMap con shop=supermarket, aparte de los mercados. No incluye tiendas de conveniencia ni bodegas, y puede faltar alguno. Sin distancia de referencia.',
-    mall: 'Cuenta los elementos de OpenStreetMap con shop=mall y los terrenos comerciales (landuse=retail) con nombre de mall o centro comercial; los malls conocidos de Arequipa se contrastan con la fuente de cada uno. Si OSM tiene el edificio, la distancia se mide hasta su borde. Sin distancia de referencia.',
+    abastecimiento: 'Cuenta los mercados (amenity=marketplace, que incluye mercados de abastos, ferias y mercadillos: no distingue minorista de mayorista) y los supermercados (shop=supermarket, sin tiendas de conveniencia ni bodegas) de OpenStreetMap, y puede faltar alguno (el censo de mercados de 2016 del INEI solo sirve para contar por distrito, no trae ubicaciones). Un supermercado dentro de un mall es el punto de abastecimiento; el mall, no. Sin distancia de referencia.',
+    compras_ocio: 'Cuenta solo los malls confirmados con la fuente de cada uno (lista curada) que OpenStreetMap tiene ubicados; uno confirmado que OpenStreetMap no tiene (por ejemplo Mallplaza) no se mide. Si OpenStreetMap tiene el edificio, la distancia se mide hasta su borde. No cuenta las galerías ni los centros comerciales pequeños. Sin distancia de referencia.',
+    comercio_barrio: 'Cuenta lo que OpenStreetMap etiqueta shop=mall (y los terrenos comerciales con nombre de mall) y no está en la lista de malls confirmados: galerías y centros comerciales pequeños, que son comercio de barrio. Si OpenStreetMap tiene el edificio, la distancia se mide hasta su borde. Sin distancia de referencia.',
     educacion: 'Cuenta los locales activos de educación básica regular del padrón de ESCALE (MINEDU), públicos y privados, con el nivel de cada institución. OpenStreetMap solo completa donde ESCALE no tiene un local del mismo nivel a 200 m, y allí casi no etiqueta el nivel: uno sin nivel se toma como candidato a primaria y secundaria. La ubicación es la del local que reportó la UGEL; no dice si hay vacantes.',
     transporte: 'Un paradero no es un servicio: el de OpenStreetMap no dice qué líneas lo usan, su horario ni su frecuencia, y las paradas informales (combis, micros) rara vez están completas.',
     rutas: 'Son los recorridos que SmartBus publicó en la fecha indicada, no un servicio garantizado: no traen frecuencias ni horarios, y un cambio de ruta por tramos puede no estar reflejado. La distancia es al trazado, no a donde se puede subir. Una línea de otra empresa que SmartBus no publica no aparece.',
@@ -1194,19 +1194,27 @@
       + (cons.error ? '' : cons.estado === 'SIN DATO' ? explicacion(cons, 'consultorios médicos') : `<p class="var-explica"><strong>Informativo.</strong> ${esc(Calculos.NOTA_CONSULTORIO.replace(/^Es informativo: /, ''))}</p>`)
       + etiq(cons) + detalleDato(cons, QUE_NO_CUBRE.consultorio), cons.estado === 'INFORMATIVO' ? 'Informativo' : null) : '';
 
-    // Mercado, supermercado y mall: categorías informativas (sin umbral): no suman al estado de nada. Del mall se mide la distancia al borde de su polígono.
+    // Abastecimiento, compras y ocio, comercio de barrio: necesidades informativas (sin umbral): no suman al estado de nada. Del mall o la galería se mide la distancia al borde de su polígono.
+    const dentroDe = (x) => (x && x.dentroDeMall ? `dentro de ${esc(x.dentroDeMall.nombre || 'un mall')}` : '');
+    const donde = (x) => (x.distanciaM === 0 ? 'el punto está dentro de su terreno' : `${fmtDist(x.distanciaM)} en línea recta${x.forma ? ' hasta su borde' : ''}`);
     const comercio = Object.keys(Calculos.COMERCIO).map((id) => {
       const r = e[id];
       if (!r) return '';
       const def = Calculos.COMERCIO[id];
-      const mv = id === 'mall' ? e.mallVerificado : null;
-      const otroMall = mv && mv.estado !== 'SIN DATO' && mv.distanciaM !== null && mv.osm !== r.osm
-        ? `<p class="var-meta"><b>Mall confirmado más cercano:</b> ${esc(mv.nombre)}, ${mv.distanciaM === 0 ? 'el punto está dentro de su terreno' : `${fmtDist(mv.distanciaM)} en línea recta${mv.forma ? ' hasta su borde' : ''}`} (<a href="${esc(mv.verificado.url)}" target="_blank" rel="noopener">${esc(mv.verificado.nombre)}</a>). OpenStreetMap etiqueta como mall también galerías y centros comerciales pequeños.</p>` : '';
-      const verif = otroMall + (r.verificado ? `<p class="var-meta">Confirmado con <a href="${esc(r.verificado.url)}" target="_blank" rel="noopener">${esc(r.verificado.nombre)}</a> (${esc(r.verificado.entidad)}).</p>` : '');
+      const tipo = r.tipo ? `<p class="var-meta"><b>Tipo:</b> ${esc(Calculos.COMERCIO_TIPO[r.tipo].singular)}${dentroDe(r) ? `, ${dentroDe(r)} (cuenta como abastecimiento; el mall, no)` : ''}.</p>` : '';
+      const porTipo = id === 'abastecimiento' && r.porTipo ? ['mercado', 'supermercado'].map((t) => {
+        const x = r.porTipo[t];
+        const nombre = Calculos.COMERCIO_TIPO[t].singular;
+        return x && x.distanciaM !== null && x.nombre
+          ? `<p class="var-meta"><b>${esc(nombre.charAt(0).toUpperCase() + nombre.slice(1))} más cercano:</b> ${esc(x.nombre)}${dentroDe(x) ? ` (${dentroDe(x)})` : ''}, ${donde(x)}.</p>`
+          : `<p class="var-meta"><b>${esc(nombre.charAt(0).toUpperCase() + nombre.slice(1))} más cercano:</b> sin dato en nuestros datos.</p>`;
+      }).join('') : '';
+      const verif = r.verificado ? `<p class="var-meta">Confirmado con <a href="${esc(r.verificado.url)}" target="_blank" rel="noopener">${esc(r.verificado.nombre)}</a> (${esc(r.verificado.entidad)}).</p>` : '';
+      const escala = `<p class="var-meta"><b>Escala:</b> ${def.escala === 'metropolitana' ? 'metropolitana (destino de la ciudad)' : 'de barrio'}.</p>`;
       return tarjetaVariable(VARIABLES[id], r.estado, lineaResumenInformativa(r),
         datoPrincipal(r)
         + (r.error ? '' : r.estado === 'SIN DATO' ? explicacion(r, def.plural) : `<p class="var-explica"><strong>Informativo.</strong> ${esc(Calculos.NOTA_COMERCIO.replace(/^Es informativo: /, ''))}</p>`)
-        + verif + detalleDato(r, QUE_NO_CUBRE[id]), r.estado === 'INFORMATIVO' ? 'Informativo' : null);
+        + tipo + porTipo + verif + escala + detalleDato(r, QUE_NO_CUBRE[id]), r.estado === 'INFORMATIVO' ? 'Informativo' : null);
     }).join('');
 
     const niveles = Equipamiento.NIVELES.map((n) => {
@@ -1689,10 +1697,9 @@
       zonificacion_proyectada: avisoPDM,
       salud: state.entorno && state.entorno.salud,
       consultorio: state.entorno && state.entorno.consultorio, // informativo, sin umbral
-      mercado: state.entorno && state.entorno.mercado && { ...state.entorno.mercado, forma: undefined }, // informativo, sin umbral
-      supermercado: state.entorno && state.entorno.supermercado && { ...state.entorno.supermercado, forma: undefined }, // informativo, sin umbral
-      mall: state.entorno && state.entorno.mall && { ...state.entorno.mall, forma: undefined }, // informativo, sin umbral
-      mall_confirmado: state.entorno && state.entorno.mallVerificado && { ...state.entorno.mallVerificado, forma: undefined }, // el más cercano de la lista curada de malls confirmados con su fuente
+      abastecimiento: state.entorno && state.entorno.abastecimiento && { ...state.entorno.abastecimiento, forma: undefined, porTipo: state.entorno.abastecimiento.porTipo && Object.fromEntries(Object.entries(state.entorno.abastecimiento.porTipo).map(([k, x]) => [k, { ...x, forma: undefined }])) }, // mercados + supermercados; informativo, sin umbral
+      compras_ocio: state.entorno && state.entorno.compras_ocio && { ...state.entorno.compras_ocio, forma: undefined }, // solo malls confirmados con su fuente; informativo, sin umbral
+      comercio_barrio: state.entorno && state.entorno.comercio_barrio && { ...state.entorno.comercio_barrio, forma: undefined }, // galerías (shop=mall sin fuente); informativo, sin umbral
       educacion: state.entorno && state.entorno.educacion,
       transporte: state.entorno && state.entorno.transporte,
       area_verde: state.entorno && state.entorno.areaVerde && { ...state.entorno.areaVerde, forma: undefined },

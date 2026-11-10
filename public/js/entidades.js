@@ -78,7 +78,7 @@ const Entidades = (() => {
     return { total: lista.length, fuentes: porFuente(lista), lista };
   }
 
-  /** Los mercados, supermercados o malls del distrito (`id`: mercado | supermercado | mall; informativos): { total, fuentes, lista }. Un polígono cuenta por su centro. */
+  /** Lo del distrito de una necesidad de comercio (`id`: abastecimiento | compras_ocio | comercio_barrio; informativas): { total, fuentes, lista }. Un polígono cuenta por su centro. */
   function contarComercio(datos, polys, id) {
     const dentro = contenedor(polys);
     const lista = (datos[C.COMERCIO[id].capa] || []).filter((p) => dentro(p.lat, p.lon));
