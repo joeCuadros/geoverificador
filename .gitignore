@@ -71,3 +71,6 @@ qwen-image-ui/
 
 # Descargas y extracciones de RENIPRESS y ESCALE (scripts/descargar-equipamiento-oficial.mjs): no se suben
 /.cache-equipamiento-oficial/
+
+# Respuesta de Overpass y CSV del CENAMA (scripts/descargar-comercio.mjs): no se suben
+/.cache-comercio/

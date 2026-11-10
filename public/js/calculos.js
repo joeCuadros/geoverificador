@@ -167,6 +167,10 @@ const Calculos = (() => {
    *   valores  → la etiqueta debe valer alguno de ellos; sin `valores` basta con que exista.
    *   excluir  → valores que no son un establecimiento (p. ej. una farmacia no es un centro de atención).
    */
+  // Nombres que hacen de un terreno o edificio comercial con nombre un mall (expresión regular sobre el nombre sin tildes): las palabras genéricas y los centros
+  // comerciales conocidos de Arequipa, cuyo nombre no las trae (Real Plaza, OutletArauco que fue Parque Lambramani, Arequipa Center, Mall Aventura).
+  const NOMBRE_MALL = 'mall|centro comercial|shopping|outlet|real plaza|open plaza|lambramani|arequipa center|aventura';
+
   const FILTROS = {
     // Establecimientos de salud (hospitales, clínicas, centros y puestos de salud, policlínicos…). El consultorio médico
     // (amenity=doctors, healthcare=doctor) es otra categoría: ver `consultorios`.
@@ -188,6 +192,15 @@ const Calculos = (() => {
       { clave: 'amenity', valores: ['doctors'] },
       { clave: 'healthcare', valores: ['doctor'] },
     ],
+    // Comercio (mercados, supermercados y malls): categorías INFORMATIVAS, sin umbral (ver CONFIG.umbrales.mercado / supermercado / mall).
+    // `nombre` (solo en landuse=retail y building=retail|commercial) es una expresión regular que debe cumplir el nombre: un terreno o edificio comercial sin nombre, o con otro nombre, no es un mall.
+    mercados: [{ clave: 'amenity', valores: ['marketplace'] }],
+    supermercados: [{ clave: 'shop', valores: ['supermarket'] }],
+    malls: [
+      { clave: 'shop', valores: ['mall'] },
+      { clave: 'landuse', valores: ['retail'], nombre: NOMBRE_MALL },
+      { clave: 'building', valores: ['retail', 'commercial'], nombre: NOMBRE_MALL },
+    ],
     educacion: [{ clave: 'amenity', valores: ['school', 'kindergarten'] }],
     transporte: [
       { clave: 'highway', valores: ['bus_stop'] },
@@ -201,17 +214,18 @@ const Calculos = (() => {
 
   // Etiquetas que se conservan en los archivos congelados (el resto no hace falta y los haría pesar más).
   const ETIQUETAS_GUARDADAS = [
-    'amenity', 'healthcare', 'healthcare:speciality', 'isced:level', 'school', 'leisure', 'landuse', 'highway', 'public_transport',
+    'amenity', 'healthcare', 'healthcare:speciality', 'isced:level', 'school', 'leisure', 'landuse', 'highway', 'public_transport', 'shop', 'building',
   ];
 
-  function coincide(tags, filtro) {
+  const sinTildes = (t) => String(t).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+  function coincide(tags, filtro, nombre) {
     const v = tags[filtro.clave];
     if (v === undefined) return false;
+    if (filtro.nombre && !(nombre && new RegExp(filtro.nombre, 'i').test(sinTildes(nombre)))) return false;
     if (filtro.valores) return filtro.valores.includes(v);
     return !(filtro.excluir || []).includes(v);
   }
-
-  const sinTildes = (t) => String(t).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
   /**
    * ¿Es un servicio odontológico? RENIPRESS ya deja fuera el centro odontológico; en OpenStreetMap un consultorio dental suele venir
@@ -232,7 +246,7 @@ const Calculos = (() => {
    */
   function categoriasDe(tags, nombre) {
     const t = tags || {};
-    let cats = Object.keys(FILTROS).filter((cat) => FILTROS[cat].some((f) => coincide(t, f)));
+    let cats = Object.keys(FILTROS).filter((cat) => FILTROS[cat].some((f) => coincide(t, f, nombre)));
     if (esDental(t, nombre)) cats = cats.filter((c) => c !== 'salud' && c !== 'consultorios');
     // Un elemento que es hospital, clinic u otro healthcare=* Y TAMBIÉN doctor es un establecimiento: no se cuenta dos veces.
     return cats.includes('salud') ? cats.filter((c) => c !== 'consultorios') : cats;
@@ -258,7 +272,10 @@ const Calculos = (() => {
   /** Selectores de Overpass QL de una variable, p. ej. ["amenity"~"^(hospital|clinic)$"]. */
   function selectoresOverpass(categoria) {
     return FILTROS[categoria].map((f) => {
-      if (f.valores) return f.valores.length === 1 ? `["${f.clave}"="${f.valores[0]}"]` : `["${f.clave}"~"^(${f.valores.join('|')})$"]`;
+      if (f.valores) {
+        const valores = f.valores.length === 1 ? `["${f.clave}"="${f.valores[0]}"]` : `["${f.clave}"~"^(${f.valores.join('|')})$"]`;
+        return f.nombre ? `${valores}["name"~"${f.nombre}",i]` : valores;
+      }
       const excl = f.excluir && f.excluir.length ? `["${f.clave}"!~"^(${f.excluir.join('|')})$"]` : '';
       return `["${f.clave}"]${excl}`;
     });
@@ -351,6 +368,7 @@ const Calculos = (() => {
   function textoFuenteElemento(r) {
     const f = r && r.fuenteElemento;
     if (!f) return '';
+    if (r.osmPrimaria) return textoFuenteComercio(r); // mercado, supermercado y mall: OpenStreetMap es la fuente, no un respaldo
     if (f === 'OSM') return `OpenStreetMap (respaldo: no hay un punto oficial cerca)${r.osm ? ` · ${r.osm}` : ''}`;
     const partes = [NOMBRE_FUENTE_ELEMENTO[f] || f];
     if (r.codigo) partes.push(f === 'ESCALE' ? `código modular ${r.codigo}` : `código ${r.codigo}`);
@@ -413,6 +431,78 @@ const Calculos = (() => {
       codigo: mejor.codigo ?? null,
       categoria: mejor.categoria ?? null,
       gestion: mejor.gestion ?? null,
+    };
+  }
+
+  // ----------------------------------------------- Comercio: mercados, supermercados y malls
+
+  /**
+   * Una sola redacción de por qué mercados, supermercados y malls son informativos, para la ficha, el chat y el informe. No hay umbral
+   * (decisión pendiente): no se dice si están cerca o lejos y no suman al puntaje ni a la búsqueda de zonas.
+   */
+  /** Las tres categorías de comercio: id de la variable, capa del mapa y cómo se nombran. */
+  const COMERCIO = {
+    mercado: { capa: 'mercados', singular: 'mercado de abastos', plural: 'mercados de abastos', corto: 'mercado', cortos: 'mercados', etiqueta: 'Mercado' },
+    supermercado: { capa: 'supermercados', singular: 'supermercado', plural: 'supermercados', corto: 'supermercado', cortos: 'supermercados', etiqueta: 'Supermercado' },
+    mall: { capa: 'malls', singular: 'mall (centro comercial)', plural: 'malls (centros comerciales)', corto: 'mall', cortos: 'malls', etiqueta: 'Mall' },
+  };
+
+  const NOTA_COMERCIO = 'Es informativo: mercados, supermercados y malls no tienen una distancia de referencia (es una decisión pendiente), así que no se dice si están cerca o lejos, no suman al puntaje ni a la búsqueda de zonas y no se elige un lugar por ellos.';
+
+  /**
+   * De dónde sale un mercado, supermercado o mall: OpenStreetMap es su fuente (no un respaldo) y, si el mall está en la lista curada,
+   * la fuente que lo confirma. Acepta un resultado de evaluarMasCercanoForma o un elemento de las capas ({ osm, verificado }).
+   */
+  function textoFuenteComercio(r) {
+    const partes = ['OpenStreetMap (ODbL)'];
+    if (r && r.verificado) partes.push(`confirmado con ${r.verificado.nombre}: ${r.verificado.url}`);
+    return partes.join(' · ');
+  }
+
+  /**
+   * Como evaluarMasCercano, pero los candidatos son Features GeoJSON de punto o de polígono (Polygon / MultiPolygon): de un polígono
+   * se mide la distancia al BORDE (0 si el punto está dentro), no al centro, para no «cortar» un mall o un mercado grande.
+   *   features: [Feature { properties { nombre, osm?, fuente?, codigo?, verificado?, tags? }, geometry }]
+   *   opciones: { umbralM, fuente, fecha, metodo, categoria? }   (sin umbral numérico → INFORMATIVO)
+   * Devuelve { estado, nombre, distanciaM, umbralM, fuente, fecha, metodo, lat, lon, osm, etiqueta, fuenteElemento, codigo, forma, verificado }
+   * (`lat` y `lon` ubican el marcador: el punto, o el centro de la caja del polígono; `forma` es el polígono, o null si es un punto).
+   */
+  function evaluarMasCercanoForma(punto, features, opciones) {
+    const { fuente, fecha, metodo, categoria } = opciones;
+    const informativo = !esNumero(opciones.umbralM);
+    const umbralM = informativo ? null : opciones.umbralM;
+    const base = { umbralM, fuente, fecha, metodo };
+    let mejor = null;
+    let mejorD = Infinity;
+    for (const f of features || []) {
+      const g = f && f.geometry;
+      if (!g) continue;
+      let d = Infinity;
+      if (g.type === 'Point' && Array.isArray(g.coordinates) && esNumero(g.coordinates[0]) && esNumero(g.coordinates[1])) d = haversine(punto.lat, punto.lon, g.coordinates[1], g.coordinates[0]);
+      else d = distanciaAGeometriaM(punto.lat, punto.lon, g);
+      if (d < mejorD) { mejor = f; mejorD = d; }
+    }
+    if (!mejor) {
+      return { estado: 'SIN DATO', nombre: null, distanciaM: null, ...base, lat: null, lon: null, osm: null, etiqueta: null, fuenteElemento: null, codigo: null, forma: null, verificado: null };
+    }
+    const p = mejor.properties || {};
+    const g = mejor.geometry;
+    const esPunto = g.type === 'Point';
+    const c = esPunto ? { lat: g.coordinates[1], lon: g.coordinates[0] } : centroDe(g);
+    return {
+      estado: informativo ? 'INFORMATIVO' : mejorD <= umbralM ? 'CUMPLE' : 'NO CUMPLE',
+      nombre: p.nombre || SIN_NOMBRE,
+      distanciaM: mejorD,
+      ...base,
+      lat: c ? c.lat : null,
+      lon: c ? c.lon : null,
+      osm: p.osm ?? null,
+      etiqueta: categoria ? etiquetaDe(p.tags, categoria) : null,
+      fuenteElemento: p.fuente ?? null,
+      osmPrimaria: p.fuente === 'OSM' || p.fuente === undefined,
+      codigo: p.codigo ?? null,
+      forma: esPunto ? null : g,
+      verificado: p.verificado ?? null,
     };
   }
 
@@ -809,6 +899,10 @@ const Calculos = (() => {
     etiquetaElemento,
     textoFuenteElemento,
     NOTA_CONSULTORIO,
+    NOTA_COMERCIO,
+    COMERCIO,
+    textoFuenteComercio,
+    evaluarMasCercanoForma,
   };
 })();
 
