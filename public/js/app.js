@@ -107,6 +107,7 @@
     <ul>
       <li>Salud: ${CONFIG.umbrales.salud} m (${esc(CONFIG.fuentesUmbral.salud.toLowerCase())}); solo establecimientos de salud.</li>
       <li>Consultorio médico: sin umbral (${esc(CONFIG.fuentesUmbral.consultorio.toLowerCase())}).</li>
+      <li>Electricidad (área de concesión de distribución): sin umbral (${esc(CONFIG.fuentesUmbral.electricidad.toLowerCase())}).</li>
       <li>Abastecimiento (mercados y supermercados), compras y ocio (malls confirmados) y comercio de barrio (galerías): sin umbral (${esc(CONFIG.fuentesUmbral.abastecimiento.toLowerCase())}).</li>
       <li>Educación: inicial ${CONFIG.umbrales.educacion.inicial} m, primaria ${CONFIG.umbrales.educacion.primaria} m, secundaria ${CONFIG.umbrales.educacion.secundaria} m (${esc(CONFIG.fuentesUmbral.educacion)}).</li>
       <li>Transporte: ${CONFIG.umbrales.transporte} m (${esc(CONFIG.fuentesUmbral.transporte.toLowerCase())}).</li>
@@ -146,6 +147,7 @@
   const VARIABLES = {
     salud: { titulo: 'Salud', icono: 'salud' },
     consultorio: { titulo: 'Consultorio médico', icono: 'salud' },
+    electricidad: { titulo: 'Electricidad: área de concesión de distribución', icono: 'electricidad' },
     abastecimiento: { titulo: 'Abastecimiento (comida): mercados y supermercados', icono: 'comercio' },
     compras_ocio: { titulo: 'Compras y ocio: malls', icono: 'comercio' },
     comercio_barrio: { titulo: 'Comercio de barrio: galerías', icono: 'comercio' },
@@ -700,6 +702,7 @@
       const t = (r) => `${r.estado.toLowerCase()}${r.distanciaM !== null ? `, ${fmtDist(r.distanciaM)}` : ''}`;
       partes.push(`Salud: ${t(e.salud)}`);
       if (e.consultorio) partes.push(`Consultorio médico (informativo): ${e.consultorio.distanciaM !== null ? fmtDist(e.consultorio.distanciaM) : 'sin dato'}`);
+      if (e.electricidad) partes.push(`Electricidad (informativo): ${e.electricidad.dentro === null ? 'sin dato' : e.electricidad.dentro ? `dentro del área de concesión de ${e.electricidad.concesionarias.join(' y ')}` : `fuera de las áreas de concesión, a ${fmtDist(e.electricidad.distanciaM)} del borde`}`);
       Object.keys(Calculos.COMERCIO).forEach((id) => { if (e[id]) partes.push(`${Calculos.COMERCIO[id].etiqueta} (informativo): ${e[id].distanciaM !== null ? fmtDist(e[id].distanciaM) : 'sin dato'}`); });
       const niv = Equipamiento.NIVELES;
       partes.push(`Colegio: ${niv.filter((n) => e.educacion[n].estado === 'CUMPLE').length} de ${niv.length} niveles cumplen`);
@@ -1103,6 +1106,7 @@
   const QUE_NO_CUBRE = {
     salud: 'Cuenta los establecimientos de salud activos de RENIPRESS (SUSALUD) con categoría I-1 a III-E y coordenadas (hospitales, clínicas, centros y puestos de salud, policlínicos…), sin los consultorios médicos, que son otra categoría, y los de OpenStreetMap solo donde RENIPRESS no tiene un punto de salud a 200 m. Cerca del 42 % de los establecimientos de Arequipa en RENIPRESS no trae coordenadas y no puede contarse. No dice si atiende emergencias ni su horario, y la distancia es en línea recta, no recorrido a pie.',
     consultorio: 'Cuenta los consultorios médicos activos de RENIPRESS (SUSALUD) —su clasificación dice «consultorios»— y los de OpenStreetMap (amenity=doctors, healthcare=doctor) solo donde RENIPRESS no tiene un consultorio a 200 m. Tampoco trae las coordenadas de todos. No dice la especialidad, el horario ni si atiende al público.',
+    electricidad: 'Dice si el punto cae dentro de un polígono de concesión de distribución eléctrica del registro del MINEM (SEAL en Arequipa y, si toca la zona, otras empresas): a quién le corresponde dar el servicio ahí. NO dice si el predio está conectado, si hay red en la calle ni si el suministro es continuo; la cobertura real vendría de un censo que aún no tenemos. Los polígonos son poco detallados y su borde puede ser impreciso: un punto fuera no significa que no haya servicio.',
     abastecimiento: 'Cuenta los mercados (amenity=marketplace, que incluye mercados de abastos, ferias y mercadillos: no distingue minorista de mayorista) y los supermercados (shop=supermarket, sin tiendas de conveniencia ni bodegas) de OpenStreetMap, y puede faltar alguno (el censo de mercados de 2016 del INEI solo sirve para contar por distrito, no trae ubicaciones). Un supermercado dentro de un mall es el punto de abastecimiento; el mall, no. Sin distancia de referencia.',
     compras_ocio: 'Cuenta solo los malls confirmados con la fuente de cada uno (lista curada) que OpenStreetMap tiene ubicados; uno confirmado que OpenStreetMap no tiene (por ejemplo Mallplaza) no se mide. Si OpenStreetMap tiene el edificio, la distancia se mide hasta su borde. No cuenta las galerías ni los centros comerciales pequeños. Sin distancia de referencia.',
     comercio_barrio: 'Cuenta lo que OpenStreetMap etiqueta shop=mall (y los terrenos comerciales con nombre de mall) y no está en la lista de malls confirmados: galerías y centros comerciales pequeños, que son comercio de barrio. Si OpenStreetMap tiene el edificio, la distancia se mide hasta su borde. Sin distancia de referencia.',
@@ -1194,6 +1198,23 @@
       + (cons.error ? '' : cons.estado === 'SIN DATO' ? explicacion(cons, 'consultorios médicos') : `<p class="var-explica"><strong>Informativo.</strong> ${esc(Calculos.NOTA_CONSULTORIO.replace(/^Es informativo: /, ''))}</p>`)
       + etiq(cons) + detalleDato(cons, QUE_NO_CUBRE.consultorio), cons.estado === 'INFORMATIVO' ? 'Informativo' : null) : '';
 
+    // Electricidad: ¿dentro de un área de concesión de distribución? Informativa. Una concesión no es una conexión: nunca se dice «tiene luz».
+    const el = e.electricidad;
+    const nombreConc = (r) => (r.concesionarias && r.concesionarias.length ? r.concesionarias.join(' y ') : r.concesionaria || 'una empresa');
+    const electricidad = el ? tarjetaVariable(VARIABLES.electricidad, el.estado,
+      el.error ? 'No se pudo obtener el dato' : el.dentro === null ? 'Sin dato'
+        : el.dentro ? `Dentro del área de concesión de ${nombreConc(el)} · no es una conexión`
+          : `Fuera de las áreas de concesión · a ${fmtDist(el.distanciaM)} del borde de la de ${nombreConc(el)}`,
+      (el.error ? `<p class="zon-msg error"><strong>No se pudo obtener el dato.</strong> ${esc(el.error)}</p>` : '')
+      + (el.dentro === null ? (el.error ? '' : explicacion(el, 'áreas de concesión eléctrica'))
+        : el.dentro
+          ? `<div class="var-dato"><p class="var-dist">Dentro <small>del área de concesión de ${esc(nombreConc(el))}</small></p><p class="var-nombre">${esc([...new Set(el.concesiones.map((c) => c.nombre_zona))].join(' · '))}</p></div>`
+            + el.concesiones.map((c) => `<p class="var-meta"><b>${esc(c.nombre_zona)}:</b> ${esc(c.empresa)} · expediente ${esc(c.expediente)} · ${esc(String(c.situacion || '').toLowerCase())}.</p>`).join('')
+          : `<div class="var-dato"><p class="var-dist">${fmtDist(el.distanciaM)} <small>hasta el borde de la concesión más cercana</small></p><p class="var-nombre">${esc(nombreConc(el))}${el.nombre ? ` · ${esc(el.nombre)}` : ''}</p></div>`)
+      + (el.dentro === null ? '' : `<p class="var-explica"><strong>Informativo.</strong> ${esc(Calculos.textoElectricidad(el))}</p>`)
+      + `<p class="var-explica">${esc(Calculos.NOTA_ELECTRICIDAD)}</p>`
+      + detalleDato(el, QUE_NO_CUBRE.electricidad), el.estado === 'INFORMATIVO' ? 'Informativo' : null) : '';
+
     // Abastecimiento, compras y ocio, comercio de barrio: necesidades informativas (sin umbral): no suman al estado de nada. Del mall o la galería se mide la distancia al borde de su polígono.
     const dentroDe = (x) => (x && x.dentroDeMall ? `dentro de ${esc(x.dentroDeMall.nombre || 'un mall')}` : '');
     const donde = (x) => (x.distanciaM === 0 ? 'el punto está dentro de su terreno' : `${fmtDist(x.distanciaM)} en línea recta${x.forma ? ' hasta su borde' : ''}`);
@@ -1249,7 +1270,7 @@
       + `<p class="var-meta">Criterio: un área verde de al menos ${fmtNum(u.areaMinM2)} m² a ${u.distanciaM} m o menos.</p>` + sens
       + detalleDato(v, QUE_NO_CUBRE.areaVerde));
 
-    $('entorno').innerHTML = salud + consultorio + comercio + educacion + transporte + areaVerde + '<div id="card-quebradas"></div>';
+    $('entorno').innerHTML = salud + consultorio + comercio + electricidad + educacion + transporte + areaVerde + '<div id="card-quebradas"></div>';
     renderQuebradas(); // llega aparte (archivo congelado de la ANA)
     $('entorno').setAttribute('aria-busy', 'false');
     $('entorno-toggle').hidden = false;
@@ -1630,6 +1651,7 @@
     if (e) {
       resumen.push(['Salud', linea(e.salud)]);
       if (e.consultorio) resumen.push(['Consultorio médico (informativo)', linea(e.consultorio)]);
+      if (e.electricidad) resumen.push(['Electricidad (informativo)', e.electricidad.dentro === null ? 'Sin dato' : `${e.electricidad.dentro ? `Dentro del área de concesión de ${e.electricidad.concesionarias.join(' y ')}` : `Fuera de las áreas de concesión; ${fmtDist(e.electricidad.distanciaM)} hasta el borde de la de ${e.electricidad.concesionaria || 'una empresa'}`} · no es una conexión`]);
       Object.keys(Calculos.COMERCIO).forEach((id) => { if (e[id]) resumen.push([`${Calculos.COMERCIO[id].etiqueta} (informativo)`, linea(e[id])]); });
       Equipamiento.NIVELES.forEach((n) => resumen.push([`Educación ${n}`, linea(e.educacion[n])]));
       resumen.push(['Transporte', linea(e.transporte)]);
@@ -1697,6 +1719,7 @@
       zonificacion_proyectada: avisoPDM,
       salud: state.entorno && state.entorno.salud,
       consultorio: state.entorno && state.entorno.consultorio, // informativo, sin umbral
+      electricidad: state.entorno && state.entorno.electricidad, // informativo, sin umbral: un área de concesión no es una conexión
       abastecimiento: state.entorno && state.entorno.abastecimiento && { ...state.entorno.abastecimiento, forma: undefined, porTipo: state.entorno.abastecimiento.porTipo && Object.fromEntries(Object.entries(state.entorno.abastecimiento.porTipo).map(([k, x]) => [k, { ...x, forma: undefined }])) }, // mercados + supermercados; informativo, sin umbral
       compras_ocio: state.entorno && state.entorno.compras_ocio && { ...state.entorno.compras_ocio, forma: undefined }, // solo malls confirmados con su fuente; informativo, sin umbral
       comercio_barrio: state.entorno && state.entorno.comercio_barrio && { ...state.entorno.comercio_barrio, forma: undefined }, // galerías (shop=mall sin fuente); informativo, sin umbral

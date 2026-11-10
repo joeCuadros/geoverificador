@@ -604,6 +604,69 @@ const Calculos = (() => {
     };
   }
 
+  // ---------------------------------------------------------------- Electricidad: área de concesión de distribución
+
+  /**
+   * Una sola redacción de qué dice y qué NO dice la concesión eléctrica, para la ficha, el chat y el informe. Estar dentro del área de concesión de
+   * una empresa de distribución (p. ej. SEAL en Arequipa) dice a quién le corresponde dar el servicio ahí; NO dice que un predio esté conectado.
+   * El artículo 34, literal a, de la Ley de Concesiones Eléctricas (D. Ley 25844) en su texto del D. Leg. 1221 (El Peruano, 24-09-2015) obliga al
+   * distribuidor a «suministrar electricidad a quien lo solicite dentro de su zona de concesión [...] en un plazo no mayor de un (1) año y que tengan
+   * carácter de Servicio Público de Electricidad»; no se revisó si una norma posterior lo cambió.
+   */
+  const NOTA_ELECTRICIDAD = 'Es informativo: el área de concesión dice a qué empresa le corresponde dar el servicio de distribución en esa zona; no dice que un predio esté conectado ni que haya red en su calle. El artículo 34, literal a, de la Ley de Concesiones Eléctricas (texto del D. Leg. 1221, de 2015) obliga al distribuidor a suministrar electricidad a quien lo solicite dentro de su zona de concesión, en un plazo no mayor de un año y si es Servicio Público de Electricidad. La cobertura real de conexión vendría de un censo (el Censo de Población y Vivienda del INEI), que este proyecto aún no tiene. No suma al puntaje ni a la búsqueda de zonas.';
+
+  const CAMPOS_CONCESION = ['nombre_zona', 'concesionaria', 'empresa', 'expediente', 'situacion', 'concesion', 'tipo_concesion'];
+
+  /**
+   * ¿Está el punto dentro del área de concesión de distribución eléctrica de alguna empresa? Puro y sin umbral: INFORMATIVO (o SIN DATO).
+   *   features: [Feature Polygon / MultiPolygon { properties { nombre_zona, concesionaria, empresa, expediente, situacion, concesion, … } }]
+   *   opciones: { fuente, fecha, metodo }
+   * Dentro (distancia 0, los huecos quedan fuera) lista TODAS las concesiones que lo contienen; fuera, da la más cercana y la distancia en línea
+   * recta hasta su BORDE. Devuelve { estado, dentro, nombre, concesionaria, concesionarias, concesiones, distanciaM, umbralM, fuente, fecha, metodo }.
+   * Esto NO dice que el predio tenga conexión (ver NOTA_ELECTRICIDAD).
+   */
+  function evaluarConcesion(punto, features, opciones = {}) {
+    const base = { umbralM: null, fuente: opciones.fuente ?? null, fecha: opciones.fecha ?? null, metodo: opciones.metodo ?? null };
+    const validos = (features || []).filter((f) => f && f.geometry && /^(Multi)?Polygon$/.test(f.geometry.type));
+    if (validos.length === 0) {
+      return { estado: 'SIN DATO', dentro: null, nombre: null, concesionaria: null, concesionarias: [], concesiones: [], distanciaM: null, ...base, lat: null, lon: null, osm: null, forma: null };
+    }
+    const medidos = validos.map((f) => ({ f, d: distanciaAGeometriaM(punto.lat, punto.lon, f.geometry) }));
+    const dentro = medidos.filter((m) => m.d === 0);
+    const elegidos = dentro.length ? dentro : [medidos.reduce((a, b) => (b.d < a.d ? b : a))];
+    const resumen = (f) => Object.fromEntries(CAMPOS_CONCESION.map((c) => [c, (f.properties && f.properties[c]) ?? null]));
+    const concesiones = elegidos.map((m) => resumen(m.f));
+    const concesionarias = [...new Set(concesiones.map((c) => c.concesionaria || c.empresa).filter(Boolean))];
+    return {
+      estado: 'INFORMATIVO',
+      dentro: dentro.length > 0,
+      nombre: concesiones[0].nombre_zona || null,
+      concesionaria: concesionarias[0] || null,
+      concesionarias,
+      concesiones: dentro.length ? concesiones : [],
+      cercana: dentro.length ? null : concesiones[0],
+      distanciaM: dentro.length ? 0 : elegidos[0].d,
+      ...base,
+      lat: null,
+      lon: null,
+      osm: null,
+      forma: null,
+    };
+  }
+
+  const distTxt = (m) => (m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(1).replace('.', ',')} km`);
+  const unir = (lista) => (lista.length <= 1 ? lista.join('') : `${lista.slice(0, -1).join(', ')} y ${lista[lista.length - 1]}`);
+
+  /** La frase sobre un resultado de evaluarConcesion. Nunca afirma que haya luz: dice de quién es el área de concesión y que eso no es una conexión. */
+  function textoElectricidad(r) {
+    if (!r || r.estado === 'SIN DATO' || r.dentro === null) return 'Electricidad (informativo): sin dato; no pude leer el archivo de áreas de concesión.';
+    if (r.dentro) {
+      const zonas = [...new Set(r.concesiones.map((c) => c.nombre_zona).filter(Boolean))];
+      return `Tu punto está dentro del área de concesión de distribución eléctrica de ${unir(r.concesionarias)}${zonas.length ? ` (${unir(zonas.map((z) => `«${z}»`))})` : ''}. Eso solo dice a qué empresa le corresponde dar el servicio ahí; no significa que tu predio ya tenga una conexión ni que haya red en tu calle.`;
+    }
+    return `Tu punto está fuera de las áreas de concesión de distribución eléctrica de los datos; la más cercana es la de ${r.concesionaria || 'una empresa'}, a ${distTxt(r.distanciaM)} de su borde. Eso no significa que no haya servicio: el registro puede tener los bordes poco precisos o no incluir alguna zona, y tampoco dice si un predio está conectado.`;
+  }
+
   /**
    * V5 Área verde: CUMPLE si hay un polígono de ≥ areaMinM2 a ≤ distanciaMaxM del punto (0 si el punto está dentro).
    * Indicador básico de la OMS Europa (2016): un espacio verde de al menos 0,5 ha a 300 m.
@@ -1007,6 +1070,9 @@ const Calculos = (() => {
     agruparComercio,
     textoFuenteComercio,
     evaluarMasCercanoForma,
+    evaluarConcesion,
+    textoElectricidad,
+    NOTA_ELECTRICIDAD,
   };
 })();
 

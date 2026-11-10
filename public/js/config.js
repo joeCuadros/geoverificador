@@ -123,6 +123,8 @@ const CONFIG = {
     mercado: null,       // pendiente de decisión del usuario; referencia propuesta: ninguna verificada
     supermercado: null,  // pendiente de decisión del usuario; referencia propuesta: ninguna verificada
     mall: null,          // pendiente de decisión del usuario; referencia propuesta: ninguna verificada
+    // Electricidad: área de concesión de distribución (MINEM-DGE). INFORMATIVA: ninguna distancia aplica; dentro o fuera de una concesión no es una conexión.
+    electricidad: null,
     educacion: { inicial: 500, primaria: 1500, secundaria: 3000 }, // V3
     transporte: 400, // V4 (convención del proyecto)
     areaVerde: { distanciaM: 300, areaMinM2: 5000, areaGrandeM2: 10000 }, // V5: ≥ 0,5 ha a ≤ 300 m; sensibilidad: ≥ 1 ha
@@ -137,6 +139,7 @@ const CONFIG = {
     mercado: 'Sin umbral: pendiente de decisión del usuario; referencia propuesta: ninguna con fuente verificada en metros; se muestra solo como dato informativo',
     supermercado: 'Sin umbral: pendiente de decisión del usuario; referencia propuesta: ninguna con fuente verificada en metros; se muestra solo como dato informativo',
     mall: 'Sin umbral: pendiente de decisión del usuario; referencia propuesta: ninguna con fuente verificada en metros; se muestra solo como dato informativo',
+    electricidad: 'Sin umbral: no aplica una distancia de referencia; dentro o fuera de un área de concesión no es una conexión; se muestra solo como dato informativo',
     educacion: 'MINEDU, numeral 7.1, Cuadro N.° 1, distancias referenciales: inicial 500 m (RVM 104-2019-MINEDU), primaria 1500 m y secundaria 3000 m (RVM 208-2019-MINEDU)',
     transporte: 'Convención del proyecto',
     areaVerde: 'Indicador básico de la OMS Europa (2016), «Urban green spaces and health», p. 39: un espacio verde de al menos 0,5 ha a 300 m en línea recta; es un indicador de monitoreo, no una norma peruana',
@@ -180,6 +183,7 @@ const CONFIG = {
       consultorios: 'data/equipamiento/consultorios.geojson', // consultorios médicos: informativos, aparte de la salud
       mercados: 'data/equipamiento/mercados.geojson', // mercados de abastos: informativos (scripts/descargar-comercio.mjs)
       supermercados: 'data/equipamiento/supermercados.geojson', // supermercados: informativos, aparte de los mercados
+      electricidad: 'data/electricidad/concesiones_distribucion.geojson', // áreas de concesión de distribución eléctrica (MINEM-DGE): informativo (scripts/descargar-concesiones-electricas.mjs)
       malls: 'data/equipamiento/malls.geojson', // malls (centros comerciales): informativos; polígonos donde OSM los tiene
       educacion: 'data/equipamiento/educacion.geojson',
       transporte: 'data/equipamiento/transporte.geojson',

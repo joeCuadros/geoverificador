@@ -8,6 +8,8 @@
  * Cada resultado trae { estado, nombre, distanciaM, umbralM, fuente, fecha, metodo, ... } con estado
  * CUMPLE | NO CUMPLE | SIN DATO. Las distancias son en línea recta, no recorrido a pie.
  *
+ * Además, la electricidad (`electricidad`: ¿dentro de un área de concesión de distribución?, INFORMATIVA y sin umbral; una concesión no es una conexión).
+ *
  * Además, las tres necesidades de comercio (`abastecimiento`, `compras_ocio`, `comercio_barrio`; ver Calculos.COMERCIO): INFORMATIVAS como el consultorio (sin umbral;
  * del polígono de un mall se mide la distancia al borde).
  *
@@ -31,7 +33,7 @@ const Equipamiento = (() => {
       const meta = fc.metadata || {};
       return {
         features: fc.features,
-        fecha: meta.fecha_extraccion || null,
+        fecha: meta.fecha_extraccion || meta.fecha_descarga || null, // OpenStreetMap trae la fecha de extracción; las concesiones eléctricas, la de descarga
         origen: 'archivo',
         fuente: meta.fuente || null, // p. ej. «RENIPRESS (SUSALUD) (fuente primaria) y OpenStreetMap (ODbL, respaldo)»
         fuentes: Array.isArray(meta.fuentes) ? meta.fuentes : null, // [{ rol: 'primaria' | 'respaldo', id, nombre, fecha }]
@@ -288,15 +290,35 @@ const Equipamiento = (() => {
   }
 
   /**
+   * ¿El punto está dentro de un área de concesión de distribución eléctrica (MINEM-DGE)? INFORMATIVO, sin respaldo en vivo. Nunca rechaza.
+   * Dentro de una concesión NO es tener una conexión: ver Calculos.NOTA_ELECTRICIDAD.
+   */
+  async function electricidadPorConcesion(punto) {
+    const metodoSin = (datos) => `Se comprueba si el punto cae dentro de algún polígono de concesión de distribución eléctrica (punto en polígono; un hueco queda fuera) y, si no, la distancia en línea recta hasta el borde de la más cercana. ${datos ? 'Datos congelados del MINEM (Dirección General de Electricidad), licencia ODC-By.' : 'No se encontró el archivo de concesiones.'} Sin umbral: ${CONFIG.fuentesUmbral.electricidad}. Esto no dice que el predio esté conectado.`;
+    try {
+      const datos = await archivo('electricidad');
+      const r = Calculos.evaluarConcesion(punto, datos ? datos.features : [], {
+        fuente: datos && datos.fuente ? datos.fuente : 'MINEM (Dirección General de Electricidad), Concesiones de Distribución Eléctrica',
+        fecha: datos ? datos.fecha : null,
+        metodo: metodoSin(datos),
+      });
+      return datos ? r : { ...r, error: 'No se encontró el archivo de concesiones eléctricas.' };
+    } catch (err) {
+      console.error('[Equipamiento] electricidad', err);
+      return { ...Calculos.evaluarConcesion(punto, [], { metodo: metodoSin(null) }), error: err.message };
+    }
+  }
+
+  /**
    * Evalúa las variables del equipamiento para el punto.
-   * Devuelve { salud, consultorio, abastecimiento, compras_ocio, comercio_barrio (las tres necesidades de comercio, informativas: ver Calculos.COMERCIO; `abastecimiento.porTipo` trae el mercado y el supermercado más cercanos), educacion: { inicial, primaria, secundaria }, transporte, areaVerde }.
+   * Devuelve { salud, consultorio, abastecimiento, compras_ocio, comercio_barrio (las tres necesidades de comercio, informativas: ver Calculos.COMERCIO; `abastecimiento.porTipo` trae el mercado y el supermercado más cercanos), electricidad (informativa: área de concesión eléctrica; ver Calculos.evaluarConcesion), educacion: { inicial, primaria, secundaria }, transporte, areaVerde }.
    * `transporte.rutas` agrega las líneas de SmartBus que pasan a ≤ CONFIG.umbrales.transporte del punto (Rutas.cerca): el paradero
    * de OpenStreetMap y los recorridos de SmartBus son dos fuentes distintas y no se mezclan.
    */
   async function evaluar(lat, lon) {
     const punto = { lat, lon };
     const u = CONFIG.umbrales;
-    const [s, c, e, t, v, rutas, comercioNecesidades] = await Promise.all([
+    const [s, c, e, t, v, rutas, comercioNecesidades, elec] = await Promise.all([
       variable('salud', punto, salud, (m) => sinDato(m, u.salud)),
       consultorioCercano(punto),
       variable('educacion', punto, educacion, (m) => Object.fromEntries(NIVELES.map((n) => [n, sinDato(m, u.educacion[n])]))),
@@ -304,8 +326,9 @@ const Equipamiento = (() => {
       variable('areasVerdes', punto, areaVerde, (m) => ({ ...sinDato(m, u.areaVerde.distanciaM), areaM2: null, cumple1ha: false })),
       lineasCerca(punto),
       comercioPorNecesidad(punto),
+      electricidadPorConcesion(punto),
     ]);
-    return { salud: s, consultorio: c, ...comercioNecesidades, educacion: e, transporte: { ...t, rutas }, areaVerde: v };
+    return { salud: s, consultorio: c, ...comercioNecesidades, electricidad: elec, educacion: e, transporte: { ...t, rutas }, areaVerde: v };
   }
 
   /**

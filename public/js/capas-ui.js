@@ -14,7 +14,7 @@ const CapasUI = (() => {
 
   // Un color por tipo de entidad; los colegios además cambian de forma/letra por nivel (nunca solo el color).
   const COLOR = {
-    inicial: '#9a4d00', primaria: '#1c3a6b', secundaria: '#6b2d7a', salud: '#b0272b', consultorio: '#0f6b6b', mercado: '#9a3412', supermercado: '#065f46', mall: '#9d174d', galeria: '#a16207', abastecimiento: '#9a3412', compras_ocio: '#9d174d', comercio_barrio: '#a16207', paradero: '#3b4a5a', parques: '#2f7d3b', quebradas: '#1f6fb2',
+    inicial: '#9a4d00', primaria: '#1c3a6b', secundaria: '#6b2d7a', salud: '#b0272b', consultorio: '#0f6b6b', mercado: '#9a3412', supermercado: '#065f46', mall: '#9d174d', galeria: '#a16207', electricidad: '#b45309', abastecimiento: '#9a3412', compras_ocio: '#9d174d', comercio_barrio: '#a16207', paradero: '#3b4a5a', parques: '#2f7d3b', quebradas: '#1f6fb2',
     sismos: '#c2570c', volcan_alto: '#a31621', volcan_moderado: '#e07b00', volcan_bajo: '#e9c046', sectores: '#0b5d4f', residencial: '#b88a2e', tranquilo: '#8a6d1f', campina: '#6f9a2f', comercial: '#7a4fa0', historico: '#a0422f',
   };
   const LETRA = { inicial: 'I', primaria: 'P', secundaria: 'S', salud: '+', consultorio: 'C', mercado: 'M', supermercado: 'S', mall: 'CC', galeria: 'G', paradero: 'B' };
@@ -22,7 +22,7 @@ const CapasUI = (() => {
   // Riesgo de los distritos ante El Niño (CENEPRED): de menor a mayor. La leyenda lleva además el texto y los nombres, así que el color no es lo único que informa.
   const COLOR_RIESGO = { Bajo: '#6aa84f', Medio: '#e9c046', Alto: '#e07b00', 'Muy alto': '#a31621' };
 
-  let api = null; // { map, datos(opciones: { rutas, volcan, cenepred }): Promise<{ datos, zonas, cauces, sismos, volcan, cenepred, rutas, umbrales, fecha }>, mapaVisible? }
+  let api = null; // { map, datos(opciones: { rutas, volcan, cenepred, electricidad }): Promise<{ datos, zonas, cauces, sismos, volcan, cenepred, rutas, umbrales, fecha }>, mapaVisible? }
   let grupo = null;
   let activas = []; // capas elegidas con los chips: [{ id }]
   let contexto = null; // lo que vino del chat: { capas, distrito, sectores }
@@ -99,11 +99,16 @@ const CapasUI = (() => {
   function dibujar(r) {
     grupo.clearLayers();
     sectorCapas.clear();
+    // Concesiones eléctricas: polígonos enteros del registro, con borde visible y un popup que dice que NO es una conexión.
+    r.poligonos.filter((p) => p.capa === 'electricidad').forEach((p) => {
+      L.geoJSON({ type: 'Feature', geometry: p.geometry }, { style: { color: COLOR.electricidad, weight: 2, dashArray: '6 4', fillColor: COLOR.electricidad, fillOpacity: 0.08 }, pane: 'capasZonas' })
+        .bindPopup(popup(p.titulo, `${p.detalle}. Es el área en que esa empresa debe dar el servicio; no dice que un predio esté conectado.`, null)).addTo(grupo);
+    });
     r.poligonos.filter((p) => CAPAS_COMERCIO.includes(p.capa)).forEach((p) => {
       L.geoJSON({ type: 'Feature', geometry: p.geometry }, { style: { color: COLOR[p.capa], weight: 2, fillColor: COLOR[p.capa], fillOpacity: 0.3 }, pane: 'capasParques' })
         .bindPopup(popup(p.titulo, `${p.detalle} (forma en OpenStreetMap; la distancia se mide hasta su borde)`, p.osm)).addTo(grupo);
     });
-    r.poligonos.filter((p) => p.capa !== 'parques' && !CAPAS_COMERCIO.includes(p.capa)).forEach((p) => {
+    r.poligonos.filter((p) => p.capa !== 'parques' && p.capa !== 'electricidad' && !CAPAS_COMERCIO.includes(p.capa)).forEach((p) => {
       L.geoJSON({ type: 'Feature', geometry: p.geometry }, { style: { color: COLOR[p.capa], weight: 1, fillColor: COLOR[p.capa], fillOpacity: 0.38 }, renderer: renderers.zonas, pane: 'capasZonas', interactive: false }).addTo(grupo);
     });
     r.poligonos.filter((p) => p.capa === 'parques').forEach((p) => {
@@ -166,6 +171,7 @@ const CapasUI = (() => {
     abastecimiento: '<span class="mu-ico mu-mercado">M</span><span class="mu-ico mu-supermercado">S</span>',
     compras_ocio: '<span class="mu-ico mu-mall">CC</span>',
     comercio_barrio: '<span class="mu-ico mu-galeria">G</span>',
+    electricidad: '<span class="mu-bloque" style="background:#b45309;opacity:.35;border:1px dashed #b45309"></span>',
     paraderos: '<span class="mu-ico mu-paradero">B</span>',
     parques: '<span class="mu-bloque" style="background:#2f7d3b"></span>',
     quebradas: '<span class="mu-linea"></span>',
@@ -192,10 +198,11 @@ const CapasUI = (() => {
       return filas.join('');
     };
     $('leyenda-estados').innerHTML = r.leyenda.map(itemDe).join('')
-      + r.sinDatos.map((c) => `<li class="ley-item leyenda-error"><span class="ley-txt">${c === 'lineas' ? 'No pude leer los recorridos de SmartBus, así que no los dibujo.' : `No pude leer el archivo de ${c === 'sismos' ? 'sismos' : c === 'volcan' ? 'peligro volcánico' : c === 'cenepred' ? 'riesgo de los distritos (CENEPRED)' : 'quebradas'}, así que no lo dibujo.`}</span></li>`).join('');
+      + r.sinDatos.map((c) => `<li class="ley-item leyenda-error"><span class="ley-txt">${c === 'lineas' ? 'No pude leer los recorridos de SmartBus, así que no los dibujo.' : `No pude leer el archivo de ${c === 'sismos' ? 'sismos' : c === 'electricidad' ? 'concesiones eléctricas' : c === 'volcan' ? 'peligro volcánico' : c === 'cenepred' ? 'riesgo de los distritos (CENEPRED)' : 'quebradas'}, así que no lo dibujo.`}</span></li>`).join('');
     const fuentes = [];
     if (r.leyenda.some((l) => ['colegios', 'salud', 'consultorios', 'paraderos', 'parques'].includes(l.capa))) fuentes.push(`Colegios: padrón de ESCALE (MINEDU). Salud y consultorios médicos (dos categorías; el consultorio es informativo, sin círculo de distancia): RENIPRESS (SUSALUD). Paraderos y parques: OpenStreetMap (ODbL), que en colegios, salud y consultorios solo completa donde no hay un punto oficial de la misma categoría a 200 m. Datos al ${fecha || 'sin fecha'}; cada punto dice su fuente al tocarlo. Puede faltar alguno.`);
     if (r.leyenda.some((l) => CAPAS_COMERCIO.includes(l.capa))) fuentes.push('Abastecimiento (mercados y supermercados), compras y ocio (malls confirmados con su fuente) y comercio de barrio (galerías): OpenStreetMap (ODbL), solo informativos (sin distancia de referencia ni círculo); de un mall o una galería con forma en el mapa la distancia es al borde, no al centro. Puede faltar alguno.');
+    if (r.leyenda.some((l) => l.capa === 'electricidad')) fuentes.push('Concesión eléctrica: áreas de concesión de distribución del MINEM (Dirección General de Electricidad), datosabiertos.gob.pe, licencia ODC-By. Dicen a qué empresa le corresponde dar el servicio, no si un predio está conectado; los polígonos son poco detallados y su borde puede ser impreciso.');
     if (r.leyenda.some((l) => ['residencial', 'tranquilo', 'campina', 'comercial', 'historico'].includes(l.capa))) fuentes.push('Zonas: plano del PDM Arequipa 2016-2025 (referencial).');
     if (r.leyenda.some((l) => l.capa === 'quebradas')) fuentes.push('Quebradas y ríos: cauces de la ANA (red de 2018), el IGP y OpenStreetMap (ODbL); cada tramo dice su fuente al tocarlo. Ninguna fuente es completa ni es un mapa de peligro.');
     if (r.leyenda.some((l) => l.capa === 'lineas')) fuentes.push('Líneas de bus: Rutas: SmartBus (smartbus.app), recorridos publicados usados con autorización verbal; sin frecuencias ni horarios.' + (r.paradasBus.length ? ' La parada es la más cercana en línea recta.' : ''));
@@ -220,12 +227,12 @@ const CapasUI = (() => {
     $('leyenda-resumen').textContent = 'Preparando el mapa…';
     $('leyenda').hidden = false;
     try {
-      const d = await api.datos({ rutas: capas.some((c) => c.id === 'lineas'), volcan: capas.some((c) => c.id === 'volcan'), cenepred: capas.some((c) => /^cenepred_/.test(c.id)) });
+      const d = await api.datos({ rutas: capas.some((c) => c.id === 'lineas'), volcan: capas.some((c) => c.id === 'volcan'), electricidad: capas.some((c) => c.id === 'electricidad'), cenepred: capas.some((c) => /^cenepred_/.test(c.id)) });
       if (mia !== secuencia) return;
       const distrito = contexto && contexto.distrito;
       const polys = distrito ? Distritos.poligonos(distrito) : null;
       const r = Capas.construir({
-        capas, datos: d.datos, zonas: d.zonas, cauces: d.cauces, sismos: d.sismos, volcan: d.volcan, cenepred: d.cenepred, rutas: d.rutas, umbrales: d.umbrales,
+        capas, datos: d.datos, zonas: d.zonas, cauces: d.cauces, sismos: d.sismos, volcan: d.volcan, electricidad: d.electricidad, cenepred: d.cenepred, rutas: d.rutas, umbrales: d.umbrales,
         area: polys && polys.length ? { polys } : null, sectores: contexto && contexto.sectores && contexto.sectores.length ? contexto.sectores : null,
       });
       ultimo = r;

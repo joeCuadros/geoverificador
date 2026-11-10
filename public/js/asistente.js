@@ -137,6 +137,10 @@ const Asistente = (() => {
       comercio_barrio: /\b(galerias?(?:\s+comercial(?:es)?)?|comercio\s+(?:de|del)\s+barrio|comercio\s+vecinal|tiendas?\s+de\s+barrio)\b/,
     },
     comercioTodo: /\b(mercados?|mercadillos?|super\s?mercados?|hipermercados?|abastecimiento|viveres|abarrotes|(?:comprar|conseguir)\s+(?:la\s+|mi\s+)?(?:comida|alimentos|verduras|frutas)|malls?|centros? comercial(?:es)?|shopping|outlets?|ocio|ir de compras|galerias?(?:\s+comercial(?:es)?)?|comercio\s+(?:de|del)\s+barrio|comercio\s+vecinal|tiendas?\s+de\s+barrio)\b/g,
+    // Electricidad (informativo): «¿hay luz?», electricidad, servicio o energía eléctrica, SEAL. «Luz» sola no cuenta («luz del día»).
+    electricidad: /\b(electricidad|electric[oa]s?|electrificacion|seal|(?:hay|tiene|tienen|tengo|con|sin|falta|cuenta con)\s+(?:la\s+)?luz|luz\s+(?:electrica|en\s+(?:mi|el|este|esta|la))|concesion de distribucion)\b/,
+    // Pedir ZONAS con luz es una búsqueda; «¿es zona de SEAL?» no (la palabra «zona» sola no la pide).
+    electricidadBusca: /\b(busc\w*|encuentr\w*|recomi\w*|sugier\w*|mejor(?:es)?|zonas|donde (?:vivir|mudar\w*))\b/,
     quebrada: /\b(quebradas?|torrenteras?|cauces?|huaycos?|huaicos?|aluvion\w*|rios?|rio chili)\b/,
     sismos: /\b(sismos?|sismic\w*|temblor\w*|terremoto\w*)\b/,
     peligros: /\b(peligros?|riesgos?|derrumbes?|deslizamientos?|caida de rocas|geologic\w*)\b/,
@@ -240,6 +244,11 @@ const Asistente = (() => {
     return Object.keys(RE.comercio).filter((id) => RE.comercio[id].test(t));
   }
 
+  /** ¿La frase habla de la electricidad (luz, servicio o energía eléctrica, SEAL)? */
+  function mencionaElectricidad(texto) {
+    return RE.electricidad.test(normalizar(texto));
+  }
+
   /** ¿La frase habla de abastecimiento (mercado, supermercado), de compras y ocio (mall, centro comercial) o de comercio de barrio (galería)? */
   function mencionaComercio(texto) {
     return comercioEn(texto).length > 0;
@@ -259,12 +268,13 @@ const Asistente = (() => {
     const intencion = {
       tipo: 'desconocido', modo: 'nuevo', criterios: [], radioGlobalM: null, lote: null, incluirCondicional: false,
       temaNoSoportado: null, aproximados: [], limitarAlPunto: false, distrito: null, distritoFuera: false, distritoTexto: null, todosPrecio: false,
-      volcanTipos: [], cenepredFenomenos: [], cenepredMapa: false, cenepredTodos: false, consultorio: false, comercio: [],
+      volcanTipos: [], cenepredFenomenos: [], cenepredMapa: false, cenepredTodos: false, consultorio: false, comercio: [], electricidad: false,
     };
     let t = normalizar(texto);
     if (!t) return intencion;
     intencion.consultorio = mencionaConsultorio(t);
     intencion.comercio = comercioEn(t);
+    intencion.electricidad = mencionaElectricidad(t);
     t = t.replace(/(\d),(\d)/g, '$1.$2'); // «1,5 km»: la coma decimal no debe partir la frase
     NUMEROS.forEach(([re, v]) => { t = t.replace(re, v); });
 
@@ -332,6 +342,14 @@ const Asistente = (() => {
       const pideZonas = (RE.busqueda.test(t.replace(RE.comercioTodo, ' ').replace(/\bdonde\b/g, ' ')) && !RE.contar.test(t) && !RE.punto.test(t)) || (ultima && (RE.agregar.test(t) || RE.prioridad.test(t)));
       if (pideZonas) return { ...intencion, tipo: 'no_soportado', temaNoSoportado: 'comercio_busqueda', aproximados: [], limitarAlPunto: false };
       return { ...intencion, tipo: 'comercio', aproximados: [], limitarAlPunto: false };
+    }
+
+    // Electricidad: informativa. «¿Hay luz en mi punto?» se responde con el área de concesión de distribución en que cae el punto (con la salvedad de que
+    // eso no es una conexión); pedir zonas «con luz» no se puede. Con otros criterios la búsqueda sigue sin ella.
+    if (intencion.electricidad && !hayCriterios && !RE.fuentes.test(t)) {
+      const pideZonas = RE.electricidadBusca.test(t) || (ultima && (RE.agregar.test(t) || RE.prioridad.test(t)));
+      if (pideZonas) return { ...intencion, tipo: 'no_soportado', temaNoSoportado: 'electricidad_busqueda', aproximados: [], limitarAlPunto: false };
+      return { ...intencion, tipo: 'electricidad', aproximados: [], limitarAlPunto: false };
     }
 
     // Peligro volcánico del Misti: se atiende antes que perfil, líneas y quebradas («¿Paucarpata está en peligro por el Misti?» no es un perfil).
@@ -949,6 +967,30 @@ const Asistente = (() => {
     return 'El abastecimiento (mercados y supermercados), las compras y el ocio (malls) y el comercio de barrio (galerías) no entran en la búsqueda: son datos informativos (no hay una distancia de referencia, es una decisión pendiente). Busqué solo por lo demás. Pregúntame aparte por el más cercano a tu punto: «¿hay un mall cerca de mi punto?» o «¿dónde puedo comprar comida cerca?».';
   }
 
+  // ---------------------------------------------------------- Electricidad (informativo)
+
+  /** Línea del resumen del punto: ¿dentro de un área de concesión eléctrica? Sin veredicto; null si no se calculó. */
+  function lineaElectricidad(r) {
+    if (!r) return null;
+    if (r.estado === 'SIN DATO' || r.dentro === null) return 'Electricidad (informativo): sin dato en los datos que tengo.';
+    if (r.dentro) return `Electricidad (informativo): dentro del área de concesión de ${r.concesionarias.join(' y ')}; eso no es una conexión.`;
+    return `Electricidad (informativo): fuera de las áreas de concesión de los datos (la más cercana, la de ${r.concesionaria || 'una empresa'}, a ${fmtDist(r.distanciaM)} de su borde); eso no dice si hay servicio.`;
+  }
+
+  /** «¿Hay luz en mi punto?»: el área de concesión eléctrica del punto, con su fuente y la salvedad. Nunca afirma que haya o no haya luz. */
+  function respuestaElectricidad(c) {
+    if (!c.punto) return { texto: 'Elige un punto en el mapa para ver si cae dentro de un área de concesión de distribución eléctrica (SEAL u otra empresa).', sugerencias: SUGERENCIAS_BASE };
+    if (!c.entorno) return { texto: 'Todavía estoy calculando los servicios cercanos a tu punto; vuelve a preguntar en unos segundos.', sugerencias: [] };
+    const r = c.entorno.electricidad;
+    if (!r) return { texto: 'Todavía no tengo ese dato; vuelve a preguntar en unos segundos.', sugerencias: [] };
+    const fuente = r.estado === 'SIN DATO' ? '' : `Fuente: ${r.fuente || 'MINEM (Dirección General de Electricidad)'}${r.fecha ? `, descargado el ${r.fecha}` : ''}, licencia ODC-By. Los bordes son los del registro: pueden ser poco precisos.`;
+    return {
+      texto: [C.textoElectricidad(r), fuente, C.NOTA_ELECTRICIDAD].filter(Boolean).join('\n'),
+      sugerencias: ['Dame un resumen del punto', '¿Hay una posta cerca?'],
+      mapa: { capas: ['electricidad'] },
+    };
+  }
+
   /** Línea del resumen del punto: el consultorio más cercano, aparte de la salud y sin veredicto; null si no se calculó. */
   function lineaConsultorio(r) {
     if (!r) return null;
@@ -1297,6 +1339,7 @@ const Asistente = (() => {
     '• Salud: RENIPRESS (SUSALUD, licencia ODC-By) y colegios: padrón de ESCALE (MINEDU), como fuente primaria, con su fecha. OpenStreetMap (ODbL) solo de respaldo, donde ningún registro oficial tiene un punto a 200 m; cada establecimiento dice de cuál es.',
     '• Paraderos y áreas verdes: OpenStreetMap (ODbL), copia congelada con su fecha de extracción. Algo que falte en el mapa puede existir.',
     '• Comercio por necesidad —abastecimiento (mercados y supermercados), compras y ocio (malls confirmados) y comercio de barrio (galerías)—: OpenStreetMap (ODbL), informativos y sin umbral; el CENAMA 2016 (INEI, PRODUCE) solo se usa para contar mercados por distrito. Los malls conocidos se contrastan con la fuente de cada uno.',
+    '• Electricidad: áreas de concesión de distribución eléctrica del MINEM (Dirección General de Electricidad, licencia ODC-By), copia congelada con su fecha de descarga. Dicen a quién le corresponde el servicio, no si un predio está conectado.',
     '• Líneas de transporte (recorridos y paradas): SmartBus (smartbus.app), usados con su autorización verbal (confirmación escrita pendiente). Sin frecuencias ni horarios.',
     '• Umbrales: colegios 500 m inicial, 1500 m primaria y 3000 m secundaria (MINEDU); área verde ≥ 0,5 ha a 300 m (OMS Europa); salud 1000 m, paradero 400 m y borde de zona 20 m son convenciones del proyecto.',
     '• Peligro volcánico del Misti: zonas del Instituto Geofísico del Perú (IGP), sin fecha de elaboración en el servicio; el mapa oficial de referencia es el de INGEMMET (Boletín n.° 100, 2025). Es informativo, no una evaluación de riesgo.',
@@ -1358,6 +1401,7 @@ const Asistente = (() => {
     volcan_busqueda: 'Todavía no puedo buscar zonas según el peligro volcánico. Sí puedo decirte en qué zonas de peligro del Misti cae tu punto («¿hay lahares cerca de mi punto?») o qué parte de un distrito cae en cada una («¿Paucarpata está en peligro por el Misti?»).',
     cenepred_busqueda: 'Todavía no puedo buscar zonas según el riesgo de inundación o de movimientos en masa. Sí puedo decirte qué estima el CENEPRED para el distrito de tu punto («¿qué dice el CENEPRED de mi punto?») o para un distrito («¿Paucarpata se inunda?»).',
     comercio_busqueda: 'No puedo buscar zonas «cerca de un mall, un supermercado, un mercado o una galería»: son datos informativos, porque no hay una distancia de referencia (es una decisión pendiente) y no los uso para elegir un lugar. Sí puedo decirte cuál es el más cercano a tu punto según lo que necesites —abastecimiento (mercados y supermercados), compras y ocio (malls) o comercio de barrio (galerías)— («¿hay un mall y un mercado cerca de mi punto?») o cuántos hay en un distrito («¿cuántos mercados hay en Cayma?»). Es informativo: no dice si está cerca o lejos.',
+    electricidad_busqueda: 'No puedo buscar zonas «con luz»: lo que tengo son las áreas de concesión de distribución eléctrica (SEAL y otras), que dicen a qué empresa le corresponde el servicio, no dónde hay conexión, y no las uso para elegir un lugar. Sí puedo decirte si tu punto está dentro de una («¿hay luz en mi punto?»). Es informativo: una concesión no es una conexión.',
     consultorio_busqueda: 'No puedo buscar zonas «cerca de un consultorio»: el consultorio médico es una categoría aparte de los establecimientos de salud y es solo informativo, porque no hay una distancia de referencia (es una decisión pendiente). Sí puedo decirte el consultorio más cercano a tu punto («¿hay un consultorio cerca?») o cuántos hay en un distrito («¿cuántos consultorios hay en Cayma?»); para buscar zonas usa «posta», «hospital» o «centro de salud».',
     ruido: 'No tengo datos de ruido. «Zona tranquila» es solo una aproximación con la zonificación (residencial de densidad baja o media 1), no una medición.',
   };
@@ -1372,7 +1416,7 @@ const Asistente = (() => {
     const fin = (texto, sugerencias = SUGERENCIAS_BASE) => ({ texto, sugerencias });
 
     if (tipo === 'saludo') return fin('¡Hola! Soy el asistente de GeoVerificador. Puedo contarte lo que hay en tu punto (zona y servicios cercanos) o buscar zonas de Arequipa según lo que te importa: colegio, posta, área verde, transporte, campiña, zona residencial. Todo con los mismos datos de la ficha.');
-    if (tipo === 'ayuda') return fin('Puedo:\n• Buscar zonas: «busco cerca de un colegio y un parque, lo más importante es el parque» o «posta y paradero en un radio de 1 km».\n• Contarte de tu punto: «¿qué zona es?», «¿hay un colegio cerca?», «dame un resumen».\n• Consultorios médicos (aparte de la salud, solo informativos): «¿hay un consultorio cerca?» o «¿cuántos consultorios hay en Cayma?».\n• Comercio por necesidad (solo informativo, sin distancia de referencia): abastecimiento —mercados y supermercados, «¿dónde puedo comprar comida cerca?»—, compras y ocio —malls, «¿hay un mall cerca de mi punto?»— y comercio de barrio —galerías—; o «¿cuántos mercados hay en Cayma?».\n• Líneas de transporte: «¿qué buses pasan por aquí?» o «¿qué líneas pasan por Paucarpata?».\n• Peligro volcánico del Misti: «¿hay lahares cerca de mi punto?» o «¿Paucarpata está en peligro por el Misti?».\n• Riesgo ante El Niño por distrito (CENEPRED): «¿Paucarpata se inunda?», «riesgo de huaico en Sachaca» o «¿qué dice el CENEPRED de mi punto?».\n• Calcular: «¿cuánto puedo construir en un lote de 200 m²?».\n• Decirte el precio de oferta por m² promedio de un distrito: «¿cuánto cuesta el m² en Cayma?».\n• Explicar el PDM nuevo y de dónde salen los datos.\nNo tengo datos de seguridad ni ruido, ni el precio de una casa o un terreno en particular.');
+    if (tipo === 'ayuda') return fin('Puedo:\n• Buscar zonas: «busco cerca de un colegio y un parque, lo más importante es el parque» o «posta y paradero en un radio de 1 km».\n• Contarte de tu punto: «¿qué zona es?», «¿hay un colegio cerca?», «dame un resumen».\n• Consultorios médicos (aparte de la salud, solo informativos): «¿hay un consultorio cerca?» o «¿cuántos consultorios hay en Cayma?».\n• Comercio por necesidad (solo informativo, sin distancia de referencia): abastecimiento —mercados y supermercados, «¿dónde puedo comprar comida cerca?»—, compras y ocio —malls, «¿hay un mall cerca de mi punto?»— y comercio de barrio —galerías—; o «¿cuántos mercados hay en Cayma?».\n• Electricidad (solo informativa): «¿hay luz en mi punto?» te dice si tu punto está dentro del área de concesión de SEAL u otra empresa; eso no es una conexión.\n• Líneas de transporte: «¿qué buses pasan por aquí?» o «¿qué líneas pasan por Paucarpata?».\n• Peligro volcánico del Misti: «¿hay lahares cerca de mi punto?» o «¿Paucarpata está en peligro por el Misti?».\n• Riesgo ante El Niño por distrito (CENEPRED): «¿Paucarpata se inunda?», «riesgo de huaico en Sachaca» o «¿qué dice el CENEPRED de mi punto?».\n• Calcular: «¿cuánto puedo construir en un lote de 200 m²?».\n• Decirte el precio de oferta por m² promedio de un distrito: «¿cuánto cuesta el m² en Cayma?».\n• Explicar el PDM nuevo y de dónde salen los datos.\nNo tengo datos de seguridad ni ruido, ni el precio de una casa o un terreno en particular.');
     if (tipo === 'fuentes') return fin(TEXTO_FUENTES);
     if (tipo === 'no_soportado') return fin(`${TEMAS[intencion.temaNoSoportado] || 'Eso no está en los datos que uso.'}\nSí puedo ayudarte con la zonificación y con la cercanía a colegios, salud, transporte y áreas verdes.`);
     if (tipo === 'desconocido') return fin('No entendí eso. Puedes pedirme, por ejemplo:', SUGERENCIAS_BASE);
@@ -1380,6 +1424,7 @@ const Asistente = (() => {
     if (tipo === 'contar') return respuestaContar(intencion, c);
     if (tipo === 'consultorio') return respuestaConsultorio(intencion, c);
     if (tipo === 'comercio') return respuestaComercio(intencion, c);
+    if (tipo === 'electricidad') return respuestaElectricidad(c);
     if (tipo === 'perfil') return respuestaPerfil(intencion, c);
     if (tipo === 'mejor_zona') return respuestaMejorZona();
     if (tipo === 'distrito_desconocido') return fin('No reconozco «' + (intencion.distritoTexto || 'ese lugar') + '» como un distrito de la provincia de Arequipa. Puedes escribir, por ejemplo, Cayma, Paucarpata o Cerro Colorado.');
@@ -1446,6 +1491,7 @@ const Asistente = (() => {
         linea('Salud', e.salud),
         lineaConsultorio(e.consultorio),
         ...Object.keys(C.COMERCIO).map((id) => lineaComercio(id, e[id])),
+        lineaElectricidad(e.electricidad),
         `Colegios: ${colegios}.`,
         linea('Transporte', e.transporte),
         ...lineaLineas(e.transporte),
@@ -1770,6 +1816,8 @@ const Asistente = (() => {
   const LIM_OFICIAL = 'Los registros oficiales no ubican todos los establecimientos (cerca del 42 % de los de salud de Arequipa en RENIPRESS no trae coordenadas) y ESCALE ubica el local que reportó la UGEL. Un establecimiento oficial puede estar y no verse; uno de OpenStreetMap solo aparece donde no hay un punto oficial cerca.';
   const LIM_CONSULTORIO = 'Los consultorios médicos (RENIPRESS: clasificación «consultorios»; OpenStreetMap: amenity=doctors y healthcare=doctor) son una categoría aparte de los establecimientos de salud: son solo informativos, sin distancia de referencia (decisión pendiente), y no cuentan como «salud cerca».';
   const FUENTE_COMERCIO = 'Abastecimiento (mercados y supermercados), compras y ocio (solo los malls confirmados) y comercio de barrio (el resto de lo que se etiqueta mall): OpenStreetMap (ODbL), copia congelada con su fecha de extracción; los malls conocidos de Arequipa se contrastan con el sitio de cada mall o de su operador. El Censo Nacional de Mercados de Abastos 2016 (INEI, publicado por PRODUCE) no trae nombres ni coordenadas: solo sirve para comparar cuántos mercados había por distrito.';
+  const FUENTE_ELECTRICIDAD = 'Electricidad: áreas de concesión de distribución eléctrica del MINEM (Dirección General de Electricidad, servicio ArcGIS REST del geoportal; datasets de datosabiertos.gob.pe, licencia ODC-By), copia congelada con su fecha de descarga.';
+  const LIM_ELECTRICIDAD = 'La concesión eléctrica dice a qué empresa le corresponde dar el servicio de distribución en esa zona; no dice que un predio esté conectado ni que haya red en su calle (la cobertura real vendría de un censo, que aún no tengo). Los polígonos del registro son poco detallados y su borde puede ser impreciso; que un punto quede fuera no significa que no haya servicio.';
   const LIM_COMERCIO = 'El abastecimiento (mercados y supermercados), las compras y el ocio (malls confirmados) y el comercio de barrio (galerías) son categorías informativas, sin distancia de referencia (es una decisión pendiente): no se dice si están cerca o lejos y no suman al puntaje. Un supermercado dentro de un mall cuenta como abastecimiento; el mall, no. OpenStreetMap puede no tener todos y a veces etiqueta de más: por distrito, el número de mercados mapeados no coincide con el del censo de 2016 (en unos hay menos y en otros más), amenity=marketplace incluye ferias y comercios mal etiquetados, y shop=mall incluye galerías y centros comerciales pequeños, no solo malls. No distingue un mercado minorista de uno mayorista. «Sin dato» no significa que no exista.';
   const LIM_PLANO = 'El plano se extrajo de un PDF y cerca del borde entre dos zonas el resultado puede no ser exacto. La vigencia del PDM 2016-2025 es incierta y hay un PDM nuevo en trámite.';
   const FUENTE_ANA = 'Cauces congelados con su fecha de extracción: la red hidrográfica de la Autoridad Nacional del Agua (ANA, 2018), las quebradas y ríos del Instituto Geofísico del Perú (IGP, sin fecha de elaboración) y los cauces de OpenStreetMap (ODbL). Cada cauce dice de cuál fuente viene.';
@@ -1794,8 +1842,8 @@ const Asistente = (() => {
     no_soportado: GENERICO,
     fuentes: {
       porque: ['Resume de dónde sale cada dato de la ficha y qué umbral se usa.'],
-      fuente: [FUENTE_PLANO, FUENTE_SERVICIOS, FUENTE_COMERCIO, FUENTE_UMBRALES],
-      limites: [LIM_RECTA, LIM_OFICIAL, LIM_CONSULTORIO, LIM_COMERCIO, LIM_OSM, LIM_REFERENCIAL],
+      fuente: [FUENTE_PLANO, FUENTE_SERVICIOS, FUENTE_COMERCIO, FUENTE_ELECTRICIDAD, FUENTE_UMBRALES],
+      limites: [LIM_RECTA, LIM_OFICIAL, LIM_CONSULTORIO, LIM_COMERCIO, LIM_ELECTRICIDAD, LIM_OSM, LIM_REFERENCIAL],
     },
     pdm: {
       porque: ['Muestra el aviso sobre el estado del PDM nuevo que registra la herramienta, con su fuente y su fecha. No lo interpreta.'],
@@ -1838,6 +1886,11 @@ const Asistente = (() => {
       limites: [LIM_CENEPRED, 'El nivel es uno solo por distrito: no distingue entre una calle y otra ni mira tu predio.'],
     },
     servicio: SERVICIOS,
+    electricidad: {
+      porque: ['Ubica tu punto dentro de los polígonos de concesión de distribución eléctrica del MINEM y dice de qué empresa es el área; si cae afuera, la distancia al borde de la más cercana. No lo compara con ninguna distancia de referencia.'],
+      fuente: [FUENTE_ELECTRICIDAD],
+      limites: [LIM_ELECTRICIDAD, C.NOTA_ELECTRICIDAD, LIM_REFERENCIAL],
+    },
     comercio: {
       porque: ['Ordena el comercio por lo que necesitas: abastecimiento (mercados y supermercados, comida), compras y ocio (solo malls confirmados) y comercio de barrio (galerías). Busca el más cercano de cada uno a tu punto (o cuenta los del distrito) y dice su distancia en línea recta; de un mall o mercado con forma en el mapa, hasta su borde. No lo compara con ninguna distancia de referencia, porque no hay una.'],
       fuente: [FUENTE_COMERCIO],
@@ -1914,6 +1967,7 @@ const Asistente = (() => {
     mencionaConsultorio,
     notaConsultorio,
     mencionaComercio,
+    mencionaElectricidad,
     comercioEn,
     notaComercio,
     generarCeldas,

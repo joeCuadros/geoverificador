@@ -55,7 +55,7 @@ const AsistenteLLM = (() => {
         criterios: {
           type: 'array',
           items: { type: 'string', enum: CRITERIOS },
-          description: 'Lo que la persona quiere tener cerca (buscar) o los servicios por los que pregunta (servicio_cercano). colegio sin nivel = inicial o primaria. tranquilo, comercial (la zona comercial del plano, no un mall, un supermercado, un mercado ni una galería: el comercio se ordena por necesidad —abastecimiento, compras y ocio, comercio de barrio— y lo responden las reglas, nunca es un criterio) e historico son aproximaciones con la zonificación.',
+          description: 'Lo que la persona quiere tener cerca (buscar) o los servicios por los que pregunta (servicio_cercano). colegio sin nivel = inicial o primaria. tranquilo, comercial (la zona comercial del plano, no un mall, un supermercado, un mercado ni una galería: el comercio se ordena por necesidad —abastecimiento, compras y ocio, comercio de barrio— y lo responden las reglas, nunca es un criterio; la electricidad —«con luz», «electricidad», SEAL— tampoco: solo el área de concesión de la distribuidora, nunca una conexión, y la responden las reglas) e historico son aproximaciones con la zonificación.',
         },
         prioridades: {
           type: 'array',

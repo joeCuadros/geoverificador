@@ -143,6 +143,26 @@ const Reporte = (() => {
     return `${bloques.join('')}<p class="rp-nota">${esc(CALC.NOTA_COMERCIO)}${metodo ? ` ${esc(metodo)}` : ''}</p>`;
   }
 
+  /**
+   * Electricidad: ¿el punto está dentro de un área de concesión de distribución eléctrica (SEAL u otra)? INFORMATIVA (sin umbral). Una concesión dice a
+   * quién le corresponde el servicio; NO que el predio esté conectado, y la cobertura real de conexión vendría de un censo que el proyecto aún no tiene.
+   */
+  function electricidad(d) {
+    const r = d.variables && d.variables.electricidad;
+    if (!r) return '';
+    if (r.error) return `<table class="rp-tabla">${fila('Resultado', `No se pudo obtener el dato: ${esc(r.error)}`)}</table><p class="rp-nota">${esc(CALC.NOTA_ELECTRICIDAD)}</p>`;
+    const filas = [fila('Estado', r.estado === 'SIN DATO' ? estado('SIN DATO') : estado('INFORMATIVO'))];
+    if (r.dentro !== null) {
+      filas.push(fila('Resultado', esc(CALC.textoElectricidad(r))));
+      if (r.dentro) {
+        r.concesiones.forEach((c) => filas.push(fila(`Concesión (${c.concesionaria || 'empresa'})`, `${esc(c.nombre_zona)} · ${esc(c.empresa)} · expediente ${esc(c.expediente)} · ${esc(String(c.situacion || '').toLowerCase())}`)));
+      } else {
+        filas.push(fila('Distancia al borde de la más cercana', `${dist(r.distanciaM)} en línea recta (${esc(r.concesionaria || '')}${r.cercana ? `, ${esc(r.cercana.nombre_zona)}` : ''})`));
+      }
+    } else filas.push(fila('Resultado', esc(CALC.textoElectricidad(r))));
+    return `<table class="rp-tabla">${filas.join('')}</table><p class="rp-nota">${esc(CALC.NOTA_ELECTRICIDAD)} ${esc(r.metodo || '')}</p>`;
+  }
+
   const hayComercio = (d) => Boolean(d.variables && Object.keys(CALC.COMERCIO).some((id) => d.variables[id]));
   const fuenteComercio = (d) => {
     const r = Object.keys(CALC.COMERCIO).map((id) => d.variables[id]).find((x) => x && x.fuente);
@@ -370,6 +390,7 @@ const Reporte = (() => {
       ['Salud', '#c2410c', salud(d), d.variables ? fuenteDe(d.variables.salud) : ''],
       ...(d.variables && d.variables.consultorio ? [['Consultorio médico (informativo)', '#b45309', consultorio(d), fuenteDe(d.variables.consultorio)]] : []),
       ...(hayComercio(d) ? [['Comercio por necesidad: abastecimiento, compras y ocio, comercio de barrio (informativo)', '#be185d', comercio(d), fuenteComercio(d)]] : []),
+      ...(d.variables && d.variables.electricidad ? [['Electricidad (informativo)', '#ca8a04', electricidad(d), fuenteDe(d.variables.electricidad)]] : []),
       ['Educación por nivel', '#7c3aed', educacion(d), d.variables ? fuenteDe(d.variables.educacion.inicial) : ''],
       ['Transporte', '#1d4ed8', transporte(d), d.variables ? [fuenteDe(d.variables.transporte), d.variables.transporte.rutas && !d.variables.transporte.rutas.error ? `${d.variables.transporte.rutas.atribucion || 'Rutas: SmartBus (smartbus.app)'}` : ''].filter(Boolean).join('; ') : ''],
       ['Área verde', '#15803d', areaVerde(d), d.variables ? fuenteDe(d.variables.areaVerde) : ''],
@@ -395,6 +416,7 @@ const Reporte = (() => {
       'Todas las distancias son en línea recta, no recorrido a pie. Los umbrales de salud (1000 m), transporte (400 m) y borde de zona (20 m) son convenciones del proyecto; los de educación son distancias referenciales de las normas del MINEDU (RVM 104-2019 y 208-2019, numeral 7.1) y el de área verde es un indicador de la OMS Europa (2016), no una norma peruana.',
       'Los locales de ESCALE dicen su nivel. Los colegios de OpenStreetMap que completan el mapa casi no lo etiquetan: uno sin nivel se toma como candidato a primaria y secundaria, lo que puede sobrestimar la oferta de un nivel.',
       ...(d.variables && d.variables.consultorio ? ['El consultorio médico es una categoría aparte de los establecimientos de salud y es solo informativo: no tiene una distancia de referencia (es una decisión pendiente), así que no se dice si está cerca o lejos, no suma a ningún puntaje y no cuenta como «salud cerca».'] : []),
+      ...(d.variables && d.variables.electricidad ? ['Electricidad: el área de concesión de distribución eléctrica (MINEM, Dirección General de Electricidad) dice a qué empresa le corresponde dar el servicio en esa zona; una concesión no es una conexión: no dice que el predio esté conectado ni que haya red en su calle, y los polígonos del registro son poco detallados (su borde puede ser impreciso). La cobertura real de conexión vendría de un censo (INEI) que este proyecto aún no tiene. Es informativo y no suma a ningún puntaje.'] : []),
       ...(hayComercio(d) ? ['El comercio se ordena por necesidad —abastecimiento (mercados y supermercados), compras y ocio (solo los malls confirmados con su fuente) y comercio de barrio (el resto de lo que se etiqueta mall)— y es informativo: no tiene una distancia de referencia (es una decisión pendiente), así que no se dice si está cerca o lejos y no suma a ningún puntaje. Un supermercado dentro de un mall cuenta como abastecimiento; el mall, no. Sale de OpenStreetMap, que puede no tenerlos todos (por distrito, el número de mercados mapeados no coincide con el del censo de 2016), etiqueta de más —amenity=marketplace incluye ferias y comercios mal etiquetados y shop=mall incluye galerías pequeñas, no solo malls— y no distingue un mercado minorista de uno mayorista; de un mall con forma en el mapa la distancia es al borde.'] : []),
       'Quebradas y cauces: no existe una distancia normativa a una quebrada, así que el estado es INFORMATIVO salvo que la persona fije su propio umbral («según tu umbral»). Los cauces vienen de la ANA, el IGP y OpenStreetMap; ninguna fuente es completa, no son un mapa de peligro y no delimitan la faja marginal.',
       'El contexto de riesgo (peligros geológicos de INGEMMET, sismos reportados por el IGP en el periodo indicado y zonas de peligro volcánico del Misti del IGP, de escala regional y sin fecha de elaboración, y el escenario de riesgo del CENEPRED ante El Niño, que es una estimación por distrito) es informativo: no es una evaluación del predio, no predice sismos, erupciones ni lluvias y que no haya registros o zonas no significa que el lugar sea seguro.',

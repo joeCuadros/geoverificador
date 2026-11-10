@@ -16,6 +16,8 @@
  *                 (alto, moderado, bajo) con una línea de leyenda por nivel. La ceniza cubre toda la ciudad y no se dibuja.
  *   cenepred_inundacion, cenepred_mm → los distritos coloreados por su nivel de riesgo ante inundaciones o ante movimientos en masa en un escenario
  *                 El Niño (CENEPRED), con una línea de leyenda por nivel. Es una estimación por distrito, no del predio. Se dibuja un fenómeno a la vez.
+ *   electricidad → áreas de concesión de distribución eléctrica (MINEM-DGE): polígonos enteros, una línea de leyenda por concesionaria. Solo informativas:
+ *                 una concesión dice a qué empresa le corresponde el servicio, no que un predio esté conectado.
  *   lineas      → recorridos de bus de SmartBus (un color por línea) y, con un punto, la parada más cercana de cada una
  * Con una búsqueda se dibujan las entidades que hacen que cada sector cumpla, y UNA región resaltada: los sectores donde se
  * cumple todo lo que pidió. No se pinta lo que no cumple y no se ve la cuadrícula.
@@ -50,6 +52,7 @@ const Capas = (() => {
     { id: 'historico', etiqueta: 'Centro histórico', grupo: 'zona' },
     { id: 'quebradas', etiqueta: 'Quebradas y ríos', grupo: 'riesgo' },
     { id: 'sismos', etiqueta: 'Sismos', grupo: 'riesgo' },
+    { id: 'electricidad', etiqueta: 'Concesión eléctrica (SEAL y otras)', grupo: 'servicio' }, // informativa: no es una conexión
     { id: 'volcan', etiqueta: 'Peligro volcánico (Misti)', grupo: 'riesgo' },
     { id: 'cenepred_inundacion', etiqueta: 'Riesgo de inundación por distrito (CENEPRED)', grupo: 'riesgo' },
     { id: 'cenepred_mm', etiqueta: 'Riesgo de movimientos en masa por distrito (CENEPRED)', grupo: 'riesgo' },
@@ -76,7 +79,7 @@ const Capas = (() => {
         k.niveles = NIVELES.filter((n) => (k.niveles || []).includes(n) || niveles.includes(n));
         k.umbralPorNivel = { ...(k.umbralPorNivel || {}), ...(c.umbralPorNivel || {}) };
         if (!c.umbralPorNivel && typeof c.umbralEfectivoM === 'number') niveles.forEach((n) => { k.umbralPorNivel[n] = c.umbralEfectivoM; });
-      } else if (c.id in C.COMERCIO) capa(c.id); // solo del mapa del chat (no son un criterio de búsqueda)
+      } else if (c.id in C.COMERCIO || c.id === 'electricidad') capa(c.id); // solo del mapa del chat (no son un criterio de búsqueda)
       else if (c.id === 'consultorios') capa('consultorios'); // solo del mapa del chat (no es un criterio de búsqueda)
       else if (c.id === 'salud') capa('salud').umbralM = c.umbralEfectivoM;
       else if (c.id === 'transporte') capa('paraderos').umbralM = c.umbralEfectivoM;
@@ -140,12 +143,13 @@ const Capas = (() => {
    *   datos:    Asistente.prepararDatos; zonas: Zonificacion.zonas(); cauces: [{ nombre, tipo, geometry }] o null; sismos: [{ lat, lon, magnitud, … }] o null
    *   area:     { polys } (un distrito), { bbox } o null (todo el mapa)
    cenepred: el contenido de data/riesgo_cenepred_fen2027.json (y Distritos cargado para los límites); solo hace falta con una capa cenepred_inundacion o cenepred_mm
+   electricidad: las Features del archivo de concesiones eléctricas (Polygon / MultiPolygon); solo hacen falta con una capa { id: 'electricidad' }
    volcan:   las zonas de Volcan.indexar; solo hacen falta (y solo se cargan) con una capa { id: 'volcan', tipos?: ['lahar', …] }
    rutas:    el índice de Rutas.indexar; solo hace falta (y solo se carga) si hay una capa { id: 'lineas', nombres:[…], punto?}
    *   sectores: los de Asistente.formatearBusqueda (con `centros`); si hay, solo se dibujan las entidades que los hacen cumplir
    * Devuelve { puntos, circulos, poligonos, lineas, sismos, peligroVolcan, riesgoDistritos, sectores, lineasBus, paradasBus, leyenda, vacias, sinDatos, resumen, limites }.
    */
-  function construir({ capas, datos, zonas, cauces, sismos, volcan = null, cenepred = null, area = null, umbrales, sectores = null, rutas = null, maxCirculos = 12 }) {
+  function construir({ capas, datos, zonas, cauces, sismos, volcan = null, electricidad = null, cenepred = null, area = null, umbrales, sectores = null, rutas = null, maxCirculos = 12 }) {
     const polys = area && area.polys ? area.polys : null;
     const cajaArea = polys ? bboxDePolys(polys) : area && area.bbox ? area.bbox : null;
     const dentroPoligonos = polys ? E().contenedor(polys) : null;
@@ -178,7 +182,7 @@ const Capas = (() => {
       colegios: ['colegio', 'colegios'], salud: ['establecimiento de salud', 'establecimientos de salud'], consultorios: ['consultorio médico', 'consultorios médicos'], abastecimiento: ['punto de abastecimiento', 'puntos de abastecimiento'], compras_ocio: ['mall confirmado', 'malls confirmados'], comercio_barrio: ['galería o comercio de barrio', 'galerías y comercios de barrio'], paraderos: ['paradero', 'paraderos'], parques: ['parque', 'parques'],
       residencial: ['zona residencial', 'zonas residenciales'], tranquilo: ['zona tranquila', 'zonas tranquilas'], campina: ['zona de campiña', 'zonas de campiña'],
       comercial: ['zona comercial', 'zonas comerciales'], historico: ['zona del centro histórico', 'zonas del centro histórico'],
-      quebradas: ['tramo de quebrada o río', 'tramos de quebradas y ríos'], sismos: ['sismo', 'sismos'], volcan: ['zona de peligro volcánico', 'zonas de peligro volcánico'], cenepred_inundacion: ['distrito coloreado por su riesgo ante inundaciones', 'distritos coloreados por su riesgo ante inundaciones'], cenepred_mm: ['distrito coloreado por su riesgo ante movimientos en masa', 'distritos coloreados por su riesgo ante movimientos en masa'], lineas: ['línea de bus', 'líneas de bus'], sectores: ['sector', 'sectores'],
+      quebradas: ['tramo de quebrada o río', 'tramos de quebradas y ríos'], sismos: ['sismo', 'sismos'], volcan: ['zona de peligro volcánico', 'zonas de peligro volcánico'], cenepred_inundacion: ['distrito coloreado por su riesgo ante inundaciones', 'distritos coloreados por su riesgo ante inundaciones'], cenepred_mm: ['distrito coloreado por su riesgo ante movimientos en masa', 'distritos coloreados por su riesgo ante movimientos en masa'], lineas: ['línea de bus', 'líneas de bus'], electricidad: ['área de concesión eléctrica', 'áreas de concesión eléctrica'], sectores: ['sector', 'sectores'],
     };
     const nombreDe = (capa, n) => NOMBRES[capa][n === 1 ? 0 : 1];
     const cuenta = (capa, n, texto) => {
@@ -289,6 +293,27 @@ const Capas = (() => {
         else cajaLineas = m.bbox;
         const etiquetas = m.trazos.map((t) => R().etiquetaLinea(t));
         cuenta('lineas', m.trazos.length, `Líneas de bus de SmartBus: ${etiquetas.join(', ')}${m.paradas.length ? `; con la parada más cercana de cada una (${m.paradas.length})` : ''}`);
+      } else if (id === 'electricidad') {
+        // Áreas de concesión de distribución eléctrica: polígonos ENTEROS del registro (no se recortan al distrito). Informativas, sin círculo.
+        if (!Array.isArray(electricidad) || electricidad.length === 0) { sinDatos.push('electricidad'); return; }
+        const delArea = electricidad.filter((f) => {
+          if (!f || !f.geometry) return false;
+          if (!cajaArea) return true;
+          const b = bboxDe(coordsDe(f.geometry));
+          return !(b[2] < cajaArea[0] || b[0] > cajaArea[2] || b[3] < cajaArea[1] || b[1] > cajaArea[3]);
+        });
+        delArea.forEach((f) => {
+          const p = f.properties || {};
+          poligonos.push({
+            capa: 'electricidad', geometry: f.geometry, nombre: p.nombre_zona || null, osm: null, concesionaria: p.concesionaria || null,
+            titulo: p.nombre_zona || 'Área de concesión eléctrica',
+            detalle: `Concesión de distribución de ${p.concesionaria || p.empresa || 'una empresa'}${p.expediente ? ` · expediente ${p.expediente}` : ''}${p.situacion ? ` · ${String(p.situacion).toLowerCase()}` : ''}`,
+          });
+        });
+        if (delArea.length === 0) vacias.push('electricidad');
+        const porEmpresa = new Map();
+        delArea.forEach((f) => { const k = (f.properties && (f.properties.concesionaria || f.properties.empresa)) || 'una empresa'; porEmpresa.set(k, (porEmpresa.get(k) || 0) + 1); });
+        porEmpresa.forEach((n, k) => leyenda.push({ capa: 'electricidad', texto: `Concesión de ${k}: ${n}`, n }));
       } else if (id === 'volcan') {
         if (!Array.isArray(volcan) || volcan.length === 0) { sinDatos.push('volcan'); return; }
         const pedidos = (capa.tipos && capa.tipos.length ? capa.tipos : V().dibujables()).filter((t) => V().TIPOS[t] && V().TIPOS[t].mapa);
@@ -353,7 +378,7 @@ const Capas = (() => {
     const resumen = !leyenda.length && !vacias.length && !sinDatos.length
       ? (cajaArea ? 'Marqué el distrito en el mapa. Elige arriba qué quieres ver dentro de él.' : '')
       : vacias.length && !leyenda.length
-      ? `En esta zona no hay ${vacias.map((v) => ({ colegios: 'colegios', salud: 'establecimientos de salud', consultorios: 'consultorios médicos', abastecimiento: 'puntos de abastecimiento', compras_ocio: 'malls confirmados', comercio_barrio: 'galerías o comercio de barrio', paraderos: 'paraderos', parques: 'parques', volcan: 'zonas de peligro volcánico' }[v] || v)).join(' ni ')} en los datos.`
+      ? `En esta zona no hay ${vacias.map((v) => ({ colegios: 'colegios', salud: 'establecimientos de salud', consultorios: 'consultorios médicos', abastecimiento: 'puntos de abastecimiento', compras_ocio: 'malls confirmados', comercio_barrio: 'galerías o comercio de barrio', electricidad: 'áreas de concesión eléctrica', paraderos: 'paraderos', parques: 'parques', volcan: 'zonas de peligro volcánico' }[v] || v)).join(' ni ')} en los datos.`
       : `Muestro ${listaEs(porCapa.map((l) => `${l.n} ${nombreDe(l.capa, l.n)}`))}.${vacias.length ? ` No hay ${listaEs(vacias.map((v) => nombreDe(v, 2)))} en esta zona.` : ''}`;
     return { puntos, circulos, poligonos, lineas, sismos: sism, peligroVolcan, riesgoDistritos, sectores: regiones, lineasBus, paradasBus, leyenda, vacias, sinDatos, resumen, limites };
   }

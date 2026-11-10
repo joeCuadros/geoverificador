@@ -670,6 +670,41 @@ const dentro = (x, y, anillos) => vueltas(x, y, anillos[0]) && !anillos.slice(1)
   const sachaca = await Ctx.cenepred(-16.4436, -71.5744);
   comprobar('CENEPRED (módulo): un punto de Sachaca da INFORMATIVO, con la frase del distrito, la fuente y sin cumple ni puntaje', sachaca.estado === 'INFORMATIVO' && sachaca.distrito === 'SACHACA' && /^Según el CENEPRED, el distrito de Sachaca tiene riesgo muy alto ante inundaciones/.test(sachaca.frase) && /CENEPRED/.test(sachaca.fuente) && !/cumple|puntaje/i.test(JSON.stringify(sachaca)), sachaca.frase);
 }
+// B7. Concesiones de distribución eléctrica (MINEM, DGE; scripts/descargar-concesiones-electricas.mjs): el archivo y el módulo del navegador frente al
+// número de vueltas. Es INFORMATIVO: dentro de una concesión no es tener una conexión.
+{
+  const CalcE = createRequire(import.meta.url)('../public/js/calculos.js');
+  const fc = json('data/electricidad/concesiones_distribucion.geojson');
+  const f = fc.features;
+  const m = fc.metadata || {};
+  const polis = (g) => (g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : []);
+  const CAMPOS_E = ['objectid', 'nombre_zona', 'situacion', 'concesion', 'empresa', 'concesionaria', 'expediente', 'tipo_concesion', 'sistema_electrico'];
+  comprobar('Electricidad: metadata con la fuente (MINEM, DGE), el enlace del servicio y de datosabiertos.gob.pe, la fecha de descarga, la licencia ODC-By, los expedientes y lo que NO dice',
+    /MINEM/.test(m.fuente || '') && /^https:\/\/geoportal\.minem\.gob\.pe\/.*MapServer\/0$/.test(m.url_servicio || '') && /datosabiertos\.gob\.pe/.test(m.url_datos_abiertos || '') && /^\d{4}-\d{2}-\d{2}$/.test(m.fecha_descarga || '') && /ODC-By/.test(m.licencia || '') && Array.isArray(m.expedientes) && m.expedientes.length > 0 && /NO dice que un predio esté conectado/.test(m.no_dice || '') && /sin umbral/i.test(m.informativo || ''));
+  comprobar('Electricidad: metadata.registros y conteo_por_concesionaria coinciden con el número de features y cada expediente de la metadata está en algún feature', m.registros === f.length && f.length > 0 && Object.values(m.conteo_por_concesionaria || {}).reduce((t, n) => t + n, 0) === f.length && m.expedientes.every((e) => f.some((x) => x.properties.expediente === e)));
+  comprobar('Electricidad: cada concesión trae todos sus campos (empresa, concesionaria, expediente, situación…), con OBJECTID único', f.every((x) => CAMPOS_E.every((c) => x.properties[c] !== undefined && x.properties[c] !== null && x.properties[c] !== '')) && new Set(f.map((x) => x.properties.objectid)).size === f.length);
+  comprobar('Electricidad: solo polígonos con anillos cerrados de 4 o más puntos, en coordenadas WGS84 dentro de Arequipa y alrededores', f.every((x) => polis(x.geometry).length > 0 && polis(x.geometry).every((p) => p.every((a) => a.length >= 4 && a[0][0] === a.at(-1)[0] && a[0][1] === a.at(-1)[1] && a.every(([lon, lat]) => lon > -73 && lon < -70 && lat > -17.5 && lat < -15.5)))));
+  comprobar('Electricidad: hay una concesión de SEAL (Sociedad Eléctrica del Sur Oeste) con el expediente 15008293-00-00', f.some((x) => x.properties.concesionaria === 'SEAL' && x.properties.expediente === '15008293-00-00'));
+  const enSeal = (lat, lon) => f.some((x) => x.properties.concesionaria === 'SEAL' && polis(x.geometry).some((p) => dentro(lon, lat, p)));
+  const plaza = CalcE.evaluarConcesion({ lat: -16.3989, lon: -71.5369 }, f, {});
+  comprobar('Electricidad: la Plaza de Armas de Arequipa está dentro de una concesión de SEAL (módulo del navegador y número de vueltas coinciden)', plaza.dentro === true && plaza.concesionarias.includes('SEAL') && enSeal(-16.3989, -71.5369));
+  comprobar('Electricidad: un punto en Lima y otro en el mar quedan fuera, con una distancia grande al borde', [[-12.05, -77.04], [-17.5, -73.5]].every(([la, lo]) => { const r = CalcE.evaluarConcesion({ lat: la, lon: lo }, f, {}); return r.dentro === false && r.distanciaM > 100000; }));
+  // Dentro / fuera frente al número de vueltas en puntos al azar de la caja de Arequipa metropolitana (los mismos criterios, otro método).
+  let discrepan = 0;
+  let dentroN = 0;
+  const N_E = 400;
+  for (let i = 0; i < N_E; i++) {
+    const lon = -71.75 + azar() * 0.4;
+    const lat = -16.6 + azar() * 0.4;
+    const nav = CalcE.evaluarConcesion({ lat, lon }, f, {}).dentro;
+    const ref = f.some((x) => polis(x.geometry).some((p) => dentro(lon, lat, p)));
+    if (ref) dentroN++;
+    if (nav !== ref) discrepan++;
+  }
+  comprobar(`Electricidad: dentro / fuera de una concesión en ${N_E} puntos al azar de la caja de Arequipa coincide con el número de vueltas`, discrepan === 0 && dentroN > 0 && dentroN < N_E, `${dentroN} dentro, ${discrepan} discrepancias`);
+  console.log(`INFO  Electricidad: ${f.length} concesiones (${Object.entries(m.conteo_por_concesionaria).map(([k, v]) => `${k} ${v}`).join(', ')}); descargado el ${m.fecha_descarga}; dentro de una concesión: ${dentroN} de ${N_E} puntos al azar de la caja`);
+}
+
 // B7a. Peligro volcánico: el módulo del navegador frente a un recuento independiente (número de vueltas, sin índice de cajas).
 {
   const Vol = app('Volcan');
