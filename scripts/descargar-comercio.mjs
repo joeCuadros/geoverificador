@@ -45,8 +45,9 @@ const VALIDACION = join(RAIZ, 'docs', 'validacion');
 // Misma caja que CONFIG.viewbox (sur, oeste, norte, este).
 const BBOX = [-16.6, -71.75, -16.2, -71.35];
 const SERVIDORES = [
-  { etiqueta: 'overpass-api.de', url: 'https://overpass-api.de/api/interpreter', intentos: 3 },
-  { etiqueta: 'overpass.kumi.systems (respaldo)', url: 'https://overpass.kumi.systems/api/interpreter', intentos: 2 },
+  { etiqueta: 'overpass-api.de', url: 'https://overpass-api.de/api/interpreter', intentos: 2 },
+  { etiqueta: 'overpass.openstreetmap.fr (respaldo)', url: 'https://overpass.openstreetmap.fr/api/interpreter', intentos: 2 },
+  { etiqueta: 'overpass.kumi.systems (respaldo)', url: 'https://overpass.kumi.systems/api/interpreter', intentos: 1 },
 ];
 const ESPERA_BASE_MS = 8000;
 const TIMEOUT_CLIENTE_MS = 300000;

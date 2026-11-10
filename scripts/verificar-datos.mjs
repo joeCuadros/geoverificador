@@ -220,6 +220,39 @@ console.log('\n== A. Integridad de los archivos ==');
   console.log(`INFO  Sismos: ventana de la capa ${m.fechaDesde} a ${m.fechaHasta} (no es el catálogo histórico); extraído ${m.descargado.slice(0, 10)}`);
 }
 
+// Comercio: mercados, supermercados y malls de OpenStreetMap (scripts/descargar-comercio.mjs); informativos, sin umbral
+{
+  const CalcC = createRequire(import.meta.url)('../public/js/calculos.js');
+  const caja = [-71.75, -16.6, -71.35, -16.2];
+  const enCaja = ([x, y]) => x >= caja[0] && x <= caja[2] && y >= caja[1] && y <= caja[3];
+  const anillosDe = (g) => (g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : []).flat();
+  const vistos = new Map();
+  for (const nombre of ['mercados', 'supermercados', 'malls']) {
+    const fc = json(`data/equipamiento/${nombre}.geojson`);
+    const f = fc.features;
+    const m = fc.metadata || {};
+    comprobar(`Comercio/${nombre}: metadata con fuente ODbL, fecha de extracción, consulta única (out geom), licencia y la nota de que es informativo`, m.fuente === 'OpenStreetMap (ODbL)' && /^\d{4}-\d{2}-\d{2}$/.test(m.fecha_extraccion) && typeof m.consulta === 'string' && m.consulta.includes('out geom tags') && (m.consulta.match(/\[out:json\]/g) || []).length === 1 && m.licencia === 'ODbL' && /informativ/i.test(m.informativo || ''));
+    comprobar(`Comercio/${nombre}: metadata.registros y conteo_por_fuente coinciden con el número de features`, m.registros === f.length && f.length > 0 && m.conteo_por_fuente && m.conteo_por_fuente.OSM === f.length, `${f.length}`);
+    comprobar(`Comercio/${nombre}: cada elemento dice su fuente (OSM), tiene id de OSM único, nombre (o null) y etiquetas, y esa etiqueta lo clasifica en ${nombre}`, new Set(f.map((x) => x.properties.osm)).size === f.length && f.every((x) => x.properties.fuente === 'OSM' && /^(node|way|relation)\/\d+$/.test(x.properties.osm) && 'nombre' in x.properties && x.properties.tags && CalcC.categoriasDe(x.properties.tags, x.properties.nombre).includes(nombre)));
+    comprobar(`Comercio/${nombre}: solo puntos y polígonos con anillos cerrados, dentro de la caja de Arequipa`, f.every((x) => (x.geometry.type === 'Point' ? enCaja(x.geometry.coordinates) : /^(Multi)?Polygon$/.test(x.geometry.type) && anillosDe(x.geometry).every((a) => a.length >= 4 && a[0][0] === a.at(-1)[0] && a[0][1] === a.at(-1)[1] && a.every(enCaja)))));
+    comprobar(`Comercio/${nombre}: el mismo lugar no aparece dos veces (ninguno repite un id asociado de otro)`, new Set(f.flatMap((x) => [x.properties.osm, ...(x.properties.osm_asociados || [])])).size === f.reduce((t, x) => t + 1 + (x.properties.osm_asociados || []).length, 0));
+    f.forEach((x) => vistos.set(x.properties.osm, (vistos.get(x.properties.osm) || 0) + 1));
+    if (nombre === 'malls') {
+      const c = m.curados || {};
+      comprobar('Comercio/malls: la lista curada trae para cada mall su entidad y el enlace https de su fuente, y dice cuáles no están en OpenStreetMap', Array.isArray(c.lista) && c.lista.length > 0 && c.lista.every((x) => x.nombre && x.entidad && /^https:\/\//.test(x.url) && /^\d{4}-\d{2}-\d{2}$/.test(x.verificado_el)) && Array.isArray(c.sin_osm) && Array.isArray(c.verificados_en_osm));
+      comprobar('Comercio/malls: todo mall verificado apunta a un elemento que existe en el archivo y cita su fuente', f.filter((x) => x.properties.verificado).every((x) => /^https:\/\//.test(x.properties.verificado.url) && x.properties.verificado.nombre) && c.verificados_en_osm.every((v) => f.some((x) => x.properties.osm === v.osm)));
+      console.log(`INFO  Malls: ${f.length} (${f.filter((x) => x.geometry.type !== 'Point').length} con polígono; ${f.filter((x) => x.properties.verificado).length} verificados con su fuente; curados sin OSM: ${(c.sin_osm || []).map((x) => x.nombre).join(', ') || 'ninguno'})`);
+    }
+    if (nombre === 'mercados') {
+      const cen = m.cenama || {};
+      const cob = json('../docs/validacion/cenama-cobertura.json');
+      comprobar('Comercio/mercados: metadata.cenama dice la fuente (PRODUCE / INEI), su licencia y que no trae coordenadas', /PRODUCE/.test(cen.entidad || '') && /ODC-By/.test(cen.licencia || '') && /sin nombre, dirección ni coordenadas/.test(cen.limites || '') && cen.registros_provincia_arequipa > 0);
+      comprobar('Comercio/mercados: la cobertura frente al CENAMA suma los mismos mercados de OpenStreetMap que el archivo y los del censo de la provincia', cob.totales.osm === f.length && cob.totales.cenama === cen.registros_provincia_arequipa && cob.filas.reduce((t, x) => t + x.cenama, 0) === cob.totales.cenama, `OSM ${cob.totales.osm} frente a CENAMA ${cob.totales.cenama}`);
+    }
+  }
+  comprobar('Comercio: ningún elemento de OpenStreetMap está en más de una de las tres categorías', [...vistos.values()].every((n) => n === 1));
+}
+
 // Equipamiento: salud (RENIPRESS) y educación (ESCALE) con OpenStreetMap de respaldo; transporte y áreas verdes de OpenStreetMap
 {
   const caja = [-71.75, -16.6, -71.35, -16.2];
