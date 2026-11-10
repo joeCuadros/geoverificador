@@ -347,6 +347,21 @@ function fusionarSalud(oficiales, osm, { radioM = 200, umbralNombre = 0.9 } = {}
 }
 
 /**
+ * Reparte los elementos de OpenStreetMap de salud en { salud, consultorios, sinCategoria } con Calculos.categoriaSalud (la misma
+ * regla de la ficha). Sirve tanto a la fusión como a la validación K2.
+ */
+function repartirSaludOsm(osm) {
+  const out = { salud: [], consultorios: [], sinCategoria: 0 };
+  for (const f of osm) {
+    const g = Calculos.categoriaSalud(f.properties && f.properties.tags);
+    if (g === 'salud') out.salud.push(f);
+    else if (g === 'consultorio') out.consultorios.push(f);
+    else out.sinCategoria++;
+  }
+  return out;
+}
+
+/**
  * Salud en dos categorías. Los establecimientos y los consultorios de RENIPRESS entran completos, cada uno en su grupo; de
  * OpenStreetMap, cada elemento se reparte con Calculos.categoriaSalud y SOLO se descarta si un punto oficial de SU MISMA
  * categoría está a `radioM` o menos (un consultorio de OSM junto a un hospital oficial se queda, y viceversa).
@@ -354,17 +369,11 @@ function fusionarSalud(oficiales, osm, { radioM = 200, umbralNombre = 0.9 } = {}
  * `sinCategoria` = elementos de OSM que no son ni establecimiento ni consultorio (no se añaden).
  */
 function fusionarSaludPorGrupo(establecimientos, consultorios, osm, opciones = {}) {
-  const grupos = { salud: [], consultorio: [] };
-  let sinCategoria = 0;
-  for (const f of osm) {
-    const g = Calculos.categoriaSalud(f.properties && f.properties.tags);
-    if (g) grupos[g].push(f);
-    else sinCategoria++;
-  }
+  const grupos = repartirSaludOsm(osm);
   return {
     salud: fusionarSalud(establecimientos, grupos.salud, opciones),
-    consultorios: fusionarSalud(consultorios, grupos.consultorio, opciones),
-    sinCategoria,
+    consultorios: fusionarSalud(consultorios, grupos.consultorios, opciones),
+    sinCategoria: grupos.sinCategoria,
   };
 }
 
@@ -437,5 +446,5 @@ module.exports = {
   decodificarCp850, cabeceraDbf, leerDbf, leerDbfArchivo, listarEntradasZip, extraerEntradaZip,
   ultimaEdicionRenipress, ultimoPadronEscale,
   esConsultorio, clasificarSalud, seleccionarSalud, seleccionarEscale, seleccionarEscaleDbf,
-  featureSalud, featureEscale, fusionarSalud, fusionarSaludPorGrupo, fusionarEducacion, procedencia,
+  featureSalud, featureEscale, fusionarSalud, repartirSaludOsm, fusionarSaludPorGrupo, fusionarEducacion, procedencia,
 };

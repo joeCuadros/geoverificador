@@ -12,7 +12,8 @@
  *   --radios=50,100,200        radios (m) a barrer para emparejar por distancia (por defecto 50, 100 y 200)
  *   --umbral-nombre=0.9        parecido mínimo de nombres, de 0 a 1 (por defecto 0,9)
  *   --paso=500                 separación (m) de la malla de puntos para medir el cambio cumple / no cumple (por defecto 500)
- *   --sin-consultorios         excluir de RENIPRESS los consultorios médicos (por defecto se incluyen, como en pnpm datos:oficial; la corrida del 2026-11-09 los excluía)
+ *   (los consultorios médicos son una categoría aparte: la salud se valida SOLO con establecimientos, como en pnpm datos:oficial, y los
+ *    consultorios se miden por separado, en una sección informativa, porque no tienen umbral)
  *   --fecha-renipress=TEXTO    edición del archivo de RENIPRESS (p. ej. 2026-09), para dejarla en el informe
  *   --fecha-escale=TEXTO       fecha del padrón de ESCALE
  *   --salida=ruta.json         además del informe en pantalla, guarda el resultado completo en JSON
@@ -23,7 +24,7 @@
  * cuántos puntos de la malla cambia CUMPLE / NO CUMPLE con los umbrales de la ficha. Sale con código 1 si falta un argumento
  * o un archivo no tiene las columnas esperadas.
  */
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -81,13 +82,9 @@ function main() {
   let renipress;
   let escale;
   try {
-    // La misma selección que arma pnpm datos:oficial (activos, categorías I-1 a III-E, sin servicio de apoyo ni centros odontológicos).
+    // La misma selección que arma pnpm datos:oficial (activos, categorías I-1 a III-E, sin servicio de apoyo ni centros odontológicos):
+    // `registros` son los establecimientos de salud y `consultorios`, los consultorios médicos (otra categoría).
     renipress = E.seleccionarSalud(leerTexto(rutaRenipress));
-    if (a['sin-consultorios']) {
-      const antes = renipress.registros.length;
-      renipress.registros = renipress.registros.filter((x) => !/consultorio/i.test(V.sinTildes(x.tipo || '')));
-      renipress.descartados.consultorios = antes - renipress.registros.length;
-    }
     escale = /\.dbf$/i.test(rutaEscale) ? E.seleccionarEscaleDbf(rutaEscale) : V.leerEscale(leerTexto(rutaEscale));
   } catch (err) {
     uso(err.message);
@@ -95,10 +92,17 @@ function main() {
   if (renipress.registros.length === 0 || escale.locales.length === 0) uso(`Después de filtrar Arequipa metropolitana quedaron ${renipress.registros.length} establecimientos de RENIPRESS y ${escale.locales.length} locales de ESCALE: revisa que sean los archivos correctos y que traigan latitud y longitud.`);
 
   // OpenStreetMap congelado (la copia cruda, no la fusión con los registros oficiales): salud y colegios, con sus niveles inferidos como en la ficha.
+  // La salud de OSM puede venir con los consultorios dentro (copia anterior) o en osm/consultorios.geojson: se juntan y se reparten con la regla de la ficha.
   const fcSalud = json('data/equipamiento/osm/salud.geojson');
+  const rutaCons = join(RAIZ, 'data', 'equipamiento', 'osm', 'consultorios.geojson');
+  const vistosOsm = new Set(fcSalud.features.map((f) => f.properties.osm));
+  const osmJuntos = [...fcSalud.features, ...(existsSync(rutaCons) ? JSON.parse(readFileSync(rutaCons, 'utf8')).features.filter((f) => !vistosOsm.has(f.properties.osm)) : [])];
+  const reparto = E.repartirSaludOsm(osmJuntos);
   const fcEdu = json('data/equipamiento/osm/educacion.geojson');
   const puntoDe = (f) => (f.geometry && f.geometry.type === 'Point' ? { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0] } : null);
-  const osmSalud = fcSalud.features.map((f) => ({ f, p: puntoDe(f) })).filter((x) => x.p).map(({ f, p }) => ({ id: f.properties.osm, nombre: f.properties.nombre || '', ...p }));
+  const aPunto = (lista) => lista.map((f) => ({ f, p: puntoDe(f) })).filter((x) => x.p).map(({ f, p }) => ({ id: f.properties.osm, nombre: f.properties.nombre || '', ...p }));
+  const osmSalud = aPunto(reparto.salud);
+  const osmConsultorios = aPunto(reparto.consultorios);
   const osmEducacion = fcEdu.features.map((f) => ({ f, p: puntoDe(f) })).filter((x) => x.p)
     .map(({ f, p }) => ({ id: f.properties.osm, nombre: f.properties.nombre || '', niveles: Calculos.nivelesEducativos(f.properties.tags), ...p }))
     .filter((e) => e.niveles.length > 0);
@@ -112,7 +116,7 @@ function main() {
   const dentroDelPlano = (lat, lon) => zonas.some((z) => lon >= z.caja[0] && lon <= z.caja[2] && lat >= z.caja[1] && lat <= z.caja[3] && z.polis.some((anillos) => Calculos.puntoEnPoligono(lat, lon, anillos)));
   const puntos = V.malla(V.CAJA_AREQUIPA, paso, dentroDelPlano);
 
-  const resultado = V.validar({ renipress, escale, osmSalud, osmEducacion, puntos, umbrales, radiosM, umbralNombre });
+  const resultado = V.validar({ renipress, escale, osmSalud, osmEducacion, puntos, umbrales, radiosM, umbralNombre, consultorios: { renipress: renipress.consultorios, osm: osmConsultorios } });
   const texto = V.informe(resultado, {
     renipress,
     escale,

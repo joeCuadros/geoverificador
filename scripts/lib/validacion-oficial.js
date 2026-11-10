@@ -447,9 +447,12 @@ function malla(caja, pasoM, dentro = null) {
 /**
  * Valida salud y educación.
  *   entrada: { renipress: leerRenipress(...), escale: leerEscale(...), osmSalud: [{id, nombre, lat, lon}], osmEducacion: [{id, nombre, lat, lon, niveles}],
- *              puntos: [{lat, lon}], umbrales: { salud, educacion: { inicial, primaria, secundaria } }, radiosM, umbralNombre }
+ *              puntos: [{lat, lon}], umbrales: { salud, educacion: { inicial, primaria, secundaria } }, radiosM, umbralNombre,
+ *              consultorios?: { renipress: [registros], osm: [{id, nombre, lat, lon}] } }
+ * `renipress.registros` y `osmSalud` son SOLO establecimientos de salud. Los consultorios médicos son otra categoría, sin umbral: si vienen,
+ * se miden aparte (exhaustividad y precisión, por distrito) y sin impacto en cumple / no cumple, porque no hay un umbral que cambiar.
  */
-function validar({ renipress, escale, osmSalud, osmEducacion, puntos = [], umbrales, radiosM = [50, 100, 200], umbralNombre = 0.9 }) {
+function validar({ renipress, escale, osmSalud, osmEducacion, puntos = [], umbrales, radiosM = [50, 100, 200], umbralNombre = 0.9, consultorios = null }) {
   const opciones = { umbralNombre };
   const res = { radiosM, umbralNombre, puntos: puntos.length };
   const mS = metricas(renipress.registros, osmSalud, radiosM, opciones);
@@ -458,6 +461,13 @@ function validar({ renipress, escale, osmSalud, osmEducacion, puntos = [], umbra
     porDistrito: porDistrito(renipress.registros, mS[mS.length - 1].pares),
     impacto: impacto(puntos, osmSalud, renipress.registros, umbrales.salud),
   };
+  if (consultorios) {
+    const mC = metricas(consultorios.renipress, consultorios.osm, radiosM, opciones);
+    res.consultorios = {
+      oficiales: consultorios.renipress.length, osm: consultorios.osm.length, metricas: mC.map(({ pares, ...x }) => x),
+      porDistrito: porDistrito(consultorios.renipress, mC[mC.length - 1].pares),
+    };
+  }
   const locales = escale.locales;
   const mE = metricas(locales, osmEducacion, radiosM, opciones);
   res.educacion = {
@@ -499,10 +509,16 @@ function informe(r, { renipress, escale, meta = {} } = {}) {
   if (renipress) L.push(`Filtros RENIPRESS: ${renipress.descartados.total} filas; descartadas: ${renipress.descartados.sinCoordenadas} sin coordenadas, ${renipress.descartados.otraProvincia} de otra provincia, ${renipress.descartados.fueraDeZona} fuera de la zona, ${renipress.descartados.inactivos} inactivas, ${renipress.descartados.consultorios} consultorios, ${renipress.descartados.repetidos} repetidas${renipress.descartados.apoyo === undefined ? '' : `, ${renipress.descartados.apoyo} servicios médicos de apoyo, ${renipress.descartados.sinCategoria} sin categoría de atención y ${renipress.descartados.odontologicos} centros odontológicos`}.`);
   if (escale) L.push(`Filtros ESCALE: ${escale.descartados.total} filas; descartadas: ${escale.descartados.sinCoordenadas} sin coordenadas, ${escale.descartados.otraProvincia} de otra provincia, ${escale.descartados.fueraDeZona} fuera de la zona, ${escale.descartados.inactivas} inactivas, ${escale.descartados.otroNivel} de otro nivel; ${escale.iies} IIEE en ${r.educacion.oficiales} locales (deduplicadas por código de local).`);
   L.push('');
-  L.push(`SALUD (V2): ${r.salud.oficiales} establecimientos oficiales, ${r.salud.osm} en OpenStreetMap`);
+  L.push(`SALUD (V2): ${r.salud.oficiales} establecimientos oficiales (sin consultorios), ${r.salud.osm} en OpenStreetMap`);
   L.push(...lineasMetricas(r.salud.metricas));
   L.push(lineaImpacto(r.salud.impacto, 'Impacto en la variable'));
   L.push('');
+  if (r.consultorios) {
+    L.push(`CONSULTORIOS (informativo, sin umbral): ${r.consultorios.oficiales} consultorios oficiales, ${r.consultorios.osm} en OpenStreetMap (amenity=doctors, healthcare=doctor)`);
+    L.push(...lineasMetricas(r.consultorios.metricas));
+    L.push('    No hay impacto en cumple / no cumple: el consultorio no tiene umbral (decisión pendiente) y no entra en el puntaje.');
+    L.push('');
+  }
   L.push(`EDUCACIÓN (V3): ${r.educacion.oficiales} locales oficiales, ${r.educacion.osm} colegios en OpenStreetMap`);
   L.push(...lineasMetricas(r.educacion.metricas));
   for (const [nivel, x] of Object.entries(r.educacion.porNivel)) {
@@ -515,6 +531,10 @@ function informe(r, { renipress, escale, meta = {} } = {}) {
   L.push(`Exhaustividad por distrito (radio de ${r.radiosM[r.radiosM.length - 1]} m)`);
   L.push('  Salud:');
   r.salud.porDistrito.forEach((x) => L.push(filaDistrito(x)));
+  if (r.consultorios) {
+    L.push('  Consultorios:');
+    r.consultorios.porDistrito.forEach((x) => L.push(filaDistrito(x)));
+  }
   L.push('  Educación:');
   r.educacion.porDistrito.forEach((x) => L.push(filaDistrito(x)));
   L.push('');

@@ -243,6 +243,22 @@ describe('validar e informe, de punta a punta con los CSV de muestra', () => {
     expect(r.educacion.porNivel.inicial.impacto.umbralM).toBe(500);
     expect(r.salud.impacto.cambian).toBe(r.salud.impacto.osmCumpleOficialNo + r.salud.impacto.oficialCumpleOsmNo);
   });
+  it('sin consultorios en la entrada, no hay sección de consultorios', () => {
+    expect(r.consultorios).toBeUndefined();
+    expect(V.informe(r, { renipress, escale })).not.toMatch(/CONSULTORIOS/);
+  });
+  it('con consultorios los mide aparte, sin umbral ni impacto, y no cambia las métricas de salud', () => {
+    const consultorio = { id: 'c1', nombre: 'Consultorio Dr. Perez', lat: -16.39, lon: -71.545, distrito: 'YANAHUARA', tipo: 'CONSULTORIOS MEDICOS Y DE OTROS PROFESIONALES DE LA SALUD', categoria: 'I-1' };
+    const osmCons = [{ id: 'n9', nombre: 'Consultorio Dr. Perez', ...mover(consultorio, 20) }, { id: 'n10', nombre: 'Dr. Otro', lat: -16.5, lon: -71.6 }];
+    const c = V.validar({ renipress, escale, osmSalud, osmEducacion, puntos, umbrales, radiosM: [50, 100, 200], consultorios: { renipress: [consultorio], osm: osmCons } });
+    expect(c.salud.metricas).toEqual(r.salud.metricas);
+    expect(c.consultorios).toMatchObject({ oficiales: 1, osm: 2 });
+    expect(c.consultorios.metricas.map((m: { emparejados: number }) => m.emparejados)).toEqual([1, 1, 1]);
+    expect(c.consultorios.impacto).toBeUndefined();
+    const t = V.informe(c, { renipress, escale });
+    expect(t).toMatch(/CONSULTORIOS \(informativo/);
+    expect(t).toMatch(/sin umbral/);
+  });
   it('el informe trae todo lo que pide el protocolo y recuerda fijar los criterios antes', () => {
     const t = V.informe(r, { renipress, escale, meta: { renipress: 'renipress.csv (2026-09)', escale: 'escale.csv', osm: 'OSM congelado' } });
     expect(t).toMatch(/VALIDACIÓN DE OPENSTREETMAP CONTRA REGISTROS OFICIALES/);

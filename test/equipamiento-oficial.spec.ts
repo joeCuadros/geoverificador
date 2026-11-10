@@ -423,6 +423,16 @@ describe('fusionarSaludPorGrupo: la deduplicación con OpenStreetMap es por cate
   });
 });
 
+describe('repartirSaludOsm', () => {
+  it('reparte los elementos de OpenStreetMap en establecimientos, consultorios y lo que no es ninguno', () => {
+    const f = (osm: string, tags: Record<string, string>) => ({ type: 'Feature', properties: { osm, tags }, geometry: { type: 'Point', coordinates: [0, 0] } });
+    const r = E.repartirSaludOsm([f('a', { amenity: 'clinic' }), f('b', { amenity: 'doctors' }), f('c', { healthcare: 'dentist' }), f('d', { healthcare: 'doctor' })]);
+    expect(r.salud.map((x: { properties: { osm: string } }) => x.properties.osm)).toEqual(['a']);
+    expect(r.consultorios.map((x: { properties: { osm: string } }) => x.properties.osm)).toEqual(['b', 'd']);
+    expect(r.sinCategoria).toBe(1);
+  });
+});
+
 describe('fusionarEducacion: ESCALE primero, OpenStreetMap como respaldo por nivel', () => {
   const oficiales = [oficialColegio('L1', 'Colegio Alfa', ['primaria', 'secundaria'], 0), oficialColegio('L2', 'Jardín Bravo', ['inicial'], 3000)];
   const osm = [
