@@ -75,3 +75,4 @@ qwen-image-ui/
 # Respuesta de Overpass y CSV del CENAMA (scripts/descargar-comercio.mjs): no se suben
 /.cache-comercio/
 /.cache-electricidad/
+/.cache-censo/

@@ -1,0 +1,637 @@
+{
+ "anio_censo": 2017,
+ "fuente": "INEI, Censos Nacionales 2017: XII de Población, VII de Vivienda y III de Comunidades Indígenas (REDATAM en línea), con los polígonos de manzana del INEI",
+ "url_redatam": "https://censos2017.inei.gob.pe/redatam/",
+ "url_poligonos": "https://geoespacial.inei.gob.pe/geoserver/Interoperabilidad/ows (capa Interoperabilidad:ig_manzana)",
+ "fecha_descarga": "2026-11-10",
+ "licencia": "No localizada en el sitio de REDATAM ni del servicio WFS; se atribuye al INEI. Datos de acceso público.",
+ "atribucion": "Instituto Nacional de Estadística e Informática (INEI), Censos Nacionales 2017",
+ "universo": "Porcentajes sobre viviendas particulares ocupadas con personas presentes (pregunta C2P2 = 1); viviendas y personas son todo lo contado en la manzana.",
+ "campos": {
+  "id": "idmanzana del INEI: ubigeo (6) + zona (5) + manzana (3 o 4)",
+  "v": "viviendas contadas",
+  "h": "hogares",
+  "p": "personas censadas",
+  "o": "viviendas ocupadas con personas presentes (universo de los porcentajes)",
+  "l": "con alumbrado eléctrico por red pública (C2P11)",
+  "ad": "agua por red pública dentro de la vivienda (C2P6)",
+  "af": "agua por red pública fuera de la vivienda pero dentro de la edificación (C2P6)",
+  "sd": "servicio higiénico conectado a la red pública de desagüe dentro de la vivienda (C2P10)",
+  "sf": "ídem fuera de la vivienda pero dentro de la edificación (C2P10)"
+ },
+ "cobertura_del_censo": "Solo área urbana (REDATAM: «Información solo de área urbana»). Una manzana sin cifras no tuvo viviendas contadas en REDATAM; no es un cero. Las viviendas contadas fuera de una manzana (8888) no tienen polígono y no se reparten.",
+ "no_dice": "Son cifras de 2017 de la manzana, no de un predio ni de hoy: el censo de 2025 (resultados publicados desde 2026) todavía no está abierto por manzana.",
+ "totales": {
+  "distritos": 25,
+  "manzanas": 31277,
+  "con_datos": 11250,
+  "viviendas": 264564,
+  "ocupadas": 221676,
+  "personas": 894354,
+  "bytes": 11333806
+ },
+ "distritos": [
+  {
+   "ubigeo": "040101",
+   "distrito": "AREQUIPA",
+   "archivo": "manzanas/040101.json",
+   "caja": [
+    -71.564592,
+    -16.432846,
+    -71.513453,
+    -16.370822
+   ],
+   "manzanas": 826,
+   "con_datos": 488,
+   "sin_poligono_en_redatam": 5,
+   "viviendas": 16998,
+   "ocupadas": 13427,
+   "personas": 51543,
+   "fuera_de_manzana": {
+    "filas": 16,
+    "viviendas": 1272,
+    "personas": 3894
+   },
+   "categorias_incoherentes": 0,
+   "bytes": 438514
+  },
+  {
+   "ubigeo": "040102",
+   "distrito": "ALTO SELVA ALEGRE",
+   "archivo": "manzanas/040102.json",
+   "caja": [
+    -71.534002,
+    -16.391035,
+    -71.493768,
+    -16.334256
+   ],
+   "manzanas": 2107,
+   "con_datos": 873,
+   "sin_poligono_en_redatam": 3,
+   "viviendas": 20282,
+   "ocupadas": 17542,
+   "personas": 75194,
+   "fuera_de_manzana": {
+    "filas": 28,
+    "viviendas": 8447,
+    "personas": 10676
+   },
+   "categorias_incoherentes": 0,
+   "bytes": 726693
+  },
+  {
+   "ubigeo": "040103",
+   "distrito": "CAYMA",
+   "archivo": "manzanas/040103.json",
+   "caja": [
+    -71.557549,
+    -16.393369,
+    -71.510801,
+    -16.285244
+   ],
+   "manzanas": 2451,
+   "con_datos": 1151,
+   "sin_poligono_en_redatam": 6,
+   "viviendas": 25184,
+   "ocupadas": 20695,
+   "personas": 80273,
+   "fuera_de_manzana": {
+    "filas": 35,
+    "viviendas": 7937,
+    "personas": 11649
+   },
+   "categorias_incoherentes": 0,
+   "bytes": 901184
+  },
+  {
+   "ubigeo": "040104",
+   "distrito": "CERRO COLORADO",
+   "archivo": "manzanas/040104.json",
+   "caja": [
+    -71.643793,
+    -16.406885,
+    -71.53879,
+    -16.282821
+   ],
+   "manzanas": 5809,
+   "con_datos": 2398,
+   "sin_poligono_en_redatam": 27,
+   "viviendas": 53148,
+   "ocupadas": 43462,
+   "personas": 161842,
+   "fuera_de_manzana": {
+    "filas": 76,
+    "viviendas": 27083,
+    "personas": 35889
+   },
+   "categorias_incoherentes": 0,
+   "bytes": 1857822
+  },
+  {
+   "ubigeo": "040105",
+   "distrito": "CHARACATO",
+   "archivo": "manzanas/040105.json",
+   "caja": [
+    -71.504787,
+    -16.48753,
+    -71.461796,
+    -16.457254
+   ],
+   "manzanas": 699,
+   "con_datos": 138,
+   "sin_poligono_en_redatam": 8,
+   "viviendas": 2922,
+   "ocupadas": 1994,
+   "personas": 7120,
+   "fuera_de_manzana": {
+    "filas": 9,
+    "viviendas": 3483,
+    "personas": 5291
+   },
+   "categorias_incoherentes": 0,
+   "bytes": 280140
+  },
+  {
+   "ubigeo": "040106",
+   "distrito": "CHIGUATA",
+   "archivo": "manzanas/040106.json",
+   "caja": [
+    -71.474299,
+    -16.410111,
+    -71.378026,
+    -16.392894
+   ],
+   "manzanas": 258,
+   "con_datos": 21,
+   "sin_poligono_en_redatam": 0,
+   "viviendas": 323,
+   "ocupadas": 245,
+   "personas": 1022,
+   "fuera_de_manzana": {
+    "filas": 4,
+    "viviendas": 1073,
+    "personas": 1222
+   },
+   "categorias_incoherentes": 0,
+   "bytes": 103509
+  },
+  {
+   "ubigeo": "040107",
+   "distrito": "JACOBO HUNTER",
+   "archivo": "manzanas/040107.json",
+   "caja": [
+    -71.584316,
+    -16.464879,
+    -71.537158,
+    -16.422592
+   ],
+   "manzanas": 1040,
+   "con_datos": 503,
+   "sin_poligono_en_redatam": 9,
+   "viviendas": 11003,
+   "ocupadas": 9788,
+   "personas": 44795,
+   "fuera_de_manzana": {
+    "filas": 13,
+    "viviendas": 2101,
+    "personas": 5350
+   },
+   "categorias_incoherentes": 0,
+   "bytes": 419958
+  },
+  {
+   "ubigeo": "040108",
+   "distrito": "LA JOYA",
+   "archivo": "manzanas/040108.json",
+   "caja": [
+    -71.921598,
+    -16.751697,
+    -71.773064,
+    -16.414493
+   ],
+   "manzanas": 2079,
+   "con_datos": 324,
+   "sin_poligono_en_redatam": 2,
+   "viviendas": 6157,
+   "ocupadas": 4967,
+   "personas": 17189,
+   "fuera_de_manzana": {
+    "filas": 31,
+    "viviendas": 11699,
+    "personas": 11020
+   },
+   "categorias_incoherentes": 0,
+   "bytes": 615658
+  },
+  {
+   "ubigeo": "040109",
+   "distrito": "MARIANO MELGAR",
+   "archivo": "manzanas/040109.json",
+   "caja": [
+    -71.516289,
+    -16.410832,
+    -71.463036,
+    -16.379854
+   ],
+   "manzanas": 1483,
+   "con_datos": 590,
+   "sin_poligono_en_redatam": 4,
+   "viviendas": 13815,
+   "ocupadas": 11963,
+   "personas": 49990,
+   "fuera_de_manzana": {
+    "filas": 22,
+    "viviendas": 6762,
+    "personas": 9928
+   },
+   "categorias_incoherentes": 0,
+   "bytes": 531290
+  },
+  {
+   "ubigeo": "040110",
+   "distrito": "MIRAFLORES",
+   "archivo": "manzanas/040110.json",
+   "caja": [
+    -71.528771,
+    -16.402885,
+    -71.485212,
+    -16.363469
+   ],
+   "manzanas": 908,
+   "con_datos": 543,
+   "sin_poligono_en_redatam": 1,
+   "viviendas": 15810,
+   "ocupadas": 13654,
+   "personas": 56604,
+   "fuera_de_manzana": {
+    "filas": 15,
+    "viviendas": 2026,
+    "personas": 3985
+   },
+   "categorias_incoherentes": 0,
+   "bytes": 334708
+  },
+  {
+   "ubigeo": "040111",
+   "distrito": "MOLLEBAYA",
+   "archivo": "manzanas/040111.json",
+   "caja": [
+    -71.521153,
+    -16.502037,
+    -71.463561,
+    -16.482941
+   ],
+   "manzanas": 359,
+   "con_datos": 29,
+   "sin_poligono_en_redatam": 7,
+   "viviendas": 943,
+   "ocupadas": 638,
+   "personas": 1668,
+   "fuera_de_manzana": {
+    "filas": 3,
+    "viviendas": 1733,
+    "personas": 2534
+   },
+   "categorias_incoherentes": 0,
+   "bytes": 142341
+  },
+  {
+   "ubigeo": "040112",
+   "distrito": "PAUCARPATA",
+   "archivo": "manzanas/040112.json",
+   "caja": [
+    -71.516555,
+    -16.446772,
+    -71.45323,
+    -16.402228
+   ],
+   "manzanas": 2703,
+   "con_datos": 1266,
+   "sin_poligono_en_redatam": 16,
+   "viviendas": 28421,
+   "ocupadas": 25254,
+   "personas": 117375,
+   "fuera_de_manzana": {
+    "filas": 39,
+    "viviendas": 7680,
+    "personas": 13971
+   },
+   "categorias_incoherentes": 0,
+   "bytes": 988580
+  },
+  {
+   "ubigeo": "040113",
+   "distrito": "POCSI",
+   "archivo": "manzanas/040113.json",
+   "caja": [
+    -71.396416,
+    -16.521121,
+    -71.354381,
+    -16.501924
+   ],
+   "manzanas": 61,
+   "con_datos": 0,
+   "sin_poligono_en_redatam": 0,
+   "viviendas": 0,
+   "ocupadas": 0,
+   "personas": 0,
+   "fuera_de_manzana": {
+    "filas": 2,
+    "viviendas": 313,
+    "personas": 247
+   },
+   "categorias_incoherentes": 0,
+   "bytes": 36964
+  },
+  {
+   "ubigeo": "040114",
+   "distrito": "POLOBAYA",
+   "archivo": "manzanas/040114.json",
+   "caja": [
+    -71.390028,
+    -16.575655,
+    -71.355834,
+    -16.556674
+   ],
+   "manzanas": 68,
+   "con_datos": 0,
+   "sin_poligono_en_redatam": 0,
+   "viviendas": 0,
+   "ocupadas": 0,
+   "personas": 0,
+   "fuera_de_manzana": {
+    "filas": 3,
+    "viviendas": 300,
+    "personas": 362
+   },
+   "categorias_incoherentes": 0,
+   "bytes": 28860
+  },
+  {
+   "ubigeo": "040115",
+   "distrito": "QUEQUEÑA",
+   "archivo": "manzanas/040115.json",
+   "caja": [
+    -71.494352,
+    -16.562803,
+    -71.448199,
+    -16.516602
+   ],
+   "manzanas": 442,
+   "con_datos": 33,
+   "sin_poligono_en_redatam": 3,
+   "viviendas": 834,
+   "ocupadas": 551,
+   "personas": 1306,
+   "fuera_de_manzana": {
+    "filas": 8,
+    "viviendas": 3810,
+    "personas": 3379
+   },
+   "categorias_incoherentes": 0,
+   "bytes": 152347
+  },
+  {
+   "ubigeo": "040116",
+   "distrito": "SABANDIA",
+   "archivo": "manzanas/040116.json",
+   "caja": [
+    -71.500773,
+    -16.462814,
+    -71.479293,
+    -16.440039
+   ],
+   "manzanas": 262,
+   "con_datos": 38,
+   "sin_poligono_en_redatam": 0,
+   "viviendas": 718,
+   "ocupadas": 594,
+   "personas": 2581,
+   "fuera_de_manzana": {
+    "filas": 3,
+    "viviendas": 777,
+    "personas": 1776
+   },
+   "categorias_incoherentes": 0,
+   "bytes": 118005
+  },
+  {
+   "ubigeo": "040117",
+   "distrito": "SACHACA",
+   "archivo": "manzanas/040117.json",
+   "caja": [
+    -71.599918,
+    -16.44616,
+    -71.5511,
+    -16.40568
+   ],
+   "manzanas": 871,
+   "con_datos": 276,
+   "sin_poligono_en_redatam": 12,
+   "viviendas": 5530,
+   "ocupadas": 4473,
+   "personas": 18026,
+   "fuera_de_manzana": {
+    "filas": 12,
+    "viviendas": 2410,
+    "personas": 6199
+   },
+   "categorias_incoherentes": 0,
+   "bytes": 420964
+  },
+  {
+   "ubigeo": "040119",
+   "distrito": "SAN JUAN DE TARUCANI",
+   "archivo": "manzanas/040119.json",
+   "caja": [
+    -71.152693,
+    -16.324717,
+    -71.058164,
+    -16.179666
+   ],
+   "manzanas": 70,
+   "con_datos": 2,
+   "sin_poligono_en_redatam": 0,
+   "viviendas": 23,
+   "ocupadas": 18,
+   "personas": 64,
+   "fuera_de_manzana": {
+    "filas": 2,
+    "viviendas": 252,
+    "personas": 519
+   },
+   "categorias_incoherentes": 0,
+   "bytes": 20872
+  },
+  {
+   "ubigeo": "040122",
+   "distrito": "SOCABAYA",
+   "archivo": "manzanas/040122.json",
+   "caja": [
+    -71.557354,
+    -16.491871,
+    -71.499998,
+    -16.430059
+   ],
+   "manzanas": 1760,
+   "con_datos": 836,
+   "sin_poligono_en_redatam": 8,
+   "viviendas": 18103,
+   "ocupadas": 15074,
+   "personas": 64671,
+   "fuera_de_manzana": {
+    "filas": 21,
+    "viviendas": 4140,
+    "personas": 10241
+   },
+   "categorias_incoherentes": 0,
+   "bytes": 630084
+  },
+  {
+   "ubigeo": "040123",
+   "distrito": "TIABAYA",
+   "archivo": "manzanas/040123.json",
+   "caja": [
+    -71.613322,
+    -16.455525,
+    -71.575006,
+    -16.426616
+   ],
+   "manzanas": 575,
+   "con_datos": 183,
+   "sin_poligono_en_redatam": 4,
+   "viviendas": 2928,
+   "ocupadas": 2583,
+   "personas": 11785,
+   "fuera_de_manzana": {
+    "filas": 9,
+    "viviendas": 1404,
+    "personas": 3980
+   },
+   "categorias_incoherentes": 0,
+   "bytes": 266965
+  },
+  {
+   "ubigeo": "040124",
+   "distrito": "UCHUMAYO",
+   "archivo": "manzanas/040124.json",
+   "caja": [
+    -71.674682,
+    -16.463418,
+    -71.594047,
+    -16.421124
+   ],
+   "manzanas": 830,
+   "con_datos": 159,
+   "sin_poligono_en_redatam": 11,
+   "viviendas": 2686,
+   "ocupadas": 2344,
+   "personas": 9372,
+   "fuera_de_manzana": {
+    "filas": 10,
+    "viviendas": 2963,
+    "personas": 3947
+   },
+   "categorias_incoherentes": 0,
+   "bytes": 290161
+  },
+  {
+   "ubigeo": "040126",
+   "distrito": "YANAHUARA",
+   "archivo": "manzanas/040126.json",
+   "caja": [
+    -71.584992,
+    -16.412359,
+    -71.533727,
+    -16.377064
+   ],
+   "manzanas": 403,
+   "con_datos": 250,
+   "sin_poligono_en_redatam": 1,
+   "viviendas": 8501,
+   "ocupadas": 6796,
+   "personas": 23986,
+   "fuera_de_manzana": {
+    "filas": 7,
+    "viviendas": 570,
+    "personas": 1431
+   },
+   "categorias_incoherentes": 0,
+   "bytes": 204192
+  },
+  {
+   "ubigeo": "040127",
+   "distrito": "YARABAMBA",
+   "archivo": "manzanas/040127.json",
+   "caja": [
+    -71.480937,
+    -16.574859,
+    -71.43615,
+    -16.542137
+   ],
+   "manzanas": 235,
+   "con_datos": 5,
+   "sin_poligono_en_redatam": 1,
+   "viviendas": 146,
+   "ocupadas": 89,
+   "personas": 291,
+   "fuera_de_manzana": {
+    "filas": 5,
+    "viviendas": 1742,
+    "personas": 990
+   },
+   "categorias_incoherentes": 0,
+   "bytes": 101060
+  },
+  {
+   "ubigeo": "040128",
+   "distrito": "YURA",
+   "archivo": "manzanas/040128.json",
+   "caja": [
+    -71.709124,
+    -16.378189,
+    -71.601092,
+    -16.244818
+   ],
+   "manzanas": 3786,
+   "con_datos": 362,
+   "sin_poligono_en_redatam": 5,
+   "viviendas": 7300,
+   "ocupadas": 5555,
+   "personas": 18668,
+   "fuera_de_manzana": {
+    "filas": 51,
+    "viviendas": 27480,
+    "personas": 14203
+   },
+   "categorias_incoherentes": 0,
+   "bytes": 1251529
+  },
+  {
+   "ubigeo": "040129",
+   "distrito": "JOSE LUIS BUSTAMANTE Y RIVERO",
+   "archivo": "manzanas/040129.json",
+   "caja": [
+    -71.54741,
+    -16.456047,
+    -71.503096,
+    -16.410873
+   ],
+   "manzanas": 1192,
+   "con_datos": 782,
+   "sin_poligono_en_redatam": 5,
+   "viviendas": 22789,
+   "ocupadas": 19970,
+   "personas": 78989,
+   "fuera_de_manzana": {
+    "filas": 18,
+    "viviendas": 1077,
+    "personas": 2840
+   },
+   "categorias_incoherentes": 0,
+   "bytes": 471406
+  }
+ ],
+ "distritos_sin_manzanas": [],
+ "generado": "2026-11-10"
+}

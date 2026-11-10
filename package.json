@@ -17,6 +17,7 @@
     "datos:oficial": "node scripts/descargar-equipamiento-oficial.mjs",
     "datos:comercio": "node scripts/descargar-comercio.mjs",
     "datos:electricidad": "node scripts/descargar-concesiones-electricas.mjs",
+    "datos:censo": "node scripts/descargar-censo-servicios.mjs",
     "datos:rutas": "node scripts/descargar-rutas-smartbus.mjs",
     "datos:verificar": "node scripts/verificar-datos.mjs",
     "datos:validar-osm": "node scripts/validar-zonificacion-osm.mjs",
