@@ -22,12 +22,12 @@ Not a listings portal and not a score. It is a verifiable, source-backed fit che
 
 - Static front end in `public/` (Leaflet map, vanilla JS), served by NestJS locally and by Vercel in production (https://geoverificador-nine.vercel.app).
 - Chat assistant: deterministic rule engine plus an optional Gemini layer that only interprets and rephrases; it never invents figures and falls back to rules on any failure.
-- Data: PDM 2016-2025 zoning polygons, health facilities (RENIPRESS, SUSALUD) and schools (ESCALE padrón, MINEDU) as the primary sources with OpenStreetMap only as a backup where no official point lies within 200 m, plus bus stops and green areas (OpenStreetMap); every facility shows its source and official code. The decision follows the OSM-versus-official check in `docs/VALIDACION.md` §3.4, INGEMMET hazards, IGP earthquakes, ANA quebradas. A precomputed grid of 2,358 cells backs the search criteria.
+- Data: PDM 2016-2025 zoning polygons, health facilities (RENIPRESS, SUSALUD) and schools (ESCALE padrón, MINEDU) as the primary sources with OpenStreetMap only as a backup where no official point lies within 200 m, plus bus stops and green areas (OpenStreetMap); every facility shows its source and official code. Medical offices (consultorios, 237 from RENIPRESS plus 31 from OpenStreetMap) are a separate category from health facilities (256 plus 25): informative only, with no distance threshold (a pending product decision, `CONFIG.umbrales.consultorio` is `null`), so they show the nearest office and its distance, never pass/fail, never enter a score or the assistant zone search, and the chat never treats them as "health nearby"; deduplication against OpenStreetMap runs per category. The decision follows the OSM-versus-official check in `docs/VALIDACION.md` §3.4, INGEMMET hazards, IGP earthquakes, ANA quebradas. A precomputed grid of 2,358 cells backs the search criteria.
 - Optional Google sign-in exists on branch `feat/login-google` (name and opaque id only).
 
 ## Capabilities and Constraints
 
-- Criteria the assistant can search: health, inicial, primaria, secundaria, colegio, transporte, area verde, residencial, tranquilo, campina, comercial, historico, lejos de quebradas (some are zoning approximations).
+- Criteria the assistant can search: health (facilities only, not consultorios), inicial, primaria, secundaria, colegio, transporte, area verde, residencial, tranquilo, campina, comercial, historico, lejos de quebradas (some are zoning approximations).
 - Thresholds: 500/1500/3000 m for inicial/primaria/secundaria are the referential distances of MINEDU's design norms (RVM 104-2019 and RVM 208-2019, article 7.1, Cuadro N.° 1); 300 m and 0.5 ha for green space is the WHO Europe (2016) monitoring indicator, not a Peruvian norm; others are project conventions. Weights and tolerances belong to the person; no unsourced default.
 - Not available and must be stated honestly: security, noise, school quality, bus travel times, per-property prices.
 - Hazards, quakes and quebradas are informative context, not criteria, unless the person sets a distance.
@@ -41,7 +41,7 @@ Name "GeoVerificador", subtitle "Predios de Arequipa". Identity to preserve: whi
 
 ## Evidence on Hand
 
-`docs/VALIDACION.md` (793=793 polygons, 99.97% points, 98.1% labels; OSM versus RENIPRESS and ESCALE in §3.4, which led to making the registers the primary source); `docs/INVESTIGACION-VARIABLES.md` (sources of each variable); real test runs (1,111 unit tests with `pnpm test` plus 4 e2e tests with `pnpm test:e2e`, counted on 2026-11-09; 144 data and calculation checks with `pnpm datos:verificar`, of which 142 passed on 2026-11-09 in two runs; the 2 that failed are speed limits of the assistant search (2.7-4.7 s against 2 s, and 1.0-1.2 s against 1 s) on the dev machine, not correctness checks). No photo of Arequipa for the landing exists in the repo; none may be fabricated.
+`docs/VALIDACION.md` (793=793 polygons, 99.97% points, 98.1% labels; OSM versus RENIPRESS and ESCALE in §3.4, which led to making the registers the primary source); `docs/INVESTIGACION-VARIABLES.md` (sources of each variable); real test runs (1,254 unit tests with `pnpm test` plus 4 e2e tests with `pnpm test:e2e`, counted on 2026-11-10; 167 data and calculation checks with `pnpm datos:verificar`, all 167 passing on 2026-11-10; in earlier runs on 2026-11-09 two of them, speed limits of the assistant search on the dev machine (2.7-4.7 s against 2 s, and 1.0-1.2 s against 1 s), failed and are not correctness checks). No photo of Arequipa for the landing exists in the repo; none may be fabricated.
 
 ## Product Principles
 
