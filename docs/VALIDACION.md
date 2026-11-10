@@ -296,6 +296,14 @@ Opciones: `--radios=50,100,200` (m), `--umbral-nombre=0.9`, `--paso=500` (separa
 
 **Cómo leerlo.** (1) Es por **superficie del plano**, no por población ni por viviendas. (2) Dice dónde el registro **no marca** una concesión, no dónde no hay luz: los polígonos son poco detallados (15 a 71 vértices) y el registro puede no incluir ampliaciones recientes; esa parte no se pudo contrastar porque falta una fuente de conexión real. (3) Lo que **no** se validó: que los bordes coincidan con el terreno ni que estar dentro signifique estar conectado; la herramienta no afirma ninguna de las dos cosas. Contrastarlo pediría el Censo Nacional de Población y Vivienda del INEI (alumbrado de la vivienda) o datos de SEAL. Reproducible con `pnpm datos:electricidad` y el muestreo descrito.
 
+### 3.7 Censo 2017 por manzana: unión de cifras y polígonos (2026-11-10)
+
+**Qué se midió.** Que las cifras de REDATAM (una fila por manzana) se unan bien con los polígonos de manzana del INEI y que lo unido reproduzca los totales que REDATAM da para cada distrito (`docs/METODOLOGIA.md` §6.7).
+
+**Resultado.** (1) En los **25 distritos** las manzanas con polígono, más las manzanas de REDATAM que el WFS no dibuja (138, 3 497 viviendas), más lo contado «fuera de manzana» (128 534 viviendas), **suman exactamente** el total de viviendas y personas de REDATAM de cada distrito. (2) La llave (ubigeo + zona + manzana + letra) une el 99 % de las manzanas con cifras: lo que no une son 138 manzanas de REDATAM sin polígono en el WFS. (3) Las categorías de agua suman las viviendas ocupadas en todas las manzanas; alumbrado, agua y desagüe nunca superan a las ocupadas. (4) El punto de la Plaza de Armas cae en una manzana del Cercado, que el censo no contó (sin viviendas) y por eso sale «sin cifras». (5) En 300 puntos al azar del Cercado, la manzana que da el módulo del navegador coincide con el método del número de vueltas.
+
+**Cómo leerlo.** (1) Valida la **unión**, no el censo: las cifras son las del INEI. (2) El 33 % de las viviendas contadas no tiene manzana y no se puede mapear; la herramienta lo dice, no lo reparte. (3) Son cifras de 2017: no se pudo contrastar con 2025 por manzana porque el INEI no la ha abierto (REDATAM 2025 pide iniciar sesión); a escala del departamento, el alumbrado pasó a 92,6 % en 2025 (viviendas con ocupantes presentes), una cifra que no es comparable punto a punto con las de manzana. (4) Una cifra de manzana describe a las viviendas censadas en esa manzana en 2017; un predio concreto puede ser distinto.
+
 ## 4. Riesgos para la validez (amenazas conocidas)
 
 | Amenaza | Efecto | Qué se hace |
