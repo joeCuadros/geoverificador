@@ -106,7 +106,11 @@ const CONFIG = {
   // «Convención del proyecto» significa que no hay una norma que lo fije y que se eligió como criterio de la herramienta.
   umbrales: {
     bordeZona: 20, // V1a: aviso si otra zona queda a esta distancia o menos del punto (convención del proyecto)
-    salud: 1000, // V2 (convención del proyecto)
+    salud: 1000, // V2 (convención del proyecto): se evalúa SOLO con establecimientos de salud, no con consultorios
+    // Consultorio médico: categoría aparte de la salud. NO hay umbral: la distancia de referencia es una decisión PENDIENTE de la persona
+    // responsable del proyecto (ninguna norma la fija). Con null la variable es INFORMATIVA: se muestra el más cercano y su distancia,
+    // sin cumple / no cumple, sin efecto en el puntaje ni en la búsqueda de zonas del asistente. No inventar un valor aquí.
+    consultorio: null,
     educacion: { inicial: 500, primaria: 1500, secundaria: 3000 }, // V3
     transporte: 400, // V4 (convención del proyecto)
     areaVerde: { distanciaM: 300, areaMinM2: 5000, areaGrandeM2: 10000 }, // V5: ≥ 0,5 ha a ≤ 300 m; sensibilidad: ≥ 1 ha
@@ -114,6 +118,7 @@ const CONFIG = {
   fuentesUmbral: {
     bordeZona: 'Convención del proyecto',
     salud: 'Convención del proyecto',
+    consultorio: 'Sin umbral: pendiente de una decisión del proyecto; se muestra solo como dato informativo',
     educacion: 'MINEDU, numeral 7.1, Cuadro N.° 1, distancias referenciales: inicial 500 m (RVM 104-2019-MINEDU), primaria 1500 m y secundaria 3000 m (RVM 208-2019-MINEDU)',
     transporte: 'Convención del proyecto',
     areaVerde: 'Indicador básico de la OMS Europa (2016), «Urban green spaces and health», p. 39: un espacio verde de al menos 0,5 ha a 300 m en línea recta; es un indicador de monitoreo, no una norma peruana',
@@ -154,6 +159,7 @@ const CONFIG = {
   equipamiento: {
     archivos: {
       salud: 'data/equipamiento/salud.geojson',
+      consultorios: 'data/equipamiento/consultorios.geojson', // consultorios médicos: informativos, aparte de la salud
       educacion: 'data/equipamiento/educacion.geojson',
       transporte: 'data/equipamiento/transporte.geojson',
       areasVerdes: 'data/equipamiento/areas_verdes.geojson',

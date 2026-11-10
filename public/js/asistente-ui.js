@@ -187,10 +187,10 @@ const AsistenteUI = (() => {
   function preparar() {
     if (!preparado) {
       preparado = (async () => {
-        const [zonas, congelados, , cauces] = await Promise.all([Zonificacion.zonas(), Equipamiento.datosCongelados(), Distritos.load().catch(() => null), Contexto.cauces().catch(() => null)]); // el tercero (distritos) solo se precarga
+        const [zonas, congelados, , cauces, consultorios] = await Promise.all([Zonificacion.zonas(), Equipamiento.datosCongelados(), Distritos.load().catch(() => null), Contexto.cauces().catch(() => null), Equipamiento.consultorios()]); // el tercero (distritos) solo se precarga; los consultorios son informativos y opcionales
         if (!congelados) throw new Error('Faltan los archivos de equipamiento de OpenStreetMap (public/data/equipamiento); sin ellos no puedo buscar zonas.');
         const datos = Asistente.prepararDatos({
-          salud: congelados.salud.features, educacion: congelados.educacion.features, transporte: congelados.transporte.features, areasVerdes: congelados.areasVerdes.features,
+          salud: congelados.salud.features, consultorios: consultorios ? consultorios.features : [], educacion: congelados.educacion.features, transporte: congelados.transporte.features, areasVerdes: congelados.areasVerdes.features,
           cauces: cauces ? cauces.lista : [],
         }, zonas, umbrales());
         return { zonas, datos, fecha: congelados.salud.fecha, hayCauces: Boolean(cauces), cauces: cauces ? cauces.lista : null };
@@ -227,7 +227,8 @@ const AsistenteUI = (() => {
     const { zonas, datos, fecha, cauces } = await preparar();
     const polys = Distritos.poligonos(intencion.distrito);
     const opciones = { areaMinM2: CONFIG.umbrales.areaVerde.areaMinM2 };
-    if (intencion.tipo === 'contar') return { ...base, fecha, conteo: Entidades.contar(datos, polys, opciones) };
+    if (intencion.tipo === 'consultorio') return { ...base, fecha, consultorios: Entidades.contarConsultorios(datos, polys) };
+    if (intencion.tipo === 'contar') return { ...base, fecha, conteo: Entidades.contar(datos, polys, opciones), ...(intencion.consultorio ? { consultorios: Entidades.contarConsultorios(datos, polys) } : {}) };
     // El perfil suma lo que ya existe en el resto de las fuentes: líneas de SmartBus que lo cruzan y precio de oferta (solo 3 distritos).
     const [rutasDistrito, precios, cenepredDatos] = await Promise.all([rutasDeDistrito(intencion.distrito), Precios.load().catch(() => null), Cenepred.load().catch(() => null)]);
     return { ...base, fecha, perfil: Entidades.perfil(datos, zonas, cauces, polys, { ...opciones, pasoM: 300 }), rutasDistrito, precios, cenepredDatos };
@@ -330,7 +331,8 @@ const AsistenteUI = (() => {
       const hayPunto = Boolean(api.obtenerPunto());
       const reglas = () => Asistente.interpretar(limpio, { hayPunto, ultimaBusqueda });
       let eleccion = { origen: 'reglas', intencion: null };
-      if (hayLLM() && llmDisponible !== false) {
+      // El modelo no conoce la categoría «consultorio» (distinta de la salud): esas frases las responden las reglas, sin salir del navegador.
+      if (hayLLM() && llmDisponible !== false && !Asistente.mencionaConsultorio(limpio)) {
         const espera = mensaje('asistente', { texto: 'Pensando…', espera: true });
         const r = await AsistenteLLM.interpretar({
           mensaje: limpio, historial,
@@ -346,10 +348,13 @@ const AsistenteUI = (() => {
       mostrarModo(eleccion.origen);
       recordar('usuario', limpio);
       const intencion = eleccion.intencion;
-      if (intencion.tipo === 'buscar') await ejecutarBusqueda(intencion);
+      if (intencion.tipo === 'buscar') {
+        if (intencion.consultorio) mensaje('asistente', { texto: Asistente.notaConsultorio() }); // la búsqueda sigue sin el consultorio
+        await ejecutarBusqueda(intencion);
+      }
       else {
-        const esDistrito = ['contar', 'perfil', 'rutas', 'volcan', 'cenepred'].includes(intencion.tipo) && intencion.distrito;
-        const conPunto = ['ficha', 'servicio', 'zona', 'construir', 'quebrada', 'sismos', 'peligros', 'rutas', 'volcan', 'cenepred'].includes(intencion.tipo);
+        const esDistrito = ['contar', 'consultorio', 'perfil', 'rutas', 'volcan', 'cenepred'].includes(intencion.tipo) && intencion.distrito;
+        const conPunto = ['ficha', 'servicio', 'consultorio', 'zona', 'construir', 'quebrada', 'sismos', 'peligros', 'rutas', 'volcan', 'cenepred'].includes(intencion.tipo);
         const ctx = intencion.tipo === 'precio' ? await contextoPrecio() : esDistrito ? await contextoDistrito(intencion) : intencion.tipo === 'cenepred' ? { ...(await contexto()), cenepredDatos: await Cenepred.load().catch(() => null) } : conPunto ? await contexto() : { estadoPDM: CONFIG.estadoPDM, potencial: Zonificacion.potencial, punto: api.obtenerPunto() };
         const resp = Asistente.responder(intencion, ctx);
         let texto = resp.texto;

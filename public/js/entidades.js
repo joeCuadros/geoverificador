@@ -71,6 +71,13 @@ const Entidades = (() => {
     };
   }
 
+  /** Los consultorios médicos del distrito (categoría aparte de la salud, informativa): { total, fuentes, lista }. */
+  function contarConsultorios(datos, polys) {
+    const dentro = contenedor(polys);
+    const lista = (datos.consultorios || []).filter((p) => dentro(p.lat, p.lon));
+    return { total: lista.length, fuentes: porFuente(lista), lista };
+  }
+
   const ordenados = (lista) => lista.sort((a, b) => a.distanciaM - b.distanciaM);
 
   /**
@@ -189,7 +196,7 @@ const Entidades = (() => {
     return { conteo: contar(datos, polys, opciones), zonas: mezclaZonas(zonas, polys, opciones), cauces: caucesEnDistrito(cauces, polys) };
   }
 
-  return { enDistrito, contar, cercaDe, fraseColegios, contenedor, mezclaZonas, caucesEnDistrito, perfil, tipoDeZona, NIVELES };
+  return { enDistrito, contar, contarConsultorios, cercaDe, fraseColegios, contenedor, mezclaZonas, caucesEnDistrito, perfil, tipoDeZona, NIVELES };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = Entidades;

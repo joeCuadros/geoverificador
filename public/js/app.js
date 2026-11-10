@@ -93,7 +93,7 @@
 
   // Documentación automática de lo que realmente se consulta (mismas definiciones que usan la extracción y la clasificación)
   const code = (v) => `<code>${esc(v)}</code>`;
-  const NOMBRE_VARIABLE = { salud: 'Salud', educacion: 'Educación', transporte: 'Transporte', areasVerdes: 'Áreas verdes' };
+  const NOMBRE_VARIABLE = { salud: 'Salud', consultorios: 'Consultorios médicos (aparte de la salud, informativos)', educacion: 'Educación', transporte: 'Transporte', areasVerdes: 'Áreas verdes' };
   $('filters-doc').innerHTML = Object.entries(Calculos.FILTROS).map(([cat, filtros]) => `
     <h4>${NOMBRE_VARIABLE[cat]}</h4>
     <ul>${filtros.map((f) => `<li>${code(f.clave)} = ${f.valores ? f.valores.map(code).join(', ') : `cualquier valor${f.excluir ? ` salvo ${f.excluir.map(code).join(', ')}` : ''}`}</li>`).join('')}</ul>`).join('')
@@ -105,7 +105,8 @@
     </ul>
     <h4>Umbrales</h4>
     <ul>
-      <li>Salud: ${CONFIG.umbrales.salud} m (${esc(CONFIG.fuentesUmbral.salud.toLowerCase())}).</li>
+      <li>Salud: ${CONFIG.umbrales.salud} m (${esc(CONFIG.fuentesUmbral.salud.toLowerCase())}); solo establecimientos de salud.</li>
+      <li>Consultorio médico: sin umbral (${esc(CONFIG.fuentesUmbral.consultorio.toLowerCase())}).</li>
       <li>Educación: inicial ${CONFIG.umbrales.educacion.inicial} m, primaria ${CONFIG.umbrales.educacion.primaria} m, secundaria ${CONFIG.umbrales.educacion.secundaria} m (${esc(CONFIG.fuentesUmbral.educacion)}).</li>
       <li>Transporte: ${CONFIG.umbrales.transporte} m (${esc(CONFIG.fuentesUmbral.transporte.toLowerCase())}).</li>
       <li>Área verde: al menos ${CONFIG.umbrales.areaVerde.areaMinM2} m² a ${CONFIG.umbrales.areaVerde.distanciaM} m (${esc(CONFIG.fuentesUmbral.areaVerde)}).</li>
@@ -143,6 +144,7 @@
   const icono = (id, extra = '') => `<svg class="ico${extra ? ` ${extra}` : ''}" aria-hidden="true"><use href="#i-${id}"/></svg>`;
   const VARIABLES = {
     salud: { titulo: 'Salud', icono: 'salud' },
+    consultorio: { titulo: 'Consultorio médico', icono: 'salud' },
     educacion: { titulo: 'Colegio', icono: 'colegio' },
     transporte: { titulo: 'Paradero', icono: 'paradero' },
     areaVerde: { titulo: 'Área verde', icono: 'verde' },
@@ -693,6 +695,7 @@
     if (e) {
       const t = (r) => `${r.estado.toLowerCase()}${r.distanciaM !== null ? `, ${fmtDist(r.distanciaM)}` : ''}`;
       partes.push(`Salud: ${t(e.salud)}`);
+      if (e.consultorio) partes.push(`Consultorio médico (informativo): ${e.consultorio.distanciaM !== null ? fmtDist(e.consultorio.distanciaM) : 'sin dato'}`);
       const niv = Equipamiento.NIVELES;
       partes.push(`Colegio: ${niv.filter((n) => e.educacion[n].estado === 'CUMPLE').length} de ${niv.length} niveles cumplen`);
       partes.push(`Paradero: ${t(e.transporte)}`);
@@ -1093,7 +1096,8 @@
 
   // Lo que cada dato NO dice. Va dentro de cada tarjeta, junto a la fuente y la fecha.
   const QUE_NO_CUBRE = {
-    salud: 'Cuenta los establecimientos activos de RENIPRESS (SUSALUD) con categoría I-1 a III-E y coordenadas, consultorios incluidos, y los de OpenStreetMap solo donde RENIPRESS no tiene un punto a 200 m. Cerca del 42 % de los establecimientos de Arequipa en RENIPRESS no trae coordenadas y no puede contarse. No dice si atiende emergencias ni su horario, y la distancia es en línea recta, no recorrido a pie.',
+    salud: 'Cuenta los establecimientos de salud activos de RENIPRESS (SUSALUD) con categoría I-1 a III-E y coordenadas (hospitales, clínicas, centros y puestos de salud, policlínicos…), sin los consultorios médicos, que son otra categoría, y los de OpenStreetMap solo donde RENIPRESS no tiene un punto de salud a 200 m. Cerca del 42 % de los establecimientos de Arequipa en RENIPRESS no trae coordenadas y no puede contarse. No dice si atiende emergencias ni su horario, y la distancia es en línea recta, no recorrido a pie.',
+    consultorio: 'Cuenta los consultorios médicos activos de RENIPRESS (SUSALUD) —su clasificación dice «consultorios»— y los de OpenStreetMap (amenity=doctors, healthcare=doctor) solo donde RENIPRESS no tiene un consultorio a 200 m. Tampoco trae las coordenadas de todos. No dice la especialidad, el horario ni si atiende al público.',
     educacion: 'Cuenta los locales activos de educación básica regular del padrón de ESCALE (MINEDU), públicos y privados, con el nivel de cada institución. OpenStreetMap solo completa donde ESCALE no tiene un local del mismo nivel a 200 m, y allí casi no etiqueta el nivel: uno sin nivel se toma como candidato a primaria y secundaria. La ubicación es la del local que reportó la UGEL; no dice si hay vacantes.',
     transporte: 'Un paradero no es un servicio: el de OpenStreetMap no dice qué líneas lo usan, su horario ni su frecuencia, y las paradas informales (combis, micros) rara vez están completas.',
     rutas: 'Son los recorridos que SmartBus publicó en la fecha indicada, no un servicio garantizado: no traen frecuencias ni horarios, y un cambio de ruta por tramos puede no estar reflejado. La distancia es al trazado, no a donde se puede subir. Una línea de otra empresa que SmartBus no publica no aparece.',
@@ -1136,6 +1140,13 @@
     </dl>`;
   }
 
+  // Tarjeta de una variable INFORMATIVA (sin umbral): la distancia al más cercano, sin distancia de referencia ni cumple / no cumple.
+  function lineaResumenInformativa(r) {
+    if (r.error) return 'No se pudo obtener el dato';
+    if (r.estado === 'SIN DATO' || r.distanciaM === null) return 'Sin dato';
+    return `${r.distanciaM === 0 ? '0 m (dentro del área)' : `${fmtDist(r.distanciaM)} en línea recta`} · sin distancia de referencia`;
+  }
+
   // Línea de la tarjeta cerrada: distancia frente a la distancia de referencia.
   function lineaResumen(r) {
     if (r.error) return 'No se pudo obtener el dato';
@@ -1167,6 +1178,13 @@
 
     const salud = tarjetaVariable(VARIABLES.salud, e.salud.estado, lineaResumen(e.salud),
       datoPrincipal(e.salud) + explicacion(e.salud, 'establecimientos de salud') + etiq(e.salud) + detalleDato(e.salud, QUE_NO_CUBRE.salud));
+
+    // Consultorio médico: categoría aparte de la salud, informativa (sin umbral): no suma al estado de Salud ni a nada más.
+    const cons = e.consultorio;
+    const consultorio = cons ? tarjetaVariable(VARIABLES.consultorio, cons.estado, lineaResumenInformativa(cons),
+      datoPrincipal(cons)
+      + (cons.error ? '' : cons.estado === 'SIN DATO' ? explicacion(cons, 'consultorios médicos') : `<p class="var-explica"><strong>Informativo.</strong> ${esc(Calculos.NOTA_CONSULTORIO.replace(/^Es informativo: /, ''))}</p>`)
+      + etiq(cons) + detalleDato(cons, QUE_NO_CUBRE.consultorio), cons.estado === 'INFORMATIVO' ? 'Informativo' : null) : '';
 
     const niveles = Equipamiento.NIVELES.map((n) => {
       const r = e.educacion[n];
@@ -1200,12 +1218,12 @@
       + `<p class="var-meta">Criterio: un área verde de al menos ${fmtNum(u.areaMinM2)} m² a ${u.distanciaM} m o menos.</p>` + sens
       + detalleDato(v, QUE_NO_CUBRE.areaVerde));
 
-    $('entorno').innerHTML = salud + educacion + transporte + areaVerde + '<div id="card-quebradas"></div>';
+    $('entorno').innerHTML = salud + consultorio + educacion + transporte + areaVerde + '<div id="card-quebradas"></div>';
     renderQuebradas(); // llega aparte (archivo congelado de la ANA)
     $('entorno').setAttribute('aria-busy', 'false');
     $('entorno-toggle').hidden = false;
     actualizarToggleTarjetas();
-    $('entorno-fuente').textContent = 'Distancias en línea recta, no recorrido a pie. Salud: RENIPRESS (SUSALUD); colegios: padrón de ESCALE (MINEDU); OpenStreetMap, colaborativo, solo de respaldo donde no hay un punto oficial a 200 m y para paraderos y áreas verdes: algo ausente puede existir. Cada establecimiento dice de qué fuente es. Las distancias de referencia de salud, paradero y borde de zona son convenciones del proyecto. Las líneas de transporte son recorridos publicados por SmartBus, sin frecuencias ni horarios.';
+    $('entorno-fuente').textContent = 'Distancias en línea recta, no recorrido a pie. Salud y consultorios médicos: RENIPRESS (SUSALUD); colegios: padrón de ESCALE (MINEDU); OpenStreetMap, colaborativo, solo de respaldo donde no hay un punto oficial de la misma categoría a 200 m y para paraderos y áreas verdes: algo ausente puede existir. Cada establecimiento dice de qué fuente es. Las distancias de referencia de salud, paradero y borde de zona son convenciones del proyecto; el consultorio médico no tiene distancia de referencia y es solo informativo. Las líneas de transporte son recorridos publicados por SmartBus, sin frecuencias ni horarios.';
   }
 
   // ------------------------------------------------------ Quebradas y cauces (ANA, IGP y OpenStreetMap)
@@ -1512,6 +1530,7 @@
     const verde = colorMapa('--map-verde');
     const filas = [
       { v: VARIABLES.salud, r: e.salud, rotulo: 'Salud' },
+      ...(e.consultorio ? [{ v: VARIABLES.consultorio, r: e.consultorio, rotulo: 'Consultorio médico' }] : []),
       ...Equipamiento.NIVELES.map((n) => ({ v: VARIABLES.educacion, r: e.educacion[n], rotulo: `Colegio ${n}` })),
       { v: VARIABLES.transporte, r: e.transporte, rotulo: 'Paradero' },
       { v: VARIABLES.areaVerde, r: e.areaVerde, rotulo: 'Área verde' },
@@ -1578,6 +1597,7 @@
     const linea = (x) => (x ? `${x.estado}${x.distanciaM !== null ? ` · ${fmtDist(x.distanciaM)}` : ''}${x.nombre ? ` · ${x.nombre}` : ''}` : 'No disponible');
     if (e) {
       resumen.push(['Salud', linea(e.salud)]);
+      if (e.consultorio) resumen.push(['Consultorio médico (informativo)', linea(e.consultorio)]);
       Equipamiento.NIVELES.forEach((n) => resumen.push([`Educación ${n}`, linea(e.educacion[n])]));
       resumen.push(['Transporte', linea(e.transporte)]);
       if (e.transporte.rutas && !e.transporte.rutas.error) resumen.push(['Líneas de transporte', Rutas.resumen(e.transporte.rutas, 12)]);
@@ -1643,6 +1663,7 @@
         : null,
       zonificacion_proyectada: avisoPDM,
       salud: state.entorno && state.entorno.salud,
+      consultorio: state.entorno && state.entorno.consultorio, // informativo, sin umbral
       educacion: state.entorno && state.entorno.educacion,
       transporte: state.entorno && state.entorno.transporte,
       area_verde: state.entorno && state.entorno.areaVerde && { ...state.entorno.areaVerde, forma: undefined },

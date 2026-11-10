@@ -14,10 +14,10 @@ const CapasUI = (() => {
 
   // Un color por tipo de entidad; los colegios además cambian de forma/letra por nivel (nunca solo el color).
   const COLOR = {
-    inicial: '#9a4d00', primaria: '#1c3a6b', secundaria: '#6b2d7a', salud: '#b0272b', paradero: '#3b4a5a', parques: '#2f7d3b', quebradas: '#1f6fb2',
+    inicial: '#9a4d00', primaria: '#1c3a6b', secundaria: '#6b2d7a', salud: '#b0272b', consultorio: '#0f6b6b', paradero: '#3b4a5a', parques: '#2f7d3b', quebradas: '#1f6fb2',
     sismos: '#c2570c', volcan_alto: '#a31621', volcan_moderado: '#e07b00', volcan_bajo: '#e9c046', sectores: '#0b5d4f', residencial: '#b88a2e', tranquilo: '#8a6d1f', campina: '#6f9a2f', comercial: '#7a4fa0', historico: '#a0422f',
   };
-  const LETRA = { inicial: 'I', primaria: 'P', secundaria: 'S', salud: '+', paradero: 'B' };
+  const LETRA = { inicial: 'I', primaria: 'P', secundaria: 'S', salud: '+', consultorio: 'C', paradero: 'B' };
   // Riesgo de los distritos ante El Niño (CENEPRED): de menor a mayor. La leyenda lleva además el texto y los nombres, así que el color no es lo único que informa.
   const COLOR_RIESGO = { Bajo: '#6aa84f', Medio: '#e9c046', Alto: '#e07b00', 'Muy alto': '#a31621' };
 
@@ -157,6 +157,7 @@ const CapasUI = (() => {
   const MUESTRA = {
     colegios: '<span class="mu-ico mu-i">I</span><span class="mu-ico mu-p">P</span><span class="mu-ico mu-s">S</span>',
     salud: '<span class="mu-ico mu-salud">+</span>',
+    consultorios: '<span class="mu-ico mu-consultorio">C</span>',
     paraderos: '<span class="mu-ico mu-paradero">B</span>',
     parques: '<span class="mu-bloque" style="background:#2f7d3b"></span>',
     quebradas: '<span class="mu-linea"></span>',
@@ -185,7 +186,7 @@ const CapasUI = (() => {
     $('leyenda-estados').innerHTML = r.leyenda.map(itemDe).join('')
       + r.sinDatos.map((c) => `<li class="ley-item leyenda-error"><span class="ley-txt">${c === 'lineas' ? 'No pude leer los recorridos de SmartBus, así que no los dibujo.' : `No pude leer el archivo de ${c === 'sismos' ? 'sismos' : c === 'volcan' ? 'peligro volcánico' : c === 'cenepred' ? 'riesgo de los distritos (CENEPRED)' : 'quebradas'}, así que no lo dibujo.`}</span></li>`).join('');
     const fuentes = [];
-    if (r.leyenda.some((l) => ['colegios', 'salud', 'paraderos', 'parques'].includes(l.capa))) fuentes.push(`Colegios: padrón de ESCALE (MINEDU). Salud: RENIPRESS (SUSALUD). Paraderos y parques: OpenStreetMap (ODbL), que en colegios y salud solo completa donde no hay un punto oficial a 200 m. Datos al ${fecha || 'sin fecha'}; cada punto dice su fuente al tocarlo. Puede faltar alguno.`);
+    if (r.leyenda.some((l) => ['colegios', 'salud', 'consultorios', 'paraderos', 'parques'].includes(l.capa))) fuentes.push(`Colegios: padrón de ESCALE (MINEDU). Salud y consultorios médicos (dos categorías; el consultorio es informativo, sin círculo de distancia): RENIPRESS (SUSALUD). Paraderos y parques: OpenStreetMap (ODbL), que en colegios, salud y consultorios solo completa donde no hay un punto oficial de la misma categoría a 200 m. Datos al ${fecha || 'sin fecha'}; cada punto dice su fuente al tocarlo. Puede faltar alguno.`);
     if (r.leyenda.some((l) => ['residencial', 'tranquilo', 'campina', 'comercial', 'historico'].includes(l.capa))) fuentes.push('Zonas: plano del PDM Arequipa 2016-2025 (referencial).');
     if (r.leyenda.some((l) => l.capa === 'quebradas')) fuentes.push('Quebradas y ríos: cauces de la ANA (red de 2018), el IGP y OpenStreetMap (ODbL); cada tramo dice su fuente al tocarlo. Ninguna fuente es completa ni es un mapa de peligro.');
     if (r.leyenda.some((l) => l.capa === 'lineas')) fuentes.push('Líneas de bus: Rutas: SmartBus (smartbus.app), recorridos publicados usados con autorización verbal; sin frecuencias ni horarios.' + (r.paradasBus.length ? ' La parada es la más cercana en línea recta.' : ''));

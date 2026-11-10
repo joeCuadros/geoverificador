@@ -98,6 +98,18 @@ const Reporte = (() => {
     return `<table class="rp-tabla">${filasDe(r, d.fuentesUmbral.salud).join('')}</table><p class="rp-nota">${esc(r.metodo)}</p>`;
   }
 
+  /** Consultorio médico más cercano: categoría aparte de la salud, INFORMATIVA (sin umbral, sin cumple / no cumple). */
+  function consultorio(d) {
+    const r = d.variables && d.variables.consultorio;
+    if (!r) return '';
+    if (r.error) return `<table class="rp-tabla">${fila('Resultado', `No se pudo obtener el dato: ${esc(r.error)}`)}</table>`;
+    const filas = [fila('Estado', r.estado === 'SIN DATO' ? estado('SIN DATO') : estado('INFORMATIVO'))];
+    if (r.nombre) filas.push(fila('Más cercano', esc(r.nombre)));
+    if (r.fuenteElemento) filas.push(fila('Fuente del establecimiento', esc(CALC.textoFuenteElemento(r))));
+    filas.push(fila('Distancia', r.distanciaM === null ? 'Sin dato' : r.distanciaM === 0 ? 'El punto está dentro del área' : `${dist(r.distanciaM)} en línea recta`));
+    return `<table class="rp-tabla">${filas.join('')}</table><p class="rp-nota">${esc(CALC.NOTA_CONSULTORIO)} ${esc(r.metodo)}</p>`;
+  }
+
   function educacion(d) {
     const e = d.variables && d.variables.educacion;
     if (!e) return sinResultado;
@@ -317,6 +329,7 @@ const Reporte = (() => {
     const lista = [
       ['Zonificación vigente y proyectada', '#4f46e5', zonificacion(d), d.fuentes.zonificacion],
       ['Salud', '#c2410c', salud(d), d.variables ? fuenteDe(d.variables.salud) : ''],
+      ...(d.variables && d.variables.consultorio ? [['Consultorio médico (informativo)', '#b45309', consultorio(d), fuenteDe(d.variables.consultorio)]] : []),
       ['Educación por nivel', '#7c3aed', educacion(d), d.variables ? fuenteDe(d.variables.educacion.inicial) : ''],
       ['Transporte', '#1d4ed8', transporte(d), d.variables ? [fuenteDe(d.variables.transporte), d.variables.transporte.rutas && !d.variables.transporte.rutas.error ? `${d.variables.transporte.rutas.atribucion || 'Rutas: SmartBus (smartbus.app)'}` : ''].filter(Boolean).join('; ') : ''],
       ['Área verde', '#15803d', areaVerde(d), d.variables ? fuenteDe(d.variables.areaVerde) : ''],
@@ -341,6 +354,7 @@ const Reporte = (() => {
       'Las líneas de transporte son los recorridos que SmartBus (smartbus.app) publicó en la fecha indicada, usados con su autorización verbal (confirmación escrita pendiente): no traen frecuencias ni horarios, y un cambio de ruta por tramos puede no estar reflejado.',
       'Todas las distancias son en línea recta, no recorrido a pie. Los umbrales de salud (1000 m), transporte (400 m) y borde de zona (20 m) son convenciones del proyecto; los de educación son distancias referenciales de las normas del MINEDU (RVM 104-2019 y 208-2019, numeral 7.1) y el de área verde es un indicador de la OMS Europa (2016), no una norma peruana.',
       'Los locales de ESCALE dicen su nivel. Los colegios de OpenStreetMap que completan el mapa casi no lo etiquetan: uno sin nivel se toma como candidato a primaria y secundaria, lo que puede sobrestimar la oferta de un nivel.',
+      ...(d.variables && d.variables.consultorio ? ['El consultorio médico es una categoría aparte de los establecimientos de salud y es solo informativo: no tiene una distancia de referencia (es una decisión pendiente), así que no se dice si está cerca o lejos, no suma a ningún puntaje y no cuenta como «salud cerca».'] : []),
       'Quebradas y cauces: no existe una distancia normativa a una quebrada, así que el estado es INFORMATIVO salvo que la persona fije su propio umbral («según tu umbral»). Los cauces vienen de la ANA, el IGP y OpenStreetMap; ninguna fuente es completa, no son un mapa de peligro y no delimitan la faja marginal.',
       'El contexto de riesgo (peligros geológicos de INGEMMET, sismos reportados por el IGP en el periodo indicado y zonas de peligro volcánico del Misti del IGP, de escala regional y sin fecha de elaboración, y el escenario de riesgo del CENEPRED ante El Niño, que es una estimación por distrito) es informativo: no es una evaluación del predio, no predice sismos, erupciones ni lluvias y que no haya registros o zonas no significa que el lugar sea seguro.',
       'El precio de oferta por m² del distrito (Aptología, CC BY 4.0) es informativo: son precios pedidos en avisos, no de cierre, y es la mediana del distrito, no el precio de este inmueble. Solo hay cifra en los distritos con al menos 30 avisos.',

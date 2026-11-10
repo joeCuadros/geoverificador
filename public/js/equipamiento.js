@@ -7,6 +7,9 @@
  *
  * Cada resultado trae { estado, nombre, distanciaM, umbralM, fuente, fecha, metodo, ... } con estado
  * CUMPLE | NO CUMPLE | SIN DATO. Las distancias son en línea recta, no recorrido a pie.
+ *
+ * Además, el consultorio médico más cercano (`consultorio`): una categoría APARTE de la salud, INFORMATIVA (sin umbral: la distancia
+ * de referencia es una decisión pendiente; estado INFORMATIVO | SIN DATO). La salud se evalúa solo con establecimientos.
  */
 const Equipamiento = (() => {
   const NIVELES = ['inicial', 'primaria', 'secundaria'];
@@ -136,7 +139,21 @@ const Equipamiento = (() => {
     return Calculos.evaluarMasCercano(
       punto,
       datos.features.map((f) => candidatoConFuente(f, Calculos.etiquetaElemento(f.properties, 'salud'))),
-      comunes(datos, u, CONFIG.fuentesUmbral.salud, metodoBase(datos, 'el establecimiento de salud (hospital, clínica, consultorio o healthcare=*)')),
+      comunes(datos, u, CONFIG.fuentesUmbral.salud, metodoBase(datos, 'el establecimiento de salud (hospital, clínica, centro o puesto de salud, policlínico o healthcare=*; el consultorio médico es otra categoría)')),
+    );
+  }
+
+  /** Consultorio médico más cercano: INFORMATIVO. No hay umbral (CONFIG.umbrales.consultorio es null), así que no hay cumple / no cumple. */
+  function consultorio(datos, punto) {
+    return Calculos.evaluarMasCercano(
+      punto,
+      datos.features.map((f) => candidatoConFuente(f, Calculos.etiquetaElemento(f.properties, 'consultorios'))),
+      {
+        umbralM: CONFIG.umbrales.consultorio,
+        fuente: datos.fuente || CONFIG.equipamiento.fuente,
+        fecha: datos.fecha,
+        metodo: `${metodoBase(datos, 'el consultorio médico')} Sin umbral: ${CONFIG.fuentesUmbral.consultorio}.`,
+      },
     );
   }
 
@@ -198,23 +215,35 @@ const Equipamiento = (() => {
     }
   }
 
+  /** El consultorio más cercano, sin respaldo en vivo: es un dato informativo y no vale una consulta a Overpass. Nunca rechaza. */
+  async function consultorioCercano(punto) {
+    try {
+      const datos = await archivo('consultorios');
+      return datos ? consultorio(datos, punto) : sinDato('No se encontró el archivo de consultorios médicos.', CONFIG.umbrales.consultorio);
+    } catch (err) {
+      console.error('[Equipamiento] consultorios', err);
+      return sinDato(err.message, CONFIG.umbrales.consultorio);
+    }
+  }
+
   /**
-   * Evalúa las cuatro variables del equipamiento para el punto.
-   * Devuelve { salud, educacion: { inicial, primaria, secundaria }, transporte, areaVerde }.
+   * Evalúa las variables del equipamiento para el punto.
+   * Devuelve { salud, consultorio (informativo), educacion: { inicial, primaria, secundaria }, transporte, areaVerde }.
    * `transporte.rutas` agrega las líneas de SmartBus que pasan a ≤ CONFIG.umbrales.transporte del punto (Rutas.cerca): el paradero
    * de OpenStreetMap y los recorridos de SmartBus son dos fuentes distintas y no se mezclan.
    */
   async function evaluar(lat, lon) {
     const punto = { lat, lon };
     const u = CONFIG.umbrales;
-    const [s, e, t, v, rutas] = await Promise.all([
+    const [s, c, e, t, v, rutas] = await Promise.all([
       variable('salud', punto, salud, (m) => sinDato(m, u.salud)),
+      consultorioCercano(punto),
       variable('educacion', punto, educacion, (m) => Object.fromEntries(NIVELES.map((n) => [n, sinDato(m, u.educacion[n])]))),
       variable('transporte', punto, transporte, (m) => sinDato(m, u.transporte)),
       variable('areasVerdes', punto, areaVerde, (m) => ({ ...sinDato(m, u.areaVerde.distanciaM), areaM2: null, cumple1ha: false })),
       lineasCerca(punto),
     ]);
-    return { salud: s, educacion: e, transporte: { ...t, rutas }, areaVerde: v };
+    return { salud: s, consultorio: c, educacion: e, transporte: { ...t, rutas }, areaVerde: v };
   }
 
   /**
@@ -228,7 +257,16 @@ const Equipamiento = (() => {
     return Object.fromEntries(categorias.map((c, i) => [c, lista[i]]));
   }
 
-  return { NIVELES, evaluar, datosCongelados, indiceRutas: cargarRutas };
+  /** El archivo de consultorios tal como se leyó ({ features, fecha, origen }), o null si falta: es informativo y la búsqueda de zonas no lo necesita. */
+  async function consultorios() {
+    try {
+      return await archivo('consultorios');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  return { NIVELES, evaluar, datosCongelados, consultorios, indiceRutas: cargarRutas };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = Equipamiento;

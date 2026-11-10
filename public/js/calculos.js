@@ -340,6 +340,14 @@ const Calculos = (() => {
     return partes.join(' · ');
   }
 
+  // ---------------------------------------------------------- Consultorio médico
+
+  /**
+   * Una sola redacción de por qué el consultorio es informativo, para la ficha, el chat y el informe. No hay un umbral (decisión
+   * pendiente): no se dice si el consultorio está cerca o lejos, no suma al puntaje y no cuenta como «salud cerca».
+   */
+  const NOTA_CONSULTORIO = 'Es informativo: el consultorio médico es una categoría aparte de los establecimientos de salud, no tiene una distancia de referencia (es una decisión pendiente), así que no se dice si está cerca o lejos, no suma al puntaje ni a la búsqueda de zonas y no cuenta como «salud cerca».';
+
   // ------------------------------------------------- Resultado de cada variable
 
   const SIN_NOMBRE = 'Sin nombre en OSM';
@@ -780,6 +788,7 @@ const Calculos = (() => {
     origenDe,
     etiquetaElemento,
     textoFuenteElemento,
+    NOTA_CONSULTORIO,
   };
 })();
 

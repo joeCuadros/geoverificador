@@ -1343,6 +1343,7 @@ summary { -webkit-tap-highlight-color: transparent; }
 .ent-colegio-primaria span { background: #1c3a6b; border-radius: 6px; }
 .ent-colegio-secundaria span { background: #6b2d7a; border: 0; width: 26px; height: 26px; box-shadow: none; clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); }
 .ent-salud span { background: #b0272b; border-radius: 4px; }
+.ent-consultorio span { background: #0f6b6b; border-radius: 50% 50% 4px 50%; }
 .ent-paradero span { background: #3b4a5a; border-radius: 12px 12px 4px 4px; }
 .leyenda-estados li.ley-item { display: flex; align-items: center; gap: 10px; }
 .muestra-ent { display: inline-flex; align-items: center; gap: 3px; min-width: 30px; flex: none; }
@@ -1351,6 +1352,7 @@ summary { -webkit-tap-highlight-color: transparent; }
 .mu-p { background: #1c3a6b; border-radius: 4px; }
 .mu-s { background: #6b2d7a; border-radius: 40%; }
 .mu-salud { background: #b0272b; border-radius: 3px; }
+.mu-consultorio { background: #0f6b6b; border-radius: 50% 50% 3px 50%; }
 .mu-paradero { background: #3b4a5a; border-radius: 8px 8px 3px 3px; }
 .mu-bloque { display: inline-block; width: 20px; height: 12px; border-radius: 2px; opacity: .55; }
 .mu-linea { display: inline-block; width: 24px; height: 3px; background: #1f6fb2; border-radius: 2px; }

@@ -65,7 +65,8 @@ const Asistente = (() => {
     ['primaria', /\bprimaria\b/g],
     ['secundaria', /\bsecundaria\b/g],
     ['colegio', /\b(colegios?|escuelas?|cole|centros? educativos?|instituciones? educativas?|educacion)\b/g],
-    ['salud', /\b(postas?|hospital(?:es)?|clinicas?|centros? de salud|consultorios?|salud|medic[oa]s?|doctor(?:es)?)\b/g],
+    // Salud = establecimientos (posta, hospital, clínica, centro de salud o médico). El consultorio médico es OTRA categoría, informativa: no es un criterio de búsqueda (ver RE.consultorio).
+    ['salud', /\b(postas?|hospital(?:es)?|clinicas?|centros? de salud|centros? medic[oa]s?|salud)\b/g],
     ['transporte', /\b(paraderos?|buses?|transporte|combis?|micros?|movilidad|paradas?)\b/g],
     ['areaVerde', /\b(areas? verdes?|parques?|espacios? verdes?|zonas? verdes?|jardin(?:es)?|verde)\b/g],
     ['campina', /\b(campina|campo|agricol\w*|chacras?|rural|sembrios?|cultivos?)\b/g],
@@ -125,6 +126,8 @@ const Asistente = (() => {
     cenepredMasa: /\b(movimientos? en masa|huaycos?|huaicos?|aluvion\w*|deslizamient\w*|derrumb\w*)\b/,
     cenepredMapa: /\b(mapa|muestra\w*|dibuja\w*|colorea\w*|pinta\w*|visualiza\w*)\b/,
     cenepredTodos: /\b(?:que|cuales|cuantos)\s+distritos\b|\btodos\s+los\s+distritos\b|\bcada\s+distrito\b|\bentre\s+los\s+distritos\b/,
+    // Consultorio médico (informativo, aparte de la salud). «Centro médico» es un establecimiento de salud: se quita antes de buscar «médico» (ver mencionaConsultorio).
+    consultorio: /\b(consultorios?|medic[oa]s?|doctor(?:es)?)\b/,
     quebrada: /\b(quebradas?|torrenteras?|cauces?|huaycos?|huaicos?|aluvion\w*|rios?|rio chili)\b/,
     sismos: /\b(sismos?|sismic\w*|temblor\w*|terremoto\w*)\b/,
     peligros: /\b(peligros?|riesgos?|derrumbes?|deslizamientos?|caida de rocas|geologic\w*)\b/,
@@ -217,6 +220,11 @@ const Asistente = (() => {
     return out;
   }
 
+  /** ¿La frase habla de un consultorio médico (o de un médico o doctor)? Un «centro médico» es un establecimiento de salud y no cuenta. */
+  function mencionaConsultorio(texto) {
+    return RE.consultorio.test(normalizar(texto).replace(/\bcentros? medic[oa]s?\b/g, ' '));
+  }
+
   /**
    * Convierte lo escrito en una intención.
    *   ctx: { hayPunto?: boolean, ultimaBusqueda?: { criterios } }
@@ -231,10 +239,11 @@ const Asistente = (() => {
     const intencion = {
       tipo: 'desconocido', modo: 'nuevo', criterios: [], radioGlobalM: null, lote: null, incluirCondicional: false,
       temaNoSoportado: null, aproximados: [], limitarAlPunto: false, distrito: null, distritoFuera: false, distritoTexto: null, todosPrecio: false,
-      volcanTipos: [], cenepredFenomenos: [], cenepredMapa: false, cenepredTodos: false,
+      volcanTipos: [], cenepredFenomenos: [], cenepredMapa: false, cenepredTodos: false, consultorio: false,
     };
     let t = normalizar(texto);
     if (!t) return intencion;
+    intencion.consultorio = mencionaConsultorio(t);
     t = t.replace(/(\d),(\d)/g, '$1.$2'); // «1,5 km»: la coma decimal no debe partir la frase
     NUMEROS.forEach(([re, v]) => { t = t.replace(re, v); });
 
@@ -284,6 +293,15 @@ const Asistente = (() => {
     // Un distrito nombrado (con errores de tipeo, tildes o mayúsculas): el mismo buscador para contar, perfil, precio, líneas y búsquedas.
     const dis = Dist().buscarNombre(t);
     if (dis) { intencion.distrito = dis.distrito; intencion.distritoFuera = !dis.enDatos; }
+
+    // Consultorio médico: categoría aparte de la salud, solo informativa. Sin otros criterios es una pregunta suya (el más cercano a tu punto
+    // o cuántos hay en un distrito); pedir zonas «cerca de un consultorio» no se puede porque no hay una distancia de referencia. Con otros
+    // criterios la búsqueda sigue sin él (la respuesta lo avisa con notaConsultorio).
+    if (intencion.consultorio && !hayCriterios && !RE.fuentes.test(t)) {
+      const pideZonas = (RE.busqueda.test(t) && !RE.contar.test(t) && !RE.punto.test(t)) || (ultima && (RE.agregar.test(t) || RE.prioridad.test(t)));
+      if (pideZonas) return { ...intencion, tipo: 'no_soportado', temaNoSoportado: 'consultorio_busqueda', aproximados: [], limitarAlPunto: false };
+      return { ...intencion, tipo: 'consultorio', aproximados: [], limitarAlPunto: false };
+    }
 
     // Peligro volcánico del Misti: se atiende antes que perfil, líneas y quebradas («¿Paucarpata está en peligro por el Misti?» no es un perfil).
     // Con criterios de búsqueda («busco colegio lejos del Misti») no se puede: se dice, no se ignora.
@@ -415,6 +433,7 @@ const Asistente = (() => {
   /**
    * Ordena los datos de OpenStreetMap y de zonificación para evaluarlos rápido.
    *   entrada: { salud, educacion, transporte, areasVerdes } (listas de Feature, como los archivos congelados)
+   *            + consultorios?: lista de Feature de los consultorios médicos (informativos: solo se muestran y se cuentan)
    *            + cauces?: [{ nombre, geometry }] (líneas de la red hidrográfica de la ANA; solo para «lejos de quebradas»)
    *   zonas:   [{ codigo, bbox, polys, regla }] (Zonificacion.zonas)
    */
@@ -451,6 +470,7 @@ const Asistente = (() => {
     });
     return {
       salud: (e.salud || []).filter(esPunto).map(puntoDe),
+      consultorios: (e.consultorios || []).filter(esPunto).map(puntoDe), // categoría aparte, informativa: ninguna búsqueda la usa
       colegios,
       colegiosLista,
       verdesTodos,
@@ -772,6 +792,49 @@ const Asistente = (() => {
     condicionado: 'requiere consulta: lo que se puede construir depende de la zona vecina, de un plan específico o de una norma especial',
     no: 'no es construible',
   };
+  /** Respuestas sobre el consultorio médico (informativo): el más cercano de un punto o cuántos hay en un distrito. Nunca dicen cumple / no cumple. */
+  function respuestaConsultorio(intencion, c) {
+    if (intencion.distrito) {
+      const t = c.distritoTitulo || Dist().titulo(intencion.distrito);
+      if (intencion.distritoFuera) return { texto: textoDistritoFuera(t), sugerencias: SUGERENCIAS_BASE };
+      if (!c.consultorios) return { texto: `Todavía estoy contando los consultorios de ${t}; vuelve a preguntar en unos segundos.`, sugerencias: [] };
+      const k = c.consultorios;
+      if (k.total === 0) return { texto: `En ${t} no encontré consultorios médicos en mis datos: puede que existan sin estar registrados ni mapeados. ${C.NOTA_CONSULTORIO}`, sugerencias: SUGERENCIAS_BASE };
+      const fuentes = Object.entries(k.fuentes || {}).map(([f, n]) => `${f === 'OSM' ? 'OpenStreetMap' : f}: ${n}`).join(', ');
+      return {
+        texto: [
+          `En ${t} hay ${plural(k.total, 'consultorio médico', 'consultorios médicos')} (${fuentes}; ${c.fecha || 'sin fecha'}; puede faltar alguno).`,
+          C.NOTA_CONSULTORIO,
+          'Los marqué en el mapa.',
+        ].join('\n'),
+        sugerencias: [`Cuéntame de ${t}`, `¿Cuántos colegios hay en ${t}?`],
+        mapa: { distrito: intencion.distrito, capas: ['consultorios'] },
+      };
+    }
+    if (!c.punto) return { texto: 'Elige un punto en el mapa para ver cuál es el consultorio médico más cercano, o pregúntame por un distrito: «¿cuántos consultorios hay en Cayma?».', sugerencias: SUGERENCIAS_BASE };
+    if (!c.entorno) return { texto: 'Todavía estoy calculando los servicios cercanos a tu punto; vuelve a preguntar en unos segundos.', sugerencias: [] };
+    const r = c.entorno.consultorio;
+    if (!r || r.estado === 'SIN DATO' || r.distanciaM === null) return { texto: `Consultorio médico: sin dato en los datos que tengo (no significa que no exista). ${C.NOTA_CONSULTORIO}`, sugerencias: SUGERENCIAS_BASE };
+    const fuente = C.textoFuenteElemento(r);
+    return {
+      texto: [`El consultorio médico más cercano a tu punto es ${r.nombre || 'uno sin nombre'}, a ${fmtDist(r.distanciaM)} en línea recta.${fuente ? ` Fuente: ${fuente}.` : ''}`, C.NOTA_CONSULTORIO].join('\n'),
+      sugerencias: ['¿Hay una posta cerca?', 'Dame un resumen del punto'],
+    };
+  }
+
+  /** Línea del resumen del punto: el consultorio más cercano, aparte de la salud y sin veredicto; null si no se calculó. */
+  function lineaConsultorio(r) {
+    if (!r) return null;
+    if (r.estado === 'SIN DATO' || r.distanciaM === null) return 'Consultorio médico (informativo): sin dato en los datos que tengo.';
+    const fuente = C.textoFuenteElemento(r);
+    return `Consultorio médico (informativo): ${r.nombre || 'sin nombre'} a ${fmtDist(r.distanciaM)}.${fuente ? ` Fuente: ${fuente}.` : ''}`;
+  }
+
+  /** Aviso cuando una búsqueda nombra un consultorio: la búsqueda sigue sin él. */
+  function notaConsultorio() {
+    return 'Los consultorios médicos no entran en la búsqueda: son una categoría aparte de la salud y solo informativa (no hay una distancia de referencia, es una decisión pendiente) y no cuentan como «salud cerca». Busqué solo por lo demás. Si quieres salud, usa «posta», «hospital» o «centro de salud».';
+  }
+
   const AVISO_REFERENCIAL = 'Es una consulta referencial: no reemplaza el Certificado de Parámetros Urbanísticos y Edificatorios ni el de Zonificación y Vías.';
 
   // ------------------------------------------------------- Distritos: contar, perfil y «mejor zona»
@@ -1166,6 +1229,7 @@ const Asistente = (() => {
     precio: 'No tengo el precio de una casa, un terreno ni un alquiler en particular, ni puedo decirte qué zona es más barata. Solo conozco el precio de oferta por m² promedio de algunos distritos (Aptología): pregúntame «¿cuánto cuesta el m² en Cayma?».',
     volcan_busqueda: 'Todavía no puedo buscar zonas según el peligro volcánico. Sí puedo decirte en qué zonas de peligro del Misti cae tu punto («¿hay lahares cerca de mi punto?») o qué parte de un distrito cae en cada una («¿Paucarpata está en peligro por el Misti?»).',
     cenepred_busqueda: 'Todavía no puedo buscar zonas según el riesgo de inundación o de movimientos en masa. Sí puedo decirte qué estima el CENEPRED para el distrito de tu punto («¿qué dice el CENEPRED de mi punto?») o para un distrito («¿Paucarpata se inunda?»).',
+    consultorio_busqueda: 'No puedo buscar zonas «cerca de un consultorio»: el consultorio médico es una categoría aparte de los establecimientos de salud y es solo informativo, porque no hay una distancia de referencia (es una decisión pendiente). Sí puedo decirte el consultorio más cercano a tu punto («¿hay un consultorio cerca?») o cuántos hay en un distrito («¿cuántos consultorios hay en Cayma?»); para buscar zonas usa «posta», «hospital» o «centro de salud».',
     ruido: 'No tengo datos de ruido. «Zona tranquila» es solo una aproximación con la zonificación (residencial de densidad baja o media 1), no una medición.',
   };
 
@@ -1179,12 +1243,13 @@ const Asistente = (() => {
     const fin = (texto, sugerencias = SUGERENCIAS_BASE) => ({ texto, sugerencias });
 
     if (tipo === 'saludo') return fin('¡Hola! Soy el asistente de GeoVerificador. Puedo contarte lo que hay en tu punto (zona y servicios cercanos) o buscar zonas de Arequipa según lo que te importa: colegio, posta, área verde, transporte, campiña, zona residencial. Todo con los mismos datos de la ficha.');
-    if (tipo === 'ayuda') return fin('Puedo:\n• Buscar zonas: «busco cerca de un colegio y un parque, lo más importante es el parque» o «posta y paradero en un radio de 1 km».\n• Contarte de tu punto: «¿qué zona es?», «¿hay un colegio cerca?», «dame un resumen».\n• Líneas de transporte: «¿qué buses pasan por aquí?» o «¿qué líneas pasan por Paucarpata?».\n• Peligro volcánico del Misti: «¿hay lahares cerca de mi punto?» o «¿Paucarpata está en peligro por el Misti?».\n• Riesgo ante El Niño por distrito (CENEPRED): «¿Paucarpata se inunda?», «riesgo de huaico en Sachaca» o «¿qué dice el CENEPRED de mi punto?».\n• Calcular: «¿cuánto puedo construir en un lote de 200 m²?».\n• Decirte el precio de oferta por m² promedio de un distrito: «¿cuánto cuesta el m² en Cayma?».\n• Explicar el PDM nuevo y de dónde salen los datos.\nNo tengo datos de seguridad ni ruido, ni el precio de una casa o un terreno en particular.');
+    if (tipo === 'ayuda') return fin('Puedo:\n• Buscar zonas: «busco cerca de un colegio y un parque, lo más importante es el parque» o «posta y paradero en un radio de 1 km».\n• Contarte de tu punto: «¿qué zona es?», «¿hay un colegio cerca?», «dame un resumen».\n• Consultorios médicos (aparte de la salud, solo informativos): «¿hay un consultorio cerca?» o «¿cuántos consultorios hay en Cayma?».\n• Líneas de transporte: «¿qué buses pasan por aquí?» o «¿qué líneas pasan por Paucarpata?».\n• Peligro volcánico del Misti: «¿hay lahares cerca de mi punto?» o «¿Paucarpata está en peligro por el Misti?».\n• Riesgo ante El Niño por distrito (CENEPRED): «¿Paucarpata se inunda?», «riesgo de huaico en Sachaca» o «¿qué dice el CENEPRED de mi punto?».\n• Calcular: «¿cuánto puedo construir en un lote de 200 m²?».\n• Decirte el precio de oferta por m² promedio de un distrito: «¿cuánto cuesta el m² en Cayma?».\n• Explicar el PDM nuevo y de dónde salen los datos.\nNo tengo datos de seguridad ni ruido, ni el precio de una casa o un terreno en particular.');
     if (tipo === 'fuentes') return fin(TEXTO_FUENTES);
     if (tipo === 'no_soportado') return fin(`${TEMAS[intencion.temaNoSoportado] || 'Eso no está en los datos que uso.'}\nSí puedo ayudarte con la zonificación y con la cercanía a colegios, salud, transporte y áreas verdes.`);
     if (tipo === 'desconocido') return fin('No entendí eso. Puedes pedirme, por ejemplo:', SUGERENCIAS_BASE);
     if (tipo === 'pdm') return fin(textoPDM(c.estadoPDM));
     if (tipo === 'contar') return respuestaContar(intencion, c);
+    if (tipo === 'consultorio') return respuestaConsultorio(intencion, c);
     if (tipo === 'perfil') return respuestaPerfil(intencion, c);
     if (tipo === 'mejor_zona') return respuestaMejorZona();
     if (tipo === 'distrito_desconocido') return fin('No reconozco «' + (intencion.distritoTexto || 'ese lugar') + '» como un distrito de la provincia de Arequipa. Puedes escribir, por ejemplo, Cayma, Paucarpata o Cerro Colorado.');
@@ -1249,6 +1314,7 @@ const Asistente = (() => {
       return fin([
         `Tu punto${c.distrito ? ` está en ${titulo(c.distrito)},` : ''} zona ${zonaTxt}.`,
         linea('Salud', e.salud),
+        lineaConsultorio(e.consultorio),
         `Colegios: ${colegios}.`,
         linea('Transporte', e.transporte),
         ...lineaLineas(e.transporte),
@@ -1571,6 +1637,7 @@ const Asistente = (() => {
   const LIM_RECTA = 'Las distancias son en línea recta, no recorrido a pie.';
   const LIM_OSM = 'OpenStreetMap es colaborativo: lo que no figura puede existir. «Sin dato» no significa que no exista.';
   const LIM_OFICIAL = 'Los registros oficiales no ubican todos los establecimientos (cerca del 42 % de los de salud de Arequipa en RENIPRESS no trae coordenadas) y ESCALE ubica el local que reportó la UGEL. Un establecimiento oficial puede estar y no verse; uno de OpenStreetMap solo aparece donde no hay un punto oficial cerca.';
+  const LIM_CONSULTORIO = 'Los consultorios médicos (RENIPRESS: clasificación «consultorios»; OpenStreetMap: amenity=doctors y healthcare=doctor) son una categoría aparte de los establecimientos de salud: son solo informativos, sin distancia de referencia (decisión pendiente), y no cuentan como «salud cerca».';
   const LIM_PLANO = 'El plano se extrajo de un PDF y cerca del borde entre dos zonas el resultado puede no ser exacto. La vigencia del PDM 2016-2025 es incierta y hay un PDM nuevo en trámite.';
   const FUENTE_ANA = 'Cauces congelados con su fecha de extracción: la red hidrográfica de la Autoridad Nacional del Agua (ANA, 2018), las quebradas y ríos del Instituto Geofísico del Perú (IGP, sin fecha de elaboración) y los cauces de OpenStreetMap (ODbL). Cada cauce dice de cuál fuente viene.';
   const FUENTE_IGP = 'Sismos reportados, Instituto Geofísico del Perú (IGP), congelados con su fecha de extracción.';
@@ -1585,7 +1652,7 @@ const Asistente = (() => {
   const SERVICIOS = {
     porque: ['Se mide la distancia en línea recta desde tu punto hasta el elemento más cercano de cada tipo y se compara con la distancia de referencia (umbral).'],
     fuente: [FUENTE_SERVICIOS, FUENTE_UMBRALES],
-    limites: [LIM_RECTA, LIM_OFICIAL, LIM_OSM, LIM_REFERENCIAL],
+    limites: [LIM_RECTA, LIM_OFICIAL, LIM_CONSULTORIO, LIM_OSM, LIM_REFERENCIAL],
   };
   const EXPLICACIONES = {
     saludo: GENERICO,
@@ -1595,7 +1662,7 @@ const Asistente = (() => {
     fuentes: {
       porque: ['Resume de dónde sale cada dato de la ficha y qué umbral se usa.'],
       fuente: [FUENTE_PLANO, FUENTE_SERVICIOS, FUENTE_UMBRALES],
-      limites: [LIM_RECTA, LIM_OFICIAL, LIM_OSM, LIM_REFERENCIAL],
+      limites: [LIM_RECTA, LIM_OFICIAL, LIM_CONSULTORIO, LIM_OSM, LIM_REFERENCIAL],
     },
     pdm: {
       porque: ['Muestra el aviso sobre el estado del PDM nuevo que registra la herramienta, con su fuente y su fecha. No lo interpreta.'],
@@ -1638,6 +1705,11 @@ const Asistente = (() => {
       limites: [LIM_CENEPRED, 'El nivel es uno solo por distrito: no distingue entre una calle y otra ni mira tu predio.'],
     },
     servicio: SERVICIOS,
+    consultorio: {
+      porque: ['Busca el consultorio médico más cercano a tu punto (o cuenta los del distrito) y dice su distancia en línea recta. No lo compara con ninguna distancia de referencia, porque no hay una.'],
+      fuente: ['Consultorios médicos: RENIPRESS (SUSALUD, ODC-By), como fuente primaria; OpenStreetMap (ODbL) solo de respaldo donde ningún consultorio oficial tiene un punto a 200 m. Copias congeladas con su fecha.'],
+      limites: [LIM_CONSULTORIO, LIM_RECTA, LIM_OFICIAL, LIM_REFERENCIAL],
+    },
     contar: {
       porque: ['Cuento los elementos de OpenStreetMap cuyo punto cae dentro del límite del distrito (los parques, por el centro de su polígono).'],
       fuente: [FUENTE_OSM, 'Límites distritales del INEI vía GEOCATMIN (INGEMMET).'],
@@ -1701,6 +1773,8 @@ const Asistente = (() => {
     interpretar,
     responder,
     prepararDatos,
+    mencionaConsultorio,
+    notaConsultorio,
     generarCeldas,
     evaluarCelda,
     buscar,
