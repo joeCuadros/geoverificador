@@ -31,11 +31,11 @@ const ruta = (id: string, partes: number[][][], extra: object = {}) => ({
 });
 // Una ruta este-oeste de 8 km que termina a 100 m del Parque Industrial; el origen del ejemplo está 4 km al oeste.
 const C10 = ruta('osm/c10', [traza([-6000, 0], [0, 100], [2000, 100])]);
-const C10_SB = ruta('smartbus/1', [traza([-6000, 0], [0, 100], [2000, 100])], { fuente: 'SmartBus', duracionMin: null, intervaloMin: null });
+const C10_DUP = ruta('osm/c10b', [traza([-6000, 0], [0, 100], [2000, 100])], { duracionMin: null, intervaloMin: null }); // la misma ruta dibujada en otra relación
 const C4 = ruta('osm/c4', [traza([-6000, 200], [0, 150], [2000, 150])], { linea: 'C4', ramal: 'Gráficos', desde: 'San Luis', hasta: 'Av. Salaverry', operador: 'C4 - Unión Aqp' });
 const REVES = ruta('osm/rev', [traza([2000, 100], [0, 100], [-6000, 0])], { desde: 'La Mansión del Fundador', hasta: 'Ciudad Blanca' });
 const CASA = pt(-4000, 60);
-const ctxBase = { punto: CASA, viajeRutas: [C10, C10_SB, C4, REVES], caminarM: 400, zona: null, estadoPDM: null };
+const ctxBase = { punto: CASA, viajeRutas: [C10, C10_DUP, C4, REVES], caminarM: 400, zona: null, estadoPDM: null };
 
 // ------------------------------------------------------------------------------ Configuración
 
@@ -103,12 +103,13 @@ describe('Asistente.responder: viaje', () => {
   const dest = PI;
   const resp = (intencion: object, c: object = ctxBase) => Asistente.responder({ tipo: 'viaje', criterios: [], destino: dest, viaje: {}, ...intencion }, c);
 
-  it('lista las rutas directas con lo que caminas en cada punta, los km en bus, las fuentes y el sentido; la misma ruta de OSM y SmartBus una vez', () => {
+  it('lista las rutas directas con lo que caminas en cada punta, los km en bus, la fuente y el sentido; la misma ruta dibujada en dos relaciones de OSM, una vez', () => {
     const t = resp({}).texto;
     expect(t).toMatch(/Parque Industrial/);
     expect(t).toMatch(/C10/);
     expect(t).toMatch(/C4/);
-    expect(t).toMatch(/OpenStreetMap y SmartBus/);
+    expect(t).toMatch(/Fuente: OpenStreetMap\./);
+    expect(t).not.toMatch(/SmartBus/);
     expect(t).toMatch(/caminas \d+ m al subir y \d+ m al bajar/);
     expect(t).toMatch(/\d,\d km en bus/);
     expect(t.split('\n').filter((l: string) => /^• C10 ·/.test(l))).toHaveLength(1);
@@ -236,8 +237,8 @@ describe('tiempo de viaje: aproximado, con sus supuestos y sin inventar lo que f
     expect(t).toMatch(/prorrate/i);
     expect(t).toMatch(/no es una medición/i);
   });
-  it('una ruta solo de SmartBus no tiene duración: se da la distancia y la caminata, sin total', () => {
-    const solo = ruta('smartbus/9', [traza([-6000, 0], [0, 100], [2000, 100])], { fuente: 'SmartBus', linea: 'C5', ramal: 'Z', desde: 'A', hasta: 'B', duracionMin: null, intervaloMin: null });
+  it('una ruta de OSM sin duración etiquetada: se da la distancia y la caminata, sin total', () => {
+    const solo = ruta('osm/9', [traza([-6000, 0], [0, 100], [2000, 100])], { linea: 'C5', ramal: 'Z', desde: 'A', hasta: 'B', duracionMin: null, intervaloMin: null });
     const t = resp({ viajeRutas: [solo] });
     const linea = t.split('\n').find((l: string) => /^• C5/.test(l));
     expect(linea).not.toMatch(/en total/);

@@ -21,7 +21,7 @@
 const Equipamiento = (() => {
   const NIVELES = ['inicial', 'primaria', 'secundaria'];
   const archivos = new Map(); // categoría → promesa con los datos congelados
-  let indiceRutas = null;      // promesa con las rutas de SmartBus ya indexadas (Rutas.indexar)
+  let indiceRutas = null;      // promesa con las rutas y paradas de OpenStreetMap ya indexadas (Rutas.indexar)
 
   // ------------------------------------------------------------- Carga de datos
 
@@ -72,7 +72,7 @@ const Equipamiento = (() => {
     return (await archivo(categoria)) || enVivo(categoria, punto);
   }
 
-  /** Rutas de SmartBus (archivo congelado): se leen una sola vez y, si falla, la próxima consulta lo reintenta. */
+  /** Rutas y paradas de OpenStreetMap (archivo congelado): se leen una sola vez y, si falla, la próxima consulta lo reintenta. */
   function cargarRutas() {
     if (!indiceRutas) {
       indiceRutas = (async () => {
@@ -99,7 +99,7 @@ const Equipamiento = (() => {
       return Rutas.cerca(await cargarRutas(), punto.lat, punto.lon, u);
     } catch (err) {
       console.error('[Equipamiento] rutas', err);
-      return { error: err.message, distanciaM: u, lineas: [], rutas: 0, fuente: CONFIG.rutas.fuente, fecha: null, permiso: CONFIG.rutas.permiso, atribucion: CONFIG.rutas.atribucion };
+      return { error: err.message, distanciaM: u, lineas: [], rutas: 0, fuente: CONFIG.rutas.fuente, fecha: null, atribucion: CONFIG.rutas.atribucion };
     }
   }
 
@@ -405,8 +405,8 @@ const Equipamiento = (() => {
   /**
    * Evalúa las variables del equipamiento para el punto.
    * Devuelve { salud, consultorio, abastecimiento, compras_ocio, comercio_barrio (las tres necesidades de comercio, informativas: ver Calculos.COMERCIO; `abastecimiento.porTipo` trae el mercado y el supermercado más cercanos), electricidad (informativa: área de concesión eléctrica; ver Calculos.evaluarConcesion), educacion: { inicial, primaria, secundaria }, transporte, areaVerde }.
-   * `transporte.rutas` agrega las líneas de SmartBus que pasan a ≤ CONFIG.umbrales.transporte del punto (Rutas.cerca): el paradero
-   * de OpenStreetMap y los recorridos de SmartBus son dos fuentes distintas y no se mezclan.
+   * `transporte.rutas` agrega las líneas de OpenStreetMap (relaciones route=bus) que pasan a ≤ CONFIG.umbrales.transporte del punto (Rutas.cerca): el paradero
+   * más cercano (un objeto de OSM) y los recorridos (relaciones de OSM) son dos consultas distintas y no se mezclan.
    */
   async function evaluar(lat, lon) {
     const punto = { lat, lon };

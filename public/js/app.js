@@ -1129,7 +1129,7 @@
     comercio_barrio: 'Cuenta lo que OpenStreetMap etiqueta shop=mall (y los terrenos comerciales con nombre de mall) y no está en la lista de malls confirmados: galerías y centros comerciales pequeños, que son comercio de barrio. Si OpenStreetMap tiene el edificio, la distancia se mide hasta su borde. Sin distancia de referencia.',
     educacion: 'Cuenta los locales activos de educación básica regular del padrón de ESCALE (MINEDU), públicos y privados, con el nivel de cada institución. OpenStreetMap solo completa donde ESCALE no tiene un local del mismo nivel a 200 m, y allí casi no etiqueta el nivel: uno sin nivel se toma como candidato a primaria y secundaria. La ubicación es la del local que reportó la UGEL; no dice si hay vacantes.',
     transporte: 'Un paradero no es un servicio: el de OpenStreetMap no dice qué líneas lo usan, su horario ni su frecuencia, y las paradas informales (combis, micros) rara vez están completas.',
-    rutas: 'Son los recorridos que SmartBus publicó en la fecha indicada, no un servicio garantizado: no traen frecuencias ni horarios, y un cambio de ruta por tramos puede no estar reflejado. La distancia es al trazado, no a donde se puede subir. Una línea de otra empresa que SmartBus no publica no aparece.',
+    rutas: 'Son los recorridos que la comunidad de OpenStreetMap tenía mapeados en la fecha indicada, no un servicio garantizado: no traen frecuencias ni horarios, y un cambio de ruta por tramos puede no estar reflejado. La distancia es al trazado, no a donde se puede subir. Las paradas de OpenStreetMap son parciales (hay rutas con pocas o ninguna parada mapeada) y no se inventa ninguna. Una línea que nadie mapeó no aparece.',
     areaVerde: `Solo cuenta polígonos cerrados en OpenStreetMap de al menos ${fmtNum(CONFIG.umbrales.areaVerde.areaMinM2)} m²; una plaza mapeada de otra forma no cuenta. No dice si el acceso es público ni cómo está mantenida.`,
   };
 
@@ -1143,17 +1143,19 @@
     </dl>`;
   }
 
-  // Líneas de SmartBus que pasan cerca del punto (Rutas.cerca): otra fuente distinta del paradero de OpenStreetMap.
+  // Líneas de transporte que pasan cerca del punto (Rutas.cerca): las relaciones route=bus de OpenStreetMap, aparte del paradero más cercano.
   function bloqueRutas(t) {
     const r = t && t.rutas;
     if (!r) return '';
     if (r.error) return `<div class="var-rutas"><p class="zon-msg error"><strong>No se pudieron cargar las líneas.</strong> ${esc(r.error)}</p></div>`;
     const ref = fmtUmbral(r.distanciaM);
-    const nota = `<p class="var-meta">Fuente: ${esc(r.fuente)}, recorridos del ${esc(fmtFechaDato(r.fecha))}. Distancia de referencia de ${ref}: ${esc(CONFIG.fuentesUmbral.transporte.toLowerCase())}.</p>`;
-    if (!r.lineas.length) return `<div class="var-rutas"><p class="var-rutas-t"><strong>Líneas que pasan a ≤${ref}:</strong> ninguna en los recorridos publicados por SmartBus.</p>${nota}</div>`;
+    const nota = `<p class="var-meta">Fuente: ${esc(r.fuente)}, recorridos extraídos el ${esc(fmtFechaDato(r.fecha))}. Distancia de referencia de ${ref}: ${esc(CONFIG.fuentesUmbral.transporte.toLowerCase())}.</p>`;
+    if (!r.lineas.length) return `<div class="var-rutas"><p class="var-rutas-t"><strong>Líneas que pasan a ≤${ref}:</strong> ninguna en los recorridos mapeados en OpenStreetMap.</p>${nota}</div>`;
     const items = r.lineas.map((l) => {
       const ramales = [...new Set(l.ramales.map((x) => x.ramal))];
-      const parada = l.parada ? ` · parada más cercana «${esc(l.parada.nombre)}» a ${fmtDist(l.parada.distanciaM)}` : '';
+      const parada = l.parada
+        ? ` · parada mapeada más cercana ${l.parada.nombre ? `«${esc(l.parada.nombre)}»` : '(sin nombre)'} a ${fmtDist(l.parada.distanciaM)}`
+        : l.paradasMapeadas === 0 ? ' · paradas no mapeadas' : '';
       return `<li><strong>${esc(Rutas.etiquetaLinea(l))}</strong><span class="var-meta">trazado a ${fmtDist(l.distanciaM)}${parada} · ${esc(ramales.slice(0, 4).join(', '))}${ramales.length > 4 ? ` y ${ramales.length - 4} más` : ''}</span></li>`;
     }).join('');
     return `<div class="var-rutas"><p class="var-rutas-t"><strong>Líneas que pasan a ≤${ref}:</strong> ${esc(Rutas.listaTexto(r.lineas))}</p><ul class="var-rutas-lista">${items}</ul>${nota}</div>`;
@@ -1162,7 +1164,7 @@
   function detalleRutas(r) {
     if (!r || r.error) return '';
     return `<dl class="var-detalle">
-      <div><dt>Fuente de las líneas</dt><dd>${esc(r.fuente)}. Datos usados con ${esc(r.permiso || CONFIG.rutas.permiso)}.</dd></div>
+      <div><dt>Fuente de las líneas</dt><dd>${esc(r.fuente)}. ${esc(r.atribucion || CONFIG.rutas.atribucion)}.</dd></div>
       <div><dt>Fecha de los datos</dt><dd>${esc(fmtFechaDato(r.fecha))} (descarga)</dd></div>
       <div><dt>Método</dt><dd>Distancia en línea recta del punto al trazado de cada recorrido (plano local, como el resto de distancias). Se agrupan los recorridos de ida y vuelta por línea. Referencia: ${fmtUmbral(r.distanciaM)}.</dd></div>
       <div><dt>Qué no cubre</dt><dd>${esc(QUE_NO_CUBRE.rutas)}</dd></div>
@@ -1362,7 +1364,7 @@
     $('entorno').setAttribute('aria-busy', 'false');
     $('entorno-toggle').hidden = false;
     actualizarToggleTarjetas();
-    $('entorno-fuente').textContent = 'Distancias en línea recta, no recorrido a pie. Salud y consultorios médicos: RENIPRESS (SUSALUD); colegios: padrón de ESCALE (MINEDU); OpenStreetMap, colaborativo, solo de respaldo donde no hay un punto oficial de la misma categoría a 200 m y para paraderos y áreas verdes: algo ausente puede existir. Cada establecimiento dice de qué fuente es. Las distancias de referencia de salud, paradero y borde de zona son convenciones del proyecto; el consultorio médico no tiene distancia de referencia y es solo informativo. Las líneas de transporte son recorridos publicados por SmartBus, sin frecuencias ni horarios.';
+    $('entorno-fuente').textContent = 'Distancias en línea recta, no recorrido a pie. Salud y consultorios médicos: RENIPRESS (SUSALUD); colegios: padrón de ESCALE (MINEDU); OpenStreetMap, colaborativo, solo de respaldo donde no hay un punto oficial de la misma categoría a 200 m y para paraderos y áreas verdes: algo ausente puede existir. Cada establecimiento dice de qué fuente es. Las distancias de referencia de salud, paradero y borde de zona son convenciones del proyecto; el consultorio médico no tiene distancia de referencia y es solo informativo. Las líneas de transporte y sus paradas son de OpenStreetMap, sin frecuencias ni horarios.';
   }
 
   // ------------------------------------------------------ Quebradas y cauces (ANA, IGP y OpenStreetMap)
@@ -1461,7 +1463,7 @@
         <p class="texto-error small" id="viaje-error" role="alert" hidden></p>
       </form>
       <div id="viaje-resultado" aria-live="polite"></div>
-      <p class="var-meta">Rutas de OpenStreetMap (ODbL) y de SmartBus; pasan a ${esc(fmtUmbral(CONFIG.viaje.caminarM))} o menos a pie de tu punto y del destino, con tu punto antes que el destino en el recorrido. Distancias en línea recta. No sé dónde se sube ni se baja ni si la ruta opera hoy.</p>`);
+      <p class="var-meta">Rutas de OpenStreetMap (ODbL); pasan a ${esc(fmtUmbral(CONFIG.viaje.caminarM))} o menos a pie de tu punto y del destino, con tu punto antes que el destino en el recorrido. Distancias en línea recta. No sé dónde se sube ni se baja ni si la ruta opera hoy.</p>`);
     if (d) calcularViaje();
   }
 

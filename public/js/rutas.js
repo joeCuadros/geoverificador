@@ -1,14 +1,15 @@
 /**
  * rutas.js — Líneas de transporte público que pasan cerca de un punto o por un distrito (sin DOM, sin red, sin estado).
  *
- * Fuente: public/data/rutas_smartbus.geojson, congelado con scripts/descargar-rutas-smartbus.mjs a partir de los recorridos
- * que publica SmartBus (smartbus.app) con su permiso verbal. Trae dos clases de elementos:
- *   - tipo «ruta»: LineString o MultiLineString [lon, lat] de un recorrido en un sentido (props: linea, empresa, ramal, sentido…)
- *   - tipo «parada»: Point con el nombre numerado que publica SmartBus («Cettar - 12») y su `orden` en el recorrido.
+ * Fuente: public/data/rutas_osm.geojson, congelado con scripts/descargar-rutas-osm.mjs a partir de OpenStreetMap (© colaboradores, ODbL): la ÚNICA fuente de rutas y
+ * paradas de la herramienta. Trae dos clases de elementos:
+ *   - tipo «ruta»: LineString o MultiLineString [lon, lat] de UNA relación route=bus (un sentido de un ramal): linea, ramal, desde, hasta, operador, osm (id de la relación)…
+ *   - tipo «parada»: Point de un objeto suelto de OSM (highway=bus_stop, public_transport=platform|stop_position) con `rutas` (osm de las relaciones a cuyo trazado
+ *     pertenece, a ≤25 m y de su empresa) y `lineas`. Las relaciones de OSM no traen paradas: las que no tienen ninguna ligada quedan «paradas no mapeadas».
  *
  * Lo que mide: la distancia en línea recta del punto a la polilínea de cada recorrido (Calculos.distanciaAGeometriaLineaM, el
- * mismo plano local que usan los demás cálculos) y a la parada más cercana de la línea. NO dice si el servicio está operando,
- * ni su frecuencia u horario, ni dónde se puede subir: solo que el trazado publicado pasa a esa distancia.
+ * mismo plano local que usan los demás cálculos) y a la parada MAPEADA más cercana de la línea. NO dice si el servicio está operando,
+ * ni su frecuencia u horario, ni dónde se puede subir (las paradas de OSM son parciales): solo que el trazado mapeado pasa a esa distancia.
  *
  * Una línea cruza un distrito si algún vértice de su trazado (densificado a tramos de 100 m como máximo) cae dentro del
  * polígono del distrito. Es una aproximación de pocos metros: un trazado que solo roce una esquina podría no contarse.
@@ -20,8 +21,8 @@ const Rutas = (() => {
 
   const M_POR_GRADO = (Math.PI / 180) * C.RADIO_TIERRA_M;
   const PASO_DENSIFICAR_M = 100;
-  const FUENTE = 'SmartBus (smartbus.app)';
-  const ATRIBUCION = 'Rutas: SmartBus (smartbus.app)';
+  const FUENTE = 'OpenStreetMap (ODbL), relaciones route=bus de la red SIT y paradas de bus';
+  const ATRIBUCION = '© colaboradores de OpenStreetMap (ODbL)';
 
   const partesDe = (g) => (!g ? [] : g.type === 'LineString' ? [g.coordinates] : g.type === 'MultiLineString' ? g.coordinates : []);
 
@@ -36,27 +37,49 @@ const Rutas = (() => {
     return b;
   }
 
+  /** «C3 - Transcayma» → «Transcayma»; «Albotran» → «Albotran»; sin operador, el nombre de la línea. */
+  const empresaDe = (operador, linea) => {
+    const t = String(operador == null ? '' : operador).trim().replace(/^[A-Za-z]*\d*\s*-\s*/, '').trim();
+    return t || linea;
+  };
+
   /**
-   * Ordena el GeoJSON para consultarlo. Devuelve { rutas, paradas, metadata, lineas }.
-   *   rutas:   [{ props, partes, bbox }]
-   *   paradas: [{ lat, lon, props }]
-   * Los elementos con geometría o tipo desconocidos se ignoran: nunca se inventa un recorrido.
+   * Ordena el GeoJSON para consultarlo. Devuelve { rutas, paradas, paradasDe, metadata, lineas }.
+   *   rutas:    [{ props, partes, bbox }]   props = las etiquetas de OSM más `empresa` (del operador), `sentido` («desde → hasta») e `id_ruta` (el osm de la relación)
+   *   paradas:  [{ lat, lon, props }]
+   *   paradasDe: Map osm de la relación → las paradas ligadas a ella (vacío si no tiene: «paradas no mapeadas»)
+   * Los elementos con geometría o tipo desconocidos se ignoran: nunca se inventa un recorrido ni una parada.
    */
   function indexar(fc) {
     const rutas = [];
     const paradas = [];
+    const paradasDe = new Map();
     ((fc && fc.features) || []).forEach((f) => {
-      const props = f.properties || {};
-      if (props.tipo === 'ruta') {
-        const partes = partesDe(f.geometry).filter((p) => Array.isArray(p) && p.length >= 2);
-        if (partes.length) rutas.push({ props, partes, bbox: bboxDe(partes) });
-      } else if (props.tipo === 'parada' && f.geometry && f.geometry.type === 'Point') {
+      const p = f.properties || {};
+      if (p.tipo === 'ruta') {
+        const partes = partesDe(f.geometry).filter((x) => Array.isArray(x) && x.length >= 2);
+        if (!partes.length) return;
+        const linea = p.linea || p.ramal || p.osm || 'Sin línea';
+        const props = { ...p, linea, empresa: empresaDe(p.operador, linea), sentido: p.desde && p.hasta ? `${p.desde} → ${p.hasta}` : null, id_ruta: p.osm };
+        rutas.push({ props, partes, bbox: bboxDe(partes) });
+      } else if (p.tipo === 'parada' && f.geometry && f.geometry.type === 'Point') {
         const [lon, lat] = f.geometry.coordinates;
-        if (Number.isFinite(lat) && Number.isFinite(lon)) paradas.push({ lat, lon, props });
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+        const parada = { lat, lon, props: { ...p, rutas: Array.isArray(p.rutas) ? p.rutas : [], lineas: Array.isArray(p.lineas) ? p.lineas : [] } };
+        paradas.push(parada);
+        parada.props.rutas.forEach((id) => { if (!paradasDe.has(id)) paradasDe.set(id, []); paradasDe.get(id).push(parada); });
       }
     });
     const lineas = [...new Set(rutas.map((r) => r.props.linea))];
-    return { rutas, paradas, metadata: (fc && fc.metadata) || {}, lineas };
+    return { rutas, paradas, paradasDe, metadata: (fc && fc.metadata) || {}, lineas };
+  }
+
+  /** Las paradas ligadas a alguna de las relaciones de `ids` (cada una una vez). */
+  function paradasDeRutas(indice, ids) {
+    const vistas = new Set();
+    const out = [];
+    ids.forEach((id) => (indice.paradasDe.get(id) || []).forEach((s) => { if (!vistas.has(s)) { vistas.add(s); out.push(s); } }));
+    return out;
   }
 
   /** Orden natural de las líneas: C2, C3 … C10, C11 y después las que no llevan número (Albotran, Chiguata). */
@@ -79,7 +102,8 @@ const Rutas = (() => {
 
   /**
    * Agrupa recorridos por línea. `hits` = [{ ruta, distanciaM }]; `paradasDe` devuelve las paradas candidatas de un recorrido.
-   * Cada línea trae su distancia mínima, sus ramales (con el sentido) y la parada más cercana al punto.
+   * Cada línea trae su distancia mínima, sus ramales (con el sentido), la parada MAPEADA más cercana al punto y cuántas paradas de OSM tiene ligadas (`paradasMapeadas`;
+   * 0 = «paradas no mapeadas»: no se inventa una parada).
    */
   function agruparPorLinea(hits, punto, indice) {
     const porLinea = new Map();
@@ -94,11 +118,11 @@ const Rutas = (() => {
     });
     return [...porLinea.values()].map((l) => {
       let parada = null;
+      const propias = paradasDeRutas(indice, l.ids);
       if (punto) {
-        indice.paradas.forEach((s) => {
-          if (!l.ids.has(s.props.id_ruta)) return;
+        propias.forEach((s) => {
           const d = C.haversine(punto.lat, punto.lon, s.lat, s.lon);
-          if (!parada || d < parada.distanciaM) parada = { nombre: s.props.nombre, ramal: s.props.ramal, orden: s.props.orden, lat: s.lat, lon: s.lon, distanciaM: d };
+          if (!parada || d < parada.distanciaM) parada = { nombre: s.props.nombre, clase: s.props.clase || null, osm: s.props.osm || null, lat: s.lat, lon: s.lon, distanciaM: d };
         });
       }
       return {
@@ -107,22 +131,22 @@ const Rutas = (() => {
         distanciaM: l.distanciaM,
         ramales: l.ramales.sort((a, b) => a.distanciaM - b.distanciaM),
         parada,
+        paradasMapeadas: propias.length,
       };
     });
   }
 
-  // Quién publica los datos y bajo qué permiso: acompaña a todo resultado para que se muestre junto a él.
+  // De dónde salen los datos y bajo qué licencia (ODbL): acompaña a todo resultado para que se muestre junto a él.
   const citaDe = (indice) => ({
     fuente: indice.metadata.fuente || FUENTE,
-    fecha: indice.metadata.fecha_descarga || null,
-    permiso: indice.metadata.permiso || null,
-    atribucion: indice.metadata.atribucion || ATRIBUCION,
+    fecha: indice.metadata.fecha_extraccion || null,
+    atribucion: ATRIBUCION,
   });
 
   /**
    * Líneas cuyo recorrido pasa a `distanciaM` metros o menos del punto.
    * Devuelve { distanciaM, lineas, rutas, fuente, fecha } con `lineas` ordenadas de la más cercana a la más lejana:
-   *   [{ linea, empresas, distanciaM, ramales: [{ ramal, sentido, nombre, distanciaM }], parada: { nombre, distanciaM } | null }]
+   *   [{ linea, empresas, distanciaM, ramales: [{ ramal, sentido, nombre, distanciaM }], parada: { nombre, distanciaM } | null, paradasMapeadas }]
    * `rutas` es el número de recorridos (un sentido cada uno) que cumplen. Lista vacía = ningún trazado publicado pasa tan cerca.
    */
   function cerca(indice, lat, lon, distanciaM) {
@@ -202,8 +226,8 @@ const Rutas = (() => {
       out.rutas += 1;
     });
     indice.paradas.forEach((s) => {
-      const ids = idsPorLinea.get(s.props.linea);
-      if (ids && ids.has(s.props.id_ruta) && dentro(s.lon, s.lat)) porLinea.get(s.props.linea).paradas += 1;
+      if (!dentro(s.lon, s.lat)) return;
+      idsPorLinea.forEach((ids, linea) => { if (s.props.rutas.some((id) => ids.has(id))) porLinea.get(linea).paradas += 1; });
     });
     out.lineas = [...porLinea.values()]
       .map((l) => ({ ...l, empresas: [...l.empresas].sort((a, b) => a.localeCompare(b, 'es')) }))
@@ -224,7 +248,7 @@ const Rutas = (() => {
 
   /**
    * Lo necesario para dibujar líneas en un mapa: el trazado de cada línea pedida (todos sus recorridos) con su color, y, si hay un
-   * punto, la parada de SmartBus más cercana a él de cada línea. Los nombres que no existen en el archivo se ignoran.
+   * punto, la parada mapeada de OpenStreetMap más cercana a él de cada línea (si la línea no tiene paradas mapeadas, ninguna). Los nombres que no existen en el archivo se ignoran.
    * Devuelve { trazos, paradas, bbox } con
    *   trazos:  [{ linea, empresas, color, partes: [[[lon, lat], …]], ramales: [{ ramal, sentido, nombre }] }]  (orden natural)
    *   paradas: [{ linea, color, nombre, ramal, lat, lon, distanciaM }]
@@ -246,10 +270,9 @@ const Rutas = (() => {
     if (punto) {
       trazos.forEach((t) => {
         let mejor = null;
-        indice.paradas.forEach((s) => {
-          if (s.props.linea !== t.linea || !t.ids.has(s.props.id_ruta)) return;
+        paradasDeRutas(indice, [...t.ids]).forEach((s) => {
           const d = C.haversine(punto.lat, punto.lon, s.lat, s.lon);
-          if (!mejor || d < mejor.distanciaM) mejor = { linea: t.linea, color: t.color, nombre: s.props.nombre, ramal: s.props.ramal, lat: s.lat, lon: s.lon, distanciaM: d };
+          if (!mejor || d < mejor.distanciaM) mejor = { linea: t.linea, color: t.color, nombre: s.props.nombre, lat: s.lat, lon: s.lon, distanciaM: d };
         });
         if (mejor) paradas.push(mejor);
       });
@@ -269,7 +292,7 @@ const Rutas = (() => {
 
   /** Frase corta para la ficha: «Líneas que pasan a ≤400 m: C2 (Cono Norte), C5 (EtraBus)» o «Ninguna línea publicada pasa a ≤400 m». */
   function resumen(res, max = 8) {
-    if (!res || !res.lineas.length) return `Ninguna línea publicada por SmartBus pasa a ≤${Math.round(res ? res.distanciaM : 0)} m`;
+    if (!res || !res.lineas.length) return `Ninguna línea mapeada en OpenStreetMap pasa a ≤${Math.round(res ? res.distanciaM : 0)} m`;
     return `Líneas que pasan a ≤${Math.round(res.distanciaM)} m: ${listaTexto(res.lineas, max)}`;
   }
 

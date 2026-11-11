@@ -252,7 +252,7 @@ const CONFIG = {
   },
 
   // «¿Qué combi me lleva de mi punto a mi trabajo?» (public/js/viaje.js): rutas directas sobre los trazados de OpenStreetMap (rutas_osm.geojson, ODbL, con de/a, duración
-  // e intervalo) y de SmartBus (rutas_smartbus.geojson). `caminarM` es la distancia a pie a la ruta en cada punta: la del paradero (umbrales.transporte, convención del proyecto).
+  // e intervalo). `caminarM` es la distancia a pie a la ruta en cada punta: la del paradero (umbrales.transporte, convención del proyecto).
   viaje: {
     caminarM: 400,
     osmUrl: 'data/rutas_osm.geojson',
@@ -286,13 +286,11 @@ const CONFIG = {
     },
   ],
 
-  // Líneas de transporte público (recorridos y paradas de SmartBus), congeladas con scripts/descargar-rutas-smartbus.mjs. Se usan con
-  // autorización verbal de SmartBus; la confirmación escrita está pendiente. La distancia para decir que una línea «pasa cerca» es
-  // la misma de `umbrales.transporte` (convención del proyecto, no una norma).
+  // Líneas de transporte público (recorridos y paradas de OpenStreetMap, ODbL), congeladas con scripts/descargar-rutas-osm.mjs: es la única fuente de rutas y paradas. La
+  // distancia para decir que una línea «pasa cerca» es la misma de `umbrales.transporte` (convención del proyecto, no una norma).
   rutas: {
-    geojsonUrl: 'data/rutas_smartbus.geojson',
-    fuente: 'SmartBus (smartbus.app)',
-    atribucion: 'Rutas: SmartBus (smartbus.app)',
-    permiso: 'autorización verbal de SmartBus; confirmación escrita pendiente',
+    geojsonUrl: 'data/rutas_osm.geojson',
+    fuente: 'OpenStreetMap (ODbL), relaciones route=bus de la red SIT y paradas de bus',
+    atribucion: '© colaboradores de OpenStreetMap (ODbL)',
   },
 };

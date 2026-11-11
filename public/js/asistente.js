@@ -908,7 +908,7 @@ const Asistente = (() => {
     return `${etiqueta}: ${ESTADO[r.estado]} · ${r.nombre || 'sin nombre en OSM'} a ${fmtDist(r.distanciaM)} (referencia ${fmtUmbral(r.umbralM)}${extra}).${fuente ? ` Fuente: ${fuente}.` : ''}`;
   };
 
-  // Líneas de SmartBus del punto, en una línea («Líneas que pasan a ≤400 m: C2 (Cono Norte), …»); nada si no se calcularon.
+  // Líneas de transporte (OpenStreetMap) del punto, en una línea («Líneas que pasan a ≤400 m: C2 (Cono Norte), …»); nada si no se calcularon.
   const lineaLineas = (t) => (t && t.rutas && !t.rutas.error ? [`${RT.resumen(t.rutas, 6)}.`] : []);
 
   // Cierre de «¿hay … cerca?»: de qué fuente sale cada tipo. Salud y colegios, de los registros oficiales; lo demás, de OpenStreetMap.
@@ -1160,11 +1160,11 @@ const Asistente = (() => {
   // ---------------------------------------------------------- Viaje en combi o bus
 
   const kmTxt = (m) => `${(m / 1000).toFixed(1).replace('.', ',')} km`;
-  const FUENTES_VIAJE = { OSM: 'OpenStreetMap', SmartBus: 'SmartBus' };
+  const FUENTES_VIAJE = { OSM: 'OpenStreetMap' };
   const fuentesTxt = (fs) => fs.map((f) => FUENTES_VIAJE[f] || f).join(' y ');
-  const NOTA_VIAJE = 'Las distancias son en línea recta, no a pie. No sé dónde se sube ni se baja (OpenStreetMap no trae paradas y las de SmartBus son numeradas) y no sé si la ruta opera hoy; el sentido sale del orden del recorrido publicado. No calculo transbordos.';
+  const NOTA_VIAJE = 'Las distancias son en línea recta, no a pie. No sé dónde se sube ni se baja (las paradas de OpenStreetMap son parciales y no se usan aquí) y no sé si la ruta opera hoy; el sentido sale del orden del recorrido publicado. No calculo transbordos.';
 
-  /** «¿Qué combi me lleva de mi punto a mi trabajo?»: las rutas directas (OpenStreetMap y SmartBus, la misma una vez), lo que caminas en cada punta y los km en bus. */
+  /** «¿Qué combi me lleva de mi punto a mi trabajo?»: las rutas directas (OpenStreetMap, la misma una vez), lo que caminas en cada punta y los km en bus. */
   function respuestaViaje(intencion, c) {
     const dest = intencion.destino || c.destino || null;
     const vi = intencion.viaje || {};
@@ -1245,7 +1245,7 @@ const Asistente = (() => {
     if (!z) return { texto: 'Todavía estoy calculando desde qué zonas se llega en combi o bus; vuelve a preguntar en unos segundos.', sugerencias: [] };
     const pct = z.totalCeldas ? Math.round((100 * z.conRuta) / z.totalCeldas) : 0;
     const max = z.caminarM || Vj().CAMINAR_M;
-    const lineas = [`Zonas con ruta directa a ${dest.nombre}: de ${fmtNum(z.totalCeldas)} celdas de 250 m sobre las zonas construibles del plano, ${fmtNum(z.conRuta)} (${pct} %) tienen una ruta de OpenStreetMap o SmartBus que pasa a ${fmtDist(max)} o menos a pie de la celda y del destino, con la celda antes que el destino en el recorrido.`];
+    const lineas = [`Zonas con ruta directa a ${dest.nombre}: de ${fmtNum(z.totalCeldas)} celdas de 250 m sobre las zonas construibles del plano, ${fmtNum(z.conRuta)} (${pct} %) tienen una ruta de OpenStreetMap que pasa a ${fmtDist(max)} o menos a pie de la celda y del destino, con la celda antes que el destino en el recorrido.`];
     const d = z.porDistrito.filter((x) => x.conRuta > 0).slice(0, 6);
     if (d.length) lineas.push(`Por distrito: ${d.map((x) => `${titulo(x.distrito)} ${x.conRuta} de ${x.celdas} (${Math.round(x.pct)} %)`).join('; ')}.`);
     if (z.mejores.length) lineas.push(`Puntos con menos caminata: ${z.mejores.map((m) => `${titulo(m.distrito)}, a ${fmtDist(m.caminarM)} de la ${m.ruta}`).join('; ')}.`);
@@ -1359,13 +1359,13 @@ const Asistente = (() => {
     if (q.sinDato) lineas.push('• Quebradas y ríos: no pude leer el archivo de cauces, así que no lo afirmo.');
     else if (q.nombres.length) lineas.push(`• Quebradas y ríos: lo cruzan ${listaEs(q.nombres.slice(0, 5))} (según ${deDonde}; no incluyen todas las quebradas urbanas ni son un mapa de peligro).`);
     else lineas.push(`• Quebradas y ríos: ${ningunoDe} cauces en este distrito (no incluyen todas las quebradas urbanas ni son un mapa de peligro).`);
-    // Líneas de SmartBus que cruzan el distrito y precio de oferta por m² (Aptología, solo 3 distritos): se agregan solo si hay dato; nada inventado.
+    // Líneas de transporte (OpenStreetMap) que cruzan el distrito y precio de oferta por m² (Aptología, solo 3 distritos): se agregan solo si hay dato; nada inventado.
     const rd = c.rutasDistrito;
     if (rd && !rd.error && rd.res) {
       const ls = rd.res.lineas;
       lineas.push(ls.length
-        ? `• Líneas de transporte (SmartBus): ${plural(ls.length, 'línea cruza', 'líneas cruzan')} el distrito: ${RT.listaTexto(ls, MAX_LINEAS_TEXTO)}.`
-        : '• Líneas de transporte (SmartBus): ninguna de las líneas publicadas cruza el distrito.');
+        ? `• Líneas de transporte (OpenStreetMap): ${plural(ls.length, 'línea cruza', 'líneas cruzan')} el distrito: ${RT.listaTexto(ls, MAX_LINEAS_TEXTO)}.`
+        : '• Líneas de transporte (OpenStreetMap): ninguna de las líneas mapeadas cruza el distrito.');
     }
     const pr = c.precios ? P.buscar(c.precios, intencion.distrito) : null;
     if (pr && pr.estado === 'INFORMATIVO' && pr.precioM2.venta !== null) {
@@ -1545,21 +1545,23 @@ const Asistente = (() => {
     ].join('\n');
   }
 
-  const FUENTE_RUTAS = 'SmartBus (smartbus.app)';
+  const FUENTE_RUTAS = 'OpenStreetMap (ODbL)';
   const fmtFechaCorta = (iso) => (iso ? new Date(`${iso}T12:00:00Z`).toLocaleDateString('es-PE', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }) : 'sin fecha');
-  const citaRutas = (r) => `Fuente: ${r.fuente || FUENTE_RUTAS}, recorridos del ${fmtFechaCorta(r.fecha)}, usados con ${r.permiso || 'autorización verbal de SmartBus; confirmación escrita pendiente'}. Son los recorridos publicados: sin frecuencias ni horarios.`;
+  const citaRutas = (r) => `Fuente: ${r.fuente || FUENTE_RUTAS}, recorridos extraídos el ${fmtFechaCorta(r.fecha)}, ${r.atribucion || '© colaboradores de OpenStreetMap (ODbL)'}. Son los recorridos mapeados por la comunidad de OpenStreetMap: sin frecuencias ni horarios.`;
   const MAX_LINEAS_TEXTO = 10;
 
   /** Líneas que pasan cerca del punto elegido (r = Equipamiento.evaluar().transporte.rutas). */
   function textoRutasPunto(r) {
     if (!r) return 'No tengo las líneas de transporte para tu punto todavía; vuelve a preguntar en unos segundos.';
-    if (r.error) return `No pude leer las líneas de SmartBus (${r.error}). El paradero más cercano de OpenStreetMap sí está en la ficha.`;
+    if (r.error) return `No pude leer las líneas de transporte (${r.error}). El paradero más cercano de OpenStreetMap sí está en la ficha.`;
     const ref = fmtUmbral(r.distanciaM);
     if (!r.lineas.length) {
-      return [`Ninguna de las líneas que publica SmartBus pasa a ${ref} o menos de tu punto (${ref} es una convención del proyecto).`, citaRutas(r), 'Distancia en línea recta al trazado, no recorrido a pie.'].join('\n');
+      return [`Ninguna de las líneas mapeadas en OpenStreetMap pasa a ${ref} o menos de tu punto (${ref} es una convención del proyecto).`, citaRutas(r), 'Distancia en línea recta al trazado, no recorrido a pie.'].join('\n');
     }
     const lineas = r.lineas.slice(0, MAX_LINEAS_TEXTO).map((l) => {
-      const parada = l.parada ? `; parada más cercana «${l.parada.nombre}» a ${fmtDist(l.parada.distanciaM)}` : '';
+      const parada = l.parada
+        ? `; parada mapeada más cercana ${l.parada.nombre ? `«${l.parada.nombre}»` : '(sin nombre)'} a ${fmtDist(l.parada.distanciaM)}`
+        : l.paradasMapeadas === 0 ? '; paradas no mapeadas en OpenStreetMap' : '';
       return `• ${RT.etiquetaLinea(l)}: el trazado pasa a ${fmtDist(l.distanciaM)}${parada}.`;
     });
     if (r.lineas.length > MAX_LINEAS_TEXTO) lineas.push(`• … y ${r.lineas.length - MAX_LINEAS_TEXTO} más.`);
@@ -1577,9 +1579,9 @@ const Asistente = (() => {
    */
   function textoRutasDistrito(d, nombre) {
     if (!d) return 'No tengo las líneas de transporte todavía; vuelve a preguntar en unos segundos.';
-    if (d.error) return `No pude leer las líneas de SmartBus (${d.error}).`;
+    if (d.error) return `No pude leer las líneas de transporte (${d.error}).`;
     const r = d.res;
-    if (!r.lineas.length) return [`Ninguna de las líneas que publica SmartBus tiene su trazado dentro del distrito de ${nombre}.`, citaRutas(r)].join('\n');
+    if (!r.lineas.length) return [`Ninguna de las líneas mapeadas en OpenStreetMap tiene su trazado dentro del distrito de ${nombre}.`, citaRutas(r)].join('\n');
     const lineas = r.lineas.slice(0, MAX_LINEAS_TEXTO + 2).map((l) => `• ${RT.etiquetaLinea(l)}: ${l.paradas > 0 ? `${l.paradas} ${l.paradas === 1 ? 'parada' : 'paradas'} dentro del distrito` : 'el trazado entra al distrito, sin paradas dentro'}.`);
     if (r.lineas.length > MAX_LINEAS_TEXTO + 2) lineas.push(`• … y ${r.lineas.length - MAX_LINEAS_TEXTO - 2} más.`);
     return [
@@ -1592,7 +1594,7 @@ const Asistente = (() => {
 
   /**
    * Qué dibujar para una respuesta de líneas: los recorridos de las líneas halladas y, con un punto, su parada más cercana. null si no
-   * hay ninguna (no se pinta nada). Los recorridos salen del archivo de SmartBus, que solo se carga cuando se va a dibujar.
+   * hay ninguna (no se pinta nada). Los recorridos salen del archivo de rutas de OpenStreetMap, que solo se carga cuando se va a dibujar.
    */
   function mapaDeLineas(res, distrito, punto) {
     if (!res || res.error || !Array.isArray(res.lineas) || res.lineas.length === 0) return null;
@@ -1611,7 +1613,7 @@ const Asistente = (() => {
     '• Puntos de acopio de agua: Directorio de Puntos de Acopio de Agua Potable Arequipa de SEDAPAR y la Municipalidad Provincial de Arequipa (gob.pe, publicado el 16 de febrero de 2024; sus datos son de abril a junio de 2017). Son lugares de reparto con camiones cisterna ante un desabastecimiento, no la red de agua.',
     '• Interrupciones del servicio de agua: Registro de interrupciones que las empresas reportan a la SUNASS (datosabiertos.gob.pe, ODC-By); de SEDAPAR, de octubre de 2019 a abril de 2024. Son interrupciones reportadas por la empresa, por distrito.',
     '• Agua, desagüe y alumbrado por manzana: Censos Nacionales 2017 del INEI (REDATAM en línea), copia congelada con su fecha de descarga; solo área urbana. El censo de 2025 ya se levantó pero el INEI aún no lo abre por manzana: del 2025 solo uso el dato del departamento de Arequipa (nota de prensa del INEI de julio de 2026).',
-    '• Líneas de transporte (recorridos y paradas): SmartBus (smartbus.app), usados con su autorización verbal (confirmación escrita pendiente). Sin frecuencias ni horarios.',
+    '• Líneas de transporte (recorridos y paradas): OpenStreetMap (© colaboradores, ODbL). Sin frecuencias ni horarios; las paradas mapeadas son parciales.',
     '• Umbrales: colegios 500 m inicial, 1500 m primaria y 3000 m secundaria (MINEDU); área verde ≥ 0,5 ha a 300 m (OMS Europa); salud 1000 m, paradero 400 m y borde de zona 20 m son convenciones del proyecto.',
     '• Peligro volcánico del Misti: zonas del Instituto Geofísico del Perú (IGP), sin fecha de elaboración en el servicio; el mapa oficial de referencia es el de INGEMMET (Boletín n.° 100, 2025). Es informativo, no una evaluación de riesgo.',
     '• Riesgo del distrito ante El Niño: escenario del CENEPRED (SIGRID) para inundaciones y movimientos en masa, estimado por distrito para lluvias como las de 1983, 1998, 2017 y 2023. Es informativo y no es una evaluación de tu predio.',
@@ -2215,9 +2217,9 @@ const Asistente = (() => {
     mejor_zona: GENERICO,
     distrito_desconocido: GENERICO,
     rutas: {
-      porque: ['Se mide la distancia en línea recta desde tu punto hasta el trazado de cada recorrido de SmartBus y se listan las líneas que pasan a 400 m o menos. Con un distrito, se listan las líneas cuyo trazado entra en él.'],
-      fuente: ['SmartBus (smartbus.app): recorridos y paradas descargados una vez, con fecha, y usados con su autorización verbal (confirmación escrita pendiente). Los 400 m son una convención del proyecto.'],
-      limites: ['Son los recorridos publicados, no un servicio garantizado: sin frecuencias ni horarios, y un cambio de ruta por tramos puede no estar reflejado.', 'La distancia es al trazado, no a donde se puede subir. Las paradas de SmartBus tienen nombres numerados.', LIM_RECTA],
+      porque: ['Se mide la distancia en línea recta desde tu punto hasta el trazado de cada recorrido de OpenStreetMap y se listan las líneas que pasan a 400 m o menos. Con un distrito, se listan las líneas cuyo trazado entra en él.'],
+      fuente: ['OpenStreetMap (© colaboradores, ODbL): relaciones route=bus de la red SIT y paradas de bus, descargadas una vez, con fecha. Los 400 m son una convención del proyecto.'],
+      limites: ['Son los recorridos mapeados por la comunidad, no un servicio garantizado: sin frecuencias ni horarios, y un cambio de ruta por tramos puede no estar reflejado.', 'La distancia es al trazado, no a donde se puede subir. Las paradas de OpenStreetMap son parciales: hay rutas con pocas o ninguna parada mapeada, y no se inventa ninguna.', LIM_RECTA],
     },
     precio: {
       porque: ['Busca el distrito en el archivo de precios de oferta por m² y lo dice tal cual: la mediana de los avisos de departamentos en venta del periodo indicado. No lo compara ni lo evalúa.'],

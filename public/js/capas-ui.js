@@ -100,7 +100,7 @@ const CapasUI = (() => {
   function dibujarLineasDeBus(r) {
     r.lineasBus.forEach((l) => {
       const nombre = Rutas.etiquetaLinea(l);
-      const detalle = `Recorrido publicado por SmartBus (${l.ramales.length} ${l.ramales.length === 1 ? 'sentido o ramal' : 'sentidos y ramales'}). Sin frecuencias ni horarios.`;
+      const detalle = `Recorrido mapeado en OpenStreetMap (${l.ramales.length} ${l.ramales.length === 1 ? 'sentido o ramal' : 'sentidos y ramales'}). Sin frecuencias ni horarios.`;
       l.partes.forEach((parte) => {
         L.polyline(parte.map(([x, y]) => [y, x]), { color: l.color, weight: 4, opacity: 0.85, pane: 'capasLineas' }).bindPopup(popup(`Línea ${nombre}`, detalle, null)).addTo(grupo);
       });
@@ -111,7 +111,7 @@ const CapasUI = (() => {
     });
     r.paradasBus.forEach((p) => {
       L.circleMarker([p.lat, p.lon], { radius: 8, color: '#fff', weight: 2.5, fillColor: p.color, fillOpacity: 1, pane: 'capasPuntos' })
-        .bindPopup(popup(`Parada más cercana de la línea ${p.linea}`, `${p.nombre} · a ${Math.round(p.distanciaM)} m de tu punto (en línea recta)`, null)).addTo(grupo);
+        .bindPopup(popup(`Parada mapeada más cercana de la línea ${p.linea}`, `${p.nombre || 'Parada sin nombre en OpenStreetMap'} · a ${Math.round(p.distanciaM)} m de tu punto (en línea recta)`, null)).addTo(grupo);
     });
   }
 
@@ -230,11 +230,11 @@ const CapasUI = (() => {
       if (l.capa !== 'lineas') return `<li class="ley-item"><span class="muestra-ent" aria-hidden="true">${muestraDe(l.capa, l)}</span><span class="ley-txt">${esc(l.texto)}</span></li>`;
       // Una fila por línea, con su color y su nombre: el color solo no basta, la etiqueta del mapa lleva el mismo nombre.
       const filas = r.lineasBus.map((b) => `<li class="ley-item"><span class="muestra-ent" aria-hidden="true"><span class="mu-linea-bus" style="background:${b.color}"></span></span><span class="ley-txt">Línea ${esc(Rutas.etiquetaLinea(b))}</span></li>`);
-      if (r.paradasBus.length) filas.push('<li class="ley-item"><span class="muestra-ent" aria-hidden="true"><span class="mu-parada-bus"></span></span><span class="ley-txt">Parada más cercana de cada línea (círculo del color de la línea)</span></li>');
+      if (r.paradasBus.length) filas.push('<li class="ley-item"><span class="muestra-ent" aria-hidden="true"><span class="mu-parada-bus"></span></span><span class="ley-txt">Parada mapeada más cercana de cada línea (círculo del color de la línea)</span></li>');
       return filas.join('');
     };
     $('leyenda-estados').innerHTML = r.leyenda.map(itemDe).join('')
-      + r.sinDatos.map((c) => `<li class="ley-item leyenda-error"><span class="ley-txt">${c === 'lineas' ? 'No pude leer los recorridos de SmartBus, así que no los dibujo.' : `No pude leer el archivo de ${c === 'sismos' ? 'sismos' : c === 'electricidad' ? 'concesiones eléctricas' : c === 'mineria' ? 'concesiones mineras' : c === 'acopio_agua' ? 'puntos de acopio de agua' : c === 'censo' ? 'censo por manzana (o el mapa abarca demasiados distritos: acerca el mapa a uno o dos)' : c === 'volcan' ? 'peligro volcánico' : c === 'cenepred' ? 'riesgo de los distritos (CENEPRED)' : 'quebradas'}, así que no lo dibujo.`}</span></li>`).join('');
+      + r.sinDatos.map((c) => `<li class="ley-item leyenda-error"><span class="ley-txt">${c === 'lineas' ? 'No pude leer los recorridos de OpenStreetMap, así que no los dibujo.' : `No pude leer el archivo de ${c === 'sismos' ? 'sismos' : c === 'electricidad' ? 'concesiones eléctricas' : c === 'mineria' ? 'concesiones mineras' : c === 'acopio_agua' ? 'puntos de acopio de agua' : c === 'censo' ? 'censo por manzana (o el mapa abarca demasiados distritos: acerca el mapa a uno o dos)' : c === 'volcan' ? 'peligro volcánico' : c === 'cenepred' ? 'riesgo de los distritos (CENEPRED)' : 'quebradas'}, así que no lo dibujo.`}</span></li>`).join('');
     const fuentes = [];
     if (r.leyenda.some((l) => ['colegios', 'salud', 'consultorios', 'paraderos', 'parques'].includes(l.capa))) fuentes.push(`Colegios: padrón de ESCALE (MINEDU). Salud y consultorios médicos (dos categorías; el consultorio es informativo, sin círculo de distancia): RENIPRESS (SUSALUD). Paraderos y parques: OpenStreetMap (ODbL), que en colegios, salud y consultorios solo completa donde no hay un punto oficial de la misma categoría a 200 m. Datos al ${fecha || 'sin fecha'}; cada punto dice su fuente al tocarlo. Puede faltar alguno.`);
     if (r.leyenda.some((l) => ['finanzas', 'comida_fuera', 'recreacion'].includes(l.capa))) fuentes.push('Finanzas (bancos y cajeros), comida fuera de casa (restaurantes y cafés) y recreación (juegos infantiles): OpenStreetMap (ODbL), solo informativos (sin distancia de referencia ni círculo). Puede faltar alguno; los parques son la capa de áreas verdes.');
@@ -243,10 +243,10 @@ const CapasUI = (() => {
     if (r.leyenda.some((l) => l.capa === 'acopio_agua')) fuentes.push('Puntos de acopio de agua: Directorio de Puntos de Acopio de Agua Potable de SEDAPAR y la Municipalidad Provincial de Arequipa (gob.pe, publicado el 16 de febrero de 2024; datos de abril a junio de 2017). Son lugares donde se previó repartir agua con camiones cisterna ante un desabastecimiento: no dicen que haya agua ahí hoy ni que una zona tenga conexión.');
     if (r.leyenda.some((l) => l.capa === 'mineria')) fuentes.push('Concesiones mineras: Catastro Minero de INGEMMET (GEOCATMIN), referencial. Una concesión es un derecho a explorar y explotar los minerales, separado del predio: no dice que haya minería en el lugar ni de quién es el predio. No se dibujan las extinguidas.');
     if (r.leyenda.some((l) => /^censo_/.test(l.capa))) fuentes.push('Censo por manzana: Censos Nacionales 2017 del INEI (REDATAM), % de viviendas ocupadas con personas presentes con alumbrado, agua o desagüe por red pública. Son cifras de 2017 de la manzana, no de un predio ni de hoy; solo área urbana. El censo de 2025 aún no está abierto por manzana.');
-    if (r.leyenda.some((l) => l.capa === 'viaje')) fuentes.push('Ruta al trabajo: trazados de rutas de bus de OpenStreetMap (ODbL) y de SmartBus. Rutas directas a 400 m a pie o menos de los dos puntos, con el origen antes que el destino; distancias en línea recta. No dice dónde se sube ni se baja ni si la ruta opera hoy.');
+    if (r.leyenda.some((l) => l.capa === 'viaje')) fuentes.push('Ruta al trabajo: trazados de rutas de bus de OpenStreetMap (ODbL). Rutas directas a 400 m a pie o menos de los dos puntos, con el origen antes que el destino; distancias en línea recta. No dice dónde se sube ni se baja ni si la ruta opera hoy.');
     if (r.leyenda.some((l) => ['residencial', 'tranquilo', 'campina', 'comercial', 'historico'].includes(l.capa))) fuentes.push('Zonas: plano del PDM Arequipa 2016-2025 (referencial).');
     if (r.leyenda.some((l) => l.capa === 'quebradas')) fuentes.push('Quebradas y ríos: cauces de la ANA (red de 2018), el IGP y OpenStreetMap (ODbL); cada tramo dice su fuente al tocarlo. Ninguna fuente es completa ni es un mapa de peligro.');
-    if (r.leyenda.some((l) => l.capa === 'lineas')) fuentes.push('Líneas de bus: Rutas: SmartBus (smartbus.app), recorridos publicados usados con autorización verbal; sin frecuencias ni horarios.' + (r.paradasBus.length ? ' La parada es la más cercana en línea recta.' : ''));
+    if (r.leyenda.some((l) => l.capa === 'lineas')) fuentes.push('Líneas de bus: relaciones route=bus y paradas de OpenStreetMap (© colaboradores, ODbL); sin frecuencias ni horarios.' + (r.paradasBus.length ? ' La parada es la más cercana mapeada, en línea recta; las paradas de OSM son parciales y una línea sin paradas mapeadas no trae ninguna.' : ''));
     if (r.leyenda.some((l) => l.capa === 'volcan')) fuentes.push('Peligro volcánico: zonas del IGP para el Misti (lahares, flujos piroclásticos, lava y avalanchas), un mapa de escala regional y sin fecha de elaboración. No es una evaluación de riesgo, el borde de una zona no es exacto y la ceniza (que cubre toda la ciudad) no se dibuja.');
     if (r.leyenda.some((l) => /^cenepred_/.test(l.capa))) fuentes.push('Riesgo por distrito: escenario del CENEPRED ante lluvias como las de El Niño. Es una estimación por distrito, no una predicción ni una evaluación de tu predio: dentro de un distrito el riesgo cambia de una calle a otra.');
     if (r.leyenda.some((l) => l.capa === 'sismos')) fuentes.push('Sismos: Instituto Geofísico del Perú; actividad reciente reportada, no una predicción.');

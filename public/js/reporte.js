@@ -253,7 +253,7 @@ const Reporte = (() => {
       <p class="rp-nota">Umbrales: ${esc(d.fuentesUmbral.educacion)}. Los colegios salen del padrón de ESCALE (MINEDU), que dice el nivel de cada local; OpenStreetMap solo completa donde ESCALE no tiene un local a 200 m, y allí casi no etiqueta el nivel: uno sin nivel se toma como candidato a primaria y secundaria, y los jardines (amenity=kindergarten) cuentan como inicial.</p>`;
   }
 
-  // Líneas de SmartBus que pasan cerca del punto: fuente distinta del paradero de OpenStreetMap, con su permiso y sus límites.
+  // Líneas de transporte (relaciones route=bus de OpenStreetMap) que pasan cerca del punto, aparte del paradero más cercano, con su licencia y sus límites.
   function lineasTransporte(t, d) {
     const r = t.rutas;
     if (!r) return '';
@@ -262,13 +262,13 @@ const Reporte = (() => {
     const filas = r.lineas.length
       ? r.lineas.map((l) => {
         const ramales = [...new Set(l.ramales.map((x) => x.ramal))];
-        const parada = l.parada ? ` · parada más cercana «${esc(l.parada.nombre)}» a ${dist(l.parada.distanciaM)}` : '';
+        const parada = l.parada ? ` · parada mapeada más cercana ${l.parada.nombre ? `«${esc(l.parada.nombre)}»` : '(sin nombre)'} a ${dist(l.parada.distanciaM)}` : l.paradasMapeadas === 0 ? ' · paradas no mapeadas' : '';
         return fila(RT.etiquetaLinea(l), `trazado a ${dist(l.distanciaM)}${parada} · ${esc(ramales.slice(0, 4).join(', '))}${ramales.length > 4 ? ` y ${ramales.length - 4} más` : ''}`);
       })
-      : [fila('Líneas', `Ninguna línea publicada por SmartBus pasa a ${dist(r.distanciaM)} o menos`)];
+      : [fila('Líneas', `Ninguna línea mapeada en OpenStreetMap pasa a ${dist(r.distanciaM)} o menos`)];
     return `<p class="rp-destacado"><strong>Líneas que pasan a ${dist(r.distanciaM)} o menos</strong> ${r.lineas.length ? esc(RT.listaTexto(r.lineas)) : '(ninguna)'}</p>
       <table class="rp-tabla">${filas.join('')}</table>
-      <p class="rp-nota">Fuente: ${esc(r.fuente)}, recorridos descargados el ${esc(r.fecha || 'sin fecha')}, usados con ${esc(r.permiso || '')}. Distancia en línea recta del punto al trazado de cada recorrido; referencia de ${ref}. Son los recorridos publicados, no un servicio garantizado: sin frecuencias ni horarios, y un cambio de ruta por tramos puede no estar reflejado.</p>`;
+      <p class="rp-nota">Fuente: ${esc(r.fuente)}, recorridos extraídos el ${esc(r.fecha || 'sin fecha')}, ${esc(r.atribucion || '')}. Distancia en línea recta del punto al trazado de cada recorrido; referencia de ${ref}. Son los recorridos mapeados por la comunidad de OpenStreetMap, no un servicio garantizado: sin frecuencias ni horarios, y un cambio de ruta por tramos puede no estar reflejado. Las paradas de OSM son parciales.</p>`;
   }
 
   function transporte(d) {
@@ -465,7 +465,7 @@ const Reporte = (() => {
       ...(d.variables && d.variables.electricidad ? [['Electricidad (informativo)', '#ca8a04', electricidad(d), fuenteDe(d.variables.electricidad)]] : []),
       ...(d.variables && d.variables.censo ? [[`Servicios de la manzana (censo ${d.variables.censo.anio || 2017}, informativo)`, '#0e7490', censo(d), d.variables.censo.fuente ? fuenteDe(d.variables.censo) : '']] : []),
       ['Educación por nivel', '#7c3aed', educacion(d), d.variables ? fuenteDe(d.variables.educacion.inicial) : ''],
-      ['Transporte', '#1d4ed8', transporte(d), d.variables ? [fuenteDe(d.variables.transporte), d.variables.transporte.rutas && !d.variables.transporte.rutas.error ? `${d.variables.transporte.rutas.atribucion || 'Rutas: SmartBus (smartbus.app)'}` : ''].filter(Boolean).join('; ') : ''],
+      ['Transporte', '#1d4ed8', transporte(d), d.variables ? [fuenteDe(d.variables.transporte), d.variables.transporte.rutas && !d.variables.transporte.rutas.error ? `${d.variables.transporte.rutas.atribucion || '© colaboradores de OpenStreetMap (ODbL)'}` : ''].filter(Boolean).join('; ') : ''],
       ['Área verde', '#15803d', areaVerde(d), d.variables ? fuenteDe(d.variables.areaVerde) : ''],
       ['Quebradas y cauces', '#0369a1', seccionQuebradas(d), fuenteCauce(d.cauce)],
       ['Contexto de riesgo (informativo)', '#64748b', seccionContexto(d), fuenteContexto(d.contextoRiesgo)],
@@ -485,7 +485,7 @@ const Reporte = (() => {
       'La zonificación vigente es la del PDM 2016-2025, cuya vigencia de 10 años se cumplió; hay un PDM nuevo en trámite y una sentencia (183-2019) que suspendió ciertos actos para predios antes agrícolas o de reserva paisajista. La zonificación proyectada no se muestra: solo se advierte su estado, con la fuente indicada.',
       'Los polígonos de la zonificación se extrajeron de un PDF: cerca del borde entre dos zonas el resultado puede no ser exacto (por eso se avisa cuando otra zona queda a 20 m o menos).',
       'Salud sale de RENIPRESS (SUSALUD) y educación del padrón de ESCALE (MINEDU), como fuente primaria; OpenStreetMap, un mapa colaborativo, solo sirve de respaldo donde ningún registro oficial tiene un punto a 200 m, y es la fuente de transporte y área verde: algo ausente puede existir. RENIPRESS no trae las coordenadas de cerca del 42 % de los establecimientos de Arequipa, que por eso no pueden ubicarse. Los datos se extrajeron una vez (fecha indicada en cada sección) y no se actualizan solos.',
-      'Las líneas de transporte son los recorridos que SmartBus (smartbus.app) publicó en la fecha indicada, usados con su autorización verbal (confirmación escrita pendiente): no traen frecuencias ni horarios, y un cambio de ruta por tramos puede no estar reflejado.',
+      'Las líneas de transporte son los recorridos que la comunidad de OpenStreetMap tenía mapeados en la fecha indicada (ODbL): no traen frecuencias ni horarios, y un cambio de ruta por tramos puede no estar reflejado. Las paradas de OpenStreetMap son parciales: una línea puede tener pocas o ninguna parada mapeada.',
       'Todas las distancias son en línea recta, no recorrido a pie. Los umbrales de salud (1000 m), transporte (400 m) y borde de zona (20 m) son convenciones del proyecto; los de educación son distancias referenciales de las normas del MINEDU (RVM 104-2019 y 208-2019, numeral 7.1) y el de área verde es un indicador de la OMS Europa (2016), no una norma peruana.',
       'Los locales de ESCALE dicen su nivel. Los colegios de OpenStreetMap que completan el mapa casi no lo etiquetan: uno sin nivel se toma como candidato a primaria y secundaria, lo que puede sobrestimar la oferta de un nivel.',
       ...(d.variables && d.variables.consultorio ? ['El consultorio médico es una categoría aparte de los establecimientos de salud y es solo informativo: no tiene una distancia de referencia (es una decisión pendiente), así que no se dice si está cerca o lejos, no suma a ningún puntaje y no cuenta como «salud cerca».'] : []),

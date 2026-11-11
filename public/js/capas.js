@@ -26,7 +26,7 @@
  *                 informativas; el año va en la etiqueta, el popup y la leyenda. Las manzanas con pocas viviendas no dan porcentaje y las que el censo no contó no se dibujan.
  *   viaje       → «¿qué combi me lleva al trabajo?»: los tramos de cada ruta directa entre donde subes y donde bajas, el origen, el destino y, en la búsqueda de zonas, las celdas desde
  *                 las que se llega (Viaje.rutasDirectas). Los datos vienen en la propia capa; informativa, sin puntaje.
- *   lineas      → recorridos de bus de SmartBus (un color por línea) y, con un punto, la parada más cercana de cada una
+ *   lineas      → recorridos de bus de OpenStreetMap (un color por línea) y, con un punto, la parada mapeada más cercana de cada una
  * Con una búsqueda se dibujan las entidades que hacen que cada sector cumpla, y UNA región resaltada: los sectores donde se
  * cumple todo lo que pidió. No se pinta lo que no cumple y no se ve la cuadrícula.
  *
@@ -313,7 +313,7 @@ const Capas = (() => {
         if (capa.punto) cajaLineas = bboxDe([[capa.punto.lon, capa.punto.lat], ...m.paradas.map((p) => [p.lon, p.lat])]);
         else cajaLineas = m.bbox;
         const etiquetas = m.trazos.map((t) => R().etiquetaLinea(t));
-        cuenta('lineas', m.trazos.length, `Líneas de bus de SmartBus: ${etiquetas.join(', ')}${m.paradas.length ? `; con la parada más cercana de cada una (${m.paradas.length})` : ''}`);
+        cuenta('lineas', m.trazos.length, `Líneas de bus de OpenStreetMap: ${etiquetas.join(', ')}${m.paradas.length ? `; con la parada mapeada más cercana de cada una (${m.paradas.length})` : ''}`);
       } else if (id === 'censo_luz' || id === 'censo_agua' || id === 'censo_desague') {
         // Censo por manzana: coroplético por el % de viviendas ocupadas con el servicio. Informativo; con pocas viviendas no hay porcentaje y sin cifras no se dibuja.
         if (!Array.isArray(censo) || censo.length === 0) { sinDatos.push('censo'); return; }

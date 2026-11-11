@@ -74,7 +74,7 @@ const Comparar = (() => {
     nombre: r && esTexto(r.nombre) ? r.nombre : null,
   });
 
-  /** Líneas de SmartBus del punto, solo lo que se muestra (null si no se calcularon o fallaron: nunca se inventan). */
+  /** Líneas de transporte (OpenStreetMap) del punto, solo lo que se muestra (null si no se calcularon o fallaron: nunca se inventan). */
   function lineasDe(transporte) {
     const r = transporte && transporte.rutas;
     if (!r || r.error || !Array.isArray(r.lineas) || !esNumero(r.distanciaM)) return null;
@@ -320,7 +320,7 @@ const Comparar = (() => {
     }
     const partes = [{ texto: linea(v) }];
     if (id === 'transporte' && v.rutas) {
-      partes.push({ texto: v.rutas.lineas.length ? `Líneas a ${fmtRef(v.rutas.distanciaM)} o menos: ${RT.listaTexto(v.rutas.lineas, 6)}` : `Ninguna línea de SmartBus a ${fmtRef(v.rutas.distanciaM)} o menos` });
+      partes.push({ texto: v.rutas.lineas.length ? `Líneas a ${fmtRef(v.rutas.distanciaM)} o menos: ${RT.listaTexto(v.rutas.lineas, 6)}` : `Ninguna línea mapeada en OpenStreetMap a ${fmtRef(v.rutas.distanciaM)} o menos` });
     }
     return { estado: v.estado, partes };
   }

@@ -150,7 +150,7 @@ const AsistenteUI = (() => {
     return ctx;
   }
 
-  /** Líneas de SmartBus que cruzan un distrito ya reconocido (nombre exacto de Distritos): { distrito, res } o { distrito, error }. */
+  /** Líneas de transporte (OpenStreetMap) que cruzan un distrito ya reconocido (nombre exacto de Distritos): { distrito, res } o { distrito, error }. */
   async function rutasDeDistrito(distrito) {
     try {
       const [indice] = await Promise.all([Equipamiento.indiceRutas(), Distritos.load()]);
@@ -225,7 +225,7 @@ const AsistenteUI = (() => {
     const { zonas, datos, fecha, cauces } = await preparar();
     let sismos = null;
     try { sismos = Capas.sismosDeFeatures(await Contexto.sismosCrudos()); } catch (_) { sismos = null; }
-    // Los recorridos de SmartBus pesan casi 5 MB: solo se bajan cuando hay líneas que dibujar. Si fallan, la capa lo dice.
+    // Los recorridos de OpenStreetMap pesan unos 3 MB: solo se bajan cuando hay líneas que dibujar. Si fallan, la capa lo dice.
     let indiceRutas = null;
     if (rutas) { try { indiceRutas = await Equipamiento.indiceRutas(); } catch (_) { indiceRutas = null; } }
     // Las zonas de peligro volcánico (~0,5 MB) solo se bajan cuando se van a dibujar. Si fallan, la capa lo dice.
@@ -247,16 +247,13 @@ const AsistenteUI = (() => {
 
   // ------------------------------------------------------------ Viaje en combi o bus
 
-  let cacheViaje = null; // promesa con las rutas de OpenStreetMap y de SmartBus ya unificadas (Viaje.desdeOsm + Viaje.desdeSmartbus)
-  /** Las rutas para «¿qué combi me lleva…?»: ~3 MB de OpenStreetMap y el índice de SmartBus (que ya se usa en la ficha). Si una fuente falla se usa la otra; si fallan las dos, null. */
+  let cacheViaje = null; // promesa con las rutas de OpenStreetMap ya adaptadas (Viaje.desdeOsm)
+  /** Las rutas para «¿qué combi me lleva…?»: ~3 MB de OpenStreetMap (el mismo archivo que usa la ficha). Si falla, null. */
   function rutasParaViaje() {
     if (!cacheViaje) {
       cacheViaje = (async () => {
-        const [osm, sb] = await Promise.all([
-          fetch(CONFIG.viaje.osmUrl).then((r) => (r.ok ? r.json() : null)).then((fc) => (fc ? Viaje.desdeOsm(fc) : [])).catch(() => []),
-          Equipamiento.indiceRutas().then((i) => Viaje.desdeSmartbus(i)).catch(() => []),
-        ]);
-        return osm.length || sb.length ? [...osm, ...sb] : null;
+        const osm = await fetch(CONFIG.viaje.osmUrl).then((r) => (r.ok ? r.json() : null)).then((fc) => (fc ? Viaje.desdeOsm(fc) : [])).catch(() => []);
+        return osm.length ? osm : null;
       })();
       cacheViaje.then((r) => { if (!r) cacheViaje = null; });
     }
@@ -294,7 +291,7 @@ const AsistenteUI = (() => {
     if (intencion.tipo === 'consultorio') return { ...base, fecha, consultorios: Entidades.contarConsultorios(datos, polys) };
     if (intencion.tipo === 'comercio') return { ...base, fecha: fechaComercio || fecha, comercio: Object.fromEntries(intencion.comercio.map((id) => [id, Entidades.contarComercio(datos, polys, id)])) };
     if (intencion.tipo === 'contar') return { ...base, fecha, conteo: Entidades.contar(datos, polys, opciones), ...(intencion.consultorio ? { consultorios: Entidades.contarConsultorios(datos, polys) } : {}) };
-    // El perfil suma lo que ya existe en el resto de las fuentes: líneas de SmartBus que lo cruzan y precio de oferta (solo 3 distritos).
+    // El perfil suma lo que ya existe en el resto de las fuentes: líneas de transporte (OpenStreetMap) que lo cruzan y precio de oferta (solo 3 distritos).
     const [rutasDistrito, precios, cenepredDatos] = await Promise.all([rutasDeDistrito(intencion.distrito), Precios.load().catch(() => null), Cenepred.load().catch(() => null)]);
     return { ...base, fecha, perfil: Entidades.perfil(datos, zonas, cauces, polys, { ...opciones, pasoM: 300 }), rutasDistrito, precios, cenepredDatos };
   }

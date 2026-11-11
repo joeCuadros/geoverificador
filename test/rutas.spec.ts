@@ -1,37 +1,41 @@
 /**
- * Pruebas de public/js/rutas.js con un GeoJSON pequeño hecho a mano (no se lee el archivo congelado): las distancias esperadas
- * se calculan a mano con 1° de latitud ≈ 111 195 m.
+ * Pruebas de public/js/rutas.js con un GeoJSON pequeño hecho a mano, con la forma de rutas_osm.geojson (relaciones route=bus y paradas de OpenStreetMap):
+ * las distancias esperadas se calculan a mano con 1° de latitud ≈ 111 195 m.
  */
 /* eslint-disable @typescript-eslint/no-require-imports */
 const Rutas = require('../public/js/rutas.js');
 
-const ruta = (id: string, linea: string, empresa: string, ramal: string, sentido: string, coords: number[][][], extra = {}) => ({
-  type: 'Feature',
-  geometry: coords.length === 1 ? { type: 'LineString', coordinates: coords[0] } : { type: 'MultiLineString', coordinates: coords },
-  properties: { tipo: 'ruta', linea, empresa, ramal, nombre: `${ramal} : ${sentido}`, sentido, id_ruta: id, url: `https://smartbus.app/pe/arequipa/${linea.toLowerCase()}`, ...extra },
-});
-const parada = (id: string, linea: string, ramal: string, orden: number, lon: number, lat: number) => ({
+const ruta = (id: string, linea: string, empresa: string, ramal: string, sentido: string, coords: number[][][], extra = {}) => {
+  const [desde, hasta] = sentido.split(' → ');
+  return {
+    type: 'Feature',
+    geometry: coords.length === 1 ? { type: 'LineString', coordinates: coords[0] } : { type: 'MultiLineString', coordinates: coords },
+    properties: { tipo: 'ruta', fuente: 'OSM', osm: `relation/${id}`, linea, ramal, nombre: `${ramal}: ${sentido}`, desde, hasta, operador: empresa === linea ? linea : `${linea} - ${empresa}`, red: 'SIT', ...extra },
+  };
+};
+// Una parada de OSM es un objeto suelto: guarda las relaciones (osm) a las que sirve.
+const parada = (n: number, nombre: string | null, lon: number, lat: number, rutas: string[], lineas: string[]) => ({
   type: 'Feature',
   geometry: { type: 'Point', coordinates: [lon, lat] },
-  properties: { tipo: 'parada', nombre: `${ramal} - ${orden}`, linea, empresa: 'x', ramal, orden, id_ruta: id },
+  properties: { tipo: 'parada', osm: `node/${n}`, nombre, clase: 'platform', operador: null, red: null, rutas: rutas.map((r) => `relation/${r}`), lineas },
 });
 
 // C2 (Cono Norte): recorrido de ida y vuelta por la misma calle, a lat -16.400. C5 (EtraBus): avenida norte-sur a lon -71.520.
 // C9: un trazado con un hueco (MultiLineString) entre lon -71.5300 y -71.5200 a lat -16.420: el hueco NO es calle.
 const FC = {
   type: 'FeatureCollection',
-  metadata: { fuente: 'SmartBus (smartbus.app)', fecha_descarga: '2026-11-03' },
+  metadata: { fuente: 'OpenStreetMap (ODbL), relaciones route=bus de la red SIT y paradas de bus', fecha_extraccion: '2026-11-10' },
   features: [
     ruta('1', 'C2', 'Cono Norte', 'Cettar', 'Ciudad Municipal → Terminal', [[[-71.54, -16.4], [-71.53, -16.4]]]),
     ruta('2', 'C2', 'Cono Norte', 'Cettar', 'Terminal → Ciudad Municipal', [[[-71.53, -16.4], [-71.54, -16.4]]]),
     ruta('3', 'C5', 'EtraBus', 'Norte', 'A → B', [[[-71.52, -16.39], [-71.52, -16.41]]]),
     ruta('4', 'C9', 'Emarsistran', '3 de octubre', 'X → Y', [[[-71.54, -16.42], [-71.53, -16.42]], [[-71.52, -16.42], [-71.51, -16.42]]]),
     { type: 'Feature', geometry: { type: 'Point', coordinates: [-71.5, -16.4] }, properties: { tipo: 'otra-cosa' } },
-    parada('1', 'C2', 'Cettar', 1, -71.54, -16.4),
-    parada('1', 'C2', 'Cettar', 2, -71.535, -16.4),
-    parada('1', 'C2', 'Cettar', 3, -71.53, -16.4),
-    parada('3', 'C5', 'Norte', 1, -71.52, -16.39),
-    parada('3', 'C5', 'Norte', 2, -71.52, -16.4),
+    parada(1, 'Cettar - 1', -71.54, -16.4, ['1', '2'], ['C2']),
+    parada(2, 'Cettar - 2', -71.535, -16.4, ['1', '2'], ['C2']),
+    parada(3, 'Cettar - 3', -71.53, -16.4, ['1', '2'], ['C2']),
+    parada(4, 'Norte 1', -71.52, -16.39, ['3'], ['C5']),
+    parada(5, null, -71.52, -16.4, ['3'], ['C5']),
   ],
 };
 const idx = Rutas.indexar(FC);
@@ -58,8 +62,10 @@ describe('Rutas.cerca', () => {
     expect(r.lineas[0].distanciaM).toBeLessThan(224);
     expect(r.rutas).toBe(2); // ida y vuelta
     expect(r.distanciaM).toBe(400);
-    expect(r.fuente).toBe('SmartBus (smartbus.app)');
-    expect(r.fecha).toBe('2026-11-03');
+    expect(r.fuente).toBe(FC.metadata.fuente);
+    expect(r.fecha).toBe('2026-11-10');
+    expect(r.atribucion).toBe('© colaboradores de OpenStreetMap (ODbL)');
+    expect(r).not.toHaveProperty('permiso');
   });
 
   it('deja fuera lo que pasa más lejos que la distancia', () => {
@@ -90,7 +96,23 @@ describe('Rutas.cerca', () => {
     expect(c2.parada.nombre).toBe('Cettar - 2'); // la de lon -71.535, a ≈ 0.0002° (≈ 21 m) al oeste del punto
     expect(c2.parada.distanciaM).toBeGreaterThan(220);
     expect(c2.parada.distanciaM).toBeLessThan(230);
-    expect(c2.parada.orden).toBe(2);
+    expect(c2.paradasMapeadas).toBe(3);
+  });
+
+  it('una línea sin ninguna parada ligada dice «paradas no mapeadas» (0) y no inventa una parada', () => {
+    const r = Rutas.cerca(idx, -16.42, -71.5305, 400);
+    const c9 = r.lineas[0];
+    expect(c9.linea).toBe('C9');
+    expect(c9.paradasMapeadas).toBe(0);
+    expect(c9.parada).toBeNull();
+  });
+
+  it('una parada solo cuenta para las rutas a las que está ligada, no por estar cerca de otra línea', () => {
+    // La parada de C5 en lon -71,52 queda a 0,0045° (≈ 480 m) del extremo de C2; con C5 a 600 m solo la parada de C5 puede ser la de C5.
+    const r = Rutas.cerca(idx, -16.4, -71.5245, 600);
+    const c5 = r.lineas.find((l: any) => l.linea === 'C5');
+    expect(c5.paradasMapeadas).toBe(2);
+    expect(['Norte 1', null]).toContain(c5.parada.nombre);
   });
 
   it('no mide contra el hueco entre dos tramos de un MultiLineString', () => {
@@ -113,7 +135,7 @@ describe('Rutas.cruzan', () => {
     const r = Rutas.cruzan(idx, distrito);
     expect(r.lineas.map((l: any) => l.linea)).toEqual(['C2', 'C5', 'C9']);
     expect(r.rutas).toBe(4);
-    expect(r.fuente).toBe('SmartBus (smartbus.app)');
+    expect(r.fuente).toBe(FC.metadata.fuente);
   });
 
   it('cuenta las paradas que caen dentro', () => {
@@ -157,7 +179,7 @@ describe('Rutas.resumen y etiquetas', () => {
   it('arma la frase de la ficha con la distancia de referencia', () => {
     const r = Rutas.cerca(idx, -16.4, -71.5245, 600);
     expect(Rutas.resumen(r)).toBe('Líneas que pasan a ≤600 m: C5 (EtraBus), C2 (Cono Norte)');
-    expect(Rutas.resumen(Rutas.cerca(idx, -16.45, -71.5, 400))).toBe('Ninguna línea publicada por SmartBus pasa a ≤400 m');
+    expect(Rutas.resumen(Rutas.cerca(idx, -16.45, -71.5, 400))).toBe('Ninguna línea mapeada en OpenStreetMap pasa a ≤400 m');
   });
 
   it('acorta una lista larga con «y N más»', () => {

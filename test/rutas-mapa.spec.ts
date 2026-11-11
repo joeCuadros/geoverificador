@@ -8,14 +8,14 @@ const Capas = require('../public/js/capas.js');
 const A = require('../public/js/asistente.js');
 
 const ruta = (linea: string, empresa: string, id: string, coords: number[][], extra = {}) => ({
-  type: 'Feature', geometry: { type: 'LineString', coordinates: coords }, properties: { tipo: 'ruta', linea, empresa, ramal: 'R', nombre: `${linea} : A → B`, sentido: 'A → B', id_ruta: id, ...extra },
+  type: 'Feature', geometry: { type: 'LineString', coordinates: coords }, properties: { tipo: 'ruta', fuente: 'OSM', osm: `relation/${id}`, linea, ramal: 'R', nombre: `${linea}: A → B`, desde: 'A', hasta: 'B', operador: `${linea} - ${empresa}`, ...extra },
 });
 const parada = (linea: string, id: string, lon: number, lat: number, nombre: string) => ({
-  type: 'Feature', geometry: { type: 'Point', coordinates: [lon, lat] }, properties: { tipo: 'parada', nombre, linea, ramal: 'R', orden: 1, id_ruta: id },
+  type: 'Feature', geometry: { type: 'Point', coordinates: [lon, lat] }, properties: { tipo: 'parada', osm: `node/${id}${nombre}`, nombre, clase: 'platform', rutas: [`relation/${id}`], lineas: [linea] },
 });
 const FC = {
   type: 'FeatureCollection',
-  metadata: { fuente: 'SmartBus (smartbus.app)', fecha_descarga: '2026-11-03', permiso: 'autorización verbal de SmartBus; confirmación escrita pendiente' },
+  metadata: { fuente: 'OpenStreetMap (ODbL), relaciones route=bus de la red SIT y paradas de bus', fecha_extraccion: '2026-11-10' },
   features: [
     ruta('C2', 'Cono Norte', '1', [[-71.54, -16.4], [-71.53, -16.4]]),
     ruta('C2', 'Cono Norte', '2', [[-71.53, -16.4], [-71.54, -16.401]]),
@@ -108,7 +108,7 @@ describe('El chat pide dibujar las líneas de bus', () => {
     { linea: 'C2', empresas: ['Cono Norte'], distanciaM: 120, ramales: [], parada: { nombre: 'Cettar - 2', distanciaM: 80 } },
     { linea: 'C5', empresas: ['EtraBus'], distanciaM: 300, ramales: [], parada: null },
   ];
-  const cita = { fuente: 'SmartBus (smartbus.app)', fecha: '2026-11-03', permiso: null };
+  const cita = { fuente: 'OpenStreetMap (ODbL)', fecha: '2026-11-10' };
 
   it('«¿qué buses pasan por aquí?» pide las líneas y el punto', () => {
     const r = A.responder(A.interpretar('¿qué buses pasan por aquí?', { hayPunto: true }), { punto: { lat: -16.4, lon: -71.535 }, entorno: { transporte: { rutas: { distanciaM: 400, lineas, ...cita } } } });

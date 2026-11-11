@@ -66,8 +66,6 @@ qwen-image-ui/
 .env*
 !.env.example
 
-# Respuestas crudas de SmartBus (scripts/descargar-rutas-smartbus.mjs)
-/.cache-smartbus/
 
 # Descargas y extracciones de RENIPRESS y ESCALE (scripts/descargar-equipamiento-oficial.mjs): no se suben
 /.cache-equipamiento-oficial/

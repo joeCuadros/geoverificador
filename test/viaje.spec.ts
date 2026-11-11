@@ -1,5 +1,5 @@
 /**
- * Viaje en combi/bus: «¿qué ruta me lleva de este punto a mi trabajo?». Rutas directas entre dos puntos sobre los trazados de OpenStreetMap y de SmartBus:
+ * Viaje en combi/bus: «¿qué ruta me lleva de este punto a mi trabajo?». Rutas directas entre dos puntos sobre los trazados de OpenStreetMap:
  * pasan a ≤ 400 m (a pie, en línea recta) de los dos y el origen queda ANTES que el destino a lo largo del recorrido. Sin red.
  */
 /* eslint-disable @typescript-eslint/no-require-imports */
@@ -84,23 +84,24 @@ describe('Viaje.rutasDirectas', () => {
   });
 });
 
-describe('Viaje.unir: la misma ruta que traen OpenStreetMap y SmartBus sale una vez, con las dos fuentes', () => {
-  const osm = ruta('osm/1', [RECTA], { fuente: 'OSM', linea: 'C3', ramal: 'Enace', desde: 'Urbanización Deán Valdivia', hasta: 'Avenida Venezuela' });
-  const sb = ruta('sb/1', [RECTA], { fuente: 'SmartBus', linea: 'C3', ramal: 'Enace', desde: 'Urbanización Deán Valdivia', hasta: 'Avenida Venezuela', duracionMin: null, intervaloMin: null });
-  const otra = ruta('sb/2', [RECTA], { fuente: 'SmartBus', linea: 'C4', ramal: 'Gráficos', desde: 'San Luis', hasta: 'Av. Salaverry' });
-  it('une por línea + ramal + de/hasta (sin tildes ni mayúsculas) y conserva las fuentes y el dato de OSM', () => {
-    const r = Viaje.rutasDirectas(pt(500, 100), pt(5000, 100), [osm, sb, otra], OPC);
+describe('Viaje.unir: la misma ruta que OpenStreetMap dibuja en dos relaciones sale una vez', () => {
+  const a = ruta('osm/1', [RECTA], { fuente: 'OSM', linea: 'C3', ramal: 'Enace', desde: 'Urbanización Deán Valdivia', hasta: 'Avenida Venezuela' });
+  const b = ruta('osm/2', [RECTA], { fuente: 'OSM', linea: 'C3', ramal: 'ENACE', desde: 'Urbanizacion Dean Valdivia', hasta: 'Avenida Venezuela', duracionMin: null, intervaloMin: null });
+  const otra = ruta('osm/3', [RECTA], { fuente: 'OSM', linea: 'C4', ramal: 'Gráficos', desde: 'San Luis', hasta: 'Av. Salaverry' });
+  it('une por línea + ramal + de/hasta (sin tildes ni mayúsculas) y completa los datos que falten con los de la otra relación', () => {
+    const r = Viaje.rutasDirectas(pt(500, 100), pt(5000, 100), [a, b, otra], OPC);
     const u = Viaje.unir(r.directas);
     expect(u).toHaveLength(2);
     const c3 = u.find((x: any) => x.ruta.linea === 'C3');
-    expect(c3.fuentes).toEqual(['OSM', 'SmartBus']);
+    expect(c3.fuentes).toEqual(['OSM']);
+    expect(c3.ids.sort()).toEqual(['osm/1', 'osm/2']);
     expect(c3.ruta.duracionMin).toBe(40);
-    expect(u.find((x: any) => x.ruta.linea === 'C4').fuentes).toEqual(['SmartBus']);
+    expect(u.find((x: any) => x.ruta.linea === 'C4').fuentes).toEqual(['OSM']);
   });
 });
 
-describe('Viaje: adaptadores de las dos fuentes', () => {
-  it('rutas de OSM (Feature con linea, ramal, desde, hasta…) y de SmartBus (índice de Rutas) quedan con la misma forma', () => {
+describe('Viaje: adaptador de las rutas de OpenStreetMap', () => {
+  it('las rutas de OSM (Feature con linea, ramal, desde, hasta…) quedan con una forma plana; las paradas y lo que no es ruta se ignoran', () => {
     const fc = { features: [
       { type: 'Feature', properties: { tipo: 'ruta', fuente: 'OSM', osm: 'relation/7', linea: 'C10', ramal: 'A', nombre: 'C-10 Bus A: X → Y', desde: 'X', hasta: 'Y', operador: 'C10 - MegaBus', duracion_min: 30, intervalo_min: 5, horario: 'Mo-Su 05:00-21:00', tarifa: '1.30 PEN', color: '#fff' }, geometry: { type: 'LineString', coordinates: RECTA } },
       { type: 'Feature', properties: { tipo: 'ruta', fuente: 'OSM', osm: 'relation/8', linea: 'C3', ramal: 'B' }, geometry: { type: 'MultiLineString', coordinates: [RECTA, RECTA] } },
@@ -109,9 +110,8 @@ describe('Viaje: adaptadores de las dos fuentes', () => {
     expect(o).toHaveLength(2);
     expect(o[0]).toMatchObject({ id: 'relation/7', fuente: 'OSM', linea: 'C10', ramal: 'A', desde: 'X', hasta: 'Y', operador: 'C10 - MegaBus', duracionMin: 30, intervaloMin: 5, horario: 'Mo-Su 05:00-21:00', tarifa: '1.30 PEN' });
     expect(o[1].partes).toHaveLength(2);
-    const indice = { rutas: [{ props: { tipo: 'ruta', linea: 'C3', empresa: 'Transcayma', ramal: 'Enace', nombre: 'Enace : A → B', sentido: 'A → B', id_ruta: '17445532', color: '#FEDD00', url: 'https://smartbus.app/pe/arequipa/c3' }, partes: [RECTA] }] };
-    const s = Viaje.desdeSmartbus(indice);
-    expect(s[0]).toMatchObject({ id: 'smartbus/17445532', fuente: 'SmartBus', linea: 'C3', ramal: 'Enace', desde: 'A', hasta: 'B', operador: 'Transcayma', duracionMin: null });
+    expect(Viaje.desdeOsm({ features: [{ type: 'Feature', properties: { tipo: 'parada', osm: 'node/1' }, geometry: { type: 'Point', coordinates: [0, 0] } }] })).toEqual([]);
+    expect(Viaje).not.toHaveProperty('desdeSmartbus');
   });
 });
 
@@ -133,7 +133,7 @@ describe('Viaje.resolverDestino y Viaje.textoRuta', () => {
 describe('Viaje.cercanas', () => {
   it('cuenta las rutas que pasan a ≤ 400 m de un punto, una por línea + ramal + sentido', () => {
     const a = ruta('a', [RECTA]);
-    const b = ruta('b', [RECTA], { fuente: 'SmartBus' }); // la misma ruta en la otra fuente
+    const b = ruta('b', [RECTA]); // la misma ruta dibujada en otra relación
     const c = ruta('c', [linea([0, 900], [6000, 900])], { ramal: 'B' });
     const r = Viaje.cercanas(pt(1000, 100), [a, b, c], OPC);
     expect(r).toHaveLength(1);
@@ -193,7 +193,7 @@ describe('Viaje.estimarTiempo: tiempo aproximado, con sus supuestos', () => {
     expect(t.caminarMin).toBeCloseTo(11.25, 5);
     expect(t.busMin).toBeCloseTo(15, 5);
   });
-  it('sin la duración de la ruta (SmartBus) no inventa el tiempo en bus ni el total; sin velocidad a pie, tampoco la caminata', () => {
+  it('sin la duración de la ruta no inventa el tiempo en bus ni el total; sin velocidad a pie, tampoco la caminata', () => {
     const sb = { ...item, ruta: { duracionMin: null, intervaloMin: null } };
     const t = Viaje.estimarTiempo(sb, T);
     expect(t).toMatchObject({ busMin: null, totalSinEsperaMin: null, esperaMediaMin: null });

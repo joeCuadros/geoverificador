@@ -1,18 +1,18 @@
 /**
  * viaje.js — «¿Qué combi o bus me lleva de este punto a mi trabajo?» (sin DOM, sin red, sin estado).
  *
- * Con los trazados de las rutas (OpenStreetMap, rutas_osm.geojson, y SmartBus, rutas_smartbus.geojson) busca las rutas DIRECTAS entre un origen y un destino:
+ * Con los trazados de las rutas de OpenStreetMap (rutas_osm.geojson, la única fuente) busca las rutas DIRECTAS entre un origen y un destino:
  * las que pasan a `caminarM` metros o menos (en línea recta, 400 m por omisión: la distancia al paradero de CONFIG.umbrales.transporte) de los dos puntos
- * y en las que el origen queda ANTES que el destino a lo largo del recorrido. Cada relación de OSM y cada recorrido de SmartBus es UN sentido de un ramal;
+ * y en las que el origen queda ANTES que el destino a lo largo del recorrido. Cada relación de OSM es UN sentido de un ramal;
  * una ruta que pasa por los dos puntos pero en el orden contrario se devuelve aparte («al revés»): sirve en el otro sentido, que suele ser otra relación.
  *
  * Lo que mide y lo que no: distancias en línea recta (plano local, como el resto de la herramienta) del punto al trazado, medidas a vértices densificados cada
- * 15 m (error de unos 7 m); el recorrido en vehículo es la distancia a lo largo del trazado. NO dice dónde se puede subir o bajar (OSM no trae paradas y las de
- * SmartBus son numeradas), ni si la ruta opera hoy, ni su frecuencia real: solo que el trazado publicado pasa ahí y en ese orden.
+ * 15 m (error de unos 7 m); el recorrido en vehículo es la distancia a lo largo del trazado. NO dice dónde se puede subir o bajar (las paradas de OSM son parciales y
+ * no se usan para esto), ni si la ruta opera hoy, ni su frecuencia real: solo que el trazado mapeado pasa ahí y en ese orden.
  *
- *   desdeOsm(fc) / desdeSmartbus(indice)    → rutas con una misma forma { id, fuente, linea, ramal, nombre, desde, hasta, operador, duracionMin, intervaloMin, … , partes }
+ *   desdeOsm(fc)                            → rutas con la forma { id, fuente, linea, ramal, nombre, desde, hasta, operador, duracionMin, intervaloMin, … , partes }
  *   rutasDirectas(origen, destino, rutas, { caminarM, linea, texto }) → { directas, alReves, evaluadas }
- *   unir(resultados)                        → la misma ruta de OSM y de SmartBus sale una vez, con sus fuentes
+ *   unir(resultados)                        → la misma ruta (línea + ramal + de + hasta) que OSM dibuja en más de una relación sale una vez
  *   resolverDestino(texto, destinos)        → el destino de la lista cuyo nombre o alias aparece primero en la frase
  *   textoRuta(r)                            → «C10 · A: Ciudad Blanca → La Mansión del Fundador (MegaBus)»
  *
@@ -30,7 +30,7 @@ const Viaje = (() => {
   const codigoLinea = (s) => sinTildes(s).replace(/[^a-z0-9]/g, '');
   const esPunto = (p) => p && Number.isFinite(p.lat) && Number.isFinite(p.lon);
 
-  // ------------------------------------------------------------ Adaptadores de las dos fuentes
+  // ------------------------------------------------------------ Adaptador de las rutas de OpenStreetMap
 
   const partesDe = (g) => (!g ? [] : g.type === 'LineString' ? [g.coordinates] : g.type === 'MultiLineString' ? g.coordinates : []).filter((p) => Array.isArray(p) && p.length >= 2);
 
@@ -41,18 +41,6 @@ const Viaje = (() => {
       return {
         id: p.osm, fuente: 'OSM', linea: p.linea ?? null, ramal: p.ramal ?? null, nombre: p.nombre ?? null, desde: p.desde ?? null, hasta: p.hasta ?? null, operador: p.operador ?? null,
         duracionMin: p.duracion_min ?? null, intervaloMin: p.intervalo_min ?? null, horario: p.horario ?? null, tarifa: p.tarifa ?? null, color: p.color ?? null, url: null, partes: partesDe(f.geometry),
-      };
-    }).filter((r) => r.partes.length);
-  }
-
-  /** Rutas de SmartBus (el índice de Rutas.indexar). */
-  function desdeSmartbus(indice) {
-    return ((indice && indice.rutas) || []).map((r) => {
-      const p = r.props || {};
-      const [desde, hasta] = String(p.sentido || '').split(/\s*→\s*/);
-      return {
-        id: `smartbus/${p.id_ruta}`, fuente: 'SmartBus', linea: p.linea ?? null, ramal: p.ramal ?? null, nombre: p.nombre ?? null, desde: desde || null, hasta: hasta || null, operador: p.empresa ?? null,
-        duracionMin: null, intervaloMin: null, horario: null, tarifa: null, color: p.color ?? null, url: p.url ?? null, partes: r.partes,
       };
     }).filter((r) => r.partes.length);
   }
@@ -171,7 +159,7 @@ const Viaje = (() => {
   /**
    * Tiempo APROXIMADO de un resultado de rutasDirectas (o de unir), con los supuestos de CONFIG.viaje.tiempo ({ velocidadPieMs, factorRodeo }):
    *   caminarMin   (caminata de las dos puntas × factorRodeo, si hay) / velocidadPieMs; null sin velocidad
-   *   busMin       la duración que OSM etiqueta para toda la ruta × (distancia recorrida / longitud de la ruta); null si la ruta no la trae (p. ej. solo SmartBus)
+   *   busMin       la duración que OSM etiqueta para toda la ruta × (distancia recorrida / longitud de la ruta); null si la ruta no la trae
    *   totalSinEsperaMin  caminarMin + busMin; null si falta alguno (no se inventa)
    *   esperaMediaMin     la mitad del intervalo etiquetado (llegando sin mirar el horario); aparte, no se suma
    */
@@ -289,7 +277,7 @@ const Viaje = (() => {
     return out;
   }
 
-  /** La misma ruta (línea + ramal + de + hasta) en OpenStreetMap y en SmartBus sale una vez, con sus fuentes; los datos que solo trae OSM (duración, intervalo…) se conservan. */
+  /** La misma ruta (línea + ramal + de + hasta) que OpenStreetMap dibuja en más de una relación sale una vez, con la de menor caminata; los datos que falten (duración, intervalo…) se toman de las otras. */
   function unir(resultados) {
     const clave = (r) => [codigoLinea(r.linea), norm(r.ramal), norm(r.desde), norm(r.hasta)].join('|');
     const grupos = new Map();
@@ -300,16 +288,12 @@ const Viaje = (() => {
     });
     const out = [];
     grupos.forEach((g) => {
-      const fuentes = [...new Set(g.map((x) => x.ruta.fuente))].sort((a, b) => (a === 'OSM' ? -1 : b === 'OSM' ? 1 : a < b ? -1 : 1));
+      const fuentes = [...new Set(g.map((x) => x.ruta.fuente))];
       const mejor = [...g].sort((a, b) => a.caminarTotalM - b.caminarTotalM)[0];
       const ruta = { ...mejor.ruta };
-      [...g].sort((a, b) => (a.ruta.fuente === 'OSM' ? -1 : b.ruta.fuente === 'OSM' ? 1 : 0)).forEach((x) => {
+      g.forEach((x) => {
         Object.entries(x.ruta).forEach(([k, v]) => { if (ruta[k] === null || ruta[k] === undefined) ruta[k] = v; });
       });
-      if (g.some((x) => x.ruta.fuente === 'OSM')) {
-        const o = g.find((x) => x.ruta.fuente === 'OSM').ruta;
-        ['duracionMin', 'intervaloMin', 'horario', 'tarifa'].forEach((k) => { if (o[k] !== null && o[k] !== undefined) ruta[k] = o[k]; });
-      }
       out.push({ ...mejor, ruta, fuentes, ids: g.map((x) => x.ruta.id) });
     });
     return out.sort((a, b) => a.caminarTotalM - b.caminarTotalM || a.viajeM - b.viajeM);
@@ -340,7 +324,7 @@ const Viaje = (() => {
     return `${r.linea || 'Ruta'}${ramal}${sentido}${op ? ` (${op})` : ''}`;
   }
 
-  return { CAMINAR_M, PASO_M, desdeOsm, desdeSmartbus, rutasDirectas, estimarTiempo, cercanas, indiceDestino, alcanza, zonasConRutaDirecta, unir, resolverDestino, textoRuta, codigoLinea, metros };
+  return { CAMINAR_M, PASO_M, desdeOsm, rutasDirectas, estimarTiempo, cercanas, indiceDestino, alcanza, zonasConRutaDirecta, unir, resolverDestino, textoRuta, codigoLinea, metros };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = Viaje;
