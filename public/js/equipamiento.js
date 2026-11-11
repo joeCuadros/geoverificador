@@ -311,6 +311,22 @@ const Equipamiento = (() => {
     }
   }
 
+  /**
+   * ¿El punto cae dentro de una concesión minera (Catastro Minero de INGEMMET)? INFORMATIVO, sin respaldo en vivo. Nunca rechaza. Un derecho a explorar y explotar los minerales
+   * no es minería en el predio: ver Calculos.NOTA_MINERA.
+   */
+  async function mineriaPorPunto(punto) {
+    const metodo = (datos) => `Se comprueba si el punto cae dentro de algún polígono del Catastro Minero de INGEMMET (punto en polígono; las concesiones extinguidas no cuentan) y, si no, la distancia en línea recta hasta el borde de la más cercana. ${datos ? 'Datos congelados del catastro, que es referencial y se actualiza a diario.' : 'No se encontró el archivo del Catastro Minero.'} ${CONFIG.fuentesUmbral.mineria}.`;
+    try {
+      const datos = await archivo('mineria');
+      const r = Calculos.evaluarMinera(punto, datos ? datos.features : [], { fuente: datos && datos.fuente ? datos.fuente : 'INGEMMET, Catastro Minero (GEOCATMIN)', fecha: datos ? datos.fecha : null, metodo: metodo(datos) });
+      return datos ? r : { ...r, error: 'No se encontró el archivo del Catastro Minero.' };
+    } catch (err) {
+      console.error('[Equipamiento] mineria', err);
+      return { ...Calculos.evaluarMinera(punto, [], { metodo: metodo(null) }), error: err.message };
+    }
+  }
+
   // ------------------------------------------------------------- Censo por manzana
 
   const jsonCensos = new Map(); // url → promesa con el JSON (o null si falta): el índice y las piezas por distrito se leen una sola vez
@@ -357,7 +373,7 @@ const Equipamiento = (() => {
   async function evaluar(lat, lon) {
     const punto = { lat, lon };
     const u = CONFIG.umbrales;
-    const [s, c, e, t, v, rutas, comercioNecesidades, elec, cen] = await Promise.all([
+    const [s, c, e, t, v, rutas, comercioNecesidades, elec, cen, min] = await Promise.all([
       variable('salud', punto, salud, (m) => sinDato(m, u.salud)),
       consultorioCercano(punto),
       variable('educacion', punto, educacion, (m) => Object.fromEntries(NIVELES.map((n) => [n, sinDato(m, u.educacion[n])]))),
@@ -367,8 +383,9 @@ const Equipamiento = (() => {
       comercioPorNecesidad(punto),
       electricidadPorConcesion(punto),
       censoPorManzana(punto),
+      mineriaPorPunto(punto),
     ]);
-    return { salud: s, consultorio: c, ...comercioNecesidades, electricidad: elec, censo: cen, educacion: e, transporte: { ...t, rutas }, areaVerde: v };
+    return { salud: s, consultorio: c, ...comercioNecesidades, electricidad: elec, censo: cen, mineria: min, educacion: e, transporte: { ...t, rutas }, areaVerde: v };
   }
 
   /**

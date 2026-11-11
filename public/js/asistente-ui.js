@@ -219,7 +219,7 @@ const AsistenteUI = (() => {
     return cargadas.some((x) => !x) ? null : cargadas.flatMap((x) => x.features);
   }
 
-  async function datosParaMapa({ rutas = false, volcan = false, cenepred = false, electricidad = false, censo = null } = {}) {
+  async function datosParaMapa({ rutas = false, volcan = false, cenepred = false, electricidad = false, mineria = false, censo = null } = {}) {
     const { zonas, datos, fecha, cauces } = await preparar();
     let sismos = null;
     try { sismos = Capas.sismosDeFeatures(await Contexto.sismosCrudos()); } catch (_) { sismos = null; }
@@ -229,6 +229,8 @@ const AsistenteUI = (() => {
     // Las zonas de peligro volcánico (~0,5 MB) solo se bajan cuando se van a dibujar. Si fallan, la capa lo dice.
     let concesiones = null; // áreas de concesión de distribución eléctrica (MINEM-DGE): solo con la capa «electricidad»
     if (electricidad) { try { const f = await fetch(CONFIG.equipamiento.archivos.electricidad).then((r) => (r.ok ? r.json() : null)); concesiones = f && Array.isArray(f.features) ? f.features : null; } catch (_) { concesiones = null; } }
+    let mineras = null; // concesiones mineras (INGEMMET): solo con la capa «mineria»
+    if (mineria) { try { const f = await fetch(CONFIG.equipamiento.archivos.mineria).then((r) => (r.ok ? r.json() : null)); mineras = f && Array.isArray(f.features) ? f.features : null; } catch (_) { mineras = null; } }
     let manzanas = null; // manzanas del censo (INEI, 2017): solo con una capa censo_*; `censo` es la vista [oeste, sur, este, norte] o true
     if (censo) { try { manzanas = await manzanasDelCenso(Array.isArray(censo) ? censo : null); } catch (_) { manzanas = null; } }
     let zonasVolcan = null;
@@ -236,7 +238,7 @@ const AsistenteUI = (() => {
     // El escenario del CENEPRED es un archivo pequeño (25 distritos) y sus límites; solo se leen cuando se va a colorear. Si fallan, la capa lo dice.
     let datosCenepred = null;
     if (cenepred) { try { const [cen] = await Promise.all([Cenepred.load(), Distritos.load()]); datosCenepred = cen; } catch (_) { datosCenepred = null; } }
-    return { datos, zonas, cauces, sismos, volcan: zonasVolcan, electricidad: concesiones, censo: manzanas, cenepred: datosCenepred, rutas: indiceRutas, umbrales: umbrales(), fecha };
+    return { datos, zonas, cauces, sismos, volcan: zonasVolcan, electricidad: concesiones, mineria: mineras, censo: manzanas, cenepred: datosCenepred, rutas: indiceRutas, umbrales: umbrales(), fecha };
   }
 
   // ------------------------------------------------------------ Viaje en combi o bus
@@ -392,7 +394,7 @@ const AsistenteUI = (() => {
       const reglas = () => Asistente.interpretar(limpio, { hayPunto, ultimaBusqueda, destino });
       let eleccion = { origen: 'reglas', intencion: null };
       // El modelo no conoce las categorías «consultorio» (distinta de la salud) ni mercado, supermercado y mall (informativas): esas frases las responden las reglas, sin salir del navegador.
-      if (hayLLM() && llmDisponible !== false && !Asistente.mencionaConsultorio(limpio) && !Asistente.mencionaComercio(limpio) && !Asistente.mencionaElectricidad(limpio) && !Asistente.mencionaAgua(limpio) && !Asistente.mencionaViaje(limpio, { hayPunto, destino })) {
+      if (hayLLM() && llmDisponible !== false && !Asistente.mencionaConsultorio(limpio) && !Asistente.mencionaComercio(limpio) && !Asistente.mencionaElectricidad(limpio) && !Asistente.mencionaMineria(limpio) && !Asistente.mencionaAgua(limpio) && !Asistente.mencionaViaje(limpio, { hayPunto, destino })) {
         const espera = mensaje('asistente', { texto: 'Pensando…', espera: true });
         const r = await AsistenteLLM.interpretar({
           mensaje: limpio, historial,
@@ -415,13 +417,13 @@ const AsistenteUI = (() => {
       }
       else {
         const esDistrito = ['contar', 'consultorio', 'comercio', 'perfil', 'rutas', 'volcan', 'cenepred'].includes(intencion.tipo) && intencion.distrito;
-        const conPunto = ['ficha', 'servicio', 'consultorio', 'comercio', 'electricidad', 'agua', 'zona', 'construir', 'quebrada', 'sismos', 'peligros', 'rutas', 'volcan', 'cenepred'].includes(intencion.tipo);
+        const conPunto = ['ficha', 'servicio', 'consultorio', 'comercio', 'electricidad', 'mineria', 'agua', 'zona', 'construir', 'quebrada', 'sismos', 'peligros', 'rutas', 'volcan', 'cenepred'].includes(intencion.tipo);
         const ctx = intencion.tipo === 'viaje' || intencion.tipo === 'ruta_zonas' ? await contextoViaje(intencion) : intencion.tipo === 'precio' ? await contextoPrecio() : esDistrito ? await contextoDistrito(intencion) : intencion.tipo === 'cenepred' ? { ...(await contexto()), cenepredDatos: await Cenepred.load().catch(() => null) } : conPunto ? await contexto() : { estadoPDM: CONFIG.estadoPDM, potencial: Zonificacion.potencial, punto: api.obtenerPunto() };
         const resp = Asistente.responder(intencion, ctx);
         let texto = resp.texto;
         // Gemini only rewords the deterministic answer; the text is verified (numbers, names, caveat) or discarded.
         // The profile and the «what matters to you?» question keep their exact structure (buttons and closing question), so they are not reworded.
-        if (eleccion.origen === 'gemini' && texto && !['perfil', 'mejor_zona', 'electricidad', 'agua', 'viaje', 'ruta_zonas'].includes(intencion.tipo)) {
+        if (eleccion.origen === 'gemini' && texto && !['perfil', 'mejor_zona', 'electricidad', 'mineria', 'agua', 'viaje', 'ruta_zonas'].includes(intencion.tipo)) {
           const espera = mensaje('asistente', { texto: 'Redactando…', espera: true });
           const red = await AsistenteLLM.redactar({ pregunta: limpio, tipo: intencion.tipo, hechos: { texto } });
           espera.remove();

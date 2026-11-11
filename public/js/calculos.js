@@ -667,6 +667,54 @@ const Calculos = (() => {
     return `Tu punto está fuera de las áreas de concesión de distribución eléctrica de los datos; la más cercana es la de ${r.concesionaria || 'una empresa'}, a ${distTxt(r.distanciaM)} de su borde. Eso no significa que no haya servicio: el registro puede tener los bordes poco precisos o no incluir alguna zona, y tampoco dice si un predio está conectado.`;
   }
 
+  // ---------------------------------------------------------------- Concesiones mineras (Catastro Minero de INGEMMET)
+
+  /**
+   * Una sola redacción de qué dice y qué NO dice una concesión minera, para la ficha, el chat y el informe. Texto Único Ordenado de la Ley General de Minería (D. S. 014-92-EM,
+   * texto consolidado consultado en FAOLEX; no se revisó si una norma posterior lo cambió): artículo 9, la concesión minera otorga a su titular «el derecho a la exploración y
+   * explotación de los recursos minerales concedidos» dentro de un sólido de profundidad indefinida, y «es un inmueble distinto y separado del predio donde se encuentre ubicada»;
+   * artículo 37, inciso 3, el titular puede «solicitar a la autoridad minera autorización para establecer servidumbres en terrenos de terceros» necesarios para la concesión, «previa
+   * indemnización justipreciada si fuere el caso». Es un derecho que puede pedir, no una servidumbre que ya exista.
+   */
+  const NOTA_MINERA = 'Es informativo: una concesión minera da a su titular el derecho a explorar y explotar los minerales concedidos dentro de su perímetro (artículo 9 de la Ley General de Minería, D. S. 014-92-EM) y es un inmueble distinto y separado del predio donde se ubica. El titular puede solicitar a la autoridad minera una servidumbre sobre terrenos de terceros que necesite para la concesión, previa indemnización (artículo 37, inciso 3): es algo que puede pedir, no algo que ya exista. El catastro es referencial: no dice si hay minería en el lugar, de quién es el predio ni qué se puede hacer en él; para eso consulta el GEOCATMIN de INGEMMET y la partida registral. No suma al puntaje ni a la búsqueda de zonas.';
+
+  const ESTADO_MINERA_TXT = { TITULADO: 'titulada', 'EN TRÁMITE': 'en trámite', OTRO: 'de otro tipo (cantera, planta de beneficio…)', EXTINGUIDO: 'extinguida' };
+  const ORDEN_MINERA = { TITULADO: 0, 'EN TRÁMITE': 1, OTRO: 2, EXTINGUIDO: 3 };
+  const CAMPOS_MINERA = ['codigo', 'nombre', 'estado', 'estado_detalle', 'sustancia', 'hectareas', 'explotacion_o_exploracion', 'distritos', 'fecha_denuncio'];
+
+  /**
+   * ¿Cae el punto dentro de alguna concesión minera? Puro y sin umbral: INFORMATIVO (o SIN DATO). Las extinguidas no cuentan.
+   *   features: [Feature Polygon / MultiPolygon { properties { codigo, nombre, estado, sustancia, hectareas… } }] (public/data/mineria/concesiones_mineras.geojson)
+   * Dentro (distancia 0; los huecos quedan fuera) lista TODAS las que lo contienen, las tituladas primero; fuera, da la más cercana (titulada, en trámite u otra) y la distancia en línea
+   * recta a su BORDE. Devuelve { estado, dentro, concesiones, tituladas, enTramite, cercana, distanciaM, umbralM, fuente, fecha, metodo }.
+   */
+  function evaluarMinera(punto, features, opciones = {}) {
+    const base = { umbralM: null, fuente: opciones.fuente ?? null, fecha: opciones.fecha ?? null, metodo: opciones.metodo ?? null };
+    const validos = (features || []).filter((f) => f && f.geometry && /^(Multi)?Polygon$/.test(f.geometry.type) && f.properties && f.properties.estado !== 'EXTINGUIDO');
+    const vacio = { estado: 'SIN DATO', dentro: null, concesiones: [], tituladas: 0, enTramite: 0, cercana: null, distanciaM: null, ...base };
+    if (!(features || []).some((f) => f && f.geometry && /^(Multi)?Polygon$/.test(f.geometry.type))) return vacio;
+    const resumen = (f) => Object.fromEntries(CAMPOS_MINERA.map((c) => [c, (f.properties && f.properties[c]) ?? null]));
+    const medidos = validos.map((f) => ({ f, d: distanciaAGeometriaM(punto.lat, punto.lon, f.geometry) }));
+    const dentro = medidos.filter((m) => m.d === 0).map((m) => resumen(m.f)).sort((a, b) => (ORDEN_MINERA[a.estado] ?? 9) - (ORDEN_MINERA[b.estado] ?? 9));
+    if (dentro.length) {
+      return { estado: 'INFORMATIVO', dentro: true, concesiones: dentro, tituladas: dentro.filter((c) => c.estado === 'TITULADO').length, enTramite: dentro.filter((c) => c.estado === 'EN TRÁMITE').length, cercana: null, distanciaM: 0, ...base };
+    }
+    const cerca = medidos.length ? medidos.reduce((a, b) => (b.d < a.d ? b : a)) : null;
+    return { estado: 'INFORMATIVO', dentro: false, concesiones: [], tituladas: 0, enTramite: 0, cercana: cerca ? resumen(cerca.f) : null, distanciaM: cerca ? cerca.d : null, ...base };
+  }
+
+  /** La frase sobre un resultado de evaluarMinera. Dice que es un derecho sobre los minerales; nunca que haya minería en el predio ni de quién es. */
+  function textoMinera(r) {
+    if (!r || r.estado === 'SIN DATO' || r.dentro === null) return 'Concesión minera (informativo): sin dato; no pude leer el archivo del Catastro Minero.';
+    if (r.dentro) {
+      const n = r.concesiones.length;
+      const lista = r.concesiones.slice(0, 4).map((c) => `«${c.nombre || c.codigo}» (${ESTADO_MINERA_TXT[c.estado] || c.estado}${c.sustancia ? `, ${c.sustancia}` : ''}${c.hectareas ? `, ${Math.round(c.hectareas)} ha` : ''})`).join('; ');
+      return `Tu punto está dentro de ${n} ${n === 1 ? 'concesión minera' : 'concesiones mineras'} del Catastro Minero de INGEMMET: ${lista}${n > 4 ? ` y ${n - 4} más` : ''}. Una concesión minera es un derecho a explorar y explotar los minerales, separado del predio: no dice que haya minería en tu predio, de quién es el predio ni qué se puede hacer en él; el catastro es referencial.`;
+    }
+    const c = r.cercana;
+    return `Tu punto no cae dentro de ninguna concesión minera del Catastro Minero de INGEMMET${c ? `; la más cercana es «${c.nombre || c.codigo}» (${ESTADO_MINERA_TXT[c.estado] || c.estado}), a ${distTxt(r.distanciaM)} de su borde` : ''}. El catastro es referencial y se actualiza a diario: no garantiza que no haya otros derechos.`;
+  }
+
   // ------------------------------------------- Servicios de la manzana según el censo (alumbrado, agua, desagüe)
 
   /**
@@ -1176,6 +1224,9 @@ const Calculos = (() => {
     textoElectricidad,
     NOTA_ELECTRICIDAD,
     NOTA_CENSO,
+    NOTA_MINERA,
+    evaluarMinera,
+    textoMinera,
     evaluarManzana,
     serviciosDeManzana,
     claseCenso,

@@ -151,6 +151,8 @@ const Asistente = (() => {
     viajeZonas: /\b(busc\w*|vivir|mudar\w*|recomi\w*|sugier\w*)\b/,
     // Pedir ZONAS con luz es una búsqueda; «¿es zona de SEAL?» no (la palabra «zona» sola no la pide).
     electricidadBusca: /\b(busc\w*|encuentr\w*|recomi\w*|sugier\w*|mejor(?:es)?|zonas|donde (?:vivir|mudar\w*))\b/,
+    // Concesión minera (informativo): concesión o derecho minero, minería, mina(s). «Minero» solo no cuenta.
+    mineria: /\b(concesion(?:es)? minera?s?|derechos? minero?s?|catastro minero|mineria|mina|minas|mineras?)\b/,
     quebrada: /\b(quebradas?|torrenteras?|cauces?|huaycos?|huaicos?|aluvion\w*|rios?|rio chili)\b/,
     sismos: /\b(sismos?|sismic\w*|temblor\w*|terremoto\w*)\b/,
     peligros: /\b(peligros?|riesgos?|derrumbes?|deslizamientos?|caida de rocas|geologic\w*)\b/,
@@ -293,17 +295,23 @@ const Asistente = (() => {
    * precio: precio de oferta por m² de un distrito (`distrito`, o el del punto; `todosPrecio` = lista de todos los que tienen cifra)
    * modo (solo en buscar): nuevo | agregar | quitar | priorizar
    */
+  /** ¿La frase habla de concesiones mineras (concesión o derecho minero, minería, mina)? */
+  function mencionaMineria(texto) {
+    return RE.mineria.test(normalizar(texto));
+  }
+
   function interpretar(texto, ctx = {}) {
     const intencion = {
       tipo: 'desconocido', modo: 'nuevo', criterios: [], radioGlobalM: null, lote: null, incluirCondicional: false,
       temaNoSoportado: null, aproximados: [], limitarAlPunto: false, distrito: null, distritoFuera: false, distritoTexto: null, todosPrecio: false,
-      volcanTipos: [], cenepredFenomenos: [], cenepredMapa: false, cenepredTodos: false, consultorio: false, comercio: [], electricidad: false, agua: false, destino: null, viaje: null,
+      volcanTipos: [], cenepredFenomenos: [], cenepredMapa: false, cenepredTodos: false, consultorio: false, comercio: [], electricidad: false, mineria: false, agua: false, destino: null, viaje: null,
     };
     let t = normalizar(texto);
     if (!t) return intencion;
     intencion.consultorio = mencionaConsultorio(t);
     intencion.comercio = comercioEn(t);
     intencion.electricidad = mencionaElectricidad(t);
+    intencion.mineria = mencionaMineria(t);
     intencion.agua = mencionaAgua(t);
     t = t.replace(/(\d),(\d)/g, '$1.$2'); // «1,5 km»: la coma decimal no debe partir la frase
     NUMEROS.forEach(([re, v]) => { t = t.replace(re, v); });
@@ -380,6 +388,13 @@ const Asistente = (() => {
       const pideZonas = RE.electricidadBusca.test(t) || (ultima && (RE.agregar.test(t) || RE.prioridad.test(t)));
       if (pideZonas) return { ...intencion, tipo: 'no_soportado', temaNoSoportado: 'electricidad_busqueda', aproximados: [], limitarAlPunto: false };
       return { ...intencion, tipo: 'electricidad', aproximados: [], limitarAlPunto: false };
+    }
+
+    // Concesión minera: informativa. «¿Hay una concesión minera en mi punto?» se responde con el Catastro Minero; buscar zonas «sin minas» no se puede.
+    if (intencion.mineria && !hayCriterios && !RE.fuentes.test(t)) {
+      const pideZonas = RE.electricidadBusca.test(t) || (ultima && (RE.agregar.test(t) || RE.prioridad.test(t)));
+      if (pideZonas) return { ...intencion, tipo: 'no_soportado', temaNoSoportado: 'mineria_busqueda', aproximados: [], limitarAlPunto: false };
+      return { ...intencion, tipo: 'mineria', aproximados: [], limitarAlPunto: false };
     }
 
     // Agua y desagüe: informativos, con el censo de la manzana (2017). Igual que la luz: «¿hay agua en mi punto?» se responde; pedir zonas «con agua» no se puede.
@@ -1034,6 +1049,14 @@ const Asistente = (() => {
     return `Electricidad (informativo): fuera de las áreas de concesión de los datos (la más cercana, la de ${r.concesionaria || 'una empresa'}, a ${fmtDist(r.distanciaM)} de su borde); eso no dice si hay servicio.`;
   }
 
+  /** Línea del resumen del punto: ¿dentro de una concesión minera? Sin veredicto; null si no se calculó. */
+  function lineaMineria(r) {
+    if (!r) return null;
+    if (r.estado === 'SIN DATO' || r.dentro === null) return 'Concesión minera (informativo): sin dato en los datos que tengo.';
+    if (r.dentro) return `Concesión minera (informativo): dentro de ${r.concesiones.length} ${r.concesiones.length === 1 ? 'concesión' : 'concesiones'} del Catastro Minero; es un derecho sobre los minerales, no dice que haya minería en tu predio.`;
+    return `Concesión minera (informativo): fuera de toda concesión del Catastro Minero${r.cercana ? ` (la más cercana, a ${fmtDist(r.distanciaM)} de su borde)` : ''}; el catastro es referencial.`;
+  }
+
   /** Línea del resumen del punto: los servicios de la manzana según el censo. Sin veredicto; null si no se calculó. */
   function lineaCenso(r) {
     if (!r) return null;
@@ -1058,6 +1081,21 @@ const Asistente = (() => {
       texto: [C.textoElectricidad(r), fuente, C.NOTA_ELECTRICIDAD, ...cifras, ...agua].filter(Boolean).join('\n'),
       sugerencias: ['Dame un resumen del punto', '¿Hay una posta cerca?'],
       mapa: { capas: ['electricidad', 'censo_luz'] },
+    };
+  }
+
+  /** «¿Hay una concesión minera en mi punto?»: el Catastro Minero de INGEMMET, con su fuente y la salvedad. Nunca afirma que haya o no haya minería en el predio. */
+  function respuestaMineria(c) {
+    if (!c.punto) return { texto: 'Elige un punto en el mapa para ver si cae dentro de una concesión minera del Catastro Minero de INGEMMET.', sugerencias: SUGERENCIAS_BASE };
+    if (!c.entorno) return { texto: 'Todavía estoy calculando los servicios cercanos a tu punto; vuelve a preguntar en unos segundos.', sugerencias: [] };
+    const r = c.entorno.mineria;
+    if (!r) return { texto: 'Todavía no tengo ese dato; vuelve a preguntar en unos segundos.', sugerencias: [] };
+    if (r.estado === 'SIN DATO') return { texto: 'No tengo el dato del Catastro Minero ahora (sin dato); no puedo decirte si tu punto cae dentro de una concesión minera. Consulta el GEOCATMIN de INGEMMET.', sugerencias: ['Dame un resumen del punto'] };
+    const fuente = `Fuente: ${r.fuente || 'INGEMMET, Catastro Minero (GEOCATMIN)'}${r.fecha ? `, descargado el ${r.fecha}` : ''}.`;
+    return {
+      texto: [C.textoMinera(r), fuente, C.NOTA_MINERA].filter(Boolean).join('\n'),
+      sugerencias: ['Dame un resumen del punto', '¿Hay luz en mi punto?'],
+      mapa: { capas: ['mineria'] },
     };
   }
 
@@ -1524,6 +1562,7 @@ const Asistente = (() => {
     '• Paraderos y áreas verdes: OpenStreetMap (ODbL), copia congelada con su fecha de extracción. Algo que falte en el mapa puede existir.',
     '• Comercio por necesidad —abastecimiento (mercados y supermercados), compras y ocio (malls confirmados) y comercio de barrio (galerías)—: OpenStreetMap (ODbL), informativos y sin umbral; el CENAMA 2016 (INEI, PRODUCE) solo se usa para contar mercados por distrito. Los malls conocidos se contrastan con la fuente de cada uno.',
     '• Electricidad: áreas de concesión de distribución eléctrica del MINEM (Dirección General de Electricidad, licencia ODC-By), copia congelada con su fecha de descarga. Dicen a quién le corresponde el servicio, no si un predio está conectado.',
+    '• Concesiones mineras: Catastro Minero de INGEMMET (GEOCATMIN), copia congelada con su fecha de descarga; es referencial y se actualiza a diario. Es un derecho sobre los minerales, no dice si hay minería ni de quién es el predio.',
     '• Agua, desagüe y alumbrado por manzana: Censos Nacionales 2017 del INEI (REDATAM en línea), copia congelada con su fecha de descarga; solo área urbana. El censo de 2025 ya se levantó pero el INEI aún no lo abre por manzana: del 2025 solo uso el dato del departamento de Arequipa (nota de prensa del INEI de julio de 2026).',
     '• Líneas de transporte (recorridos y paradas): SmartBus (smartbus.app), usados con su autorización verbal (confirmación escrita pendiente). Sin frecuencias ni horarios.',
     '• Umbrales: colegios 500 m inicial, 1500 m primaria y 3000 m secundaria (MINEDU); área verde ≥ 0,5 ha a 300 m (OMS Europa); salud 1000 m, paradero 400 m y borde de zona 20 m son convenciones del proyecto.',
@@ -1587,6 +1626,7 @@ const Asistente = (() => {
     cenepred_busqueda: 'Todavía no puedo buscar zonas según el riesgo de inundación o de movimientos en masa. Sí puedo decirte qué estima el CENEPRED para el distrito de tu punto («¿qué dice el CENEPRED de mi punto?») o para un distrito («¿Paucarpata se inunda?»).',
     comercio_busqueda: 'No puedo buscar zonas «cerca de un mall, un supermercado, un mercado o una galería»: son datos informativos, porque no hay una distancia de referencia (es una decisión pendiente) y no los uso para elegir un lugar. Sí puedo decirte cuál es el más cercano a tu punto según lo que necesites —abastecimiento (mercados y supermercados), compras y ocio (malls) o comercio de barrio (galerías)— («¿hay un mall y un mercado cerca de mi punto?») o cuántos hay en un distrito («¿cuántos mercados hay en Cayma?»). Es informativo: no dice si está cerca o lejos.',
     agua_busqueda: 'No puedo buscar zonas «con agua» o «con desagüe»: lo que tengo son las cifras del censo de 2017 por manzana (qué porcentaje de las viviendas censadas tenía agua y desagüe por red pública), que describen una manzana en 2017 y no uso para elegir un lugar. Sí puedo decirte qué dice el censo de la manzana de tu punto («¿hay agua en mi punto?»). Es informativo: no dice si un predio está conectado.',
+    mineria_busqueda: 'No puedo buscar zonas «sin minas» o «lejos de concesiones mineras»: el Catastro Minero de INGEMMET es referencial y una concesión es un derecho sobre los minerales, no un indicio de minería ni una distancia de seguridad, y no la uso para elegir un lugar. Sí puedo decirte si tu punto cae dentro de una concesión minera o cuál es la más cercana («¿hay una concesión minera en mi punto?»). Es informativo.',
     electricidad_busqueda: 'No puedo buscar zonas «con luz»: lo que tengo son las áreas de concesión de distribución eléctrica (SEAL y otras), que dicen a qué empresa le corresponde el servicio, no dónde hay conexión, y no las uso para elegir un lugar. Sí puedo decirte si tu punto está dentro de una («¿hay luz en mi punto?»). Es informativo: una concesión no es una conexión.',
     consultorio_busqueda: 'No puedo buscar zonas «cerca de un consultorio»: el consultorio médico es una categoría aparte de los establecimientos de salud y es solo informativo, porque no hay una distancia de referencia (es una decisión pendiente). Sí puedo decirte el consultorio más cercano a tu punto («¿hay un consultorio cerca?») o cuántos hay en un distrito («¿cuántos consultorios hay en Cayma?»); para buscar zonas usa «posta», «hospital» o «centro de salud».',
     ruido: 'No tengo datos de ruido. «Zona tranquila» es solo una aproximación con la zonificación (residencial de densidad baja o media 1), no una medición.',
@@ -1611,6 +1651,7 @@ const Asistente = (() => {
     if (tipo === 'consultorio') return respuestaConsultorio(intencion, c);
     if (tipo === 'comercio') return respuestaComercio(intencion, c);
     if (tipo === 'electricidad') return respuestaElectricidad(c, intencion);
+    if (tipo === 'mineria') return respuestaMineria(c);
     if (tipo === 'agua') return respuestaAgua(c);
     if (tipo === 'viaje') return respuestaViaje(intencion, c);
     if (tipo === 'ruta_zonas') return respuestaRutaZonas(intencion, c);
@@ -1681,6 +1722,7 @@ const Asistente = (() => {
         lineaConsultorio(e.consultorio),
         ...Object.keys(C.COMERCIO).map((id) => lineaComercio(id, e[id])),
         lineaElectricidad(e.electricidad),
+        lineaMineria(e.mineria),
         lineaCenso(e.censo),
         `Colegios: ${colegios}.`,
         linea('Transporte', e.transporte),
@@ -2008,6 +2050,8 @@ const Asistente = (() => {
   const FUENTE_COMERCIO = 'Abastecimiento (mercados y supermercados), compras y ocio (solo los malls confirmados) y comercio de barrio (el resto de lo que se etiqueta mall): OpenStreetMap (ODbL), copia congelada con su fecha de extracción; los malls conocidos de Arequipa se contrastan con el sitio de cada mall o de su operador. El Censo Nacional de Mercados de Abastos 2016 (INEI, publicado por PRODUCE) no trae nombres ni coordenadas: solo sirve para comparar cuántos mercados había por distrito.';
   const FUENTE_ELECTRICIDAD = 'Electricidad: áreas de concesión de distribución eléctrica del MINEM (Dirección General de Electricidad, servicio ArcGIS REST del geoportal; datasets de datosabiertos.gob.pe, licencia ODC-By), copia congelada con su fecha de descarga.';
   const LIM_ELECTRICIDAD = 'La concesión eléctrica dice a qué empresa le corresponde dar el servicio de distribución en esa zona; no dice que un predio esté conectado ni que haya red en su calle (la cobertura real vendría de un censo, que aún no tengo). Los polígonos del registro son poco detallados y su borde puede ser impreciso; que un punto quede fuera no significa que no haya servicio.';
+  const FUENTE_MINERIA = 'Concesiones mineras: Catastro Minero de INGEMMET (GEOCATMIN, servicio ArcGIS REST), copia congelada con su fecha de descarga; el propio servicio lo declara referencial y de actualización diaria. No se guarda el nombre del titular.';
+  const LIM_MINERIA = 'El Catastro Minero dice dónde hay derechos mineros (concesiones tituladas, en trámite y otras); no dice que haya minería en el lugar, de quién es el predio ni qué se puede hacer en él. Que un punto quede fuera no garantiza que no haya otros derechos: consulta el GEOCATMIN de INGEMMET.';
   const FUENTE_CENSO = 'Agua, desagüe y alumbrado por manzana: Censos Nacionales 2017 del INEI (REDATAM en línea, https://censos2017.inei.gob.pe/) con los polígonos de manzana del INEI, copia congelada con su fecha de descarga; solo área urbana. De 2025 solo se usa el dato del departamento de Arequipa (nota de prensa del INEI del 17 de julio de 2026).';
   const LIM_CENSO = 'Las cifras del censo son de 2017 y de toda la manzana, calculadas sobre las viviendas ocupadas con personas presentes que se censaron: no dicen si un predio en particular está conectado ni cómo está hoy. Con menos de 5 viviendas ocupadas no doy el porcentaje. El censo de 2025 todavía no está abierto por manzana (REDATAM 2025 pide iniciar sesión).';
   const LIM_COMERCIO = 'El abastecimiento (mercados y supermercados), las compras y el ocio (malls confirmados) y el comercio de barrio (galerías) son categorías informativas, sin distancia de referencia (es una decisión pendiente): no se dice si están cerca o lejos y no suman al puntaje. Un supermercado dentro de un mall cuenta como abastecimiento; el mall, no. OpenStreetMap puede no tener todos y a veces etiqueta de más: por distrito, el número de mercados mapeados no coincide con el del censo de 2016 (en unos hay menos y en otros más), amenity=marketplace incluye ferias y comercios mal etiquetados, y shop=mall incluye galerías y centros comerciales pequeños, no solo malls. No distingue un mercado minorista de uno mayorista. «Sin dato» no significa que no exista.';
@@ -2034,8 +2078,8 @@ const Asistente = (() => {
     no_soportado: GENERICO,
     fuentes: {
       porque: ['Resume de dónde sale cada dato de la ficha y qué umbral se usa.'],
-      fuente: [FUENTE_PLANO, FUENTE_SERVICIOS, FUENTE_COMERCIO, FUENTE_ELECTRICIDAD, FUENTE_CENSO, FUENTE_UMBRALES],
-      limites: [LIM_RECTA, LIM_OFICIAL, LIM_CONSULTORIO, LIM_COMERCIO, LIM_ELECTRICIDAD, LIM_CENSO, LIM_OSM, LIM_REFERENCIAL],
+      fuente: [FUENTE_PLANO, FUENTE_SERVICIOS, FUENTE_COMERCIO, FUENTE_ELECTRICIDAD, FUENTE_MINERIA, FUENTE_CENSO, FUENTE_UMBRALES],
+      limites: [LIM_RECTA, LIM_OFICIAL, LIM_CONSULTORIO, LIM_COMERCIO, LIM_ELECTRICIDAD, LIM_MINERIA, LIM_CENSO, LIM_OSM, LIM_REFERENCIAL],
     },
     pdm: {
       porque: ['Muestra el aviso sobre el estado del PDM nuevo que registra la herramienta, con su fuente y su fecha. No lo interpreta.'],
@@ -2082,6 +2126,11 @@ const Asistente = (() => {
       porque: ['Ubica tu punto en la manzana del censo de 2017 que lo contiene (o la más cercana, si estás en la calle) y da el porcentaje de sus viviendas ocupadas que tenían agua y desagüe por red pública. No lo compara con ninguna distancia de referencia.'],
       fuente: [FUENTE_CENSO],
       limites: [LIM_CENSO, C.NOTA_CENSO, LIM_REFERENCIAL],
+    },
+    mineria: {
+      porque: ['Ubica tu punto dentro de los polígonos de concesiones mineras del Catastro Minero de INGEMMET y lista las que lo contienen (las extinguidas no cuentan); si cae afuera, la distancia al borde de la más cercana. No lo compara con ninguna distancia de referencia.'],
+      fuente: [FUENTE_MINERIA],
+      limites: [LIM_MINERIA, C.NOTA_MINERA, LIM_REFERENCIAL],
     },
     electricidad: {
       porque: ['Ubica tu punto dentro de los polígonos de concesión de distribución eléctrica del MINEM y dice de qué empresa es el área; si cae afuera, la distancia al borde de la más cercana. No lo compara con ninguna distancia de referencia.'],
@@ -2165,6 +2214,7 @@ const Asistente = (() => {
     notaConsultorio,
     mencionaComercio,
     mencionaElectricidad,
+    mencionaMineria,
     mencionaAgua,
     mencionaViaje,
     resumirRutaZonas,

@@ -125,6 +125,8 @@ const CONFIG = {
     mall: null,          // pendiente de decisión del usuario; referencia propuesta: ninguna verificada
     // Electricidad: área de concesión de distribución (MINEM-DGE). INFORMATIVA: ninguna distancia aplica; dentro o fuera de una concesión no es una conexión.
     electricidad: null,
+    // Concesiones mineras (Catastro Minero de INGEMMET): INFORMATIVAS; una concesión es un derecho sobre los minerales, no una distancia ni una norma.
+    mineria: null,
     // Servicios de la manzana según el censo (alumbrado, agua y desagüe por red pública): INFORMATIVOS, sin umbral. Son cifras de un año de censo, no una norma.
     censo: null,
     educacion: { inicial: 500, primaria: 1500, secundaria: 3000 }, // V3
@@ -142,6 +144,7 @@ const CONFIG = {
     supermercado: 'Sin umbral: pendiente de decisión del usuario; referencia propuesta: ninguna con fuente verificada en metros; se muestra solo como dato informativo',
     mall: 'Sin umbral: pendiente de decisión del usuario; referencia propuesta: ninguna con fuente verificada en metros; se muestra solo como dato informativo',
     censo: 'Sin umbral: son cifras del censo de la manzana (año 2017), no una distancia ni una norma; se muestran solo como dato informativo',
+    mineria: 'Sin umbral: no aplica una distancia de referencia; dentro o fuera de una concesión minera no dice si hay minería ni qué se puede hacer en el predio; se muestra solo como dato informativo',
     electricidad: 'Sin umbral: no aplica una distancia de referencia; dentro o fuera de un área de concesión no es una conexión; se muestra solo como dato informativo',
     educacion: 'MINEDU, numeral 7.1, Cuadro N.° 1, distancias referenciales: inicial 500 m (RVM 104-2019-MINEDU), primaria 1500 m y secundaria 3000 m (RVM 208-2019-MINEDU)',
     transporte: 'Convención del proyecto',
@@ -209,6 +212,7 @@ const CONFIG = {
       consultorios: 'data/equipamiento/consultorios.geojson', // consultorios médicos: informativos, aparte de la salud
       mercados: 'data/equipamiento/mercados.geojson', // mercados de abastos: informativos (scripts/descargar-comercio.mjs)
       supermercados: 'data/equipamiento/supermercados.geojson', // supermercados: informativos, aparte de los mercados
+      mineria: 'data/mineria/concesiones_mineras.geojson', // concesiones mineras (INGEMMET): informativo (scripts/descargar-concesiones-mineras.mjs)
       electricidad: 'data/electricidad/concesiones_distribucion.geojson', // áreas de concesión de distribución eléctrica (MINEM-DGE): informativo (scripts/descargar-concesiones-electricas.mjs)
       malls: 'data/equipamiento/malls.geojson', // malls (centros comerciales): informativos; polígonos donde OSM los tiene
       educacion: 'data/equipamiento/educacion.geojson',

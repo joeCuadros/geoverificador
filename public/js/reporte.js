@@ -144,6 +144,23 @@ const Reporte = (() => {
   }
 
   /**
+   * Concesión minera: ¿el punto cae dentro de una concesión del Catastro Minero de INGEMMET? INFORMATIVA (sin umbral). Una concesión es un derecho a explorar y explotar los
+   * minerales, separado del predio: no dice que haya minería ni de quién es el predio. No se guarda el nombre del titular.
+   */
+  function mineria(d) {
+    const r = d.variables && d.variables.mineria;
+    if (!r) return '';
+    if (r.error) return `<table class="rp-tabla">${fila('Resultado', `No se pudo obtener el dato: ${esc(r.error)}`)}</table><p class="rp-nota">${esc(CALC.NOTA_MINERA)}</p>`;
+    const filas = [fila('Estado', r.estado === 'SIN DATO' ? estado('SIN DATO') : estado('INFORMATIVO')), fila('Resultado', esc(CALC.textoMinera(r)))];
+    if (r.dentro) {
+      r.concesiones.forEach((c) => filas.push(fila(`Concesión ${esc(c.codigo)}`, `${esc(c.nombre)} · ${esc(c.estado)}${c.sustancia ? ` · ${esc(c.sustancia)}` : ''}${c.hectareas ? ` · ${Math.round(c.hectareas)} ha` : ''}${c.explotacion_o_exploracion ? ` · ${esc(c.explotacion_o_exploracion)}` : ''}`)));
+    } else if (r.dentro === false && r.cercana) {
+      filas.push(fila('Distancia al borde de la más cercana', `${dist(r.distanciaM)} en línea recta (${esc(r.cercana.nombre)}, ${esc(r.cercana.estado)})`));
+    }
+    return `<table class="rp-tabla">${filas.join('')}</table><p class="rp-nota">${esc(CALC.NOTA_MINERA)} ${esc(r.metodo || '')}</p>`;
+  }
+
+  /**
    * Electricidad: ¿el punto está dentro de un área de concesión de distribución eléctrica (SEAL u otra)? INFORMATIVA (sin umbral). Una concesión dice a
    * quién le corresponde el servicio; NO que el predio esté conectado, y la cobertura real de conexión vendría de un censo que el proyecto aún no tiene.
    */
@@ -411,6 +428,7 @@ const Reporte = (() => {
       ['Salud', '#c2410c', salud(d), d.variables ? fuenteDe(d.variables.salud) : ''],
       ...(d.variables && d.variables.consultorio ? [['Consultorio médico (informativo)', '#b45309', consultorio(d), fuenteDe(d.variables.consultorio)]] : []),
       ...(hayComercio(d) ? [['Comercio por necesidad: abastecimiento, compras y ocio, comercio de barrio (informativo)', '#be185d', comercio(d), fuenteComercio(d)]] : []),
+      ...(d.variables && d.variables.mineria ? [['Concesión minera (informativo)', '#7c2d12', mineria(d), fuenteDe(d.variables.mineria)]] : []),
       ...(d.variables && d.variables.electricidad ? [['Electricidad (informativo)', '#ca8a04', electricidad(d), fuenteDe(d.variables.electricidad)]] : []),
       ...(d.variables && d.variables.censo ? [[`Servicios de la manzana (censo ${d.variables.censo.anio || 2017}, informativo)`, '#0e7490', censo(d), d.variables.censo.fuente ? fuenteDe(d.variables.censo) : '']] : []),
       ['Educación por nivel', '#7c3aed', educacion(d), d.variables ? fuenteDe(d.variables.educacion.inicial) : ''],
@@ -439,6 +457,7 @@ const Reporte = (() => {
       'Los locales de ESCALE dicen su nivel. Los colegios de OpenStreetMap que completan el mapa casi no lo etiquetan: uno sin nivel se toma como candidato a primaria y secundaria, lo que puede sobrestimar la oferta de un nivel.',
       ...(d.variables && d.variables.consultorio ? ['El consultorio médico es una categoría aparte de los establecimientos de salud y es solo informativo: no tiene una distancia de referencia (es una decisión pendiente), así que no se dice si está cerca o lejos, no suma a ningún puntaje y no cuenta como «salud cerca».'] : []),
       ...(d.variables && d.variables.censo ? ['Servicios de la manzana: alumbrado, agua y desagüe por red pública según el censo de 2017 del INEI (REDATAM), solo área urbana. Son cifras de toda la manzana, calculadas sobre las viviendas ocupadas con personas presentes que se censaron, no de un predio ni de hoy; con menos de 5 viviendas no se da el porcentaje. El censo de 2025 ya se levantó pero el INEI todavía no lo abre por manzana. Es informativo y no suma a ningún puntaje.'] : []),
+      ...(d.variables && d.variables.mineria ? ['Concesión minera: el Catastro Minero de INGEMMET es referencial y se actualiza a diario; una concesión minera es un derecho a explorar y explotar los minerales, separado del predio (art. 9 de la Ley General de Minería): no dice que haya minería en el lugar, de quién es el predio ni qué se puede hacer en él, y que el punto quede fuera no garantiza que no haya otros derechos. Es informativo y no suma a ningún puntaje.'] : []),
       ...(d.variables && d.variables.electricidad ? ['Electricidad: el área de concesión de distribución eléctrica (MINEM, Dirección General de Electricidad) dice a qué empresa le corresponde dar el servicio en esa zona; una concesión no es una conexión: no dice que el predio esté conectado ni que haya red en su calle, y los polígonos del registro son poco detallados (su borde puede ser impreciso). La cobertura real de conexión vendría de un censo (INEI) que este proyecto aún no tiene. Es informativo y no suma a ningún puntaje.'] : []),
       ...(hayComercio(d) ? ['El comercio se ordena por necesidad —abastecimiento (mercados y supermercados), compras y ocio (solo los malls confirmados con su fuente) y comercio de barrio (el resto de lo que se etiqueta mall)— y es informativo: no tiene una distancia de referencia (es una decisión pendiente), así que no se dice si está cerca o lejos y no suma a ningún puntaje. Un supermercado dentro de un mall cuenta como abastecimiento; el mall, no. Sale de OpenStreetMap, que puede no tenerlos todos (por distrito, el número de mercados mapeados no coincide con el del censo de 2016), etiqueta de más —amenity=marketplace incluye ferias y comercios mal etiquetados y shop=mall incluye galerías pequeñas, no solo malls— y no distingue un mercado minorista de uno mayorista; de un mall con forma en el mapa la distancia es al borde.'] : []),
       'Quebradas y cauces: no existe una distancia normativa a una quebrada, así que el estado es INFORMATIVO salvo que la persona fije su propio umbral («según tu umbral»). Los cauces vienen de la ANA, el IGP y OpenStreetMap; ninguna fuente es completa, no son un mapa de peligro y no delimitan la faja marginal.',

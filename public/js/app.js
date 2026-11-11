@@ -149,6 +149,7 @@
     salud: { titulo: 'Salud', icono: 'salud' },
     consultorio: { titulo: 'Consultorio médico', icono: 'salud' },
     electricidad: { titulo: 'Servicios básicos: luz, agua y desagüe', icono: 'electricidad' },
+    mineria: { titulo: 'Concesión minera', icono: 'mapa' },
     viaje: { titulo: 'Ir al trabajo en combi o bus', icono: 'paradero' },
     abastecimiento: { titulo: 'Abastecimiento (comida): mercados y supermercados', icono: 'comercio' },
     compras_ocio: { titulo: 'Compras y ocio: malls', icono: 'comercio' },
@@ -705,6 +706,7 @@
       partes.push(`Salud: ${t(e.salud)}`);
       if (e.consultorio) partes.push(`Consultorio médico (informativo): ${e.consultorio.distanciaM !== null ? fmtDist(e.consultorio.distanciaM) : 'sin dato'}`);
       if (e.censo) partes.push(`Servicios de la manzana (censo ${e.censo.anio}, informativo): ${e.censo.tieneCifras && !e.censo.pocas ? `luz ${e.censo.luz.pct} %, agua ${e.censo.agua.pct} %, desagüe ${e.censo.desague.pct} %` : 'sin porcentaje'}`);
+      if (e.mineria) partes.push(`Concesión minera (informativo): ${e.mineria.dentro === null ? 'sin dato' : e.mineria.dentro ? `dentro de ${e.mineria.concesiones.length} (derecho sobre los minerales, no minería en el predio)` : e.mineria.cercana ? `fuera de toda concesión; la más cercana a ${fmtDist(e.mineria.distanciaM)} del borde` : 'fuera de toda concesión'}`);
       if (e.electricidad) partes.push(`Electricidad (informativo): ${e.electricidad.dentro === null ? 'sin dato' : e.electricidad.dentro ? `dentro del área de concesión de ${e.electricidad.concesionarias.join(' y ')}` : `fuera de las áreas de concesión, a ${fmtDist(e.electricidad.distanciaM)} del borde`}`);
       Object.keys(Calculos.COMERCIO).forEach((id) => { if (e[id]) partes.push(`${Calculos.COMERCIO[id].etiqueta} (informativo): ${e[id].distanciaM !== null ? fmtDist(e[id].distanciaM) : 'sin dato'}`); });
       const niv = Equipamiento.NIVELES;
@@ -1110,6 +1112,7 @@
     salud: 'Cuenta los establecimientos de salud activos de RENIPRESS (SUSALUD) con categoría I-1 a III-E y coordenadas (hospitales, clínicas, centros y puestos de salud, policlínicos…), sin los consultorios médicos, que son otra categoría, y los de OpenStreetMap solo donde RENIPRESS no tiene un punto de salud a 200 m. Cerca del 42 % de los establecimientos de Arequipa en RENIPRESS no trae coordenadas y no puede contarse. No dice si atiende emergencias ni su horario, y la distancia es en línea recta, no recorrido a pie.',
     consultorio: 'Cuenta los consultorios médicos activos de RENIPRESS (SUSALUD) —su clasificación dice «consultorios»— y los de OpenStreetMap (amenity=doctors, healthcare=doctor) solo donde RENIPRESS no tiene un consultorio a 200 m. Tampoco trae las coordenadas de todos. No dice la especialidad, el horario ni si atiende al público.',
     censo: 'Son cifras del Censo Nacional de 2017 (INEI, REDATAM) de toda la manzana, sobre las viviendas particulares ocupadas con personas presentes que se censaron. No son de un predio ni de hoy: pasaron años y la ciudad creció. Solo cubre el área urbana; una manzana que el censo no contó queda sin cifras (no es un cero) y con menos de 5 viviendas ocupadas no se da el porcentaje. El censo de 2025 ya se levantó, pero el INEI todavía no abre sus resultados por manzana (REDATAM 2025 pide iniciar sesión): del 2025 solo se muestra el dato del departamento.',
+    mineria: 'Dice si el punto cae dentro de una concesión del Catastro Minero de INGEMMET (tituladas, en trámite y otras; las extinguidas no cuentan) y, si no, cuál es la más cercana. Una concesión minera es el derecho a explorar y explotar los minerales dentro de su perímetro, separado del predio: NO dice que haya minería en el lugar, de quién es el predio ni qué se puede hacer en él. El catastro es referencial y se actualiza a diario; la copia que usamos tiene la fecha indicada. No se muestra el nombre del titular.',
     electricidad: 'Dice si el punto cae dentro de un polígono de concesión de distribución eléctrica del registro del MINEM (SEAL en Arequipa y, si toca la zona, otras empresas): a quién le corresponde dar el servicio ahí. NO dice si el predio está conectado, si hay red en la calle ni si el suministro es continuo; la cobertura real vendría de un censo que aún no tenemos. Los polígonos son poco detallados y su borde puede ser impreciso: un punto fuera no significa que no haya servicio.',
     abastecimiento: 'Cuenta los mercados (amenity=marketplace, que incluye mercados de abastos, ferias y mercadillos: no distingue minorista de mayorista) y los supermercados (shop=supermarket, sin tiendas de conveniencia ni bodegas) de OpenStreetMap, y puede faltar alguno (el censo de mercados de 2016 del INEI solo sirve para contar por distrito, no trae ubicaciones). Un supermercado dentro de un mall es el punto de abastecimiento; el mall, no. Sin distancia de referencia.',
     compras_ocio: 'Cuenta solo los malls confirmados con la fuente de cada uno (lista curada) que OpenStreetMap tiene ubicados; uno confirmado que OpenStreetMap no tiene (por ejemplo Mallplaza) no se mide. Si OpenStreetMap tiene el edificio, la distancia se mide hasta su borde. No cuenta las galerías ni los centros comerciales pequeños. Sin distancia de referencia.',
@@ -1220,6 +1223,22 @@
       + `<p class="var-explica">${esc(Calculos.NOTA_ELECTRICIDAD)}</p>`
       + detalleDato(el, QUE_NO_CUBRE.electricidad)) : null;
 
+    // Concesión minera (Catastro Minero de INGEMMET): informativa. Un derecho sobre los minerales, no «minería en tu predio».
+    const mi = e.mineria;
+    const mineria = mi ? tarjetaVariable(VARIABLES.mineria, mi.estado,
+      mi.error ? 'No se pudo obtener el dato' : mi.dentro === null ? 'Sin dato'
+        : mi.dentro ? `Dentro de ${mi.concesiones.length} ${mi.concesiones.length === 1 ? 'concesión minera' : 'concesiones mineras'} · es un derecho sobre los minerales`
+          : mi.cercana ? `Fuera de toda concesión · la más cercana, a ${fmtDist(mi.distanciaM)} del borde` : 'Fuera de toda concesión',
+      (mi.error ? `<p class="zon-msg error"><strong>No se pudo obtener el dato.</strong> ${esc(mi.error)}</p>` : '')
+      + (mi.dentro === null ? (mi.error ? '' : explicacion(mi, 'concesiones mineras'))
+        : mi.dentro
+          ? `<div class="var-dato"><p class="var-dist">Dentro <small>de ${mi.concesiones.length === 1 ? 'una concesión minera' : `${mi.concesiones.length} concesiones mineras`}</small></p></div>`
+            + mi.concesiones.map((c) => `<p class="var-meta"><b>${esc(c.nombre || c.codigo)}</b> (código ${esc(c.codigo)}): ${esc(c.estado.toLowerCase())}${c.estado_detalle ? ` · ${esc(c.estado_detalle)}` : ''}${c.sustancia ? ` · sustancia ${esc(c.sustancia)}` : ''}${c.hectareas ? ` · ${fmtNum(Math.round(c.hectareas))} ha` : ''}${c.explotacion_o_exploracion ? ` · ${esc(c.explotacion_o_exploracion.toLowerCase())}` : ''}.</p>`).join('')
+          : `<div class="var-dato"><p class="var-dist">${mi.cercana ? fmtDist(mi.distanciaM) : '—'} <small>hasta el borde de la concesión más cercana</small></p>${mi.cercana ? `<p class="var-nombre">${esc(mi.cercana.nombre || mi.cercana.codigo)} · ${esc(mi.cercana.estado.toLowerCase())}</p>` : ''}</div>`)
+      + (mi.dentro === null ? '' : `<p class="var-explica"><strong>Informativo.</strong> ${esc(Calculos.textoMinera(mi))}</p>`)
+      + `<p class="var-explica">${esc(Calculos.NOTA_MINERA)}</p>`
+      + detalleDato(mi, QUE_NO_CUBRE.mineria), mi.estado === 'INFORMATIVO' ? 'Informativo' : null) : '';
+
     // Censo por manzana (INEI, 2017): alumbrado, agua y desagüe por red pública de la MANZANA del punto. Informativo; nunca «tu predio tiene».
     const ce = e.censo;
     const dep25 = CONFIG.censo.departamento2025;
@@ -1299,7 +1318,7 @@
       + `<p class="var-meta">Criterio: un área verde de al menos ${fmtNum(u.areaMinM2)} m² a ${u.distanciaM} m o menos.</p>` + sens
       + detalleDato(v, QUE_NO_CUBRE.areaVerde));
 
-    $('entorno').innerHTML = salud + consultorio + comercio + electricidad + educacion + transporte + '<div id="card-viaje"></div>' + areaVerde + '<div id="card-quebradas"></div>';
+    $('entorno').innerHTML = salud + consultorio + comercio + electricidad + mineria + educacion + transporte + '<div id="card-viaje"></div>' + areaVerde + '<div id="card-quebradas"></div>';
     renderViaje(); // «Ir al trabajo»: qué combi o bus lleva de este punto al destino
     renderQuebradas(); // llega aparte (archivo congelado de la ANA)
     $('entorno').setAttribute('aria-busy', 'false');
@@ -1760,6 +1779,7 @@
       resumen.push(['Salud', linea(e.salud)]);
       if (e.consultorio) resumen.push(['Consultorio médico (informativo)', linea(e.consultorio)]);
       if (e.censo) resumen.push([`Servicios de la manzana (censo ${e.censo.anio}, informativo)`, e.censo.tieneCifras && !e.censo.pocas ? `Alumbrado ${e.censo.luz.pct} % · agua ${e.censo.agua.pct} % · desagüe ${e.censo.desague.pct} % de ${e.censo.ocupadas} viviendas ocupadas (manzana, no predio)` : 'Sin porcentaje para esta manzana']);
+      if (e.mineria) resumen.push(['Concesión minera (informativo)', e.mineria.dentro === null ? 'Sin dato' : e.mineria.dentro ? `Dentro de ${e.mineria.concesiones.length} ${e.mineria.concesiones.length === 1 ? 'concesión' : 'concesiones'} del Catastro Minero · derecho sobre los minerales, no dice que haya minería en el predio` : `Fuera de toda concesión${e.mineria.cercana ? `; la más cercana a ${fmtDist(e.mineria.distanciaM)} del borde` : ''} · catastro referencial`]);
       if (e.electricidad) resumen.push(['Electricidad (informativo)', e.electricidad.dentro === null ? 'Sin dato' : `${e.electricidad.dentro ? `Dentro del área de concesión de ${e.electricidad.concesionarias.join(' y ')}` : `Fuera de las áreas de concesión; ${fmtDist(e.electricidad.distanciaM)} hasta el borde de la de ${e.electricidad.concesionaria || 'una empresa'}`} · no es una conexión`]);
       Object.keys(Calculos.COMERCIO).forEach((id) => { if (e[id]) resumen.push([`${Calculos.COMERCIO[id].etiqueta} (informativo)`, linea(e[id])]); });
       Equipamiento.NIVELES.forEach((n) => resumen.push([`Educación ${n}`, linea(e.educacion[n])]));
@@ -1830,6 +1850,7 @@
       salud: state.entorno && state.entorno.salud,
       consultorio: state.entorno && state.entorno.consultorio, // informativo, sin umbral
       censo_manzana: state.entorno && state.entorno.censo, // informativo, sin umbral: cifras de la manzana en el año del censo (2017), no del predio
+      mineria: state.entorno && state.entorno.mineria, // informativo, sin umbral: una concesión es un derecho sobre los minerales
       electricidad: state.entorno && state.entorno.electricidad, // informativo, sin umbral: un área de concesión no es una conexión
       abastecimiento: state.entorno && state.entorno.abastecimiento && { ...state.entorno.abastecimiento, forma: undefined, porTipo: state.entorno.abastecimiento.porTipo && Object.fromEntries(Object.entries(state.entorno.abastecimiento.porTipo).map(([k, x]) => [k, { ...x, forma: undefined }])) }, // mercados + supermercados; informativo, sin umbral
       compras_ocio: state.entorno && state.entorno.compras_ocio && { ...state.entorno.compras_ocio, forma: undefined }, // solo malls confirmados con su fuente; informativo, sin umbral
