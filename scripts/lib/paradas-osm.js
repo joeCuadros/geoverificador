@@ -70,11 +70,11 @@ const EMPRESAS = [
   ['transcayma', /trans\s*cayma/],
   ['unionaqp', /union\s+aqp/],
   ['uniongrau', /union\s+grau/],
-  ['aqpmasivo', /aqp\s+masivo/],
+  ['aqpmasivo', /aqp\s*masivo/],
   ['emarsistran', /emarsi?stran/],
   ['megabus', /mega\s*bus/],
-  ['cotum', /cotum|coutm/],
-  ['etrabus', /etrabus/],
+  ['cotum', /cotum|coutm|pachacutec/],
+  ['etrabus', /etrabus|mariano\s+melgar/],
   ['characato', /characato/],
 ];
 

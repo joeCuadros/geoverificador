@@ -1269,6 +1269,25 @@ console.log('\n== D. Rutas y paradas de OpenStreetMap: integridad y cálculos fr
   console.log(`INFO  Rutas OSM: ${rO.length} rutas, ${mO.conteos.vertices} vértices, líneas ${JSON.stringify(mO.conteos.lineas)}; con duración ${mO.conteos.con_duracion}, con intervalo ${mO.conteos.con_intervalo}`);
 }
 
+// Y2. Registro OFICIAL del SIT (scripts/extraer-registro-sit.mjs, scripts/lib/registro-sit.js) y su comparación con las rutas de OpenStreetMap.
+console.log('\n== Registro oficial del SIT frente a las rutas de OpenStreetMap ==');
+{
+  const Reg = createRequire(import.meta.url)('./lib/registro-sit.js');
+  const reg = json('data/sit_registro_oficial.json');
+  const m = reg.metadata || {};
+  const us = reg.unidades || [];
+  comprobar('Registro SIT: metadata con la fuente (MPA), la página y el anexo, el SHA-256, que es de 2017 (no vigente) y la ordenanza que lo reemplazó', /Municipalidad Provincial de Arequipa/.test(m.fuente || '') && m.url_pagina === 'https://www.muniarequipa.gob.pe/sistema_transporte/' && /anexos_08_06_2017\.pdf$/.test(m.url_anexos || '') && /^[0-9a-f]{64}$/.test(m.sha256_anexos || '') && m.vigente === false && /1355-MPA/.test(m.plan_vigente?.norma || '') && /elperuano\.pe/.test(m.plan_vigente?.url || '') && /no están publicados/.test(m.plan_vigente?.nota || ''));
+  const codigos = us.map((u) => u.codigo);
+  comprobar('Registro SIT: las 12 unidades de negocio (C1A, C1B y C2 a C11) con nombre y al menos una ruta; códigos de ruta A#, T# o BT# sin repetir; longitudes entre 3 y 60 km', codigos.join() === 'C1A,C1B,C2,C3,C4,C5,C6,C7,C8,C9,C10,C11' && us.every((u) => u.nombre && u.rutas.length > 0 && u.rutas.every((r) => /^(A|T|BT)\d+$/.test(r.codigo) && (r.longitud_km === null || (r.longitud_km >= 3 && r.longitud_km <= 60)))) && new Set(us.flatMap((u) => u.rutas.map((r) => r.codigo))).size === us.reduce((t, u) => t + u.rutas.length, 0), `${us.reduce((t, u) => t + u.rutas.length, 0)} rutas`);
+  comprobar('Registro SIT: los conteos de la metadata cuadran con las unidades', m.conteos?.unidades === us.length && m.conteos?.rutas === us.reduce((t, u) => t + u.rutas.length, 0) && m.conteos?.rutas_con_longitud === us.reduce((t, u) => t + u.rutas.filter((r) => r.longitud_km !== null).length, 0));
+  const osm = json('data/rutas_osm.geojson').features.filter((f) => f.properties.tipo === 'ruta');
+  const c = Reg.comparar(us, osm);
+  comprobar('Registro SIT: toda línea de OSM con forma de unidad (C2, C3…) es una unidad del registro; las que no lo son (Albotran, Chiguata) no figuran en el registro de 2017', osm.every((f) => !/^C\d+$/.test(f.properties.linea) || codigos.includes(f.properties.linea)) && c.lineasOsmFueraDelRegistro.join() === 'Albotran,Chiguata', c.lineasOsmFueraDelRegistro.join());
+  comprobar('Registro SIT: OSM tiene la línea de las 10 unidades C2 a C11 (faltan solo los troncales C1A y C1B) y en cada una la empresa que etiqueta OSM es el concesionario del contrato en el 95 % de las rutas o más', c.unidades.enOsm === 10 && c.unidades.faltanEnOsm.join() === 'C1A,C1B' && c.empresa.total.coincide / c.empresa.total.rutasOsm >= 0.95, `${c.empresa.total.coincide} de ${c.empresa.total.rutasOsm} rutas`);
+  const menos = Object.entries(c.rutas).filter(([, r]) => r.ramalesOsm < r.oficiales).map(([k, r]) => `${k} (${r.ramalesOsm} de OSM frente a ${r.oficiales} oficiales)`);
+  console.log(`INFO  Registro SIT (2017): unidades en OSM ${c.unidades.enOsm} de ${c.unidades.oficiales} (${Math.round((100 * c.unidades.enOsm) / c.unidades.oficiales)} %); rutas de OSM cuya empresa coincide con el concesionario ${c.empresa.total.coincide} de ${c.empresa.total.rutasOsm}; ramales distintos de OSM ${Object.values(c.rutas).reduce((t, r) => t + r.ramalesOsm, 0)} frente a ${Object.values(c.rutas).reduce((t, r) => t + r.oficiales, 0)} rutas oficiales de las mismas unidades; unidades con menos ramales en OSM que rutas oficiales: ${menos.join(', ') || 'ninguna'}`);
+}
+
 console.log(`\n${pruebas - fallos} de ${pruebas} comprobaciones correctas.`);
 if (fallos) {
   console.error(`${fallos} FALLARON.`);

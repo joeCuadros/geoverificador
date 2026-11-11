@@ -22,6 +22,7 @@
     "datos:electricidad": "node scripts/descargar-concesiones-electricas.mjs",
     "datos:censo": "node scripts/descargar-censo-servicios.mjs",
     "datos:rutas-osm": "node scripts/descargar-rutas-osm.mjs",
+    "datos:sit": "node scripts/extraer-registro-sit.mjs",
     "datos:mineria": "node --use-system-ca scripts/descargar-concesiones-mineras.mjs",
     "datos:verificar": "node scripts/verificar-datos.mjs",
     "datos:validar-osm": "node scripts/validar-zonificacion-osm.mjs",
