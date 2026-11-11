@@ -200,6 +200,208 @@ const Viaje = (() => {
     return [...vistas.values()].sort((a, b) => a.distanciaM - b.distanciaM);
   }
 
+  // ------------------------------------------------------------ Un trasbordo
+
+  /**
+   * Distancia a pie máxima entre dos rutas para hacer trasbordo (m). SUPUESTO del proyecto, no una norma: se tomó la mitad de los 400 m del acceso al paradero
+   * (el estándar de área de captación de transporte público más citado en planificación) porque ninguna guía encontrada fija una distancia para el trasbordo.
+   * CONFIG.viaje.trasbordoM la fija en la aplicación.
+   */
+  const TRASBORDO_M = 200;
+  const MAX_TRASBORDOS = 5;
+  const PASO_GRUESO = 4; // 4 vértices de 15 m = ≈ 60 m en la búsqueda gruesa del trasbordo
+
+  /**
+   * Viajes con UN trasbordo A → B del origen al destino, para cuando ninguna ruta va directo. La ruta A se aborda a `caminarM` o menos del origen, la B se deja a `caminarM`
+   * o menos del destino y en el trasbordo las dos pasan a `trasbordoM` o menos una de otra. Respeta el sentido de cada relación (se sube a A antes del punto de trasbordo y se
+   * baja de B después del suyo) y no usa relaciones en sentido contrario. Elige, para cada par de rutas, el trasbordo de menor tiempo aproximado (o, sin la duración que
+   * etiqueta OSM o sin velocidad a pie, el de menor caminata y luego menos km en vehículo), deja una sola combinación por par de LÍNEAS y devuelve las `max` mejores.
+   *   opciones: { caminarM = 400, trasbordoM = 200, max = 5, tiempo (CONFIG.viaje.tiempo), paradas: [{ lat, lon, nombre, rutas: [id de relación] }], linea, texto }
+   *   → { trasbordos: [{ rutaA, rutaB, caminarOrigenM, caminarTrasbordoM, caminarDestinoM, caminarTotalM, viajeAM, viajeBM, viajeM, longitudAM, longitudBM,
+   *        subida, bajadaA, subidaB, bajada, trasbordo: { lat, lon }, parada: { nombre, lat, lon, distanciaM } | null, segmentoA, segmentoB }], candidatasA, candidatasB }
+   */
+  function rutasConTrasbordo(origen, destino, rutas, opciones = {}) {
+    const vacio = { trasbordos: [], candidatasA: 0, candidatasB: 0 };
+    if (!esPunto(origen) || !esPunto(destino)) return vacio;
+    const max = opciones.caminarM ?? CAMINAR_M;
+    const trasM = opciones.trasbordoM ?? TRASBORDO_M;
+    const tope = opciones.max ?? MAX_TRASBORDOS;
+    const tiempo = opciones.tiempo || {};
+    const v = Number.isFinite(tiempo.velocidadPieMs) && tiempo.velocidadPieMs > 0 ? tiempo.velocidadPieMs : null;
+    const rodeo = Number.isFinite(tiempo.factorRodeo) && tiempo.factorRodeo > 0 ? tiempo.factorRodeo : 1;
+    const lista = filtrar(rutas, opciones);
+    if (lista.length === 0) return vacio;
+    const kO = Math.cos((origen.lat * Math.PI) / 180) * M_POR_GRADO;
+    const kD = Math.cos((destino.lat * Math.PI) / 180) * M_POR_GRADO;
+    const mLatO = max / M_POR_GRADO;
+    const mLonO = mLatO / Math.max(0.2, Math.cos((origen.lat * Math.PI) / 180));
+    const mLatD = max / M_POR_GRADO;
+    const mLonD = mLatD / Math.max(0.2, Math.cos((destino.lat * Math.PI) / 180));
+    const cercaDe = (b, p, mLat, mLon) => !(p.lon < b[0] - mLon || p.lon > b[2] + mLon || p.lat < b[1] - mLat || p.lat > b[3] + mLat);
+
+    // Candidatas: A pasa a ≤ caminarM del origen; B pasa a ≤ caminarM del destino. De cada una se guarda, para cada vértice, el mejor punto de subida (A: el más cercano al
+    // origen entre los anteriores) o de bajada (B: el más cercano al destino entre los posteriores).
+    const A = [];
+    const B = [];
+    lista.forEach((r) => {
+      const t = densificar(r);
+      const n = t.lat.length;
+      if (cercaDe(t.bbox, origen, mLatO, mLonO)) {
+        const d = new Float64Array(n);
+        const mejor = new Int32Array(n);
+        let m = -1;
+        let md = Infinity;
+        for (let k = 0; k < n; k++) {
+          d[k] = Math.hypot((t.lon[k] - origen.lon) * kO, (t.lat[k] - origen.lat) * M_POR_GRADO);
+          if (d[k] <= max && d[k] < md) { md = d[k]; m = k; }
+          mejor[k] = m;
+        }
+        if (m >= 0) A.push({ r, t, d, mejor, n });
+      }
+      if (cercaDe(t.bbox, destino, mLatD, mLonD)) {
+        const d = new Float64Array(n);
+        const mejor = new Int32Array(n);
+        let m = -1;
+        let md = Infinity;
+        for (let k = n - 1; k >= 0; k--) {
+          d[k] = Math.hypot((t.lon[k] - destino.lon) * kD, (t.lat[k] - destino.lat) * M_POR_GRADO);
+          if (d[k] <= max && d[k] < md) { md = d[k]; m = k; }
+          mejor[k] = m;
+        }
+        if (m >= 0) B.push({ r, t, d, mejor, n });
+      }
+    });
+    const out = { trasbordos: [], candidatasA: A.length, candidatasB: B.length };
+    if (!A.length || !B.length) return out;
+
+    // Búsqueda gruesa y afinada. Los vértices están cada ≤ 15 m: se busca el trasbordo con uno de cada PASO_GRUESO (≈ 60 m) en una rejilla de casillas de `trasM` metros que
+    // reúne los vértices de TODAS las B candidatas (una sola pasada por los de cada A, sin comparar rutas de dos en dos), y luego se afina con todos los vértices cerca del mejor
+    // par de cada combinación de rutas.
+    const lat0 = origen.lat;
+    const kx = Math.cos((lat0 * Math.PI) / 180) * M_POR_GRADO;
+    const celda = Math.max(trasM, 1);
+    const clave = (ci, cj) => (ci + 100000) * 1000000 + (cj + 100000);
+    const rejilla = new Map();
+    B.forEach((b, bi) => {
+      b.clave = claveRuta(b.r);
+      for (let k = 0; k < b.n; k += PASO_GRUESO) {
+        if (b.mejor[k] < 0) continue; // desde este vértice ya no hay dónde bajar cerca del destino
+        const c = clave(Math.floor((b.t.lon[k] * kx) / celda), Math.floor((b.t.lat[k] * M_POR_GRADO) / celda));
+        let l = rejilla.get(c);
+        if (!l) { l = []; rejilla.set(c, l); }
+        l.push(bi, k);
+      }
+    });
+
+    const metrica = (caminarM, kmA, kmB, a, b) => {
+      const dA = a.r.duracionMin;
+      const dB = b.r.duracionMin;
+      if (v !== null && Number.isFinite(dA) && dA > 0 && Number.isFinite(dB) && dB > 0 && a.t.s[a.n - 1] > 0 && b.t.s[b.n - 1] > 0) {
+        return (caminarM * rodeo) / v / 60 + (dA * kmA) / a.t.s[a.n - 1] + (dB * kmB) / b.t.s[b.n - 1];
+      }
+      return caminarM * 1e4 + kmA + kmB; // sin tiempo: gana la menor caminata, y a igual caminata, los menores km en vehículo
+    };
+    const evaluar = (a, b, j, k) => {
+      const i = a.mejor[j];
+      const m = b.mejor[k];
+      if (i < 0 || m < 0) return null;
+      const dt = Math.hypot((b.t.lon[k] - a.t.lon[j]) * kx, (b.t.lat[k] - a.t.lat[j]) * M_POR_GRADO);
+      if (dt > trasM) return null;
+      const kmA = a.t.s[j] - a.t.s[i];
+      const kmB = b.t.s[m] - b.t.s[k];
+      if (kmA <= 0 || kmB <= 0) return null; // sin recorrido útil en alguna de las dos
+      const walk = a.d[i] + dt + b.d[m];
+      return { val: metrica(walk, kmA, kmB, a, b), i, j, k, m, dt, kmA, kmB, walk };
+    };
+
+    const gruesos = new Map(); // índice de A × B → mejor par grueso
+    A.forEach((a, ai) => {
+      a.clave = claveRuta(a.r);
+      for (let j = 0; j < a.n; j += PASO_GRUESO) {
+        if (a.mejor[j] < 0) continue;
+        const ci = Math.floor((a.t.lon[j] * kx) / celda);
+        const cj = Math.floor((a.t.lat[j] * M_POR_GRADO) / celda);
+        for (let p = -1; p <= 1; p++) {
+          for (let q = -1; q <= 1; q++) {
+            const l = rejilla.get(clave(ci + p, cj + q));
+            if (!l) continue;
+            for (let z = 0; z < l.length; z += 2) {
+              const bi = l[z];
+              const b = B[bi];
+              if (a.r === b.r || a.clave === b.clave) continue;
+              const e = evaluar(a, b, j, l[z + 1]);
+              if (!e) continue;
+              const id = ai * B.length + bi;
+              const previo = gruesos.get(id);
+              if (!previo || e.val < previo.val) gruesos.set(id, e);
+            }
+          }
+        }
+      }
+    });
+
+    const porPar = new Map(); // línea A | línea B → la mejor combinación
+    gruesos.forEach((g, id) => {
+      const a = A[Math.floor(id / B.length)];
+      const b = B[id % B.length];
+      let mejor = g;
+      for (let j = Math.max(0, g.j - PASO_GRUESO); j <= Math.min(a.n - 1, g.j + PASO_GRUESO); j++) {
+        for (let k = Math.max(0, g.k - PASO_GRUESO); k <= Math.min(b.n - 1, g.k + PASO_GRUESO); k++) {
+          const e = evaluar(a, b, j, k);
+          if (e && e.val < mejor.val) mejor = e;
+        }
+      }
+      const par = `${codigoLinea(a.r.linea)}|${codigoLinea(b.r.linea)}`;
+      const previo = porPar.get(par);
+      if (!previo || mejor.val < previo.val) porPar.set(par, { ...mejor, a, b });
+    });
+
+    const paradas = Array.isArray(opciones.paradas) ? opciones.paradas : [];
+    const items = [...porPar.values()].sort((x, y) => x.val - y.val).slice(0, tope).map(({ a, b, i, j, k, m, dt, kmA, kmB, walk }) => {
+      const trazo = (t, de, hasta) => { const c = []; for (let q = de; q <= hasta; q++) c.push([t.lon[q], t.lat[q]]); return c; };
+      const bajadaA = { lat: a.t.lat[j], lon: a.t.lon[j] };
+      const subidaB = { lat: b.t.lat[k], lon: b.t.lon[k] };
+      const medio = { lat: (bajadaA.lat + subidaB.lat) / 2, lon: (bajadaA.lon + subidaB.lon) / 2 };
+      let parada = null;
+      paradas.forEach((s) => {
+        if (!esPunto(s) || !Array.isArray(s.rutas) || !(s.rutas.includes(a.r.id) || s.rutas.includes(b.r.id))) return;
+        const d = C.haversine(medio.lat, medio.lon, s.lat, s.lon);
+        if (d <= trasM && (!parada || d < parada.distanciaM)) parada = { nombre: s.nombre ?? null, lat: s.lat, lon: s.lon, distanciaM: d };
+      });
+      return {
+        rutaA: a.r, rutaB: b.r,
+        caminarOrigenM: a.d[i], caminarTrasbordoM: dt, caminarDestinoM: b.d[m], caminarTotalM: walk,
+        viajeAM: kmA, viajeBM: kmB, viajeM: kmA + kmB, longitudAM: a.t.s[a.n - 1], longitudBM: b.t.s[b.n - 1],
+        subida: { lat: a.t.lat[i], lon: a.t.lon[i] }, bajadaA, subidaB, bajada: { lat: b.t.lat[m], lon: b.t.lon[m] }, trasbordo: medio, parada,
+        segmentoA: trazo(a.t, i, j), segmentoB: trazo(b.t, k, m),
+      };
+    });
+    out.trasbordos = items;
+    return out;
+  }
+
+  /**
+   * Tiempo APROXIMADO de un viaje con trasbordo (de rutasConTrasbordo), con los mismos supuestos y reglas que estimarTiempo: caminata de los tres tramos a la velocidad a pie;
+   * en vehículo, la duración que OSM etiqueta para cada ruta prorrateada por la distancia recorrida en ella; las DOS esperas (la mitad del intervalo de cada ruta) aparte y sin
+   * sumar. Si falta la duración de alguna de las dos rutas no hay tiempo en vehículo ni total, y si falta el intervalo de alguna no hay espera: no se inventan.
+   */
+  function estimarTiempoTrasbordo(item, tiempo) {
+    const t = tiempo || {};
+    const rodeo = Number.isFinite(t.factorRodeo) && t.factorRodeo > 0 ? t.factorRodeo : 1;
+    const caminarMin = Number.isFinite(t.velocidadPieMs) && t.velocidadPieMs > 0 ? (item.caminarTotalM * rodeo) / t.velocidadPieMs / 60 : null;
+    const a = item.rutaA || {};
+    const b = item.rutaB || {};
+    const ok = (x) => Number.isFinite(x) && x > 0;
+    const busMin = ok(a.duracionMin) && ok(b.duracionMin) && item.longitudAM > 0 && item.longitudBM > 0 ? (a.duracionMin * item.viajeAM) / item.longitudAM + (b.duracionMin * item.viajeBM) / item.longitudBM : null;
+    return {
+      caminarMin,
+      busMin,
+      totalSinEsperaMin: caminarMin !== null && busMin !== null ? caminarMin + busMin : null,
+      esperaMediaMin: ok(a.intervaloMin) && ok(b.intervaloMin) ? (a.intervaloMin + b.intervaloMin) / 2 : null,
+      fuenteBus: busMin !== null ? 'duración que etiqueta OpenStreetMap en cada ruta, prorrateada por la distancia recorrida' : null,
+    };
+  }
+
   // ------------------------------------------------------------ Búsqueda de zonas: desde dónde se llega a un destino
 
   const filtrar = (rutas, opciones) => {
@@ -324,7 +526,7 @@ const Viaje = (() => {
     return `${r.linea || 'Ruta'}${ramal}${sentido}${op ? ` (${op})` : ''}`;
   }
 
-  return { CAMINAR_M, PASO_M, desdeOsm, rutasDirectas, estimarTiempo, cercanas, indiceDestino, alcanza, zonasConRutaDirecta, unir, resolverDestino, textoRuta, codigoLinea, metros };
+  return { CAMINAR_M, PASO_M, TRASBORDO_M, MAX_TRASBORDOS, desdeOsm, rutasDirectas, rutasConTrasbordo, estimarTiempoTrasbordo, estimarTiempo, cercanas, indiceDestino, alcanza, zonasConRutaDirecta, unir, resolverDestino, textoRuta, codigoLinea, metros };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = Viaje;
