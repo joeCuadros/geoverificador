@@ -115,6 +115,14 @@ describe('Rutas.cerca', () => {
     expect(['Norte 1', null]).toContain(c5.parada.nombre);
   });
 
+  it('la parada mapeada más cercana solo se da si está a la distancia pedida o menos: una parada a 10 km no sirve de nada', () => {
+    const lejos = Rutas.indexar({ features: [ruta('9', 'C9', 'Emarsistran', 'X', 'A → B', [[[-71.6, -16.4], [-71.5, -16.4]]]), parada(9, 'Final', -71.5, -16.4, ['9'], ['C9'])] });
+    const l = Rutas.cerca(lejos, -16.4, -71.6, 400).lineas[0];
+    expect(l.distanciaM).toBeLessThan(1);
+    expect(l.parada).toBeNull(); // la única parada mapeada de la línea queda a ≈ 10,7 km
+    expect(l.paradasMapeadas).toBe(1); // …pero la línea sí tiene paradas mapeadas (no es «paradas no mapeadas»)
+  });
+
   it('no mide contra el hueco entre dos tramos de un MultiLineString', () => {
     // En el medio del hueco de C9 (lon -71.525, lat -16.420) la calle más cercana está a 0.005° ≈ 534 m.
     expect(Rutas.cerca(idx, -16.42, -71.525, 400).lineas).toEqual([]);

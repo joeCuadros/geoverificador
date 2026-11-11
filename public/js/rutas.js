@@ -102,10 +102,10 @@ const Rutas = (() => {
 
   /**
    * Agrupa recorridos por línea. `hits` = [{ ruta, distanciaM }]; `paradasDe` devuelve las paradas candidatas de un recorrido.
-   * Cada línea trae su distancia mínima, sus ramales (con el sentido), la parada MAPEADA más cercana al punto y cuántas paradas de OSM tiene ligadas (`paradasMapeadas`;
-   * 0 = «paradas no mapeadas»: no se inventa una parada).
+   * Cada línea trae su distancia mínima, sus ramales (con el sentido), la parada MAPEADA más cercana al punto SI está a `radioM` o menos (una parada a 6 km no sirve de nada) y cuántas
+   * paradas de OSM tiene ligadas la línea (`paradasMapeadas`; 0 = «paradas no mapeadas»: no se inventa una parada).
    */
-  function agruparPorLinea(hits, punto, indice) {
+  function agruparPorLinea(hits, punto, indice, radioM) {
     const porLinea = new Map();
     hits.forEach(({ ruta, distanciaM }) => {
       const p = ruta.props;
@@ -122,7 +122,7 @@ const Rutas = (() => {
       if (punto) {
         propias.forEach((s) => {
           const d = C.haversine(punto.lat, punto.lon, s.lat, s.lon);
-          if (!parada || d < parada.distanciaM) parada = { nombre: s.props.nombre, clase: s.props.clase || null, osm: s.props.osm || null, lat: s.lat, lon: s.lon, distanciaM: d };
+          if (d <= radioM && (!parada || d < parada.distanciaM)) parada = { nombre: s.props.nombre, clase: s.props.clase || null, osm: s.props.osm || null, lat: s.lat, lon: s.lon, distanciaM: d };
         });
       }
       return {
@@ -159,7 +159,7 @@ const Rutas = (() => {
       const d = Math.min(...ruta.partes.map((p) => C.distanciaALineaM(lat, lon, p)));
       if (d <= distanciaM) hits.push({ ruta, distanciaM: d });
     });
-    const lineas = agruparPorLinea(hits, { lat, lon }, indice).sort((a, b) => a.distanciaM - b.distanciaM || compararLineas(a.linea, b.linea));
+    const lineas = agruparPorLinea(hits, { lat, lon }, indice, distanciaM).sort((a, b) => a.distanciaM - b.distanciaM || compararLineas(a.linea, b.linea));
     return { distanciaM, lineas, rutas: hits.length, ...citaDe(indice) };
   }
 

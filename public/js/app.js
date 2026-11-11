@@ -1155,7 +1155,7 @@
       const ramales = [...new Set(l.ramales.map((x) => x.ramal))];
       const parada = l.parada
         ? ` · parada mapeada más cercana ${l.parada.nombre ? `«${esc(l.parada.nombre)}»` : '(sin nombre)'} a ${fmtDist(l.parada.distanciaM)}`
-        : l.paradasMapeadas === 0 ? ' · paradas no mapeadas' : '';
+        : l.paradasMapeadas === 0 ? ' · paradas no mapeadas' : ` · ninguna parada mapeada a ≤${ref}`;
       return `<li><strong>${esc(Rutas.etiquetaLinea(l))}</strong><span class="var-meta">trazado a ${fmtDist(l.distanciaM)}${parada} · ${esc(ramales.slice(0, 4).join(', '))}${ramales.length > 4 ? ` y ${ramales.length - 4} más` : ''}</span></li>`;
     }).join('');
     return `<div class="var-rutas"><p class="var-rutas-t"><strong>Líneas que pasan a ≤${ref}:</strong> ${esc(Rutas.listaTexto(r.lineas))}</p><ul class="var-rutas-lista">${items}</ul>${nota}</div>`;

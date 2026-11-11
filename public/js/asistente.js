@@ -1561,7 +1561,7 @@ const Asistente = (() => {
     const lineas = r.lineas.slice(0, MAX_LINEAS_TEXTO).map((l) => {
       const parada = l.parada
         ? `; parada mapeada más cercana ${l.parada.nombre ? `«${l.parada.nombre}»` : '(sin nombre)'} a ${fmtDist(l.parada.distanciaM)}`
-        : l.paradasMapeadas === 0 ? '; paradas no mapeadas en OpenStreetMap' : '';
+        : l.paradasMapeadas === 0 ? '; paradas no mapeadas en OpenStreetMap' : `; ninguna parada mapeada a ${ref} o menos`;
       return `• ${RT.etiquetaLinea(l)}: el trazado pasa a ${fmtDist(l.distanciaM)}${parada}.`;
     });
     if (r.lineas.length > MAX_LINEAS_TEXTO) lineas.push(`• … y ${r.lineas.length - MAX_LINEAS_TEXTO} más.`);

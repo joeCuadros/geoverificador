@@ -262,7 +262,7 @@ const Reporte = (() => {
     const filas = r.lineas.length
       ? r.lineas.map((l) => {
         const ramales = [...new Set(l.ramales.map((x) => x.ramal))];
-        const parada = l.parada ? ` · parada mapeada más cercana ${l.parada.nombre ? `«${esc(l.parada.nombre)}»` : '(sin nombre)'} a ${dist(l.parada.distanciaM)}` : l.paradasMapeadas === 0 ? ' · paradas no mapeadas' : '';
+        const parada = l.parada ? ` · parada mapeada más cercana ${l.parada.nombre ? `«${esc(l.parada.nombre)}»` : '(sin nombre)'} a ${dist(l.parada.distanciaM)}` : l.paradasMapeadas === 0 ? ' · paradas no mapeadas' : ` · ninguna parada mapeada a ${dist(r.distanciaM)} o menos`;
         return fila(RT.etiquetaLinea(l), `trazado a ${dist(l.distanciaM)}${parada} · ${esc(ramales.slice(0, 4).join(', '))}${ramales.length > 4 ? ` y ${ramales.length - 4} más` : ''}`);
       })
       : [fila('Líneas', `Ninguna línea mapeada en OpenStreetMap pasa a ${dist(r.distanciaM)} o menos`)];
