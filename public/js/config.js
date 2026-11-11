@@ -137,6 +137,9 @@ const CONFIG = {
     electricidad: null,
     // Concesiones mineras (Catastro Minero de INGEMMET): INFORMATIVAS; una concesión es un derecho sobre los minerales, no una distancia ni una norma.
     mineria: null,
+    // Agua: punto de acopio de SEDAPAR (directorio publicado en 2024 con datos de 2017) e interrupciones del servicio (SUNASS): INFORMATIVOS, sin distancia ni frecuencia de referencia.
+    acopio: null,
+    interrupciones: null,
     // Servicios de la manzana según el censo (alumbrado, agua y desagüe por red pública): INFORMATIVOS, sin umbral. Son cifras de un año de censo, no una norma.
     censo: null,
     educacion: { inicial: 500, primaria: 1500, secundaria: 3000 }, // V3
@@ -162,6 +165,8 @@ const CONFIG = {
     juego_infantil: 'Sin umbral: pendiente de decisión del usuario; referencia propuesta: ninguna con fuente verificada en metros; se muestra solo como dato informativo',
     mall: 'Sin umbral: pendiente de decisión del usuario; referencia propuesta: ninguna con fuente verificada en metros; se muestra solo como dato informativo',
     censo: 'Sin umbral: son cifras del censo de la manzana (año 2017), no una distancia ni una norma; se muestran solo como dato informativo',
+    acopio: 'Sin umbral: no aplica una distancia de referencia; un punto de acopio es un lugar de reparto con camiones cisterna ante un desabastecimiento, con datos de 2017; se muestra solo como dato informativo',
+    interrupciones: 'Sin umbral: no hay una frecuencia de interrupciones de referencia con fuente verificada; son interrupciones reportadas por SEDAPAR a la SUNASS y se muestran solo como dato informativo',
     mineria: 'Sin umbral: no aplica una distancia de referencia; dentro o fuera de una concesión minera no dice si hay minería ni qué se puede hacer en el predio; se muestra solo como dato informativo',
     electricidad: 'Sin umbral: no aplica una distancia de referencia; dentro o fuera de un área de concesión no es una conexión; se muestra solo como dato informativo',
     educacion: 'MINEDU, numeral 7.1, Cuadro N.° 1, distancias referenciales: inicial 500 m (RVM 104-2019-MINEDU), primaria 1500 m y secundaria 3000 m (RVM 208-2019-MINEDU)',
@@ -230,6 +235,8 @@ const CONFIG = {
       consultorios: 'data/equipamiento/consultorios.geojson', // consultorios médicos: informativos, aparte de la salud
       mercados: 'data/equipamiento/mercados.geojson', // mercados de abastos: informativos (scripts/descargar-comercio.mjs)
       supermercados: 'data/equipamiento/supermercados.geojson', // supermercados: informativos, aparte de los mercados
+      acopio: 'data/agua/puntos_acopio.geojson', // puntos de acopio de agua de SEDAPAR (directorio publicado en 2024, datos de 2017): informativo (scripts/convertir-acopio-sedapar.mjs)
+      interrupciones: 'data/agua/interrupciones_sedapar.json', // interrupciones del servicio de agua por distrito (SUNASS): informativo (scripts/descargar-interrupciones-sunass.mjs)
       mineria: 'data/mineria/concesiones_mineras.geojson', // concesiones mineras (INGEMMET): informativo (scripts/descargar-concesiones-mineras.mjs)
       electricidad: 'data/electricidad/concesiones_distribucion.geojson', // áreas de concesión de distribución eléctrica (MINEM-DGE): informativo (scripts/descargar-concesiones-electricas.mjs)
       finanzas: 'data/equipamiento/finanzas.geojson', // bancos y cajeros: informativos (scripts/descargar-servicios-osm.mjs)

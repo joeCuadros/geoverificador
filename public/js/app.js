@@ -710,6 +710,7 @@
       partes.push(`Salud: ${t(e.salud)}`);
       if (e.consultorio) partes.push(`Consultorio médico (informativo): ${e.consultorio.distanciaM !== null ? fmtDist(e.consultorio.distanciaM) : 'sin dato'}`);
       if (e.censo) partes.push(`Servicios de la manzana (censo ${e.censo.anio}, informativo): ${e.censo.tieneCifras && !e.censo.pocas ? `luz ${e.censo.luz.pct} %, agua ${e.censo.agua.pct} %, desagüe ${e.censo.desague.pct} %` : 'sin porcentaje'}`);
+      if (e.acopio) partes.push(`Agua (informativo): ${e.acopio.estado === 'SIN DATO' ? 'sin dato del punto de acopio' : `punto de acopio a ${fmtDist(e.acopio.distanciaM)} (directorio de SEDAPAR, datos de 2017)`}${e.interrupciones && e.interrupciones.registros && e.interrupciones.promedioN !== null ? `; ≈ ${e.interrupciones.promedioN} interrupciones del servicio al año en el distrito (SUNASS)` : ''}`);
       if (e.mineria) partes.push(`Concesión minera (informativo): ${e.mineria.dentro === null ? 'sin dato' : e.mineria.dentro ? `dentro de ${e.mineria.concesiones.length} (derecho sobre los minerales, no minería en el predio)` : e.mineria.cercana ? `fuera de toda concesión; la más cercana a ${fmtDist(e.mineria.distanciaM)} del borde` : 'fuera de toda concesión'}`);
       if (e.electricidad) partes.push(`Electricidad (informativo): ${e.electricidad.dentro === null ? 'sin dato' : e.electricidad.dentro ? `dentro del área de concesión de ${e.electricidad.concesionarias.join(' y ')}` : `fuera de las áreas de concesión, a ${fmtDist(e.electricidad.distanciaM)} del borde`}`);
       Object.keys(Calculos.COMERCIO).forEach((id) => { if (e[id]) partes.push(`${Calculos.COMERCIO[id].etiqueta} (informativo): ${e[id].distanciaM !== null ? fmtDist(e[id].distanciaM) : 'sin dato'}`); });
@@ -1116,6 +1117,8 @@
     salud: 'Cuenta los establecimientos de salud activos de RENIPRESS (SUSALUD) con categoría I-1 a III-E y coordenadas (hospitales, clínicas, centros y puestos de salud, policlínicos…), sin los consultorios médicos, que son otra categoría, y los de OpenStreetMap solo donde RENIPRESS no tiene un punto de salud a 200 m. Cerca del 42 % de los establecimientos de Arequipa en RENIPRESS no trae coordenadas y no puede contarse. No dice si atiende emergencias ni su horario, y la distancia es en línea recta, no recorrido a pie.',
     consultorio: 'Cuenta los consultorios médicos activos de RENIPRESS (SUSALUD) —su clasificación dice «consultorios»— y los de OpenStreetMap (amenity=doctors, healthcare=doctor) solo donde RENIPRESS no tiene un consultorio a 200 m. Tampoco trae las coordenadas de todos. No dice la especialidad, el horario ni si atiende al público.',
     censo: 'Son cifras del Censo Nacional de 2017 (INEI, REDATAM) de toda la manzana, sobre las viviendas particulares ocupadas con personas presentes que se censaron. No son de un predio ni de hoy: pasaron años y la ciudad creció. Solo cubre el área urbana; una manzana que el censo no contó queda sin cifras (no es un cero) y con menos de 5 viviendas ocupadas no se da el porcentaje. El censo de 2025 ya se levantó, pero el INEI todavía no abre sus resultados por manzana (REDATAM 2025 pide iniciar sesión): del 2025 solo se muestra el dato del departamento.',
+    acopio: 'Es el punto de acopio de agua potable más cercano del directorio de SEDAPAR y la Municipalidad Provincial de Arequipa: un lugar donde se previó repartir agua con camiones cisterna ante un desabastecimiento. El directorio se publicó el 16 de febrero de 2024 pero sus fichas son de abril a junio de 2017: pueden haber cambiado. NO dice que haya agua en el punto hoy, que el reparto sea permanente ni si tu predio tiene conexión; la distancia es en línea recta. Siete fichas del directorio traen coordenadas imposibles y no se usan.',
+    interrupciones: 'Cuenta las interrupciones del servicio de agua potable que SEDAPAR reportó a la SUNASS en el distrito, contadas una vez por distrito, y suma sus horas (de inicio a fin de cada una, sin multiplicar por las viviendas afectadas). El archivo va de octubre de 2019 a abril de 2024: 2020 a 2023 son años completos y 2019 y 2024, parciales. NO dice cuántas viviendas afectó cada una, en qué calle fue, si el distrito tiene peor o mejor servicio que otro (uno más grande tiene más registros) ni que tu predio haya tenido cortes.',
     mineria: 'Dice si el punto cae dentro de una concesión del Catastro Minero de INGEMMET (tituladas, en trámite y otras; las extinguidas no cuentan) y, si no, cuál es la más cercana. Una concesión minera es el derecho a explorar y explotar los minerales dentro de su perímetro, separado del predio: NO dice que haya minería en el lugar, de quién es el predio ni qué se puede hacer en él. El catastro es referencial y se actualiza a diario; la copia que usamos tiene la fecha indicada. No se muestra el nombre del titular.',
     electricidad: 'Dice si el punto cae dentro de un polígono de concesión de distribución eléctrica del registro del MINEM (SEAL en Arequipa y, si toca la zona, otras empresas): a quién le corresponde dar el servicio ahí. NO dice si el predio está conectado, si hay red en la calle ni si el suministro es continuo; la cobertura real vendría de un censo que aún no tenemos. Los polígonos son poco detallados y su borde puede ser impreciso: un punto fuera no significa que no haya servicio.',
     abastecimiento: 'Cuenta los mercados (amenity=marketplace, que incluye mercados de abastos, ferias y mercadillos: no distingue minorista de mayorista) y los supermercados (shop=supermarket, sin tiendas de conveniencia ni bodegas) de OpenStreetMap, y puede faltar alguno (el censo de mercados de 2016 del INEI solo sirve para contar por distrito, no trae ubicaciones). Un supermercado dentro de un mall es el punto de abastecimiento; el mall, no. Sin distancia de referencia.',
@@ -1265,10 +1268,38 @@
       + `<p class="var-explica">${esc(Calculos.NOTA_CENSO.replace(/^Es informativo: /, ''))}</p>`
       + (dep25 ? `<p class="var-meta"><b>Censo ${dep25.anio} (más reciente), departamento de ${esc(dep25.departamento)}:</b> ${pctC(dep25.alumbrado)} con alumbrado eléctrico, ${pctC(dep25.aguaDentro)} con agua de red pública dentro de la vivienda y ${pctC(dep25.higienicoDentro)} con servicio higiénico de red pública dentro de la vivienda (${esc(dep25.universo)}). Es un dato del departamento, no de tu manzana; <a href="${esc(dep25.url)}" target="_blank" rel="noopener">fuente: ${esc(dep25.fuente)}</a>.</p>` : '')
       + detalleDato(ce, QUE_NO_CUBRE.censo);
-    const partesResumen = [concesion ? concesion.resumen : null, ce ? `manzana, censo ${ce.anio}: ${resumenCenso}` : null].filter(Boolean);
-    const hayInfo = (concesion && concesion.estado === 'INFORMATIVO') || (ce && ce.estado === 'INFORMATIVO');
-    const electricidad = concesion || ce ? tarjetaVariable(VARIABLES.electricidad, hayInfo ? 'INFORMATIVO' : 'SIN DATO', partesResumen.join(' · '),
-      (concesion ? `<h4 class="var-sub">Electricidad: área de concesión de distribución</h4>${concesion.cuerpo}` : '') + censoHtml, hayInfo ? 'Informativo' : null) : '';
+    // Agua: el punto de acopio más cercano (directorio de SEDAPAR, datos de 2017) y las interrupciones del servicio en el distrito (SUNASS). Informativos; nunca «tu predio tiene agua».
+    const ac = e.acopio;
+    const itr = e.interrupciones;
+    const acopioHtml = !ac ? '' : (ac.error ? `<p class="zon-msg error"><strong>No se pudo obtener el dato.</strong> ${esc(ac.error)}</p>` : '')
+      + (ac.estado === 'SIN DATO' ? (ac.error ? '' : explicacion(ac, 'puntos de acopio de agua'))
+        : `<div class="var-dato"><p class="var-dist">${fmtDist(ac.distanciaM)} <small>hasta el punto de acopio de agua más cercano</small></p><p class="var-nombre">${esc(ac.direccion || 'sin dirección')}${ac.distrito ? ` · ${esc(capitalizar(ac.distrito))}` : ''}</p></div>
+          <p class="var-meta">A 500 m o menos: ${ac.a500m} · a 1 km o menos: ${ac.a1000m} (de ${fmtNum(ac.total)} puntos del directorio). Datos de ${esc(ac.fechaDatos || '2017')}; directorio publicado el ${esc(ac.fecha || 'sin fecha')}.</p>
+          <p class="var-explica"><strong>Informativo.</strong> ${esc(Calculos.textoAcopio(ac))}</p>`)
+      + `<p class="var-explica">${esc(Calculos.NOTA_ACOPIO)}</p>` + detalleDato(ac, QUE_NO_CUBRE.acopio);
+    const filaAnio = (a) => {
+      const v = itr.porAnio[a];
+      const parcial = itr.parciales.some((p) => String(p.anio) === String(a));
+      return `<tr><th scope="row">${esc(a)}${parcial ? ' <small>(año parcial)</small>' : ''}</th><td>${fmtNum(v.n)}</td><td>${fmtNum(v.horas)}</td></tr>`;
+    };
+    const interrupcionesHtml = !itr ? '' : itr.estado === 'SIN DATO' || !itr.registros
+      ? `<p class="var-explica"><strong>Informativo.</strong> ${esc(Calculos.textoInterrupciones(itr))}</p>`
+      : `<h4 class="var-sub">Interrupciones del servicio de agua en ${esc(capitalizar(itr.distrito))} (SUNASS)</h4>
+          <table class="var-tabla"><thead><tr><th scope="col">Año</th><th scope="col">Interrupciones</th><th scope="col">Horas</th></tr></thead><tbody>${Object.keys(itr.porAnio).sort().map(filaAnio).join('')}</tbody></table>
+          <p class="var-meta">Periodo del archivo: ${esc(itr.periodo.desde)} a ${esc(itr.periodo.hasta)}. Fuente: ${esc(itr.fuente || 'SUNASS')}, licencia ${esc(itr.licencia || 'ODC-By')}, descargado el ${esc(itr.fecha || 'sin fecha')}.</p>
+          <p class="var-explica"><strong>Informativo.</strong> ${esc(Calculos.textoInterrupciones(itr))}</p>
+          <p class="var-explica">${esc(Calculos.NOTA_INTERRUPCIONES)}</p>${detalleDato(itr, QUE_NO_CUBRE.interrupciones, { metodo: false })}`;
+    const listaHtml = `<h4 class="var-sub">Si vas a comprar</h4><ul class="var-lista">${Calculos.LISTA_COMPRADOR.map((x) => `<li>${esc(x.texto)}</li>`).join('')}</ul>`;
+    const aguaHtml = `<h4 class="var-sub">Agua: punto de acopio e interrupciones del servicio</h4>${acopioHtml}${interrupcionesHtml}${listaHtml}`;
+    const resumenAgua = [
+      ac && ac.estado === 'INFORMATIVO' ? `punto de acopio a ${fmtDist(ac.distanciaM)} (datos de 2017)` : null,
+      itr && itr.registros && itr.promedioN !== null ? `≈ ${itr.promedioN} interrupciones de agua al año (SUNASS)` : null,
+    ].filter(Boolean).join(', ');
+
+    const partesResumen = [concesion ? concesion.resumen : null, ce ? `manzana, censo ${ce.anio}: ${resumenCenso}` : null, resumenAgua || null].filter(Boolean);
+    const hayInfo = (concesion && concesion.estado === 'INFORMATIVO') || (ce && ce.estado === 'INFORMATIVO') || (ac && ac.estado === 'INFORMATIVO') || (itr && itr.estado === 'INFORMATIVO');
+    const electricidad = concesion || ce || ac || itr ? tarjetaVariable(VARIABLES.electricidad, hayInfo ? 'INFORMATIVO' : 'SIN DATO', partesResumen.join(' · '),
+      (concesion ? `<h4 class="var-sub">Electricidad: área de concesión de distribución</h4>${concesion.cuerpo}` : '') + censoHtml + (ac || itr ? aguaHtml : listaHtml), hayInfo ? 'Informativo' : null) : '';
 
     // Abastecimiento, compras y ocio, comercio de barrio: necesidades informativas (sin umbral): no suman al estado de nada. Del mall o la galería se mide la distancia al borde de su polígono.
     const dentroDe = (x) => (x && x.dentroDeMall ? `dentro de ${esc(x.dentroDeMall.nombre || 'un mall')}` : '');
@@ -1761,7 +1792,8 @@
     $('entorno').setAttribute('aria-busy', 'true');
     $('entorno-toggle').hidden = true;
     $('entorno').innerHTML = '<p class="zon-msg loading"><span class="spinner"></span>Buscando los servicios más cercanos…</p>';
-    const e = await Equipamiento.evaluar(lat, lon); // nunca rechaza: cada variable devuelve SIN DATO con su causa si falla
+    const [e, dis] = await Promise.all([Equipamiento.evaluar(lat, lon), Distritos.lookup(lat, lon).catch(() => null)]); // evaluar nunca rechaza: cada variable devuelve SIN DATO con su causa si falla
+    e.interrupciones = await Equipamiento.interrupcionesDe(dis ? dis.distrito : null); // SUNASS: interrupciones del servicio de agua en el distrito (informativo)
     if (seq !== state.entornoSeq) return; // el usuario ya eligió otro punto
     state.entorno = e;
     state.entornoStatus = 'ok';
@@ -1786,6 +1818,7 @@
       resumen.push(['Salud', linea(e.salud)]);
       if (e.consultorio) resumen.push(['Consultorio médico (informativo)', linea(e.consultorio)]);
       if (e.censo) resumen.push([`Servicios de la manzana (censo ${e.censo.anio}, informativo)`, e.censo.tieneCifras && !e.censo.pocas ? `Alumbrado ${e.censo.luz.pct} % · agua ${e.censo.agua.pct} % · desagüe ${e.censo.desague.pct} % de ${e.censo.ocupadas} viviendas ocupadas (manzana, no predio)` : 'Sin porcentaje para esta manzana']);
+      if (e.acopio) resumen.push(['Agua (informativo)', `${e.acopio.estado === 'SIN DATO' ? 'Sin dato del punto de acopio' : `Punto de acopio más cercano a ${fmtDist(e.acopio.distanciaM)} (directorio de SEDAPAR, datos de 2017; no es una conexión)`}${e.interrupciones && e.interrupciones.registros && e.interrupciones.promedioN !== null ? ` · ≈ ${e.interrupciones.promedioN} interrupciones del servicio al año en el distrito (SUNASS, ${e.interrupciones.aniosCompletos[0]} a ${e.interrupciones.aniosCompletos.at(-1)})` : ''}`]);
       if (e.mineria) resumen.push(['Concesión minera (informativo)', e.mineria.dentro === null ? 'Sin dato' : e.mineria.dentro ? `Dentro de ${e.mineria.concesiones.length} ${e.mineria.concesiones.length === 1 ? 'concesión' : 'concesiones'} del Catastro Minero · derecho sobre los minerales, no dice que haya minería en el predio` : `Fuera de toda concesión${e.mineria.cercana ? `; la más cercana a ${fmtDist(e.mineria.distanciaM)} del borde` : ''} · catastro referencial`]);
       if (e.electricidad) resumen.push(['Electricidad (informativo)', e.electricidad.dentro === null ? 'Sin dato' : `${e.electricidad.dentro ? `Dentro del área de concesión de ${e.electricidad.concesionarias.join(' y ')}` : `Fuera de las áreas de concesión; ${fmtDist(e.electricidad.distanciaM)} hasta el borde de la de ${e.electricidad.concesionaria || 'una empresa'}`} · no es una conexión`]);
       Object.keys(Calculos.COMERCIO).forEach((id) => { if (e[id]) resumen.push([`${Calculos.COMERCIO[id].etiqueta} (informativo)`, linea(e[id])]); });
@@ -1857,6 +1890,8 @@
       salud: state.entorno && state.entorno.salud,
       consultorio: state.entorno && state.entorno.consultorio, // informativo, sin umbral
       censo_manzana: state.entorno && state.entorno.censo, // informativo, sin umbral: cifras de la manzana en el año del censo (2017), no del predio
+      acopio: state.entorno && state.entorno.acopio, // informativo, sin umbral: lugares de reparto con camiones cisterna (datos de 2017), no una conexión
+      interrupciones: state.entorno && state.entorno.interrupciones, // informativo, sin umbral: interrupciones que SEDAPAR reportó a la SUNASS en el distrito
       mineria: state.entorno && state.entorno.mineria, // informativo, sin umbral: una concesión es un derecho sobre los minerales
       electricidad: state.entorno && state.entorno.electricidad, // informativo, sin umbral: un área de concesión no es una conexión
       abastecimiento: state.entorno && state.entorno.abastecimiento && { ...state.entorno.abastecimiento, forma: undefined, porTipo: state.entorno.abastecimiento.porTipo && Object.fromEntries(Object.entries(state.entorno.abastecimiento.porTipo).map(([k, x]) => [k, { ...x, forma: undefined }])) }, // mercados + supermercados; informativo, sin umbral

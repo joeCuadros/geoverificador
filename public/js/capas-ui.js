@@ -14,17 +14,17 @@ const CapasUI = (() => {
 
   // Un color por tipo de entidad; los colegios además cambian de forma/letra por nivel (nunca solo el color).
   const COLOR = {
-    inicial: '#9a4d00', primaria: '#1c3a6b', secundaria: '#6b2d7a', salud: '#b0272b', consultorio: '#0f6b6b', mercado: '#9a3412', supermercado: '#065f46', mall: '#9d174d', galeria: '#a16207', banco: '#1e40af', cajero: '#0e7490', restaurante: '#b91c1c', cafe: '#78350f', juego_infantil: '#15803d', finanzas: '#1e40af', comida_fuera: '#b91c1c', recreacion: '#15803d', electricidad: '#b45309', mineria_titulada: '#7c2d12', mineria_tramite: '#a16207', mineria_otro: '#6b7280', censo_pocas: '#9ca3af', abastecimiento: '#9a3412', compras_ocio: '#9d174d', comercio_barrio: '#a16207', paradero: '#3b4a5a', parques: '#2f7d3b', quebradas: '#1f6fb2',
+    inicial: '#9a4d00', primaria: '#1c3a6b', secundaria: '#6b2d7a', salud: '#b0272b', consultorio: '#0f6b6b', mercado: '#9a3412', supermercado: '#065f46', mall: '#9d174d', galeria: '#a16207', banco: '#1e40af', cajero: '#0e7490', restaurante: '#b91c1c', cafe: '#78350f', juego_infantil: '#15803d', finanzas: '#1e40af', comida_fuera: '#b91c1c', recreacion: '#15803d', electricidad: '#b45309', acopio_agua: '#0369a1', acopio: '#0369a1', mineria_titulada: '#7c2d12', mineria_tramite: '#a16207', mineria_otro: '#6b7280', censo_pocas: '#9ca3af', abastecimiento: '#9a3412', compras_ocio: '#9d174d', comercio_barrio: '#a16207', paradero: '#3b4a5a', parques: '#2f7d3b', quebradas: '#1f6fb2',
     sismos: '#c2570c', volcan_alto: '#a31621', volcan_moderado: '#e07b00', volcan_bajo: '#e9c046', sectores: '#0b5d4f', residencial: '#b88a2e', tranquilo: '#8a6d1f', campina: '#6f9a2f', comercial: '#7a4fa0', historico: '#a0422f',
   };
-  const LETRA = { inicial: 'I', primaria: 'P', secundaria: 'S', salud: '+', consultorio: 'C', mercado: 'M', supermercado: 'S', mall: 'CC', galeria: 'G', banco: '$', cajero: 'A', restaurante: 'R', cafe: 'T', juego_infantil: 'J', paradero: 'B' };
+  const LETRA = { inicial: 'I', primaria: 'P', secundaria: 'S', salud: '+', consultorio: 'C', mercado: 'M', supermercado: 'S', mall: 'CC', galeria: 'G', banco: '$', cajero: 'A', restaurante: 'R', cafe: 'T', juego_infantil: 'J', acopio: 'H', paradero: 'B' };
   const CAPAS_COMERCIO = ['abastecimiento', 'compras_ocio', 'comercio_barrio', 'finanzas', 'comida_fuera', 'recreacion']; // las tres necesidades de comercio, informativas: polígono con popup, sin círculo
   // Riesgo de los distritos ante El Niño (CENEPRED): de menor a mayor. La leyenda lleva además el texto y los nombres, así que el color no es lo único que informa.
   // Mapa coroplético del censo por manzana: de menos a más viviendas con el servicio (claro a oscuro); las manzanas con pocas viviendas, en gris. El color nunca es lo único: la leyenda y el popup dicen el porcentaje.
   const COLOR_CENSO = ['#e0f2fe', '#7dd3fc', '#0284c7', '#0c4a6e'];
   const COLOR_RIESGO = { Bajo: '#6aa84f', Medio: '#e9c046', Alto: '#e07b00', 'Muy alto': '#a31621' };
 
-  let api = null; // { map, datos(opciones: { rutas, volcan, cenepred, electricidad, mineria, censo }): Promise<{ datos, zonas, cauces, sismos, volcan, cenepred, rutas, umbrales, fecha }>, mapaVisible? }
+  let api = null; // { map, datos(opciones: { rutas, volcan, cenepred, electricidad, mineria, acopio, censo }): Promise<{ datos, zonas, cauces, sismos, volcan, cenepred, rutas, umbrales, fecha }>, mapaVisible? }
   let grupo = null;
   let activas = []; // capas elegidas con los chips: [{ id }]
   let contexto = null; // lo que vino del chat: { capas, distrito, sectores }
@@ -207,6 +207,7 @@ const CapasUI = (() => {
     recreacion: '<span class="mu-ico mu-juego">J</span>',
     electricidad: '<span class="mu-bloque" style="background:#b45309;opacity:.35;border:1px dashed #b45309"></span>',
     mineria: '<span class="mu-bloque" style="background:#7c2d12;opacity:.3;border:1px solid #7c2d12"></span>',
+    acopio_agua: '<span class="mu-ico mu-acopio">H</span>',
     paraderos: '<span class="mu-ico mu-paradero">B</span>',
     parques: '<span class="mu-bloque" style="background:#2f7d3b"></span>',
     quebradas: '<span class="mu-linea"></span>',
@@ -233,12 +234,13 @@ const CapasUI = (() => {
       return filas.join('');
     };
     $('leyenda-estados').innerHTML = r.leyenda.map(itemDe).join('')
-      + r.sinDatos.map((c) => `<li class="ley-item leyenda-error"><span class="ley-txt">${c === 'lineas' ? 'No pude leer los recorridos de SmartBus, así que no los dibujo.' : `No pude leer el archivo de ${c === 'sismos' ? 'sismos' : c === 'electricidad' ? 'concesiones eléctricas' : c === 'mineria' ? 'concesiones mineras' : c === 'censo' ? 'censo por manzana (o el mapa abarca demasiados distritos: acerca el mapa a uno o dos)' : c === 'volcan' ? 'peligro volcánico' : c === 'cenepred' ? 'riesgo de los distritos (CENEPRED)' : 'quebradas'}, así que no lo dibujo.`}</span></li>`).join('');
+      + r.sinDatos.map((c) => `<li class="ley-item leyenda-error"><span class="ley-txt">${c === 'lineas' ? 'No pude leer los recorridos de SmartBus, así que no los dibujo.' : `No pude leer el archivo de ${c === 'sismos' ? 'sismos' : c === 'electricidad' ? 'concesiones eléctricas' : c === 'mineria' ? 'concesiones mineras' : c === 'acopio_agua' ? 'puntos de acopio de agua' : c === 'censo' ? 'censo por manzana (o el mapa abarca demasiados distritos: acerca el mapa a uno o dos)' : c === 'volcan' ? 'peligro volcánico' : c === 'cenepred' ? 'riesgo de los distritos (CENEPRED)' : 'quebradas'}, así que no lo dibujo.`}</span></li>`).join('');
     const fuentes = [];
     if (r.leyenda.some((l) => ['colegios', 'salud', 'consultorios', 'paraderos', 'parques'].includes(l.capa))) fuentes.push(`Colegios: padrón de ESCALE (MINEDU). Salud y consultorios médicos (dos categorías; el consultorio es informativo, sin círculo de distancia): RENIPRESS (SUSALUD). Paraderos y parques: OpenStreetMap (ODbL), que en colegios, salud y consultorios solo completa donde no hay un punto oficial de la misma categoría a 200 m. Datos al ${fecha || 'sin fecha'}; cada punto dice su fuente al tocarlo. Puede faltar alguno.`);
     if (r.leyenda.some((l) => ['finanzas', 'comida_fuera', 'recreacion'].includes(l.capa))) fuentes.push('Finanzas (bancos y cajeros), comida fuera de casa (restaurantes y cafés) y recreación (juegos infantiles): OpenStreetMap (ODbL), solo informativos (sin distancia de referencia ni círculo). Puede faltar alguno; los parques son la capa de áreas verdes.');
     if (r.leyenda.some((l) => CAPAS_COMERCIO.includes(l.capa))) fuentes.push('Abastecimiento (mercados y supermercados), compras y ocio (malls confirmados con su fuente) y comercio de barrio (galerías): OpenStreetMap (ODbL), solo informativos (sin distancia de referencia ni círculo); de un mall o una galería con forma en el mapa la distancia es al borde, no al centro. Puede faltar alguno.');
     if (r.leyenda.some((l) => l.capa === 'electricidad')) fuentes.push('Concesión eléctrica: áreas de concesión de distribución del MINEM (Dirección General de Electricidad), datosabiertos.gob.pe, licencia ODC-By. Dicen a qué empresa le corresponde dar el servicio, no si un predio está conectado; los polígonos son poco detallados y su borde puede ser impreciso.');
+    if (r.leyenda.some((l) => l.capa === 'acopio_agua')) fuentes.push('Puntos de acopio de agua: Directorio de Puntos de Acopio de Agua Potable de SEDAPAR y la Municipalidad Provincial de Arequipa (gob.pe, publicado el 16 de febrero de 2024; datos de abril a junio de 2017). Son lugares donde se previó repartir agua con camiones cisterna ante un desabastecimiento: no dicen que haya agua ahí hoy ni que una zona tenga conexión.');
     if (r.leyenda.some((l) => l.capa === 'mineria')) fuentes.push('Concesiones mineras: Catastro Minero de INGEMMET (GEOCATMIN), referencial. Una concesión es un derecho a explorar y explotar los minerales, separado del predio: no dice que haya minería en el lugar ni de quién es el predio. No se dibujan las extinguidas.');
     if (r.leyenda.some((l) => /^censo_/.test(l.capa))) fuentes.push('Censo por manzana: Censos Nacionales 2017 del INEI (REDATAM), % de viviendas ocupadas con personas presentes con alumbrado, agua o desagüe por red pública. Son cifras de 2017 de la manzana, no de un predio ni de hoy; solo área urbana. El censo de 2025 aún no está abierto por manzana.');
     if (r.leyenda.some((l) => l.capa === 'viaje')) fuentes.push('Ruta al trabajo: trazados de rutas de bus de OpenStreetMap (ODbL) y de SmartBus. Rutas directas a 400 m a pie o menos de los dos puntos, con el origen antes que el destino; distancias en línea recta. No dice dónde se sube ni se baja ni si la ruta opera hoy.');
@@ -277,12 +279,12 @@ const CapasUI = (() => {
     $('leyenda-resumen').textContent = 'Preparando el mapa…';
     $('leyenda').hidden = false;
     try {
-      const d = await api.datos({ rutas: capas.some((c) => c.id === 'lineas'), volcan: capas.some((c) => c.id === 'volcan'), electricidad: capas.some((c) => c.id === 'electricidad'), mineria: capas.some((c) => c.id === 'mineria'), censo: capas.some((c) => /^censo_/.test(c.id)) ? vistaCenso() : null, cenepred: capas.some((c) => /^cenepred_/.test(c.id)) });
+      const d = await api.datos({ rutas: capas.some((c) => c.id === 'lineas'), volcan: capas.some((c) => c.id === 'volcan'), electricidad: capas.some((c) => c.id === 'electricidad'), mineria: capas.some((c) => c.id === 'mineria'), acopio: capas.some((c) => c.id === 'acopio_agua'), censo: capas.some((c) => /^censo_/.test(c.id)) ? vistaCenso() : null, cenepred: capas.some((c) => /^cenepred_/.test(c.id)) });
       if (mia !== secuencia) return;
       const distrito = contexto && contexto.distrito;
       const polys = distrito ? Distritos.poligonos(distrito) : null;
       const r = Capas.construir({
-        capas, datos: d.datos, zonas: d.zonas, cauces: d.cauces, sismos: d.sismos, volcan: d.volcan, electricidad: d.electricidad, mineria: d.mineria, censo: d.censo, cenepred: d.cenepred, rutas: d.rutas, umbrales: d.umbrales,
+        capas, datos: d.datos, zonas: d.zonas, cauces: d.cauces, sismos: d.sismos, volcan: d.volcan, electricidad: d.electricidad, mineria: d.mineria, acopio: d.acopio, censo: d.censo, cenepred: d.cenepred, rutas: d.rutas, umbrales: d.umbrales,
         area: polys && polys.length ? { polys } : null, sectores: contexto && contexto.sectores && contexto.sectores.length ? contexto.sectores : null,
       });
       ultimo = r;

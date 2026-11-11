@@ -145,8 +145,8 @@ const Asistente = (() => {
     comercioTodo: /\b(mercados?|mercadillos?|super\s?mercados?|hipermercados?|abastecimiento|viveres|abarrotes|(?:comprar|conseguir)\s+(?:la\s+|mi\s+)?(?:comida|alimentos|verduras|frutas)|malls?|centros? comercial(?:es)?|shopping|outlets?|ocio|ir de compras|galerias?(?:\s+comercial(?:es)?)?|comercio\s+(?:de|del)\s+barrio|comercio\s+vecinal|tiendas?\s+de\s+barrio|bancos?|cajeros?(?:\s+automaticos?)?|atm|agencias? bancarias?|sacar (?:plata|dinero|efectivo)|restaurantes?|restaurant|cafes?|cafeterias?|comer fuera|salir a comer|donde comer|juegos? infantil(?:es)?|parques? infantil(?:es)?|parques? de juegos|areas? de juegos|columpios?|resbaladeras?|playgrounds?)\b/g,
     // Electricidad (informativo): «¿hay luz?», electricidad, servicio o energía eléctrica, SEAL. «Luz» sola no cuenta («luz del día»).
     electricidad: /\b(electricidad|electric[oa]s?|electrificacion|seal|(?:hay|tiene|tienen|tengo|con|sin|falta|cuenta con)\s+(?:la\s+)?luz|luz\s+(?:electrica|en\s+(?:mi|el|este|esta|la))|concesion de distribucion)\b/,
-    // Agua y desagüe (informativo): «¿hay agua en mi punto?», agua potable, desagüe, alcantarillado. «Agua» sola cuenta; «río» y «quebrada» siguen siendo cauces.
-    agua: /\b(agua(?:\s+potable)?|desague|alcantarillado|saneamiento|servicio higienico)\b/,
+    // Agua y desagüe (informativo): «¿hay agua en mi punto?», agua potable, desagüe, alcantarillado, punto de acopio, camión cisterna, factibilidad (y lo que hay que pedir al comprar). «Agua» sola cuenta; «río» y «quebrada» siguen siendo cauces.
+    agua: /\b(agua(?:\s+potable)?|desague|alcantarillado|saneamiento|servicio higienico|acopio|cisternas?|factibilidad)\b/,
     // Viaje en combi o bus a un destino: «¿qué combi me lleva a mi trabajo en el Parque Industrial?», «tomo la C10», «el carro de Ciudad Blanca».
     viajeFuerte: /\b(me lleva\w*|me llevan|llegar|llego|llegue\w*|ruta directa|sin transbordo|como llego|como voy)\b/,
     viajeTrabajo: /\b(trabajo|trabajar|trabajamos|oficina|chamba)\b/,
@@ -1119,17 +1119,41 @@ const Asistente = (() => {
     };
   }
 
-  /** «¿Hay agua en mi punto?»: el censo de la manzana (2017) con su salvedad y el dato del departamento (2025). Nunca afirma que el predio tenga o no tenga agua. */
+  /** La lista de lo que conviene pedir al comprar (Calculos.LISTA_COMPRADOR), como viñetas. No depende del punto. */
+  const listaComprador = () => ['Si vas a comprar, lo que conviene pedir:', ...C.LISTA_COMPRADOR.map((x) => `• ${x.texto}`)].join('\n');
+
+  /** Línea del resumen del punto: el punto de acopio de agua más cercano (directorio de SEDAPAR, datos de 2017). Sin veredicto; null si no se calculó. */
+  function lineaAcopio(r) {
+    if (!r) return null;
+    if (r.estado === 'SIN DATO' || r.distanciaM === null) return 'Agua (informativo): sin dato del directorio de puntos de acopio de SEDAPAR.';
+    return `Agua (informativo): punto de acopio más cercano, a ${fmtDist(r.distanciaM)} (directorio de SEDAPAR con datos de ${r.fechaDatos || '2017'}); es un lugar de reparto con camiones cisterna, no dice que haya agua ni conexión.`;
+  }
+
+  /**
+   * «¿Hay agua en mi punto?»: el censo de la manzana (2017) con su salvedad y el dato del departamento (2025), el punto de acopio de agua más cercano (directorio de SEDAPAR,
+   * datos de 2017), las interrupciones del servicio en el distrito (SUNASS) y lo que conviene pedir al comprar. Nunca afirma que el predio tenga o no tenga agua.
+   */
   function respuestaAgua(c) {
-    if (!c.punto) return { texto: 'Elige un punto en el mapa para ver qué dice el censo de la manzana sobre el agua y el desagüe por red pública.', sugerencias: SUGERENCIAS_BASE };
+    if (!c.punto) return { texto: ['Elige un punto en el mapa para ver qué dice el censo de la manzana sobre el agua y el desagüe por red pública, cuál es el punto de acopio de agua más cercano y qué interrupciones del servicio hubo en tu distrito.', listaComprador()].join('\n'), sugerencias: SUGERENCIAS_BASE };
     if (!c.entorno) return { texto: 'Todavía estoy calculando los servicios cercanos a tu punto; vuelve a preguntar en unos segundos.', sugerencias: [] };
     const r = c.entorno.censo;
-    if (!r) return { texto: 'Todavía no tengo ese dato; vuelve a preguntar en unos segundos.', sugerencias: [] };
+    const acopio = c.entorno.acopio || null;
+    const ints = c.interrupciones || null;
+    if (!r && !acopio && !ints) return { texto: 'Todavía no tengo ese dato; vuelve a preguntar en unos segundos.', sugerencias: [] };
+    const partesAgua = [
+      acopio ? C.textoAcopio(acopio) : '',
+      acopio && acopio.estado !== 'SIN DATO' ? `Fuente: ${acopio.fuente || 'SEDAPAR'}, publicado el ${acopio.fecha || 'sin fecha'}; la distancia es en línea recta y los puntos son de ${acopio.fechaDatos || '2017'}.` : '',
+      ints ? C.textoInterrupciones(ints) : '',
+      ints && ints.estado !== 'SIN DATO' && ints.registros ? `Fuente: ${ints.fuente || 'SUNASS'}, descargado el ${ints.fecha || 'sin fecha'}, licencia ${ints.licencia || 'ODC-By'}. ${C.NOTA_INTERRUPCIONES}` : '',
+      listaComprador(),
+    ].filter(Boolean);
+    const mapa = { capas: ['censo_agua', ...(acopio && acopio.estado !== 'SIN DATO' ? ['acopio_agua'] : [])] };
+    if (!r) return { texto: partesAgua.join('\n'), sugerencias: ['Dame un resumen del punto', '¿Hay luz en mi punto?'], mapa };
     const fuente = r.tieneCifras ? `Fuente: ${r.fuente || 'INEI, Censos Nacionales 2017'}${r.fecha ? `, descargado el ${r.fecha}` : ''}. El censo por manzana es solo del área urbana.` : '';
     return {
-      texto: [C.textoCenso(r), fuente, r.tieneCifras ? C.NOTA_CENSO : '', C.textoCenso2025(c.departamento2025, 'agua')].filter(Boolean).join('\n'),
+      texto: [C.textoCenso(r), fuente, r.tieneCifras ? C.NOTA_CENSO : '', C.textoCenso2025(c.departamento2025, 'agua'), ...partesAgua].filter(Boolean).join('\n'),
       sugerencias: ['Dame un resumen del punto', '¿Hay luz en mi punto?'],
-      mapa: { capas: ['censo_agua'] },
+      mapa,
     };
   }
 
@@ -1584,6 +1608,8 @@ const Asistente = (() => {
     '• Electricidad: áreas de concesión de distribución eléctrica del MINEM (Dirección General de Electricidad, licencia ODC-By), copia congelada con su fecha de descarga. Dicen a quién le corresponde el servicio, no si un predio está conectado.',
     '• Concesiones mineras: Catastro Minero de INGEMMET (GEOCATMIN), copia congelada con su fecha de descarga; es referencial y se actualiza a diario. Es un derecho sobre los minerales, no dice si hay minería ni de quién es el predio.',
     '• Finanzas (bancos y cajeros), comida fuera de casa (restaurantes y cafés) y recreación (áreas de juegos infantiles): OpenStreetMap (ODbL), informativas y sin umbral, copia congelada con su fecha de extracción. Los parques y jardines no se repiten ahí: ya son el criterio «área verde».',
+    '• Puntos de acopio de agua: Directorio de Puntos de Acopio de Agua Potable Arequipa de SEDAPAR y la Municipalidad Provincial de Arequipa (gob.pe, publicado el 16 de febrero de 2024; sus datos son de abril a junio de 2017). Son lugares de reparto con camiones cisterna ante un desabastecimiento, no la red de agua.',
+    '• Interrupciones del servicio de agua: Registro de interrupciones que las empresas reportan a la SUNASS (datosabiertos.gob.pe, ODC-By); de SEDAPAR, de octubre de 2019 a abril de 2024. Son interrupciones reportadas por la empresa, por distrito.',
     '• Agua, desagüe y alumbrado por manzana: Censos Nacionales 2017 del INEI (REDATAM en línea), copia congelada con su fecha de descarga; solo área urbana. El censo de 2025 ya se levantó pero el INEI aún no lo abre por manzana: del 2025 solo uso el dato del departamento de Arequipa (nota de prensa del INEI de julio de 2026).',
     '• Líneas de transporte (recorridos y paradas): SmartBus (smartbus.app), usados con su autorización verbal (confirmación escrita pendiente). Sin frecuencias ni horarios.',
     '• Umbrales: colegios 500 m inicial, 1500 m primaria y 3000 m secundaria (MINEDU); área verde ≥ 0,5 ha a 300 m (OMS Europa); salud 1000 m, paradero 400 m y borde de zona 20 m son convenciones del proyecto.',
@@ -1745,6 +1771,7 @@ const Asistente = (() => {
         lineaElectricidad(e.electricidad),
         lineaMineria(e.mineria),
         lineaCenso(e.censo),
+        lineaAcopio(e.acopio),
         `Colegios: ${colegios}.`,
         linea('Transporte', e.transporte),
         ...lineaLineas(e.transporte),
@@ -2073,6 +2100,8 @@ const Asistente = (() => {
   const LIM_ELECTRICIDAD = 'La concesión eléctrica dice a qué empresa le corresponde dar el servicio de distribución en esa zona; no dice que un predio esté conectado ni que haya red en su calle (la cobertura real vendría de un censo, que aún no tengo). Los polígonos del registro son poco detallados y su borde puede ser impreciso; que un punto quede fuera no significa que no haya servicio.';
   const FUENTE_MINERIA = 'Concesiones mineras: Catastro Minero de INGEMMET (GEOCATMIN, servicio ArcGIS REST), copia congelada con su fecha de descarga; el propio servicio lo declara referencial y de actualización diaria. No se guarda el nombre del titular.';
   const LIM_MINERIA = 'El Catastro Minero dice dónde hay derechos mineros (concesiones tituladas, en trámite y otras); no dice que haya minería en el lugar, de quién es el predio ni qué se puede hacer en él. Que un punto quede fuera no garantiza que no haya otros derechos: consulta el GEOCATMIN de INGEMMET.';
+  const FUENTE_AGUA = 'Puntos de acopio de agua: Directorio de Puntos de Acopio de Agua Potable Arequipa de SEDAPAR y la Municipalidad Provincial de Arequipa (gob.pe, publicado el 16 de febrero de 2024; fichas de abril a junio de 2017), convertido de UTM zona 19 sur a WGS84. Interrupciones del servicio de agua: Registro de interrupciones reportadas por las empresas a la SUNASS (datosabiertos.gob.pe, licencia ODC-By), las de SEDAPAR de octubre de 2019 a abril de 2024.';
+  const LIM_AGUA = 'Un punto de acopio es un lugar donde se previó repartir agua con camiones cisterna ante un desabastecimiento: no dice que haya agua ahí hoy, que el punto siga vigente (los datos son de 2017) ni si tu zona tiene conexión; siete fichas del directorio traen coordenadas imposibles y no se usan. Las interrupciones son las que SEDAPAR reportó a la SUNASS, contadas una vez por distrito y sin pesar por las viviendas afectadas: no se comparan distritos y no dicen nada de un predio. Los datos de conexión de un predio en particular no están publicados.';
   const FUENTE_CENSO = 'Agua, desagüe y alumbrado por manzana: Censos Nacionales 2017 del INEI (REDATAM en línea, https://censos2017.inei.gob.pe/) con los polígonos de manzana del INEI, copia congelada con su fecha de descarga; solo área urbana. De 2025 solo se usa el dato del departamento de Arequipa (nota de prensa del INEI del 17 de julio de 2026).';
   const LIM_CENSO = 'Las cifras del censo son de 2017 y de toda la manzana, calculadas sobre las viviendas ocupadas con personas presentes que se censaron: no dicen si un predio en particular está conectado ni cómo está hoy. Con menos de 5 viviendas ocupadas no doy el porcentaje. El censo de 2025 todavía no está abierto por manzana (REDATAM 2025 pide iniciar sesión).';
   const LIM_COMERCIO = 'El abastecimiento (mercados y supermercados), las compras y el ocio (malls confirmados) y el comercio de barrio (galerías) son categorías informativas, sin distancia de referencia (es una decisión pendiente): no se dice si están cerca o lejos y no suman al puntaje. Un supermercado dentro de un mall cuenta como abastecimiento; el mall, no. OpenStreetMap puede no tener todos y a veces etiqueta de más: por distrito, el número de mercados mapeados no coincide con el del censo de 2016 (en unos hay menos y en otros más), amenity=marketplace incluye ferias y comercios mal etiquetados, y shop=mall incluye galerías y centros comerciales pequeños, no solo malls. No distingue un mercado minorista de uno mayorista. «Sin dato» no significa que no exista. Los bancos, cajeros, restaurantes, cafés y juegos infantiles son igual de informativos y sin distancia de referencia: amenity=bank y amenity=atm no distinguen una agencia de un cajero corresponsal, un restaurante o café no dice calidad, precio ni horario, y leisure=playground a menudo está dentro de un parque (que cuenta aparte, como área verde).';
@@ -2099,8 +2128,8 @@ const Asistente = (() => {
     no_soportado: GENERICO,
     fuentes: {
       porque: ['Resume de dónde sale cada dato de la ficha y qué umbral se usa.'],
-      fuente: [FUENTE_PLANO, FUENTE_SERVICIOS, FUENTE_COMERCIO, FUENTE_ELECTRICIDAD, FUENTE_MINERIA, FUENTE_CENSO, FUENTE_UMBRALES],
-      limites: [LIM_RECTA, LIM_OFICIAL, LIM_CONSULTORIO, LIM_COMERCIO, LIM_ELECTRICIDAD, LIM_MINERIA, LIM_CENSO, LIM_OSM, LIM_REFERENCIAL],
+      fuente: [FUENTE_PLANO, FUENTE_SERVICIOS, FUENTE_COMERCIO, FUENTE_ELECTRICIDAD, FUENTE_MINERIA, FUENTE_AGUA, FUENTE_CENSO, FUENTE_UMBRALES],
+      limites: [LIM_RECTA, LIM_OFICIAL, LIM_CONSULTORIO, LIM_COMERCIO, LIM_ELECTRICIDAD, LIM_MINERIA, LIM_AGUA, LIM_CENSO, LIM_OSM, LIM_REFERENCIAL],
     },
     pdm: {
       porque: ['Muestra el aviso sobre el estado del PDM nuevo que registra la herramienta, con su fuente y su fecha. No lo interpreta.'],
@@ -2147,6 +2176,11 @@ const Asistente = (() => {
       porque: ['Ubica tu punto en la manzana del censo de 2017 que lo contiene (o la más cercana, si estás en la calle) y da el porcentaje de sus viviendas ocupadas que tenían agua y desagüe por red pública. No lo compara con ninguna distancia de referencia.'],
       fuente: [FUENTE_CENSO],
       limites: [LIM_CENSO, C.NOTA_CENSO, LIM_REFERENCIAL],
+    },
+    agua: {
+      porque: ['Ubica tu punto respecto de los puntos de acopio de agua del directorio de SEDAPAR (el más cercano en línea recta), cuenta las interrupciones del servicio de agua que SEDAPAR reportó a la SUNASS en tu distrito y recuerda qué pedir al comprar. No lo compara con ninguna distancia ni frecuencia de referencia.'],
+      fuente: [FUENTE_AGUA, FUENTE_CENSO],
+      limites: [LIM_AGUA, C.NOTA_ACOPIO, C.NOTA_INTERRUPCIONES, LIM_CENSO, LIM_REFERENCIAL],
     },
     mineria: {
       porque: ['Ubica tu punto dentro de los polígonos de concesiones mineras del Catastro Minero de INGEMMET y lista las que lo contienen (las extinguidas no cuentan); si cae afuera, la distancia al borde de la más cercana. No lo compara con ninguna distancia de referencia.'],

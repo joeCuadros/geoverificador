@@ -144,6 +144,38 @@ const Reporte = (() => {
   }
 
   /**
+   * Agua: el punto de acopio más cercano (directorio de SEDAPAR, datos de 2017), las interrupciones del servicio de agua del distrito (SUNASS) y lo que conviene pedir al
+   * comprar. INFORMATIVA (sin umbral): ni el acopio ni las interrupciones dicen que el predio tenga o no tenga agua.
+   */
+  function agua(d) {
+    const a = d.variables && d.variables.acopio;
+    const i = d.variables && d.variables.interrupciones;
+    const filas = [];
+    if (a) {
+      filas.push(fila('Punto de acopio de agua', a.estado === 'SIN DATO' ? estado('SIN DATO') : estado('INFORMATIVO')));
+      if (a.estado !== 'SIN DATO') {
+        filas.push(fila('Más cercano', `${esc(a.direccion || 'sin dirección')}${a.distrito ? ` (${esc(a.distrito)})` : ''}`));
+        filas.push(fila('Distancia', `${dist(a.distanciaM)} en línea recta`));
+        filas.push(fila('Puntos a 500 m / a 1 km', `${a.a500m} / ${a.a1000m}`));
+        filas.push(fila('Datos de', `${esc(a.fechaDatos || '2017')} (directorio publicado el ${esc(a.fecha || 'sin fecha')})`));
+      } else filas.push(fila('Resultado', esc(CALC.textoAcopio(a))));
+    }
+    if (i) {
+      filas.push(fila('Interrupciones del servicio de agua', i.estado === 'SIN DATO' ? estado('SIN DATO') : estado('INFORMATIVO')));
+      if (i.estado === 'SIN DATO' || !i.registros) filas.push(fila('Resultado', esc(CALC.textoInterrupciones(i))));
+      else {
+        const k = i.aniosCompletos;
+        if (k.length) filas.push(fila(`Promedio por año completo (${k[0]} a ${k.at(-1)})`, `${i.promedioN} interrupciones · ${i.promedioHoras} horas`));
+        if (i.total && i.periodo) filas.push(fila(`Todo el periodo (${esc(i.periodo.desde)} a ${esc(i.periodo.hasta)})`, `${i.total.n} interrupciones · ${Math.round(i.total.horas)} horas (${i.total.imprevistas} imprevistas, ${i.total.programadas} programadas)`));
+        i.parciales.forEach((p) => filas.push(fila(`Año parcial ${p.anio}`, `${p.n} interrupciones · ${Math.round(p.horas)} horas`)));
+      }
+    }
+    const notas = [a ? CALC.NOTA_ACOPIO : '', i ? CALC.NOTA_INTERRUPCIONES : ''].filter(Boolean).map((t) => `<p class="rp-nota">${esc(t)}</p>`).join('');
+    const lista = `<p class="rp-nota"><strong>Si vas a comprar, lo que conviene pedir:</strong></p><ul class="rp-lista">${CALC.LISTA_COMPRADOR.map((x) => `<li>${esc(x.texto)}</li>`).join('')}</ul>`;
+    return `<table class="rp-tabla">${filas.join('')}</table>${notas}${lista}`;
+  }
+
+  /**
    * Concesión minera: ¿el punto cae dentro de una concesión del Catastro Minero de INGEMMET? INFORMATIVA (sin umbral). Una concesión es un derecho a explorar y explotar los
    * minerales, separado del predio: no dice que haya minería ni de quién es el predio. No se guarda el nombre del titular.
    */
@@ -428,6 +460,7 @@ const Reporte = (() => {
       ['Salud', '#c2410c', salud(d), d.variables ? fuenteDe(d.variables.salud) : ''],
       ...(d.variables && d.variables.consultorio ? [['Consultorio médico (informativo)', '#b45309', consultorio(d), fuenteDe(d.variables.consultorio)]] : []),
       ...(hayComercio(d) ? [['Comercio por necesidad: abastecimiento, compras y ocio, comercio de barrio (informativo)', '#be185d', comercio(d), fuenteComercio(d)]] : []),
+      ...(d.variables && (d.variables.acopio || d.variables.interrupciones) ? [['Agua: puntos de acopio e interrupciones del servicio (informativo)', '#0369a1', agua(d), [d.variables.acopio ? `${d.variables.acopio.fuente || 'SEDAPAR'} (publicado el ${d.variables.acopio.fecha || 'sin fecha'}; datos de ${d.variables.acopio.fechaDatos || '2017'})` : '', d.variables.interrupciones && d.variables.interrupciones.registros !== null ? `${d.variables.interrupciones.fuente || 'SUNASS'}, interrupciones reportadas por SEDAPAR (${d.variables.interrupciones.licencia || 'ODC-By'}, descargado el ${d.variables.interrupciones.fecha || 'sin fecha'})` : ''].filter(Boolean).join('; ')]] : []),
       ...(d.variables && d.variables.mineria ? [['Concesión minera (informativo)', '#7c2d12', mineria(d), fuenteDe(d.variables.mineria)]] : []),
       ...(d.variables && d.variables.electricidad ? [['Electricidad (informativo)', '#ca8a04', electricidad(d), fuenteDe(d.variables.electricidad)]] : []),
       ...(d.variables && d.variables.censo ? [[`Servicios de la manzana (censo ${d.variables.censo.anio || 2017}, informativo)`, '#0e7490', censo(d), d.variables.censo.fuente ? fuenteDe(d.variables.censo) : '']] : []),
@@ -457,6 +490,7 @@ const Reporte = (() => {
       'Los locales de ESCALE dicen su nivel. Los colegios de OpenStreetMap que completan el mapa casi no lo etiquetan: uno sin nivel se toma como candidato a primaria y secundaria, lo que puede sobrestimar la oferta de un nivel.',
       ...(d.variables && d.variables.consultorio ? ['El consultorio médico es una categoría aparte de los establecimientos de salud y es solo informativo: no tiene una distancia de referencia (es una decisión pendiente), así que no se dice si está cerca o lejos, no suma a ningún puntaje y no cuenta como «salud cerca».'] : []),
       ...(d.variables && d.variables.censo ? ['Servicios de la manzana: alumbrado, agua y desagüe por red pública según el censo de 2017 del INEI (REDATAM), solo área urbana. Son cifras de toda la manzana, calculadas sobre las viviendas ocupadas con personas presentes que se censaron, no de un predio ni de hoy; con menos de 5 viviendas no se da el porcentaje. El censo de 2025 ya se levantó pero el INEI todavía no lo abre por manzana. Es informativo y no suma a ningún puntaje.'] : []),
+      ...(d.variables && (d.variables.acopio || d.variables.interrupciones) ? ['Agua: los puntos de acopio vienen del directorio de SEDAPAR y la Municipalidad Provincial de Arequipa (publicado en gob.pe en 2024 con datos de abril a junio de 2017) y son lugares de reparto con camiones cisterna ante un desabastecimiento: no dicen que haya agua en ellos hoy, que sigan vigentes ni que una zona tenga conexión. Las interrupciones son las que SEDAPAR reportó a la SUNASS (de octubre de 2019 a abril de 2024), contadas una vez por distrito y sin pesar por las viviendas afectadas: no se comparan distritos y no dicen nada de un predio. Los datos de conexión de un predio en particular no están publicados. Es informativo y no suma a ningún puntaje.'] : []),
       ...(d.variables && d.variables.mineria ? ['Concesión minera: el Catastro Minero de INGEMMET es referencial y se actualiza a diario; una concesión minera es un derecho a explorar y explotar los minerales, separado del predio (art. 9 de la Ley General de Minería): no dice que haya minería en el lugar, de quién es el predio ni qué se puede hacer en él, y que el punto quede fuera no garantiza que no haya otros derechos. Es informativo y no suma a ningún puntaje.'] : []),
       ...(d.variables && d.variables.electricidad ? ['Electricidad: el área de concesión de distribución eléctrica (MINEM, Dirección General de Electricidad) dice a qué empresa le corresponde dar el servicio en esa zona; una concesión no es una conexión: no dice que el predio esté conectado ni que haya red en su calle, y los polígonos del registro son poco detallados (su borde puede ser impreciso). La cobertura real de conexión vendría de un censo (INEI) que este proyecto aún no tiene. Es informativo y no suma a ningún puntaje.'] : []),
       ...(hayComercio(d) ? ['El comercio se ordena por necesidad —abastecimiento (mercados y supermercados), compras y ocio (solo los malls confirmados con su fuente) y comercio de barrio (el resto de lo que se etiqueta mall)— y es informativo: no tiene una distancia de referencia (es una decisión pendiente), así que no se dice si está cerca o lejos y no suma a ningún puntaje. Un supermercado dentro de un mall cuenta como abastecimiento; el mall, no. Sale de OpenStreetMap, que puede no tenerlos todos (por distrito, el número de mercados mapeados no coincide con el del censo de 2016), etiqueta de más —amenity=marketplace incluye ferias y comercios mal etiquetados y shop=mall incluye galerías pequeñas, no solo malls— y no distingue un mercado minorista de uno mayorista; de un mall con forma en el mapa la distancia es al borde.'] : []),

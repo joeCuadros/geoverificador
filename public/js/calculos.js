@@ -697,6 +697,120 @@ const Calculos = (() => {
     return `Tu punto está fuera de las áreas de concesión de distribución eléctrica de los datos; la más cercana es la de ${r.concesionaria || 'una empresa'}, a ${distTxt(r.distanciaM)} de su borde. Eso no significa que no haya servicio: el registro puede tener los bordes poco precisos o no incluir alguna zona, y tampoco dice si un predio está conectado.`;
   }
 
+  // ---------------------------------------------------------------- Agua: puntos de acopio de SEDAPAR e interrupciones del servicio (SUNASS)
+
+  const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+  /** «2024-02-16» → «16 de febrero de 2024»; null si no es una fecha ISO. */
+  function fechaLarga(iso) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ''));
+    return m ? `${Number(m[3])} de ${MESES[Number(m[2]) - 1]} de ${m[1]}` : null;
+  }
+  /** «2019-10-03» → «octubre de 2019». */
+  const mesAnio = (iso) => {
+    const m = /^(\d{4})-(\d{2})/.exec(String(iso || ''));
+    return m ? `${MESES[Number(m[2]) - 1]} de ${m[1]}` : null;
+  };
+  const enteroTxt = (n) => (Math.abs(n) >= 10000 ? String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ') : String(Math.round(n)));
+  const capital = (t) => String(t || '').toLowerCase().replace(/(^|\s)(\S)/g, (_, a, b) => a + b.toUpperCase()).replace(/ (De|Y|Del|La)( |$)/g, (x) => x.toLowerCase());
+
+  /**
+   * Una sola redacción de qué dice y qué NO dice un punto de acopio de agua, para la ficha, el chat y el informe. El directorio es de SEDAPAR y la Municipalidad
+   * Provincial de Arequipa (plan de abastecimiento por tanques cisterna en caso de emergencia): lo publicó gob.pe el 2024-02-16 pero sus fichas son de abril de 2017.
+   */
+  const NOTA_ACOPIO = 'Es informativo: los puntos de acopio son los lugares donde SEDAPAR y la Municipalidad Provincial de Arequipa previeron repartir agua con camiones cisterna ante un desabastecimiento (plan de emergencia). El directorio se publicó en gob.pe el 16 de febrero de 2024, pero sus datos son de abril a junio de 2017: los puntos pueden haber cambiado. No dice que haya agua en ese lugar hoy, que el reparto sea permanente ni si tu zona tiene conexión a la red; la distancia es en línea recta. No suma al puntaje ni a la búsqueda de zonas.';
+
+  /**
+   * El punto de acopio de agua más cercano. Puro y sin umbral: INFORMATIVO (o SIN DATO).
+   *   features: [Feature Point { properties { direccion, distrito, pagina_pdf… } }] (public/data/agua/puntos_acopio.geojson)
+   *   opciones: { fuente, fecha (publicación), fechaDatos (a qué época corresponden los datos), metodo }
+   * Devuelve { estado, direccion, distrito, distanciaM, lat, lon, a500m, a1000m, total, umbralM, fuente, fecha, fechaDatos, metodo }.
+   */
+  function evaluarAcopio(punto, features, opciones = {}) {
+    const base = { umbralM: null, fuente: opciones.fuente ?? null, fecha: opciones.fecha ?? null, fechaDatos: opciones.fechaDatos ?? null, metodo: opciones.metodo ?? null };
+    const validos = (features || []).filter((f) => f && f.geometry && f.geometry.type === 'Point' && esNumero(f.geometry.coordinates[0]) && esNumero(f.geometry.coordinates[1]));
+    if (validos.length === 0) return { estado: 'SIN DATO', direccion: null, distrito: null, distanciaM: null, lat: null, lon: null, a500m: 0, a1000m: 0, total: 0, ...base };
+    const medidos = validos.map((f) => ({ f, d: haversine(punto.lat, punto.lon, f.geometry.coordinates[1], f.geometry.coordinates[0]) }));
+    const cerca = medidos.reduce((a, b) => (b.d < a.d ? b : a));
+    const p = cerca.f.properties || {};
+    return {
+      estado: 'INFORMATIVO', direccion: p.direccion || null, distrito: p.distrito || null, distanciaM: cerca.d, lat: cerca.f.geometry.coordinates[1], lon: cerca.f.geometry.coordinates[0],
+      a500m: medidos.filter((m) => m.d <= 500).length, a1000m: medidos.filter((m) => m.d <= 1000).length, total: validos.length, ...base,
+    };
+  }
+
+  /** La frase sobre un resultado de evaluarAcopio: un lugar de reparto con camiones cisterna, con la edad de los datos; nunca «tienes agua». */
+  function textoAcopio(r) {
+    if (!r || r.estado === 'SIN DATO') return 'Punto de acopio de agua (informativo): sin dato; no pude leer el directorio de SEDAPAR.';
+    const cerca = r.a1000m > 1 ? ` (hay ${r.a1000m} a 1 km o menos)` : '';
+    const publicado = fechaLarga(r.fecha);
+    return `El punto de acopio de agua potable más cercano del directorio de SEDAPAR es «${r.direccion || 'sin dirección'}»${r.distrito ? ` (${capital(r.distrito)})` : ''}, a ${distTxt(r.distanciaM)} en línea recta${cerca}. Es un lugar donde se previó repartir agua con camiones cisterna ante un desabastecimiento. ${publicado ? `El directorio se publicó el ${publicado}, pero sus datos` : 'Sus datos'} son de ${r.fechaDatos || '2017'}: los puntos pueden haber cambiado. No dice que haya agua ahí hoy ni si tu zona tiene conexión a la red.`;
+  }
+
+  const NOTA_INTERRUPCIONES = 'Es informativo: son las interrupciones del servicio de agua potable que SEDAPAR reportó a la SUNASS (registro abierto, ODC-By), contadas una vez por distrito. Las horas son de cada interrupción, de su inicio a su fin, sumadas; no se multiplican por las viviendas afectadas, así que una que dejó sin agua a unas pocas calles pesa igual que una de todo un distrito. Un distrito más grande tiene más conexiones y suele tener más registros: no se compara un distrito con otro. El archivo llega hasta abril de 2024 y no dice nada de un predio en particular. No suma al puntaje ni a la búsqueda de zonas.';
+
+  const claveDistrito = (t) => sinTildes(String(t == null ? '' : t)).trim().replace(/\s+/g, ' ').toUpperCase();
+
+  /**
+   * Las interrupciones del servicio de agua de SEDAPAR en un distrito. Puro y sin umbral: INFORMATIVO (o SIN DATO).
+   *   datos: el contenido de public/data/agua/interrupciones_sedapar.json ({ metadata, distritos })
+   * Devuelve { estado, distrito, registros (true | false | null), promedioN, promedioHoras (por año completo), aniosCompletos, parciales [{ anio, n, horas }], total, periodo,
+   * umbralM, fuente, fecha }. Un distrito que no figura en el archivo NO es «cero interrupciones»: es registros = false.
+   */
+  function resumirInterrupciones(distrito, datos, opciones = {}) {
+    const meta = (datos && datos.metadata) || {};
+    const base = { umbralM: null, fuente: meta.fuente ?? opciones.fuente ?? null, fecha: meta.fecha_descarga ?? opciones.fecha ?? null, licencia: meta.licencia ?? null };
+    const vacio = { estado: 'SIN DATO', distrito: distrito ? claveDistrito(distrito) : null, registros: null, promedioN: null, promedioHoras: null, aniosCompletos: [], porAnio: {}, parciales: [], total: null, periodo: null, ...base };
+    if (!datos || !datos.distritos || !distrito) return vacio;
+    const clave = Object.keys(datos.distritos).find((k) => claveDistrito(k) === claveDistrito(distrito));
+    const comunes = { estado: 'INFORMATIVO', distrito: clave || claveDistrito(distrito), periodo: meta.periodo || null, aniosCompletos: meta.anios_completos || [], ...base };
+    if (!clave) return { ...comunes, registros: false, promedioN: null, promedioHoras: null, porAnio: {}, parciales: [], total: null };
+    const d = datos.distritos[clave];
+    const por = d.por_anio || {};
+    const suma = (k) => comunes.aniosCompletos.reduce((t, a) => t + ((por[a] && por[a][k]) || 0), 0);
+    const k = comunes.aniosCompletos.length;
+    return {
+      ...comunes, registros: true,
+      promedioN: k ? Math.round(suma('n') / k) : null, promedioHoras: k ? Math.round(suma('horas') / k) : null,
+      porAnio: por,
+      parciales: (meta.anios_parciales || []).map((anio) => ({ anio, n: (por[anio] && por[anio].n) || 0, horas: (por[anio] && por[anio].horas) || 0 })),
+      total: d.total || null,
+    };
+  }
+
+  /** La frase sobre un resultado de resumirInterrupciones: reportado por la empresa, por año completo y en el periodo; nunca «tu predio tuvo cortes». */
+  function textoInterrupciones(r) {
+    if (!r || r.estado === 'SIN DATO' || r.registros === null) return 'Interrupciones del servicio de agua (informativo): sin dato; no pude leer el archivo de la SUNASS o no sé el distrito de tu punto.';
+    const donde = capital(r.distrito);
+    if (!r.registros) return `En el archivo de la SUNASS no hay interrupciones del servicio de agua potable registradas para ${donde} (SEDAPAR no reportó ninguna o el distrito no figura): eso no garantiza que no haya habido cortes.`;
+    const k = r.aniosCompletos;
+    const anual = k.length && r.promedioN !== null
+      ? `un promedio de ${enteroTxt(r.promedioN)} interrupciones del servicio de agua potable al año (años completos ${k[0]} a ${k.at(-1)}), que sumaron en promedio ${enteroTxt(r.promedioHoras)} horas al año`
+      : 'interrupciones del servicio de agua potable';
+    const periodo = r.periodo && r.total ? ` En todo el periodo registrado, de ${mesAnio(r.periodo.desde)} a ${mesAnio(r.periodo.hasta)}, fueron ${enteroTxt(r.total.n)} interrupciones (${enteroTxt(r.total.horas)} horas).` : '';
+    return `En ${donde}, SEDAPAR reportó a la SUNASS ${anual}.${periodo} Son interrupciones reportadas por la empresa y contadas una vez cada una: no dice cuántas viviendas afectó cada una ni que tu predio haya tenido cortes.`;
+  }
+
+  const URL_FACTIBILIDAD_SEDAPAR = 'https://www.gob.pe/institucion/sedapar/pages/65539-servicio-de-agua-potable-y-alcantarillado-de-arequipa-solicitar-certificado-de-factibilidad-para-servicio-de-agua-potable-y-alcantarillado';
+
+  /**
+   * Lo que conviene pedir y preguntar al comprar un predio, en cuanto a agua y luz. Cada punto se verificó en la fuente (el trámite de factibilidad en gob.pe/sedapar,
+   * la ley en el Congreso). No afirma nada del predio: dice qué pedir y por qué esta herramienta no lo sabe.
+   */
+  const LISTA_COMPRADOR = [
+    {
+      id: 'recibos',
+      texto: 'Pide al vendedor el último recibo de agua de SEDAPAR y el de luz de SEAL, con el número de suministro de cada uno, y pregunta a cada empresa si el predio tiene el servicio activo y si hay deudas pendientes.',
+    },
+    {
+      id: 'factibilidad',
+      texto: `Si es un terreno sin conexión, pregunta a SEDAPAR si el lote tiene factibilidad de servicio: el trámite se llama «Solicitar certificado de factibilidad para servicio de agua potable y alcantarillado» y sus requisitos vigentes están en gob.pe (${URL_FACTIBILIDAD_SEDAPAR}). Ese trámite no otorga ni modifica la propiedad, el saneamiento físico-legal ni la zonificación del predio. Para la luz, consulta a SEAL cómo pedir el servicio.`,
+    },
+    {
+      id: 'datos',
+      texto: 'Los datos de conexión de un predio en particular no están publicados (no hay una lista ni un mapa de predios con agua o luz) y suelen estar asociados a la persona titular del suministro, cuyos datos personales protege la Ley N.° 29733, Ley de Protección de Datos Personales: por eso esta herramienta no puede decirte si un predio está conectado; hay que pedirlo y confirmarlo con la empresa.',
+    },
+  ];
+
   // ---------------------------------------------------------------- Concesiones mineras (Catastro Minero de INGEMMET)
 
   /**
@@ -1255,6 +1369,13 @@ const Calculos = (() => {
     NOTA_ELECTRICIDAD,
     NOTA_CENSO,
     NOTA_MINERA,
+    NOTA_ACOPIO,
+    NOTA_INTERRUPCIONES,
+    LISTA_COMPRADOR,
+    evaluarAcopio,
+    textoAcopio,
+    resumirInterrupciones,
+    textoInterrupciones,
     evaluarMinera,
     textoMinera,
     evaluarManzana,

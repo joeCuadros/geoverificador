@@ -144,7 +144,8 @@ const AsistenteUI = (() => {
       Distritos.lookup(p.lat, p.lon).catch(() => null),
       Contexto.evaluar(p.lat, p.lon, umbral), // quebradas, peligros y sismos: contexto informativo
     ]);
-    const ctx = { ...base, punto: { lat: p.lat, lon: p.lon }, distrito: dis ? dis.distrito : null, zona, entorno, cauce: riesgo.quebradas, sismos: riesgo.sismos, peligros: riesgo.peligros, volcan: riesgo.volcan, cenepred: riesgo.cenepred, departamento2025: CONFIG.censo.departamento2025 };
+    const interrupciones = await Equipamiento.interrupcionesDe(dis ? dis.distrito : null); // SUNASS: interrupciones del servicio de agua del distrito (informativo)
+    const ctx = { ...base, punto: { lat: p.lat, lon: p.lon }, distrito: dis ? dis.distrito : null, zona, entorno, interrupciones, cauce: riesgo.quebradas, sismos: riesgo.sismos, peligros: riesgo.peligros, volcan: riesgo.volcan, cenepred: riesgo.cenepred, departamento2025: CONFIG.censo.departamento2025 };
     cacheContexto = { clave, ctx };
     return ctx;
   }
@@ -220,7 +221,7 @@ const AsistenteUI = (() => {
     return cargadas.some((x) => !x) ? null : cargadas.flatMap((x) => x.features);
   }
 
-  async function datosParaMapa({ rutas = false, volcan = false, cenepred = false, electricidad = false, mineria = false, censo = null } = {}) {
+  async function datosParaMapa({ rutas = false, volcan = false, cenepred = false, electricidad = false, mineria = false, acopio = false, censo = null } = {}) {
     const { zonas, datos, fecha, cauces } = await preparar();
     let sismos = null;
     try { sismos = Capas.sismosDeFeatures(await Contexto.sismosCrudos()); } catch (_) { sismos = null; }
@@ -232,6 +233,8 @@ const AsistenteUI = (() => {
     if (electricidad) { try { const f = await fetch(CONFIG.equipamiento.archivos.electricidad).then((r) => (r.ok ? r.json() : null)); concesiones = f && Array.isArray(f.features) ? f.features : null; } catch (_) { concesiones = null; } }
     let mineras = null; // concesiones mineras (INGEMMET): solo con la capa «mineria»
     if (mineria) { try { const f = await fetch(CONFIG.equipamiento.archivos.mineria).then((r) => (r.ok ? r.json() : null)); mineras = f && Array.isArray(f.features) ? f.features : null; } catch (_) { mineras = null; } }
+    let puntosAcopio = null; // puntos de acopio de agua (SEDAPAR): solo con la capa «acopio_agua»
+    if (acopio) { try { const f = await fetch(CONFIG.equipamiento.archivos.acopio).then((r) => (r.ok ? r.json() : null)); puntosAcopio = f && Array.isArray(f.features) ? f.features : null; } catch (_) { puntosAcopio = null; } }
     let manzanas = null; // manzanas del censo (INEI, 2017): solo con una capa censo_*; `censo` es la vista [oeste, sur, este, norte] o true
     if (censo) { try { manzanas = await manzanasDelCenso(Array.isArray(censo) ? censo : null); } catch (_) { manzanas = null; } }
     let zonasVolcan = null;
@@ -239,7 +242,7 @@ const AsistenteUI = (() => {
     // El escenario del CENEPRED es un archivo pequeño (25 distritos) y sus límites; solo se leen cuando se va a colorear. Si fallan, la capa lo dice.
     let datosCenepred = null;
     if (cenepred) { try { const [cen] = await Promise.all([Cenepred.load(), Distritos.load()]); datosCenepred = cen; } catch (_) { datosCenepred = null; } }
-    return { datos, zonas, cauces, sismos, volcan: zonasVolcan, electricidad: concesiones, mineria: mineras, censo: manzanas, cenepred: datosCenepred, rutas: indiceRutas, umbrales: umbrales(), fecha };
+    return { datos, zonas, cauces, sismos, volcan: zonasVolcan, electricidad: concesiones, mineria: mineras, acopio: puntosAcopio, censo: manzanas, cenepred: datosCenepred, rutas: indiceRutas, umbrales: umbrales(), fecha };
   }
 
   // ------------------------------------------------------------ Viaje en combi o bus

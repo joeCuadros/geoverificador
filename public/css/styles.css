@@ -1354,6 +1354,7 @@ summary { -webkit-tap-highlight-color: transparent; }
 .ent-supermercado span::first-line { transform: rotate(-45deg); }
 .ent-mall span { background: #9d174d; border-radius: 4px; width: 28px; font-size: .625rem; }
 .ent-galeria span { background: #a16207; border-radius: 50% 4px 50% 4px; }
+.ent-acopio span { background: #0369a1; border-radius: 12px 12px 4px 12px; }
 .ent-banco span { background: #1e40af; border-radius: 4px; }
 .ent-cajero span { background: #0e7490; border-radius: 4px 12px 4px 12px; }
 .ent-restaurante span { background: #b91c1c; border-radius: 50%; }
@@ -1372,6 +1373,7 @@ summary { -webkit-tap-highlight-color: transparent; }
 .mu-supermercado { background: #065f46; border-radius: 3px; }
 .mu-mall { background: #9d174d; border-radius: 3px; width: 22px; font-size: .5rem; }
 .mu-galeria { background: #a16207; border-radius: 50% 3px 50% 3px; }
+.mu-acopio { background: #0369a1; border-radius: 8px 8px 3px 8px; }
 .mu-banco { background: #1e40af; border-radius: 3px; }
 .mu-cajero { background: #0e7490; border-radius: 3px 8px 3px 8px; }
 .mu-restaurante { background: #b91c1c; }
@@ -1395,3 +1397,6 @@ summary { -webkit-tap-highlight-color: transparent; }
 .ficha-resumen p { margin: 0 0 6px; font-size: 1rem; line-height: 1.45; }
 .ficha-resumen p:last-child { margin-bottom: 0; }
 .ficha-fuentes { margin-top: 8px; }
+
+.var-lista { margin: .25rem 0 .5rem 1.1rem; padding: 0; }
+.var-lista li { margin: .25rem 0; font-size: .875rem; }

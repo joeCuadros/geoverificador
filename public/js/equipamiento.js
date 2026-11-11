@@ -40,6 +40,7 @@ const Equipamiento = (() => {
         fuente: meta.fuente || null, // p. ej. «RENIPRESS (SUSALUD) (fuente primaria) y OpenStreetMap (ODbL, respaldo)»
         fuentes: Array.isArray(meta.fuentes) ? meta.fuentes : null, // [{ rol: 'primaria' | 'respaldo', id, nombre, fecha }]
         radioDedupM: (meta.deduplicacion && meta.deduplicacion.radio_m) || null,
+        metadata: meta,
       };
     } catch (_) {
       return null;
@@ -312,6 +313,43 @@ const Equipamiento = (() => {
   }
 
   /**
+   * El punto de acopio de agua más cercano (directorio de SEDAPAR publicado en 2024, datos de 2017). INFORMATIVO, sin respaldo en vivo. Nunca rechaza.
+   * Es un lugar de reparto con camiones cisterna ante un desabastecimiento: ver Calculos.NOTA_ACOPIO.
+   */
+  async function acopioPorPunto(punto) {
+    const metodo = (datos) => `Distancia en línea recta al punto de acopio de agua potable más cercano del directorio de SEDAPAR. ${datos ? 'Datos congelados del directorio, publicado el 16 de febrero de 2024 con fichas de abril a junio de 2017.' : 'No se encontró el archivo del directorio.'} ${CONFIG.fuentesUmbral.acopio}.`;
+    try {
+      const datos = await archivo('acopio');
+      const meta = (datos && datos.metadata) || {};
+      const r = Calculos.evaluarAcopio(punto, datos ? datos.features : [], {
+        fuente: meta.fuente || 'SEDAPAR, Directorio de Puntos de Acopio de Agua Potable Arequipa', fecha: meta.fecha_publicacion || null,
+        fechaDatos: meta.periodo_de_los_datos || meta.fecha_de_los_datos || null, metodo: metodo(datos),
+      });
+      return datos ? r : { ...r, error: 'No se encontró el archivo de puntos de acopio de agua.' };
+    } catch (err) {
+      console.error('[Equipamiento] acopio', err);
+      return { ...Calculos.evaluarAcopio(punto, [], { metodo: metodo(null) }), error: err.message };
+    }
+  }
+
+  let interrupciones = null; // promesa con el archivo de interrupciones (SUNASS), leído una sola vez; si falla, la próxima consulta lo reintenta
+  function cargarInterrupciones() {
+    if (!interrupciones) {
+      interrupciones = fetch(CONFIG.equipamiento.archivos.interrupciones)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((d) => (d && d.distritos && d.metadata ? d : null))
+        .catch(() => null)
+        .then((d) => { if (!d) interrupciones = null; return d; });
+    }
+    return interrupciones;
+  }
+
+  /** Las interrupciones del servicio de agua de SEDAPAR en un distrito (por nombre), de la SUNASS. INFORMATIVO; sin el archivo, SIN DATO. */
+  async function interrupcionesDe(distrito) {
+    return Calculos.resumirInterrupciones(distrito, await cargarInterrupciones());
+  }
+
+  /**
    * ¿El punto cae dentro de una concesión minera (Catastro Minero de INGEMMET)? INFORMATIVO, sin respaldo en vivo. Nunca rechaza. Un derecho a explorar y explotar los minerales
    * no es minería en el predio: ver Calculos.NOTA_MINERA.
    */
@@ -373,7 +411,7 @@ const Equipamiento = (() => {
   async function evaluar(lat, lon) {
     const punto = { lat, lon };
     const u = CONFIG.umbrales;
-    const [s, c, e, t, v, rutas, comercioNecesidades, elec, cen, min] = await Promise.all([
+    const [s, c, e, t, v, rutas, comercioNecesidades, elec, cen, min, aco] = await Promise.all([
       variable('salud', punto, salud, (m) => sinDato(m, u.salud)),
       consultorioCercano(punto),
       variable('educacion', punto, educacion, (m) => Object.fromEntries(NIVELES.map((n) => [n, sinDato(m, u.educacion[n])]))),
@@ -384,8 +422,9 @@ const Equipamiento = (() => {
       electricidadPorConcesion(punto),
       censoPorManzana(punto),
       mineriaPorPunto(punto),
+      acopioPorPunto(punto),
     ]);
-    return { salud: s, consultorio: c, ...comercioNecesidades, electricidad: elec, censo: cen, mineria: min, educacion: e, transporte: { ...t, rutas }, areaVerde: v };
+    return { salud: s, consultorio: c, ...comercioNecesidades, electricidad: elec, censo: cen, mineria: min, acopio: aco, educacion: e, transporte: { ...t, rutas }, areaVerde: v };
   }
 
   /**
@@ -415,7 +454,7 @@ const Equipamiento = (() => {
     return Object.fromEntries(ids.map((c, i) => [c, lista[i]]));
   }
 
-  return { NIVELES, evaluar, datosCongelados, consultorios, comercio: comercioDatos, indiceRutas: cargarRutas };
+  return { NIVELES, evaluar, interrupcionesDe, datosCongelados, consultorios, comercio: comercioDatos, indiceRutas: cargarRutas };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = Equipamiento;
