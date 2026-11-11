@@ -21,9 +21,9 @@ const sinTildes = (s) => String(s == null ? '' : s).normalize('NFD').replace(/[�
 // ------------------------------------------------------------------ Consulta
 
 /** Una sola consulta para toda la caja [sur, oeste, norte, este] (política de uso de Overpass): `out geom` da puntos, vías y relaciones con su forma. */
-function construirConsulta(caja, timeoutS = 240) {
+function construirConsulta(caja, timeoutS = 240, categorias = CATEGORIAS) {
   const c = `(${caja.join(',')})`;
-  const lineas = CATEGORIAS.flatMap((cat) => Calculos.selectoresOverpass(cat).map((s) => `  nwr${s}${c};`));
+  const lineas = categorias.flatMap((cat) => Calculos.selectoresOverpass(cat).map((s) => `  nwr${s}${c};`));
   return [`[out:json][timeout:${timeoutS}][maxsize:1073741824];`, '(', ...lineas, ');', 'out geom tags;'].join('\n');
 }
 
@@ -34,7 +34,7 @@ function construirConsulta(caja, timeoutS = 240) {
  * una relación con el exterior abierto no tiene forma utilizable y se cuenta en `sinGeometria` (no se inventa). `categoria` es la primera
  * de mercados / supermercados / malls que dicen las etiquetas y el nombre (Calculos.categoriasDe); sin ninguna, se cuenta en `sinCategoria`.
  */
-function convertirElementos(elementos) {
+function convertirElementos(elementos, categorias = CATEGORIAS) {
   const lista = (elementos || []).filter((e) => e && e.tags);
   const puntos = Calculos.osmAFeatures(lista.filter((e) => e.type === 'node'), 'puntos');
   const formas = Calculos.osmAFeatures(lista.filter((e) => e.type !== 'node'), 'poligonos');
@@ -45,7 +45,7 @@ function convertirElementos(elementos) {
   for (const e of lista) {
     const f = porId.get(`${e.type}/${e.id}`);
     if (!f) { sinGeometria++; continue; }
-    const categoria = CATEGORIAS.find((c) => Calculos.categoriasDe(f.properties.tags, f.properties.nombre).includes(c));
+    const categoria = categorias.find((c) => Calculos.categoriasDe(f.properties.tags, f.properties.nombre).includes(c));
     if (!categoria) { sinCategoria++; continue; }
     features.push({ ...f, properties: { ...f.properties, categoria } });
   }

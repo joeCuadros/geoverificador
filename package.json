@@ -16,6 +16,7 @@
     "datos:extraer": "node scripts/extraer-equipamiento.mjs",
     "datos:oficial": "node scripts/descargar-equipamiento-oficial.mjs",
     "datos:comercio": "node scripts/descargar-comercio.mjs",
+    "datos:servicios": "node scripts/descargar-servicios-osm.mjs",
     "datos:electricidad": "node scripts/descargar-concesiones-electricas.mjs",
     "datos:censo": "node scripts/descargar-censo-servicios.mjs",
     "datos:rutas-osm": "node scripts/descargar-rutas-osm.mjs",
