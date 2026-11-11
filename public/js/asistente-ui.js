@@ -239,6 +239,41 @@ const AsistenteUI = (() => {
     return { datos, zonas, cauces, sismos, volcan: zonasVolcan, electricidad: concesiones, censo: manzanas, cenepred: datosCenepred, rutas: indiceRutas, umbrales: umbrales(), fecha };
   }
 
+  // ------------------------------------------------------------ Viaje en combi o bus
+
+  let cacheViaje = null; // promesa con las rutas de OpenStreetMap y de SmartBus ya unificadas (Viaje.desdeOsm + Viaje.desdeSmartbus)
+  /** Las rutas para «¿qué combi me lleva…?»: ~3 MB de OpenStreetMap y el índice de SmartBus (que ya se usa en la ficha). Si una fuente falla se usa la otra; si fallan las dos, null. */
+  function rutasParaViaje() {
+    if (!cacheViaje) {
+      cacheViaje = (async () => {
+        const [osm, sb] = await Promise.all([
+          fetch(CONFIG.viaje.osmUrl).then((r) => (r.ok ? r.json() : null)).then((fc) => (fc ? Viaje.desdeOsm(fc) : [])).catch(() => []),
+          Equipamiento.indiceRutas().then((i) => Viaje.desdeSmartbus(i)).catch(() => []),
+        ]);
+        return osm.length || sb.length ? [...osm, ...sb] : null;
+      })();
+      cacheViaje.then((r) => { if (!r) cacheViaje = null; });
+    }
+    return cacheViaje;
+  }
+
+  /** Lo que el chat necesita para viajar: las rutas, la distancia a pie y el destino fijado; para la búsqueda de zonas, además las celdas desde las que se llega. */
+  async function contextoViaje(intencion) {
+    const base = await contexto();
+    const viajeRutas = await rutasParaViaje();
+    const destino = intencion.destino || (api.obtenerDestino ? api.obtenerDestino() : null);
+    const c = { ...base, viajeRutas, caminarM: CONFIG.viaje.caminarM, destino };
+    if (intencion.tipo === 'ruta_zonas' && viajeRutas && destino) {
+      const { zonas } = await preparar();
+      const celdas = celdasDe(zonas, false);
+      const v = intencion.viaje || {};
+      const hits = Viaje.zonasConRutaDirecta(destino, viajeRutas, celdas, { caminarM: CONFIG.viaje.caminarM, linea: v.linea || null, texto: v.texto || null });
+      await Distritos.load().catch(() => null);
+      c.zonasRuta = { ...Asistente.resumirRutaZonas(hits, celdas, (la, lo) => Distritos.nombreDe(la, lo), { separacionM: CONFIG.asistente.separacionPuntosM }), caminarM: CONFIG.viaje.caminarM, celdasConRuta: hits.map((h) => ({ lat: h.celda.lat, lon: h.celda.lon })) };
+    }
+    return c;
+  }
+
   /** Lo que el chat necesita para hablar de un distrito: sus polígonos, el conteo o el perfil y la fecha de los datos. */
   async function contextoDistrito(intencion) {
     const base = { estadoPDM: CONFIG.estadoPDM, potencial: Zonificacion.potencial, punto: api.obtenerPunto(), distritoTitulo: Distritos.titulo(intencion.distrito) };
@@ -353,10 +388,11 @@ const AsistenteUI = (() => {
     try {
       await verificarModo(); // antes de enviar nada, la persona ya ve si el texto llega a un modelo
       const hayPunto = Boolean(api.obtenerPunto());
-      const reglas = () => Asistente.interpretar(limpio, { hayPunto, ultimaBusqueda });
+      const destino = api.obtenerDestino ? api.obtenerDestino() : null; // el que la persona fijó con «Ir al trabajo»
+      const reglas = () => Asistente.interpretar(limpio, { hayPunto, ultimaBusqueda, destino });
       let eleccion = { origen: 'reglas', intencion: null };
       // El modelo no conoce las categorías «consultorio» (distinta de la salud) ni mercado, supermercado y mall (informativas): esas frases las responden las reglas, sin salir del navegador.
-      if (hayLLM() && llmDisponible !== false && !Asistente.mencionaConsultorio(limpio) && !Asistente.mencionaComercio(limpio) && !Asistente.mencionaElectricidad(limpio) && !Asistente.mencionaAgua(limpio)) {
+      if (hayLLM() && llmDisponible !== false && !Asistente.mencionaConsultorio(limpio) && !Asistente.mencionaComercio(limpio) && !Asistente.mencionaElectricidad(limpio) && !Asistente.mencionaAgua(limpio) && !Asistente.mencionaViaje(limpio, { hayPunto, destino })) {
         const espera = mensaje('asistente', { texto: 'Pensando…', espera: true });
         const r = await AsistenteLLM.interpretar({
           mensaje: limpio, historial,
@@ -380,12 +416,12 @@ const AsistenteUI = (() => {
       else {
         const esDistrito = ['contar', 'consultorio', 'comercio', 'perfil', 'rutas', 'volcan', 'cenepred'].includes(intencion.tipo) && intencion.distrito;
         const conPunto = ['ficha', 'servicio', 'consultorio', 'comercio', 'electricidad', 'agua', 'zona', 'construir', 'quebrada', 'sismos', 'peligros', 'rutas', 'volcan', 'cenepred'].includes(intencion.tipo);
-        const ctx = intencion.tipo === 'precio' ? await contextoPrecio() : esDistrito ? await contextoDistrito(intencion) : intencion.tipo === 'cenepred' ? { ...(await contexto()), cenepredDatos: await Cenepred.load().catch(() => null) } : conPunto ? await contexto() : { estadoPDM: CONFIG.estadoPDM, potencial: Zonificacion.potencial, punto: api.obtenerPunto() };
+        const ctx = intencion.tipo === 'viaje' || intencion.tipo === 'ruta_zonas' ? await contextoViaje(intencion) : intencion.tipo === 'precio' ? await contextoPrecio() : esDistrito ? await contextoDistrito(intencion) : intencion.tipo === 'cenepred' ? { ...(await contexto()), cenepredDatos: await Cenepred.load().catch(() => null) } : conPunto ? await contexto() : { estadoPDM: CONFIG.estadoPDM, potencial: Zonificacion.potencial, punto: api.obtenerPunto() };
         const resp = Asistente.responder(intencion, ctx);
         let texto = resp.texto;
         // Gemini only rewords the deterministic answer; the text is verified (numbers, names, caveat) or discarded.
         // The profile and the «what matters to you?» question keep their exact structure (buttons and closing question), so they are not reworded.
-        if (eleccion.origen === 'gemini' && texto && !['perfil', 'mejor_zona', 'electricidad', 'agua'].includes(intencion.tipo)) {
+        if (eleccion.origen === 'gemini' && texto && !['perfil', 'mejor_zona', 'electricidad', 'agua', 'viaje', 'ruta_zonas'].includes(intencion.tipo)) {
           const espera = mensaje('asistente', { texto: 'Redactando…', espera: true });
           const red = await AsistenteLLM.redactar({ pregunta: limpio, tipo: intencion.tipo, hechos: { texto } });
           espera.remove();
@@ -399,6 +435,7 @@ const AsistenteUI = (() => {
           const capas = Capas.deCriterios(resp.mapa.capas.map((id) => ({ id }))).map((c) => (c.id === 'colegios' && !nivelPedido ? { id: 'colegios' } : c)); // «colegios» a secas son todos los niveles
           if (resp.mapa.lineas) capas.push({ id: 'lineas', ...resp.mapa.lineas }); // líneas de bus: nombres de las líneas y, si hay, el punto
           if (resp.mapa.volcan) capas.push({ id: 'volcan', ...resp.mapa.volcan }); // peligro volcánico: los fenómenos que se dibujan
+          if (resp.mapa.viaje) capas.push({ id: 'viaje', ...resp.mapa.viaje }); // ruta al trabajo: tramos, origen, destino y, en zonas, las celdas
           if (resp.mapa.cenepred) capas.push({ id: resp.mapa.cenepred.fenomeno === 'movimientos_masa' ? 'cenepred_mm' : 'cenepred_inundacion' }); // riesgo de los distritos ante El Niño (CENEPRED)
           api.alBuscar({ capas, distrito: resp.mapa.distrito, sectores: [] });
         }
@@ -629,5 +666,5 @@ const AsistenteUI = (() => {
     });
   }
 
-  return { iniciar, activar, datosParaMapa, distanciaQuebradaM, publicarPunto };
+  return { iniciar, activar, rutasParaViaje, datosParaMapa, distanciaQuebradaM, publicarPunto };
 })();

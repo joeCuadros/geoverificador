@@ -1131,6 +1131,39 @@ console.log('\n== D. Rutas de SmartBus: integridad y cálculos frente a métodos
   comprobar('Rutas: lejos de toda ruta (Pampa de Majes, 120 km al oeste) no se inventa ninguna línea', RutasMod.cerca(indice, -16.35, -72.65, D).lineas.length === 0);
 }
 
+// Z. Rutas de bus de OpenStreetMap (scripts/descargar-rutas-osm.mjs) y el viaje en combi (public/js/viaje.js); va al final porque guarda en memoria los trazados densificados y eso ralentiza las pruebas de tiempo: el archivo, su acuerdo con SmartBus y un viaje conocido.
+{
+  const CalcR = createRequire(import.meta.url)('../public/js/calculos.js');
+  globalThis.Calculos = globalThis.Calculos || CalcR;
+  const V = createRequire(import.meta.url)('../public/js/viaje.js');
+  const RutasM = createRequire(import.meta.url)('../public/js/rutas.js');
+  const fcO = json('data/rutas_osm.geojson');
+  const mO = fcO.metadata || {};
+  const rO = fcO.features;
+  comprobar('Rutas OSM: metadata con la fuente, la consulta, la fecha, la base de OSM, la licencia ODbL, la atribución y los conteos', /OpenStreetMap/.test(mO.fuente || '') && typeof mO.consulta === 'string' && /relation\["type"="route"\]/.test(mO.consulta) && /^\d{4}-\d{2}-\d{2}$/.test(mO.fecha_extraccion || '') && mO.licencia === 'ODbL' && /OpenStreetMap/.test(mO.atribucion || '') && mO.conteos && mO.conteos.rutas === rO.length && rO.length > 0, `${rO.length} rutas`);
+  comprobar('Rutas OSM: cada ruta es un sentido de un ramal con id de OSM único, línea, ramal, de y hasta, y un trazado (LineString o MultiLineString) dentro de Arequipa', new Set(rO.map((f) => f.properties.osm)).size === rO.length && rO.every((f) => /^relation\/\d+$/.test(f.properties.osm) && f.properties.linea && f.properties.ramal && f.properties.desde && f.properties.hasta && /^(Multi)?LineString$/.test(f.geometry.type) && (f.geometry.type === 'LineString' ? [f.geometry.coordinates] : f.geometry.coordinates).every((p) => p.length >= 2 && p.every(([x, y]) => x > -72 && x < -71 && y > -17 && y < -16))));
+  const saltoMax = Math.max(0, ...rO.flatMap((f) => (f.geometry.type === 'LineString' ? [f.geometry.coordinates] : f.geometry.coordinates).flatMap((p) => p.slice(1).map((c, i) => CalcR.haversine(p[i][1], p[i][0], c[1], c[0])))));
+  comprobar('Rutas OSM: ninguna relación tuvo un salto entre vías de más de 300 m (se habría partido en partes) y ningún tramo recto del trazado pasa de 1 km', mO.conteos.con_saltos === 0 && saltoMax <= 1000, `mayor tramo recto entre vértices ${Math.round(saltoMax)} m (dentro de una misma vía de OSM)`);
+  comprobar('Rutas OSM: duración e intervalo, cuando están, son minutos enteros positivos', rO.every((f) => [f.properties.duracion_min, f.properties.intervalo_min].every((x) => x === null || (Number.isInteger(x) && x > 0))));
+  const fcS = json('data/rutas_smartbus.geojson');
+  const osmR = V.desdeOsm(fcO);
+  const sbR = V.desdeSmartbus(RutasM.indexar(fcS));
+  const todas = [...osmR, ...sbR].map((ruta) => ({ ruta, caminarTotalM: 0, viajeM: 0 }));
+  const unidas = V.unir(todas);
+  const enAmbas = unidas.filter((u) => u.fuentes.length === 2).length;
+  comprobar('Rutas OSM y SmartBus: describen las mismas rutas (la unión por línea + ramal + de + hasta deja casi todas en las dos fuentes)', enAmbas / osmR.length >= 0.9, `${enAmbas} de ${osmR.length} rutas de OSM están también en SmartBus`);
+  const lineasO = new Set(rO.map((f) => f.properties.linea));
+  comprobar('Rutas OSM y SmartBus: las mismas líneas', [...lineasO].every((l) => fcS.metadata.lineas.includes(l)) && fcS.metadata.lineas.every((l) => lineasO.has(l)));
+  // Un viaje conocido: desde Paucarpata (cerca de la C6) hasta el Parque Industrial de la configuración hay rutas directas y todas ponen el origen antes que el destino.
+  const PI = { lat: -16.4179, lon: -71.5497 };
+  const rutasT = [...osmR, ...sbR];
+  const dir = V.rutasDirectas({ lat: -16.4240, lon: -71.5000 }, PI, rutasT, { caminarM: 400 });
+  comprobar('Viaje: de Paucarpata al Parque Industrial hay rutas directas de las dos fuentes, a ≤ 400 m de las dos puntas y con viaje mayor que cero', dir.directas.length > 0 && dir.directas.every((d) => d.caminarOrigenM <= 400 && d.caminarDestinoM <= 400 && d.viajeM > 0) && new Set(dir.directas.map((d) => d.ruta.fuente)).size === 2, `${dir.directas.length} directas, ${V.unir(dir.directas).length} distintas`);
+  const inv = V.rutasDirectas(PI, { lat: -16.4240, lon: -71.5000 }, rutasT, { caminarM: 400 });
+  comprobar('Viaje: el sentido importa: las rutas directas de ida no son las mismas que las del regreso', V.unir(dir.directas).map((d) => d.ruta.ramal + d.ruta.hasta).sort().join() !== V.unir(inv.directas).map((d) => d.ruta.ramal + d.ruta.hasta).sort().join() || dir.directas.length !== inv.directas.length);
+  console.log(`INFO  Rutas OSM: ${rO.length} rutas, ${mO.conteos.vertices} vértices, líneas ${JSON.stringify(mO.conteos.lineas)}; con duración ${mO.conteos.con_duracion}, con intervalo ${mO.conteos.con_intervalo}`);
+}
+
 console.log(`\n${pruebas - fallos} de ${pruebas} comprobaciones correctas.`);
 if (fallos) {
   console.error(`${fallos} FALLARON.`);

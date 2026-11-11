@@ -149,6 +149,7 @@
     salud: { titulo: 'Salud', icono: 'salud' },
     consultorio: { titulo: 'Consultorio médico', icono: 'salud' },
     electricidad: { titulo: 'Servicios básicos: luz, agua y desagüe', icono: 'electricidad' },
+    viaje: { titulo: 'Ir al trabajo en combi o bus', icono: 'paradero' },
     abastecimiento: { titulo: 'Abastecimiento (comida): mercados y supermercados', icono: 'comercio' },
     compras_ocio: { titulo: 'Compras y ocio: malls', icono: 'comercio' },
     comercio_barrio: { titulo: 'Comercio de barrio: galerías', icono: 'comercio' },
@@ -1298,7 +1299,8 @@
       + `<p class="var-meta">Criterio: un área verde de al menos ${fmtNum(u.areaMinM2)} m² a ${u.distanciaM} m o menos.</p>` + sens
       + detalleDato(v, QUE_NO_CUBRE.areaVerde));
 
-    $('entorno').innerHTML = salud + consultorio + comercio + electricidad + educacion + transporte + areaVerde + '<div id="card-quebradas"></div>';
+    $('entorno').innerHTML = salud + consultorio + comercio + electricidad + educacion + transporte + '<div id="card-viaje"></div>' + areaVerde + '<div id="card-quebradas"></div>';
+    renderViaje(); // «Ir al trabajo»: qué combi o bus lleva de este punto al destino
     renderQuebradas(); // llega aparte (archivo congelado de la ANA)
     $('entorno').setAttribute('aria-busy', 'false');
     $('entorno-toggle').hidden = false;
@@ -1352,6 +1354,84 @@
         <div><dt>Qué no cubre</dt><dd>${cubre}</dd></div>
       </dl>`;
   }
+
+  // ------------------------------------------------------------ Ir al trabajo (combi o bus)
+
+  /** El destino que la persona fijó («Ir al trabajo»): se recuerda en este navegador (si deja). */
+  function leerDestino() {
+    if (state.destino !== undefined) return state.destino;
+    try { state.destino = JSON.parse(localStorage.getItem('gv.destino') || 'null'); } catch (_) { state.destino = null; }
+    return state.destino;
+  }
+  function fijarDestino(d) {
+    state.destino = d;
+    try { if (d) localStorage.setItem('gv.destino', JSON.stringify(d)); else localStorage.removeItem('gv.destino'); } catch (_) { /* sin almacenamiento: vale solo en esta sesión */ }
+  }
+
+  /** Resuelve lo escrito: primero la lista de CONFIG.destinos (Parque Industrial…) y, si no está, el buscador de direcciones (Nominatim, dentro de Arequipa). */
+  async function resolverDestinoEscrito(texto) {
+    const conocido = Viaje.resolverDestino(texto, CONFIG.destinos);
+    if (conocido) return conocido;
+    const { results } = await Services.geocode(texto, { bounded: true });
+    if (!results.length) return null;
+    const r = results[0];
+    return { id: 'busqueda', nombre: r.name.split(',').slice(0, 2).join(',').trim(), lat: r.lat, lon: r.lon, osm: r.osm, nota: 'Punto que devolvió el buscador de direcciones (Nominatim); si no es donde trabajas, escribe otro lugar o la dirección completa.' };
+  }
+
+  async function calcularViaje() {
+    const host = $('viaje-resultado');
+    const d = leerDestino();
+    if (!host || !d || !state.point) return;
+    host.innerHTML = '<p class="zon-msg loading"><span class="spinner"></span>Buscando rutas directas…</p>';
+    const rutas = await AsistenteUI.rutasParaViaje();
+    if (!rutas) { host.innerHTML = '<p class="zon-msg error">No pude leer los archivos de rutas.</p>'; return; }
+    const resp = Asistente.responder({ tipo: 'viaje', criterios: [], destino: d, viaje: {} }, { punto: state.point, viajeRutas: rutas, caminarM: CONFIG.viaje.caminarM });
+    host.innerHTML = resp.texto.split('\n').map((l) => `<p class="${/^•/.test(l) ? 'var-explica' : 'var-meta'}">${esc(l)}</p>`).join('');
+    if (resp.mapa && resp.mapa.viaje) CapasUI.mostrar({ capas: [{ id: 'viaje', ...resp.mapa.viaje }], distrito: null, sectores: [] });
+  }
+
+  function renderViaje() {
+    const host = $('card-viaje');
+    if (!host) return;
+    const d = leerDestino();
+    const opciones = CONFIG.destinos.map((x) => `<option value="${esc(x.nombre)}"></option>`).join('');
+    host.innerHTML = tarjetaVariable(VARIABLES.viaje, 'INFORMATIVO', d ? `Destino: ${d.nombre}` : 'Elige dónde trabajas para ver qué combi te lleva',
+      `<form class="viaje-form" id="viaje-form" novalidate>
+        <label for="viaje-destino" class="campo-label">¿Adónde vas? <small>(Parque Industrial, o escribe un lugar o dirección)</small></label>
+        <input id="viaje-destino" type="text" list="viaje-opciones" autocomplete="off" value="${esc(d ? d.nombre : '')}" placeholder="Parque Industrial">
+        <datalist id="viaje-opciones">${opciones}</datalist>
+        <button type="submit" class="ghost">Ver rutas</button>${d ? ' <button type="button" class="ghost" id="viaje-quitar">Quitar destino</button>' : ''}
+        <p class="texto-error small" id="viaje-error" role="alert" hidden></p>
+      </form>
+      <div id="viaje-resultado" aria-live="polite"></div>
+      <p class="var-meta">Rutas de OpenStreetMap (ODbL) y de SmartBus; pasan a ${esc(fmtUmbral(CONFIG.viaje.caminarM))} o menos a pie de tu punto y del destino, con tu punto antes que el destino en el recorrido. Distancias en línea recta. No sé dónde se sube ni se baja ni si la ruta opera hoy.</p>`);
+    if (d) calcularViaje();
+  }
+
+  $('entorno').addEventListener('submit', async (e) => {
+    if (!e.target.closest('#viaje-form')) return;
+    e.preventDefault();
+    const err = $('viaje-error');
+    err.hidden = true;
+    const texto = $('viaje-destino').value.trim();
+    if (!texto) { err.textContent = 'Escribe adónde vas.'; err.hidden = false; return; }
+    try {
+      const d = await resolverDestinoEscrito(texto);
+      if (!d) { err.textContent = `No encontré «${texto}» en Arequipa. Prueba con otra dirección o con «Parque Industrial».`; err.hidden = false; return; }
+      fijarDestino(d);
+      renderViaje();
+      const det = $('card-viaje').querySelector('details');
+      if (det) det.open = true;
+    } catch (ex) {
+      err.textContent = `No pude buscar ese lugar: ${ex.message}`;
+      err.hidden = false;
+    }
+  });
+  $('entorno').addEventListener('click', (e) => {
+    if (!e.target.closest('#viaje-quitar')) return;
+    fijarDestino(null);
+    renderViaje();
+  });
 
   function renderQuebradas() {
     const host = $('card-quebradas');
@@ -1836,6 +1916,7 @@
     obtenerPunto: () => state.point,
     consultarPunto,
     umbrales: () => state.umbrales,
+    obtenerDestino: () => leerDestino(), // el destino fijado con «Ir al trabajo»: el asistente lo usa en «¿qué combi me lleva a mi trabajo?»
     mostrarMapa: () => EspacioUI.mostrarMapa(),
     mapaVisible: () => EspacioUI.mapaVisible(),
     alBuscar: (que) => CapasUI.mostrar(que),

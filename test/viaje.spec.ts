@@ -129,3 +129,50 @@ describe('Viaje.resolverDestino y Viaje.textoRuta', () => {
     expect(Viaje.resolverDestino('de ciudad blanca al parque industrial', destinos).id).toBe('ciudad-blanca');
   });
 });
+
+describe('Viaje.cercanas', () => {
+  it('cuenta las rutas que pasan a ≤ 400 m de un punto, una por línea + ramal + sentido', () => {
+    const a = ruta('a', [RECTA]);
+    const b = ruta('b', [RECTA], { fuente: 'SmartBus' }); // la misma ruta en la otra fuente
+    const c = ruta('c', [linea([0, 900], [6000, 900])], { ramal: 'B' });
+    const r = Viaje.cercanas(pt(1000, 100), [a, b, c], OPC);
+    expect(r).toHaveLength(1);
+    expect(r[0].distanciaM).toBeCloseTo(100, -1);
+    expect(Viaje.cercanas(pt(1000, 800), [a, b, c], OPC).map((x: any) => x.ruta.ramal)).toEqual(['B']);
+    expect(Viaje.cercanas({ lat: NaN, lon: 0 }, [a], OPC)).toEqual([]);
+  });
+});
+
+describe('Viaje.indiceDestino y Viaje.alcanza: desde qué orígenes se llega al destino sin transbordo (para buscar zonas)', () => {
+  const ida = ruta('ida', [RECTA]);
+  const vuelta = ruta('vuelta', [[...RECTA].reverse()]);
+  const destino = pt(5000, 0);
+  const idx = Viaje.indiceDestino(destino, [ida, vuelta], OPC);
+  it('un origen cerca de la ruta y antes del destino alcanza; da cuánto camina y por qué ruta', () => {
+    const a = Viaje.alcanza(idx, pt(500, 150));
+    expect(a.cumple).toBe(true);
+    expect(a.caminarM).toBeGreaterThan(140);
+    expect(a.caminarM).toBeLessThan(160);
+    expect(a.ruta.id).toBe('ida');
+    expect(a.n).toBe(1);
+  });
+  it('un origen pasado el destino (en el sentido de la ruta) no alcanza con esa ruta, y uno lejos del trazado tampoco', () => {
+    expect(Viaje.alcanza(idx, pt(5800, 50)).ruta && Viaje.alcanza(idx, pt(5800, 50)).ruta.id).not.toBe('ida');
+    expect(Viaje.alcanza(idx, pt(500, 900)).cumple).toBe(false);
+  });
+  it('coincide con rutasDirectas en una malla de orígenes', () => {
+    for (const e of [-200, 0, 700, 2500, 4900, 5100, 6200]) {
+      for (const n of [-600, -100, 80, 350, 420]) {
+        const o = pt(e, n);
+        const directo = Viaje.rutasDirectas(o, destino, [ida, vuelta], OPC).directas.length > 0;
+        expect(Viaje.alcanza(idx, o).cumple).toBe(directo);
+      }
+    }
+  });
+  it('zonasConRutaDirecta devuelve, de una lista de celdas, las que alcanzan el destino, con lo que caminan', () => {
+    const celdas = [pt(500, 100), pt(500, 2000), pt(3000, -50)].map((p, i) => ({ ...p, i }));
+    const r = Viaje.zonasConRutaDirecta(destino, [ida, vuelta], celdas, OPC);
+    expect(r.map((x: any) => x.celda.i)).toEqual([0, 2]);
+    expect(r[0].caminarM).toBeCloseTo(100, -1);
+  });
+});

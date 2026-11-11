@@ -168,6 +168,105 @@ const Viaje = (() => {
     return out;
   }
 
+  /** Las rutas que pasan a `caminarM` o menos de un punto, una por línea + ramal + sentido: [{ ruta, distanciaM }] (para decir «pasan N cerca del destino»). */
+  function cercanas(punto, rutas, opciones = {}) {
+    const max = opciones.caminarM ?? CAMINAR_M;
+    if (!esPunto(punto)) return [];
+    const k = Math.cos((punto.lat * Math.PI) / 180) * M_POR_GRADO;
+    const mLat = max / M_POR_GRADO;
+    const mLon = mLat / Math.max(0.2, Math.cos((punto.lat * Math.PI) / 180));
+    const vistas = new Map();
+    filtrar(rutas, opciones).forEach((r) => {
+      const t = densificar(r);
+      const b = t.bbox;
+      if (punto.lon < b[0] - mLon || punto.lon > b[2] + mLon || punto.lat < b[1] - mLat || punto.lat > b[3] + mLat) return;
+      let mejor = Infinity;
+      for (let i = 0; i < t.lat.length; i++) mejor = Math.min(mejor, Math.hypot((t.lon[i] - punto.lon) * k, (t.lat[i] - punto.lat) * M_POR_GRADO));
+      if (mejor <= max) {
+        const clave = [codigoLinea(r.linea), norm(r.ramal), norm(r.desde), norm(r.hasta)].join('|');
+        if (!vistas.has(clave) || mejor < vistas.get(clave).distanciaM) vistas.set(clave, { ruta: r, distanciaM: mejor });
+      }
+    });
+    return [...vistas.values()].sort((a, b) => a.distanciaM - b.distanciaM);
+  }
+
+  // ------------------------------------------------------------ Búsqueda de zonas: desde dónde se llega a un destino
+
+  const filtrar = (rutas, opciones) => {
+    const cod = opciones.linea ? codigoLinea(opciones.linea) : null;
+    const texto = opciones.texto ? norm(opciones.texto) : null;
+    return (rutas || []).filter((r) => r && r.partes && r.partes.length
+      && (!cod || codigoLinea(r.linea) === cod)
+      && (!texto || norm([r.nombre, r.ramal, r.desde, r.hasta, r.operador, r.linea].filter(Boolean).join(' | ')).includes(texto)));
+  };
+
+  /**
+   * Prepara un destino para preguntar muchas veces «¿desde este origen se llega sin transbordo?» (la búsqueda de zonas evalúa miles de celdas). De cada ruta que pasa a
+   * `caminarM` o menos del destino guarda solo los puntos del recorrido ANTES del último punto cercano al destino, en una malla de casillas de `caminarM` metros: es
+   * exactamente la condición de rutasDirectas (existe un punto cercano al origen que viene antes de uno cercano al destino).
+   */
+  function indiceDestino(destino, rutas, opciones = {}) {
+    const max = opciones.caminarM ?? CAMINAR_M;
+    const bLat = max / M_POR_GRADO;
+    const bLon = bLat / Math.max(0.2, Math.cos((destino.lat * Math.PI) / 180));
+    const k = Math.cos((destino.lat * Math.PI) / 180) * M_POR_GRADO;
+    const casillas = new Map();
+    const usadas = [];
+    filtrar(rutas, opciones).forEach((r) => {
+      const t = densificar(r);
+      let jMax = -1;
+      for (let i = 0; i < t.lat.length; i++) if (Math.hypot((t.lon[i] - destino.lon) * k, (t.lat[i] - destino.lat) * M_POR_GRADO) <= max) jMax = i;
+      if (jMax <= 0) return;
+      const n = usadas.push(r) - 1;
+      for (let i = 0; i < jMax; i++) {
+        const clave = `${Math.floor(t.lat[i] / bLat)},${Math.floor(t.lon[i] / bLon)}`;
+        let c = casillas.get(clave);
+        if (!c) { c = []; casillas.set(clave, c); }
+        c.push(n, t.lat[i], t.lon[i]);
+      }
+    });
+    return { destino, max, bLat, bLon, casillas, rutas: usadas };
+  }
+
+  const claveRuta = (r) => [codigoLinea(r.linea), norm(r.ramal), norm(r.desde), norm(r.hasta)].join('|');
+
+  /** ¿Se llega al destino del índice desde `origen`? { cumple, caminarM (al punto más cercano de la mejor ruta), ruta, n (rutas distintas que sirven) }. */
+  function alcanza(indice, origen) {
+    const vacio = { cumple: false, caminarM: null, ruta: null, n: 0 };
+    if (!esPunto(origen)) return vacio;
+    const { max, bLat, bLon, casillas } = indice;
+    const k = Math.cos((origen.lat * Math.PI) / 180) * M_POR_GRADO;
+    const fi = Math.floor(origen.lat / bLat);
+    const fj = Math.floor(origen.lon / bLon);
+    const mejores = new Map(); // ruta del índice → distancia mínima
+    for (let a = -1; a <= 1; a++) {
+      for (let b = -1; b <= 1; b++) {
+        const c = casillas.get(`${fi + a},${fj + b}`);
+        if (!c) continue;
+        for (let m = 0; m < c.length; m += 3) {
+          const d = Math.hypot((c[m + 2] - origen.lon) * k, (c[m + 1] - origen.lat) * M_POR_GRADO);
+          if (d <= max && d < (mejores.has(c[m]) ? mejores.get(c[m]) : Infinity)) mejores.set(c[m], d);
+        }
+      }
+    }
+    if (mejores.size === 0) return vacio;
+    let mejor = null;
+    mejores.forEach((d, n) => { if (!mejor || d < mejor.d) mejor = { d, n }; });
+    const distintas = new Set([...mejores.keys()].map((n) => claveRuta(indice.rutas[n])));
+    return { cumple: true, caminarM: mejor.d, ruta: indice.rutas[mejor.n], n: distintas.size };
+  }
+
+  /** De una lista de celdas { lat, lon, … } las que alcanzan el destino sin transbordo: [{ celda, caminarM, ruta, n }]. */
+  function zonasConRutaDirecta(destino, rutas, celdas, opciones = {}) {
+    const idx = indiceDestino(destino, rutas, opciones);
+    const out = [];
+    (celdas || []).forEach((celda) => {
+      const a = alcanza(idx, celda);
+      if (a.cumple) out.push({ celda, caminarM: a.caminarM, ruta: a.ruta, n: a.n });
+    });
+    return out;
+  }
+
   /** La misma ruta (línea + ramal + de + hasta) en OpenStreetMap y en SmartBus sale una vez, con sus fuentes; los datos que solo trae OSM (duración, intervalo…) se conservan. */
   function unir(resultados) {
     const clave = (r) => [codigoLinea(r.linea), norm(r.ramal), norm(r.desde), norm(r.hasta)].join('|');
@@ -219,7 +318,7 @@ const Viaje = (() => {
     return `${r.linea || 'Ruta'}${ramal}${sentido}${op ? ` (${op})` : ''}`;
   }
 
-  return { CAMINAR_M, PASO_M, desdeOsm, desdeSmartbus, rutasDirectas, unir, resolverDestino, textoRuta, codigoLinea, metros };
+  return { CAMINAR_M, PASO_M, desdeOsm, desdeSmartbus, rutasDirectas, cercanas, indiceDestino, alcanza, zonasConRutaDirecta, unir, resolverDestino, textoRuta, codigoLinea, metros };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = Viaje;

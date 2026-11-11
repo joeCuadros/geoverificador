@@ -20,6 +20,8 @@
  *                 una concesión dice a qué empresa le corresponde el servicio, no que un predio esté conectado.
  *   censo_luz, censo_agua, censo_desague → manzanas del censo coloreadas por el % de viviendas ocupadas con alumbrado, agua o desagüe por red pública (INEI, 2017):
  *                 informativas; el año va en la etiqueta, el popup y la leyenda. Las manzanas con pocas viviendas no dan porcentaje y las que el censo no contó no se dibujan.
+ *   viaje       → «¿qué combi me lleva al trabajo?»: los tramos de cada ruta directa entre donde subes y donde bajas, el origen, el destino y, en la búsqueda de zonas, las celdas desde
+ *                 las que se llega (Viaje.rutasDirectas). Los datos vienen en la propia capa; informativa, sin puntaje.
  *   lineas      → recorridos de bus de SmartBus (un color por línea) y, con un punto, la parada más cercana de cada una
  * Con una búsqueda se dibujan las entidades que hacen que cada sector cumpla, y UNA región resaltada: los sectores donde se
  * cumple todo lo que pidió. No se pinta lo que no cumple y no se ve la cuadrícula.
@@ -58,6 +60,7 @@ const Capas = (() => {
     { id: 'censo_luz', etiqueta: 'Alumbrado eléctrico por red pública (censo 2017)', grupo: 'servicio' }, // censo por manzana: informativas, cifras de 2017
     { id: 'censo_agua', etiqueta: 'Agua por red pública (censo 2017)', grupo: 'servicio' },
     { id: 'censo_desague', etiqueta: 'Desagüe por red pública (censo 2017)', grupo: 'servicio' },
+    { id: 'viaje', etiqueta: 'Ruta al trabajo (combi o bus)', grupo: 'servicio' }, // sus datos vienen del asistente (origen, destino, tramos), no se arman con un botón
     { id: 'volcan', etiqueta: 'Peligro volcánico (Misti)', grupo: 'riesgo' },
     { id: 'cenepred_inundacion', etiqueta: 'Riesgo de inundación por distrito (CENEPRED)', grupo: 'riesgo' },
     { id: 'cenepred_mm', etiqueta: 'Riesgo de movimientos en masa por distrito (CENEPRED)', grupo: 'riesgo' },
@@ -176,6 +179,7 @@ const Capas = (() => {
     const peligroVolcan = [];
     const riesgoDistritos = [];
     let lineasBus = [];
+    let viajeOut = null;
     let paradasBus = [];
     let cajaLineas = null;
     const leyenda = [];
@@ -188,7 +192,7 @@ const Capas = (() => {
       colegios: ['colegio', 'colegios'], salud: ['establecimiento de salud', 'establecimientos de salud'], consultorios: ['consultorio médico', 'consultorios médicos'], abastecimiento: ['punto de abastecimiento', 'puntos de abastecimiento'], compras_ocio: ['mall confirmado', 'malls confirmados'], comercio_barrio: ['galería o comercio de barrio', 'galerías y comercios de barrio'], paraderos: ['paradero', 'paraderos'], parques: ['parque', 'parques'],
       residencial: ['zona residencial', 'zonas residenciales'], tranquilo: ['zona tranquila', 'zonas tranquilas'], campina: ['zona de campiña', 'zonas de campiña'],
       comercial: ['zona comercial', 'zonas comerciales'], historico: ['zona del centro histórico', 'zonas del centro histórico'],
-      quebradas: ['tramo de quebrada o río', 'tramos de quebradas y ríos'], sismos: ['sismo', 'sismos'], volcan: ['zona de peligro volcánico', 'zonas de peligro volcánico'], cenepred_inundacion: ['distrito coloreado por su riesgo ante inundaciones', 'distritos coloreados por su riesgo ante inundaciones'], cenepred_mm: ['distrito coloreado por su riesgo ante movimientos en masa', 'distritos coloreados por su riesgo ante movimientos en masa'], lineas: ['línea de bus', 'líneas de bus'], electricidad: ['área de concesión eléctrica', 'áreas de concesión eléctrica'], censo_luz: ['manzana con cifras de alumbrado', 'manzanas con cifras de alumbrado'], censo_agua: ['manzana con cifras de agua', 'manzanas con cifras de agua'], censo_desague: ['manzana con cifras de desagüe', 'manzanas con cifras de desagüe'], sectores: ['sector', 'sectores'],
+      quebradas: ['tramo de quebrada o río', 'tramos de quebradas y ríos'], sismos: ['sismo', 'sismos'], volcan: ['zona de peligro volcánico', 'zonas de peligro volcánico'], cenepred_inundacion: ['distrito coloreado por su riesgo ante inundaciones', 'distritos coloreados por su riesgo ante inundaciones'], cenepred_mm: ['distrito coloreado por su riesgo ante movimientos en masa', 'distritos coloreados por su riesgo ante movimientos en masa'], lineas: ['línea de bus', 'líneas de bus'], electricidad: ['área de concesión eléctrica', 'áreas de concesión eléctrica'], viaje: ['ruta al trabajo', 'rutas al trabajo'], censo_luz: ['manzana con cifras de alumbrado', 'manzanas con cifras de alumbrado'], censo_agua: ['manzana con cifras de agua', 'manzanas con cifras de agua'], censo_desague: ['manzana con cifras de desagüe', 'manzanas con cifras de desagüe'], sectores: ['sector', 'sectores'],
     };
     const nombreDe = (capa, n) => NOMBRES[capa][n === 1 ? 0 : 1];
     const cuenta = (capa, n, texto) => {
@@ -327,6 +331,14 @@ const Capas = (() => {
         if (conCifras.length === 0) vacias.push(id);
         porClase.forEach((n, i) => { if (n > 0) leyenda.push({ capa: id, clase: i, texto: `${C.CLASES_CENSO[i]}: ${n}`, n }); });
         if (pocas > 0) leyenda.push({ capa: id, clase: null, texto: `Pocas viviendas (sin porcentaje): ${pocas}`, n: pocas });
+      } else if (id === 'viaje') {
+        // Ruta al trabajo: los datos los trae la capa (los armó el asistente con Viaje.rutasDirectas). Tramo = de donde subes a donde bajas.
+        const tramos = (capa.tramos || []).filter((t) => t && Array.isArray(t.segmento) && t.segmento.length >= 2);
+        const celdasViaje = (capa.celdas || []).filter((p) => p && Number.isFinite(p.lat) && Number.isFinite(p.lon));
+        if (!capa.destino && tramos.length === 0) { vacias.push('viaje'); return; }
+        viajeOut = { origen: capa.origen || null, destino: capa.destino || null, tramos, celdas: celdasViaje };
+        const destinoTxt = capa.destino && capa.destino.nombre ? ` a ${capa.destino.nombre}` : '';
+        leyenda.push({ capa: 'viaje', texto: tramos.length ? `Ruta al trabajo${destinoTxt}: ${tramos.length} ${tramos.length === 1 ? 'ruta directa' : 'rutas directas'} (de donde subes a donde bajas)` : `Ruta al trabajo${destinoTxt}${celdasViaje.length ? `: ${celdasViaje.length} celdas desde las que se llega sin transbordo` : ''}`, n: Math.max(tramos.length, celdasViaje.length, 1) });
       } else if (id === 'electricidad') {
         // Áreas de concesión de distribución eléctrica: polígonos ENTEROS del registro (no se recortan al distrito). Informativas, sin círculo.
         if (!Array.isArray(electricidad) || electricidad.length === 0) { sinDatos.push('electricidad'); return; }
@@ -401,7 +413,8 @@ const Capas = (() => {
     } else if (cajaArea) limites = cajaArea;
     else if (cajaLineas && valido(cajaLineas) && puntos.length === 0 && poligonos.length === 0) limites = cajaLineas;
     else {
-      const todos = [...puntos.map((p) => [p.lon, p.lat]), ...poligonos.flatMap((p) => coordsDe(p.geometry)), ...peligroVolcan.flatMap((p) => coordsDe(p.geometry)), ...riesgoDistritos.flatMap((p) => coordsDe(p.geometry))];
+      const todos = [...puntos.map((p) => [p.lon, p.lat]), ...poligonos.flatMap((p) => coordsDe(p.geometry)), ...peligroVolcan.flatMap((p) => coordsDe(p.geometry)), ...riesgoDistritos.flatMap((p) => coordsDe(p.geometry)),
+        ...(viajeOut ? [...(viajeOut.origen ? [[viajeOut.origen.lon, viajeOut.origen.lat]] : []), ...(viajeOut.destino ? [[viajeOut.destino.lon, viajeOut.destino.lat]] : []), ...viajeOut.tramos.flatMap((t) => t.segmento), ...viajeOut.celdas.map((p) => [p.lon, p.lat])] : [])];
       limites = todos.length ? bboxDe(todos) : null;
     }
     if (limites && !valido(limites)) limites = null;
@@ -414,7 +427,7 @@ const Capas = (() => {
       : vacias.length && !leyenda.length
       ? `En esta zona no hay ${vacias.map((v) => ({ colegios: 'colegios', salud: 'establecimientos de salud', consultorios: 'consultorios médicos', abastecimiento: 'puntos de abastecimiento', compras_ocio: 'malls confirmados', comercio_barrio: 'galerías o comercio de barrio', electricidad: 'áreas de concesión eléctrica', censo_luz: 'manzanas con cifras del censo', censo_agua: 'manzanas con cifras del censo', censo_desague: 'manzanas con cifras del censo', paraderos: 'paraderos', parques: 'parques', volcan: 'zonas de peligro volcánico' }[v] || v)).join(' ni ')} en los datos.`
       : `Muestro ${listaEs(porCapa.map((l) => `${l.n} ${nombreDe(l.capa, l.n)}`))}.${vacias.length ? ` No hay ${listaEs(vacias.map((v) => nombreDe(v, 2)))} en esta zona.` : ''}`;
-    return { puntos, circulos, poligonos, lineas, sismos: sism, peligroVolcan, riesgoDistritos, sectores: regiones, lineasBus, paradasBus, leyenda, vacias, sinDatos, resumen, limites };
+    return { puntos, circulos, poligonos, lineas, viaje: viajeOut, sismos: sism, peligroVolcan, riesgoDistritos, sectores: regiones, lineasBus, paradasBus, leyenda, vacias, sinDatos, resumen, limites };
   }
 
   /** Los sismos del archivo GeoJSON del IGP como lista simple { lat, lon, magnitud, fecha, profundidadKm, ref }; ignora lo que no es un punto con magnitud. */

@@ -219,6 +219,29 @@ const CONFIG = {
     respaldoRadioM: 5000,
   },
 
+  // «¿Qué combi me lleva de mi punto a mi trabajo?» (public/js/viaje.js): rutas directas sobre los trazados de OpenStreetMap (rutas_osm.geojson, ODbL, con de/a, duración
+  // e intervalo) y de SmartBus (rutas_smartbus.geojson). `caminarM` es la distancia a pie a la ruta en cada punta: la del paradero (umbrales.transporte, convención del proyecto).
+  viaje: {
+    caminarM: 400,
+    osmUrl: 'data/rutas_osm.geojson',
+    fuenteOsm: 'OpenStreetMap (ODbL), relaciones route=bus de la red SIT',
+  },
+
+  // Destinos con nombre que el asistente reconoce («trabajo en el Parque Industrial»). El punto es el de OpenStreetMap que se cita; `nota` dice qué punto es.
+  // La persona puede fijar otro destino en la ficha («Ir al trabajo»). «Ciudad Blanca» es un barrio y el final de rutas del C2 y el C10, no una empresa.
+  destinos: [
+    {
+      id: 'parque-industrial', nombre: 'Parque Industrial', tipo: 'zona industrial', alias: ['parque industrial', 'parque industrial de arequipa', 'zona industrial'],
+      lat: -16.4179, lon: -71.5497, osm: 'way/491224938',
+      nota: 'Punto de referencia: el centro del polígono «Parque Industrial» de OpenStreetMap (way/491224938), dentro de la zona industrial entre Av. Alfonso Ugarte y Av. Jesús (Aceros Arequipa, Celima, Alicorp…). La zona mide varios cientos de metros: si trabajas en otra parte de ella, fija el punto en la ficha.',
+    },
+    {
+      id: 'ciudad-blanca', nombre: 'Ciudad Blanca', tipo: 'barrio', alias: ['ciudad blanca'],
+      lat: -16.4146, lon: -71.4844, osm: 'node/4329651109',
+      nota: 'Barrio de Paucarpata (punto de OpenStreetMap, node/4329651109); también es el final de rutas del C2 y el C10.',
+    },
+  ],
+
   // Líneas de transporte público (recorridos y paradas de SmartBus), congeladas con scripts/descargar-rutas-smartbus.mjs. Se usan con
   // autorización verbal de SmartBus; la confirmación escrita está pendiente. La distancia para decir que una línea «pasa cerca» es
   // la misma de `umbrales.transporte` (convención del proyecto, no una norma).

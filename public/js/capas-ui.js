@@ -80,6 +80,23 @@ const CapasUI = (() => {
     return [y, x];
   }
 
+  /** Ruta al trabajo: cada ruta directa de donde subes a donde bajas, el origen, el destino y, en la búsqueda de zonas, las celdas desde las que se llega. */
+  function dibujarViaje(r) {
+    const v = r.viaje;
+    if (!v) return;
+    (v.celdas || []).forEach((c) => L.circleMarker([c.lat, c.lon], { radius: 4, color: "#0b5d4f", weight: 0, fillColor: "#0b5d4f", fillOpacity: 0.45, pane: "capasPuntos", interactive: false }).addTo(grupo));
+    (v.tramos || []).forEach((t) => {
+      const color = t.color || "#0b5d4f";
+      const detalle = `Caminas ${Math.round(t.caminarOrigenM)} m al subir y ${Math.round(t.caminarDestinoM)} m al bajar (en línea recta). Fuente: ${(t.fuentes || []).join(" y ")}. El trazado es el publicado; no sé dónde se sube ni se baja.`;
+      L.polyline(t.segmento.map(([x, y]) => [y, x]), { color, weight: 6, opacity: 0.9, pane: "capasLineas" }).bindPopup(popup(t.nombre, detalle, null)).addTo(grupo);
+      [[t.subida, "Subes aquí (el punto de la ruta más cercano a tu casa)"], [t.bajada, "Bajas aquí (el punto de la ruta más cercano al destino)"]].forEach(([p, txt]) => {
+        if (p) L.circleMarker([p.lat, p.lon], { radius: 6, color: "#fff", weight: 2, fillColor: color, fillOpacity: 1, pane: "capasPuntos" }).bindPopup(popup(t.nombre, txt, null)).addTo(grupo);
+      });
+    });
+    if (v.origen) L.circleMarker([v.origen.lat, v.origen.lon], { radius: 9, color: "#fff", weight: 3, fillColor: "#1d4ed8", fillOpacity: 1, pane: "capasPuntos" }).bindPopup(popup("Tu punto (de donde sales)", null, null)).addTo(grupo);
+    if (v.destino) L.circleMarker([v.destino.lat, v.destino.lon], { radius: 9, color: "#fff", weight: 3, fillColor: "#b91c1c", fillOpacity: 1, pane: "capasPuntos" }).bindPopup(popup(v.destino.nombre || "Destino", "Destino (punto de referencia)", null)).addTo(grupo);
+  }
+
   function dibujarLineasDeBus(r) {
     r.lineasBus.forEach((l) => {
       const nombre = Rutas.etiquetaLinea(l);
@@ -148,6 +165,7 @@ const CapasUI = (() => {
         .bindPopup(popup(z.titulo, z.detalle, null)).addTo(grupo);
     });
     dibujarLineasDeBus(r);
+    dibujarViaje(r);
     const iconos = r.puntos.length <= MAX_ICONOS;
     r.puntos.forEach((p) => (iconos ? marcador(p) : circuloLienzo(p)).addTo(grupo));
     r.sismos.forEach((s) => {
@@ -212,6 +230,7 @@ const CapasUI = (() => {
     if (r.leyenda.some((l) => CAPAS_COMERCIO.includes(l.capa))) fuentes.push('Abastecimiento (mercados y supermercados), compras y ocio (malls confirmados con su fuente) y comercio de barrio (galerías): OpenStreetMap (ODbL), solo informativos (sin distancia de referencia ni círculo); de un mall o una galería con forma en el mapa la distancia es al borde, no al centro. Puede faltar alguno.');
     if (r.leyenda.some((l) => l.capa === 'electricidad')) fuentes.push('Concesión eléctrica: áreas de concesión de distribución del MINEM (Dirección General de Electricidad), datosabiertos.gob.pe, licencia ODC-By. Dicen a qué empresa le corresponde dar el servicio, no si un predio está conectado; los polígonos son poco detallados y su borde puede ser impreciso.');
     if (r.leyenda.some((l) => /^censo_/.test(l.capa))) fuentes.push('Censo por manzana: Censos Nacionales 2017 del INEI (REDATAM), % de viviendas ocupadas con personas presentes con alumbrado, agua o desagüe por red pública. Son cifras de 2017 de la manzana, no de un predio ni de hoy; solo área urbana. El censo de 2025 aún no está abierto por manzana.');
+    if (r.leyenda.some((l) => l.capa === 'viaje')) fuentes.push('Ruta al trabajo: trazados de rutas de bus de OpenStreetMap (ODbL) y de SmartBus. Rutas directas a 400 m a pie o menos de los dos puntos, con el origen antes que el destino; distancias en línea recta. No dice dónde se sube ni se baja ni si la ruta opera hoy.');
     if (r.leyenda.some((l) => ['residencial', 'tranquilo', 'campina', 'comercial', 'historico'].includes(l.capa))) fuentes.push('Zonas: plano del PDM Arequipa 2016-2025 (referencial).');
     if (r.leyenda.some((l) => l.capa === 'quebradas')) fuentes.push('Quebradas y ríos: cauces de la ANA (red de 2018), el IGP y OpenStreetMap (ODbL); cada tramo dice su fuente al tocarlo. Ninguna fuente es completa ni es un mapa de peligro.');
     if (r.leyenda.some((l) => l.capa === 'lineas')) fuentes.push('Líneas de bus: Rutas: SmartBus (smartbus.app), recorridos publicados usados con autorización verbal; sin frecuencias ni horarios.' + (r.paradasBus.length ? ' La parada es la más cercana en línea recta.' : ''));
