@@ -227,7 +227,7 @@ console.log('\n== A. Integridad de los archivos ==');
   const enCaja = ([x, y]) => x >= caja[0] && x <= caja[2] && y >= caja[1] && y <= caja[3];
   const anillosDe = (g) => (g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : []).flat();
   const vistos = new Map();
-  for (const nombre of ['mercados', 'supermercados', 'malls']) {
+  for (const nombre of ['mercados', 'supermercados', 'malls', 'finanzas', 'comida_fuera', 'recreacion']) {
     const fc = json(`data/equipamiento/${nombre}.geojson`);
     const f = fc.features;
     const m = fc.metadata || {};
@@ -250,7 +250,23 @@ console.log('\n== A. Integridad de los archivos ==');
       comprobar('Comercio/mercados: la cobertura frente al CENAMA suma los mismos mercados de OpenStreetMap que el archivo y los del censo de la provincia', cob.totales.osm === f.length && cob.totales.cenama === cen.registros_provincia_arequipa && cob.filas.reduce((t, x) => t + x.cenama, 0) === cob.totales.cenama, `OSM ${cob.totales.osm} frente a CENAMA ${cob.totales.cenama}`);
     }
   }
-  comprobar('Comercio: ningún elemento de OpenStreetMap está en más de una de las tres categorías', [...vistos.values()].every((n) => n === 1));
+  comprobar('Comercio: ningún elemento de OpenStreetMap está en más de una de las seis categorías (mercados, supermercados, malls, finanzas, comida_fuera, recreacion)', [...vistos.values()].every((n) => n === 1));
+
+  // Servicios de la vida diaria (scripts/descargar-servicios-osm.mjs): finanzas (bancos y cajeros), comida fuera (restaurantes y cafés) y recreación (juegos infantiles); INFORMATIVOS.
+  {
+    const sv = Object.fromEntries(['finanzas', 'comida_fuera', 'recreacion'].map((n) => [n, json(`data/equipamiento/${n}.geojson`)]));
+    comprobar('Servicios: cada elemento trae un tipo permitido por su necesidad (banco/cajero, restaurante/cafe, juego_infantil) y el conteo_por_tipo de la metadata coincide', Object.entries(sv).every(([n, fc]) => fc.features.every((x) => CalcC.COMERCIO[n].tipos.includes(x.properties.tipo)) && Object.entries(fc.metadata.conteo_por_tipo || {}).every(([t, c]) => fc.features.filter((x) => x.properties.tipo === t).length === c) && Object.values(fc.metadata.conteo_por_tipo || {}).reduce((s, c) => s + c, 0) === fc.features.length));
+    comprobar('Servicios: los parques y jardines no se repiten (ningún elemento es leisure=park, garden ni landuse=recreation_ground: ya son el criterio «área verde»)', Object.values(sv).every((fc) => fc.features.every((x) => !['park', 'garden'].includes(x.properties.tags.leisure) && x.properties.tags.landuse !== 'recreation_ground')));
+    const plazaS = { lat: -16.3989, lon: -71.5369 };
+    const gS = CalcC.agruparComercio({ finanzas: sv.finanzas.features, comida_fuera: sv.comida_fuera.features, recreacion: sv.recreacion.features });
+    const cercanoS = (id) => CalcC.evaluarMasCercanoForma(plazaS, gS[id], { umbralM: null, fuente: 'OSM', fecha: 'x', metodo: 'm' });
+    comprobar('Servicios: desde la Plaza de Armas hay un banco o cajero y un restaurante o café a menos de 300 m (módulo del navegador) y la distancia nunca supera la del cálculo independiente (haversine al más cercano; los polígonos se miden al borde)', ['finanzas', 'comida_fuera'].every((id) => {
+      const r = cercanoS(id);
+      const ind = Math.min(...gS[id].map((x) => { const c = x.geometry.type === 'Point' ? { lat: x.geometry.coordinates[1], lon: x.geometry.coordinates[0] } : CalcC.centroDe(x.geometry); const dLa = ((c.lat - plazaS.lat) * Math.PI) / 180; const dLo = ((c.lon - plazaS.lon) * Math.PI) / 180; const a = Math.sin(dLa / 2) ** 2 + Math.cos((plazaS.lat * Math.PI) / 180) * Math.cos((c.lat * Math.PI) / 180) * Math.sin(dLo / 2) ** 2; return 2 * 6371008.8 * Math.asin(Math.sqrt(a)); }));
+      return r.estado === 'INFORMATIVO' && r.distanciaM < 300 && r.distanciaM <= ind + 0.5; // los polígonos miden al borde: puede ser menor que al centro, nunca mayor
+    }));
+    console.log(`INFO  Servicios de la vida diaria (OpenStreetMap, ${sv.finanzas.metadata.fecha_extraccion}): finanzas ${sv.finanzas.features.length} (${JSON.stringify(sv.finanzas.metadata.conteo_por_tipo)}), comida fuera ${sv.comida_fuera.features.length} (${JSON.stringify(sv.comida_fuera.metadata.conteo_por_tipo)}), recreación ${sv.recreacion.features.length}`);
+  }
 
   // Reparto por NECESIDAD (Calculos.agruparComercio): abastecimiento (mercados + supermercados), compras y ocio (malls con fuente) y comercio de barrio (el resto de shop=mall).
   const crudo = (nombre) => json(`data/equipamiento/${nombre}.geojson`).features;
