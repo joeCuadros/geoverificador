@@ -1167,7 +1167,7 @@ const Asistente = (() => {
   const kmTxt = (m) => `${(m / 1000).toFixed(1).replace('.', ',')} km`;
   const FUENTES_VIAJE = { OSM: 'OpenStreetMap' };
   const fuentesTxt = (fs) => fs.map((f) => FUENTES_VIAJE[f] || f).join(' y ');
-  const NOTA_VIAJE = 'Las distancias son en línea recta, no a pie. No sé dónde se sube ni se baja (las paradas de OpenStreetMap son parciales y no se usan aquí) y no sé si la ruta opera hoy; el sentido sale del orden del recorrido publicado. No calculo transbordos.';
+  const NOTA_VIAJE = 'Las distancias son en línea recta, no a pie. No sé dónde se sube ni se baja (las paradas de OpenStreetMap son parciales y no se usan aquí) y no sé si la ruta opera hoy; el sentido sale del orden del recorrido publicado. Solo calculo viajes directos o con UN trasbordo.';
 
   /**
    * De dónde sale la persona cuando lo dice («vivo en Cayma»): un lugar de CONFIG.destinos (con su punto) o un distrito de los datos (la interfaz le pone el centro de su zona urbana).
@@ -1248,7 +1248,11 @@ const Asistente = (() => {
     } else {
       const cd = V.cercanas(dest, c.viajeRutas, filtro).length;
       const co = V.cercanas(c.punto, c.viajeRutas, filtro).length;
-      lineas.push(`No hay ninguna ruta directa: ${plural(cd, 'ruta pasa', 'rutas pasan')} a ${fmtDist(max)} o menos del destino y ${plural(co, 'ruta pasa', 'rutas pasan')} a esa distancia de tu punto, pero ninguna sirve a los dos en ese orden.`);
+      lineas.push(`No hay ninguna ruta directa: ${plural(cd, 'ruta pasa', 'rutas pasan')} a ${fmtDist(max)} o menos del destino y ${plural(co, 'ruta pasa', 'rutas pasan')} a esa distancia de tu punto, ${co === 0 ? 'así que no hay dónde subir cerca.' : 'pero ninguna sirve a los dos en ese orden.'}`);
+      if (co === 0) {
+        const mas = V.cercanas(c.punto, c.viajeRutas, { ...filtro, caminarM: 20000 })[0];
+        if (mas) lineas.push(`La ruta más cercana a tu punto es ${V.textoRuta(mas.ruta)}, que pasa a ${fmtDist(mas.distanciaM)} en línea recta (más de los ${fmtDist(max)} que se aceptan a pie): en esa zona hoy no hay una ruta mapeada para subir, y no se inventa un trasbordo desde ahí.`);
+      }
       const trasM = c.trasbordoM || V.TRASBORDO_M;
       const tr = V.rutasConTrasbordo(c.punto, dest, c.viajeRutas, { ...filtro, trasbordoM: trasM, tiempo: c.tiempo, paradas: c.viajeParadas || [], max: c.maxTrasbordos || V.MAX_TRASBORDOS });
       if (tr.trasbordos.length) {

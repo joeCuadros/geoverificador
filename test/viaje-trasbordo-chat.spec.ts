@@ -177,3 +177,13 @@ describe('Búsqueda de zonas con ruta al destino: «directa» (por omisión) o �
     expect(sin.texto).toMatch(/Para sumar los orígenes desde los que se llega con un trasbordo di, por ejemplo, «busco una zona con ruta con un trasbordo al Parque Industrial»/);
   });
 });
+
+describe('Asistente.responder: un origen sin ninguna ruta cerca', () => {
+  it('dice que no hay dónde subir y cuál es la ruta más cercana y a qué distancia, sin inventar un trasbordo', () => {
+    const lejos = pt(-9000, 60); // 3 km al oeste del inicio de A
+    const r = Asistente.responder({ tipo: 'viaje', criterios: [], destino: PI, viaje: {} }, { punto: lejos, viajeRutas: [A, B], caminarM: 400, trasbordoM: 200, tiempo });
+    expect(r.texto).toMatch(/0 rutas pasan a esa distancia de tu punto, así que no hay dónde subir cerca/);
+    expect(r.texto).toMatch(/La ruta más cercana a tu punto es C3 · Enace[^\n]*, que pasa a 3 km en línea recta/);
+    expect(r.resumen).toBeNull();
+  });
+});
