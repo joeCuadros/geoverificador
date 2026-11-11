@@ -150,10 +150,12 @@ const Asistente = (() => {
     // Viaje en combi o bus a un destino: «¿qué combi me lleva a mi trabajo en el Parque Industrial?», «tomo la C10», «el carro de Ciudad Blanca».
     viajeFuerte: /\b(me lleva\w*|me llevan|llegar|llego|llegue\w*|ruta directa|sin transbordo|como llego|como voy)\b/,
     viajeTrabajo: /\b(trabajo|trabajar|trabajamos|oficina|chamba)\b/,
-    viajeVehiculo: /\b(combis?|buses?|micros?|rutas?|lineas?|carros?|colectivos?|transporte)\b/,
+    viajeVehiculo: /\b(combis?|buses?|micros?|rutas?|lineas?|carros?|colectivos?|transporte|trasbordos?|transbordos?)\b/,
     viajeLinea: /\b(?:la|el|ruta|linea|combi|bus|micro|tomo|tomar|toma|hasta)\s+(c\s?-?\s?(?:2|3|4|5|6|7|8|9|10|11)|albotran|chiguata)\b|\b(c-(?:2|3|4|5|6|7|8|9|10|11))\b/,
     viajeLetrero: /\b(?:carros?|combis?|buses?|micros?|rutas?|lineas?|colectivos?)\s+(?:de|que dice|que va a|con letrero(?: de)?)\s+([a-z0-9 ]{3,30}?)(?=\s+(?:porque|para|y|que|pero|quiero|trabajo|voy|ir|hasta)\b|[,.;]|$)/,
     viajeZonas: /\b(busc\w*|vivir|mudar\w*|recomi\w*|sugier\w*)\b/,
+    // «vivo en Cayma y trabajo en el Parque Industrial», «salgo de Ciudad Blanca», «desde Paucarpata hasta el Parque Industrial»: de dónde sale la persona.
+    viajeOrigen: /\b(?:(?:vivo|vivimos|resido|salgo|parto|vengo)\s+(?:en|por|de|desde|cerca de|cerca del|a)|desde)\s+(?:el\s+|la\s+|los\s+|las\s+)?([a-z0-9 ]{3,40}?)(?=\s+(?:y|e|pero|porque|trabajo|trabajar|voy|para|hasta|a|al)\b|[,.;?]|$)/,
     // Pedir ZONAS con luz es una búsqueda; «¿es zona de SEAL?» no (la palabra «zona» sola no la pide).
     electricidadBusca: /\b(busc\w*|encuentr\w*|recomi\w*|sugier\w*|mejor(?:es)?|zonas|donde (?:vivir|mudar\w*))\b/,
     // Concesión minera (informativo): concesión o derecho minero, minería, mina(s). «Minero» solo no cuenta.
@@ -438,7 +440,8 @@ const Asistente = (() => {
     if (criterios_soloTransporte(intencion.criterios) && !RE.fuentes.test(t)) {
       const letrero = RE.viajeLetrero.exec(t);
       const lin = RE.viajeLinea.exec(t);
-      const sinFiltros = t.replace(letrero ? letrero[0] : '', ' ').replace(lin ? lin[0] : '', ' ');
+      const mo = RE.viajeOrigen.exec(t);
+      const sinFiltros = t.replace(letrero ? letrero[0] : '', ' ').replace(lin ? lin[0] : '', ' ').replace(mo ? mo[0] : '', ' ');
       const destinos = (typeof CONFIG !== 'undefined' && CONFIG.destinos) || [];
       const dest = Vj().resolverDestino(sinFiltros, destinos);
       const fuerte = RE.viajeFuerte.test(t);
@@ -447,9 +450,11 @@ const Asistente = (() => {
       const conDestino = Boolean(dest) || Boolean(ctx.destino);
       if ((dest && (fuerte || trabajo || veh)) || (!dest && ctx.destino && (fuerte || (trabajo && veh))) || (!dest && fuerte && trabajo)) {
         const viaje = { linea: lin ? Vj().codigoLinea(lin[1] || lin[2]).toUpperCase().replace(/^C(\d+)$/, 'C$1') : null, texto: letrero ? letrero[1].trim() : null };
-        const base = { ...intencion, criterios: [], aproximados: [], limitarAlPunto: false, destino: dest || ctx.destino || null, viaje };
-        const pideZonas = conDestino && (RE.viajeZonas.test(t) || /\bzonas\b/.test(t)) && /\b(directa|directo|sin transbordo|llegue|llegar|combi|bus|ruta|rutas)\b/.test(t);
-        return { ...base, tipo: pideZonas ? 'ruta_zonas' : 'viaje' };
+        const base = { ...intencion, criterios: [], aproximados: [], limitarAlPunto: false, destino: dest || ctx.destino || null, viaje, origen: mo ? origenDe(mo[1], destinos) : null };
+        const pideZonas = conDestino && (RE.viajeZonas.test(t) || /\bzonas\b/.test(t)) && /\b(directa|directo|sin transbordo|llegue|llegar|combi|bus|ruta|rutas|trasbordo|transbordo)\b/.test(t);
+        // Opt-in: «una zona con ruta con un trasbordo al Parque Industrial» suma los orígenes desde los que se llega con UN trasbordo (por omisión, solo las directas).
+        const conTrasbordo = pideZonas && /\b(con|un|1)\s+(?:un\s+)?(trasbordo|transbordo)s?\b/.test(t) && !/\bsin\s+(trasbordo|transbordo)s?\b/.test(t);
+        return { ...base, tipo: pideZonas ? 'ruta_zonas' : 'viaje', trasbordo: conTrasbordo };
       }
     }
 
@@ -1164,6 +1169,17 @@ const Asistente = (() => {
   const fuentesTxt = (fs) => fs.map((f) => FUENTES_VIAJE[f] || f).join(' y ');
   const NOTA_VIAJE = 'Las distancias son en línea recta, no a pie. No sé dónde se sube ni se baja (las paradas de OpenStreetMap son parciales y no se usan aquí) y no sé si la ruta opera hoy; el sentido sale del orden del recorrido publicado. No calculo transbordos.';
 
+  /**
+   * De dónde sale la persona cuando lo dice («vivo en Cayma»): un lugar de CONFIG.destinos (con su punto) o un distrito de los datos (la interfaz le pone el centro de su zona urbana).
+   * Si lo que dijo no es ninguno, null: se usa el punto elegido en el mapa.
+   */
+  function origenDe(texto, destinos) {
+    const lugar = Vj().resolverDestino(texto, destinos);
+    if (lugar) return { tipo: 'lugar', nombre: lugar.nombre, lat: lugar.lat, lon: lugar.lon };
+    const d = Dist().buscarNombre(texto);
+    return d && d.enDatos ? { tipo: 'distrito', distrito: d.distrito, nombre: titulo(d.distrito) } : null;
+  }
+
   const NOTA_TRASBORDO = 'Con trasbordo: las dos rutas pasan a ≤ 200 m una de la otra (un supuesto del proyecto, no una norma) y no sé si hay una parada ahí ni si las frecuencias permiten el enlace. Los tiempos son estimaciones con la duración que etiqueta OpenStreetMap, no un horario garantizado.';
 
   /** «≈ 35 min»: mínimo 1. */
@@ -1182,8 +1198,12 @@ const Asistente = (() => {
     const dest = intencion.destino || c.destino || null;
     const vi = intencion.viaje || {};
     if (!dest) return { texto: '¿A dónde vas? Dime tu destino, por ejemplo «trabajo en el Parque Industrial», o fíjalo en la ficha con «Ir al trabajo».', sugerencias: ['Trabajo en el Parque Industrial', '¿Qué buses pasan por aquí?'] };
-    if (!c.punto) return { texto: `Elige en el mapa el punto desde donde sales (tu casa) y vuelve a preguntar cómo llegar a ${dest.nombre}.`, sugerencias: SUGERENCIAS_BASE };
+    const dicho = intencion.origen || null;
+    const salida = dicho ? (Number.isFinite(dicho.lat) ? { lat: dicho.lat, lon: dicho.lon } : c.origenPunto || null) : c.punto;
+    if (dicho && !salida) return { texto: `No pude ubicar el centro de ${dicho.nombre}. Elige en el mapa el punto desde donde sales (tu casa) y vuelve a preguntar cómo llegar a ${dest.nombre}.`, sugerencias: SUGERENCIAS_BASE };
+    if (!salida) return { texto: `Elige en el mapa el punto desde donde sales (tu casa) y vuelve a preguntar cómo llegar a ${dest.nombre}.`, sugerencias: SUGERENCIAS_BASE };
     if (!c.viajeRutas) return { texto: 'Todavía estoy cargando las rutas; vuelve a preguntar en unos segundos.', sugerencias: [] };
+    c = { ...c, punto: salida };
     const V = Vj();
     const max = c.caminarM || V.CAMINAR_M;
     const filtro = { caminarM: max, linea: vi.linea || null, texto: vi.texto || null };
@@ -1191,8 +1211,7 @@ const Asistente = (() => {
     const u = V.unir(r.directas);
     const rev = V.unir(r.alReves);
     const solo = vi.linea ? `, solo la línea ${vi.linea}` : vi.texto ? `, solo rutas cuyo nombre o letrero diga «${vi.texto}»` : '';
-    const nombreOrigen = intencion.origen && intencion.origen.nombre ? intencion.origen.nombre : null;
-    const cabecera = `De ${nombreOrigen ? `${nombreOrigen} (${c.origenNota || 'punto elegido'})` : 'tu punto'} a ${dest.nombre}${dest.osm ? ` (punto de OpenStreetMap, ${dest.osm})` : ''}${solo}:`;
+    const cabecera = `De ${dicho ? `${dicho.nombre} (${dicho.tipo === 'distrito' ? 'el centro de su zona urbana, aproximado' : 'su punto de referencia en OpenStreetMap'})` : 'tu punto'} a ${dest.nombre}${dest.osm ? ` (punto de OpenStreetMap, ${dest.osm})` : ''}${solo}:`;
     const lineas = [cabecera];
     const alternativas = [];
     let resumen = null;
@@ -1277,14 +1296,15 @@ const Asistente = (() => {
     const por = new Map();
     (celdas || []).forEach((c) => { const d = dist(c); if (!por.has(d)) por.set(d, { distrito: d, celdas: 0, conRuta: 0 }); por.get(d).celdas += 1; });
     (hits || []).forEach((h) => { por.get(dist(h.celda)).conRuta += 1; });
+    const directas = (hits || []).filter((h) => h.tipo !== 'trasbordo').length;
     const porDistrito = [...por.values()].map((d) => ({ ...d, pct: d.celdas ? (100 * d.conRuta) / d.celdas : 0 })).filter((d) => d.celdas > 0).sort((a, b) => b.conRuta - a.conRuta || b.pct - a.pct);
     const mejores = [];
     [...(hits || [])].sort((a, b) => a.caminarM - b.caminarM).forEach((h) => {
       if (mejores.length < maxMejores && mejores.every((m) => distanciaM(m, h.celda) >= separacionM)) {
-        mejores.push({ lat: h.celda.lat, lon: h.celda.lon, caminarM: h.caminarM, ruta: Vj().textoRuta(h.ruta), distrito: dist(h.celda) });
+        mejores.push({ lat: h.celda.lat, lon: h.celda.lon, caminarM: h.caminarM, ruta: Vj().textoRuta(h.ruta), distrito: dist(h.celda), tipo: h.tipo === 'trasbordo' ? 'trasbordo' : 'directa' });
       }
     });
-    return { totalCeldas: (celdas || []).length, conRuta: (hits || []).length, porDistrito, mejores };
+    return { totalCeldas: (celdas || []).length, conRuta: (hits || []).length, directas, conTrasbordo: (hits || []).length - directas, porDistrito, mejores };
   }
 
   /** «Busco una zona con ruta directa al Parque Industrial»: opt-in y aparte de los criterios; no es un puntaje. */
@@ -1295,10 +1315,13 @@ const Asistente = (() => {
     if (!z) return { texto: 'Todavía estoy calculando desde qué zonas se llega en combi o bus; vuelve a preguntar en unos segundos.', sugerencias: [] };
     const pct = z.totalCeldas ? Math.round((100 * z.conRuta) / z.totalCeldas) : 0;
     const max = z.caminarM || Vj().CAMINAR_M;
-    const lineas = [`Zonas con ruta directa a ${dest.nombre}: de ${fmtNum(z.totalCeldas)} celdas de 250 m sobre las zonas construibles del plano, ${fmtNum(z.conRuta)} (${pct} %) tienen una ruta de OpenStreetMap que pasa a ${fmtDist(max)} o menos a pie de la celda y del destino, con la celda antes que el destino en el recorrido.`];
+    const lineas = z.trasbordo
+      ? [`Zonas con ruta directa o con un trasbordo a ${dest.nombre}: de ${fmtNum(z.totalCeldas)} celdas de 250 m sobre las zonas construibles del plano, ${fmtNum(z.conRuta)} (${pct} %) llegan: ${fmtNum(z.directas)} (${z.totalCeldas ? Math.round((100 * z.directas) / z.totalCeldas) : 0} %) con una ruta directa y ${fmtNum(z.conTrasbordo)} (${z.totalCeldas ? Math.round((100 * z.conTrasbordo) / z.totalCeldas) : 0} %) con UN trasbordo (subes a una ruta a ${fmtDist(max)} o menos de la celda, la dejas donde pasa a ${fmtDist(z.trasbordoM || 200)} o menos de otra que baja a ${fmtDist(max)} o menos del destino, cada una en su sentido).`, NOTA_TRASBORDO]
+      : [`Zonas con ruta directa a ${dest.nombre}: de ${fmtNum(z.totalCeldas)} celdas de 250 m sobre las zonas construibles del plano, ${fmtNum(z.conRuta)} (${pct} %) tienen una ruta de OpenStreetMap que pasa a ${fmtDist(max)} o menos a pie de la celda y del destino, con la celda antes que el destino en el recorrido.`];
     const d = z.porDistrito.filter((x) => x.conRuta > 0).slice(0, 6);
     if (d.length) lineas.push(`Por distrito: ${d.map((x) => `${titulo(x.distrito)} ${x.conRuta} de ${x.celdas} (${Math.round(x.pct)} %)`).join('; ')}.`);
-    if (z.mejores.length) lineas.push(`Puntos con menos caminata: ${z.mejores.map((m) => `${titulo(m.distrito)}, a ${fmtDist(m.caminarM)} de la ${m.ruta}`).join('; ')}.`);
+    if (z.mejores.length) lineas.push(`Puntos con menos caminata: ${z.mejores.map((m) => `${titulo(m.distrito)}, a ${fmtDist(m.caminarM)} de la ${m.ruta}${m.tipo === 'trasbordo' ? ' (con un trasbordo)' : ''}`).join('; ')}.`);
+    if (!z.trasbordo) lineas.push('Para sumar los orígenes desde los que se llega con un trasbordo di, por ejemplo, «busco una zona con ruta con un trasbordo al ' + dest.nombre + '».');
     lineas.push('Es una consulta aparte, determinista: no es un puntaje, no entra en la búsqueda de zonas por criterios ni la cambia. ' + NOTA_VIAJE);
     return {
       texto: lineas.join('\n'),

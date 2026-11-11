@@ -1354,6 +1354,9 @@ summary { -webkit-tap-highlight-color: transparent; }
 .ent-supermercado span::first-line { transform: rotate(-45deg); }
 .ent-mall span { background: #9d174d; border-radius: 4px; width: 28px; font-size: .625rem; }
 .ent-galeria span { background: #a16207; border-radius: 50% 4px 50% 4px; }
+.var-mejor { margin: .25rem 0 .5rem; padding: .5rem .75rem; border-left: 4px solid var(--accent, #1d4ed8); background: color-mix(in srgb, var(--accent, #1d4ed8) 8%, transparent); border-radius: 0 6px 6px 0; }
+.var-detalle-viaje > summary { cursor: pointer; font-size: .875rem; margin: .25rem 0; }
+body.eligiendo-destino #map { cursor: crosshair; }
 .ent-acopio span { background: #0369a1; border-radius: 12px 12px 4px 12px; }
 .ent-banco span { background: #1e40af; border-radius: 4px; }
 .ent-cajero span { background: #0e7490; border-radius: 4px 12px 4px 12px; }

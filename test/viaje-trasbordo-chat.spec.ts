@@ -115,3 +115,65 @@ describe('Capas: la capa «viaje» con un trasbordo', () => {
     }
   });
 });
+
+describe('Asistente.interpretar: «vivo en X y trabajo en el Parque Industrial»', () => {
+  const i = (t: string) => Asistente.interpretar(t, {});
+  it('un lugar con nombre como origen: viaje con el origen y el destino, sin confundir uno con otro', () => {
+    const r = i('vivo en Ciudad Blanca y trabajo en el Parque Industrial');
+    expect(r.tipo).toBe('viaje');
+    expect(r.destino.id).toBe('parque-industrial');
+    expect(r.origen).toMatchObject({ tipo: 'lugar', nombre: 'Ciudad Blanca' });
+    expect(Number.isFinite(r.origen.lat)).toBe(true);
+  });
+  it('un distrito como origen: la interfaz le pone el centro de su zona urbana', () => {
+    const r = i('vivo en Cayma y trabajo en el Parque Industrial');
+    expect(r).toMatchObject({ tipo: 'viaje', origen: { tipo: 'distrito', distrito: 'CAYMA', nombre: 'Cayma' } });
+    expect(r.destino.id).toBe('parque-industrial');
+  });
+  it('«desde Paucarpata hasta el Parque Industrial»', () => {
+    expect(i('¿cómo llego desde Paucarpata hasta el Parque Industrial?')).toMatchObject({ tipo: 'viaje', origen: { tipo: 'distrito', distrito: 'PAUCARPATA' } });
+  });
+  it('sin origen dicho el origen es null y vale el punto del mapa', () => {
+    expect(i('¿cómo llego al Parque Industrial?')).toMatchObject({ tipo: 'viaje', origen: null });
+  });
+  it('responder: un origen con punto propio se usa aunque no haya punto elegido, y la cabecera lo dice', () => {
+    const r = Asistente.responder(i('vivo en Ciudad Blanca y trabajo en el Parque Industrial'), { punto: null, viajeRutas: [DIRECTA], caminarM: 400, tiempo });
+    expect(r.texto.split('\n')[0]).toMatch(/^De Ciudad Blanca \(su punto de referencia en OpenStreetMap\) a Parque Industrial/);
+  });
+  it('responder: un distrito sin punto resuelto pide elegir el punto; con `origenPunto` lo usa y avisa que es aproximado', () => {
+    const intencion = i('vivo en Cayma y trabajo en el Parque Industrial');
+    expect(Asistente.responder(intencion, { punto: null, viajeRutas: [DIRECTA], caminarM: 400, tiempo }).texto).toMatch(/No pude ubicar el centro de Cayma/);
+    const r = Asistente.responder(intencion, { punto: null, origenPunto: CASA, viajeRutas: [DIRECTA], caminarM: 400, tiempo });
+    expect(r.texto.split('\n')[0]).toMatch(/^De Cayma \(el centro de su zona urbana, aproximado\) a Parque Industrial/);
+    expect(r.mapa.viaje.origen.lat).toBeCloseTo(CASA.lat, 6);
+  });
+});
+
+describe('Búsqueda de zonas con ruta al destino: «directa» (por omisión) o «con un trasbordo» (opt-in)', () => {
+  const i = (x: string) => Asistente.interpretar(x, {});
+  it('por omisión la búsqueda de zonas con ruta sigue siendo solo de rutas directas', () => {
+    expect(i('busco una zona con ruta directa al Parque Industrial')).toMatchObject({ tipo: 'ruta_zonas', trasbordo: false });
+    expect(i('busco una zona donde llegue en combi al Parque Industrial')).toMatchObject({ tipo: 'ruta_zonas', trasbordo: false });
+    expect(i('busco una zona sin transbordo al Parque Industrial')).toMatchObject({ tipo: 'ruta_zonas', trasbordo: false });
+  });
+  it('pedir «con un trasbordo» la amplía a las rutas con un trasbordo', () => {
+    expect(i('busco una zona con ruta con un trasbordo al Parque Industrial')).toMatchObject({ tipo: 'ruta_zonas', trasbordo: true });
+    expect(i('busco una zona con un transbordo al Parque Industrial')).toMatchObject({ tipo: 'ruta_zonas', trasbordo: true });
+  });
+  it('el resumen separa las directas de las de un trasbordo y dice el supuesto; sin la opción ofrece pedirlo', () => {
+    const hits = [
+      { celda: { lat: -16.4, lon: -71.5 }, caminarM: 100, ruta: A, tipo: 'directa' },
+      { celda: { lat: -16.41, lon: -71.51 }, caminarM: 250, ruta: B, tipo: 'trasbordo' },
+    ];
+    const celdas = [...hits.map((h) => h.celda), { lat: -16.5, lon: -71.6 }, { lat: -16.6, lon: -71.7 }];
+    const zonasRuta = { ...Asistente.resumirRutaZonas(hits, celdas, () => 'CAYMA', {}), caminarM: 400, trasbordo: true, trasbordoM: 200, celdasConRuta: hits.map((h) => h.celda) };
+    expect(zonasRuta).toMatchObject({ conRuta: 2, directas: 1, conTrasbordo: 1 });
+    const r = Asistente.responder({ tipo: 'ruta_zonas', criterios: [], destino: PI, viaje: {}, trasbordo: true }, { zonasRuta });
+    expect(r.texto).toMatch(/Zonas con ruta directa o con un trasbordo a Parque Industrial: de 4 celdas[^\n]*2 \(50 %\) llegan: 1 \(25 %\) con una ruta directa y 1 \(25 %\) con UN trasbordo/);
+    expect(r.texto).toMatch(/supuesto del proyecto/);
+    expect(r.texto).toMatch(/\(con un trasbordo\)/);
+    const sin = Asistente.responder({ tipo: 'ruta_zonas', criterios: [], destino: PI, viaje: {} }, { zonasRuta: { ...zonasRuta, trasbordo: false } });
+    expect(sin.texto).toMatch(/Zonas con ruta directa a Parque Industrial/);
+    expect(sin.texto).toMatch(/Para sumar los orígenes desde los que se llega con un trasbordo di, por ejemplo, «busco una zona con ruta con un trasbordo al Parque Industrial»/);
+  });
+});

@@ -247,17 +247,32 @@ const AsistenteUI = (() => {
 
   // ------------------------------------------------------------ Viaje en combi o bus
 
-  let cacheViaje = null; // promesa con las rutas de OpenStreetMap ya adaptadas (Viaje.desdeOsm)
+  let cacheViaje = null; // promesa con { rutas, paradas } de OpenStreetMap ya adaptadas (Viaje.desdeOsm y Viaje.paradasDeOsm)
   /** Las rutas para «¿qué combi me lleva…?»: ~3 MB de OpenStreetMap (el mismo archivo que usa la ficha). Si falla, null. */
-  function rutasParaViaje() {
+  function datosParaViaje() {
     if (!cacheViaje) {
       cacheViaje = (async () => {
-        const osm = await fetch(CONFIG.viaje.osmUrl).then((r) => (r.ok ? r.json() : null)).then((fc) => (fc ? Viaje.desdeOsm(fc) : [])).catch(() => []);
-        return osm.length ? osm : null;
+        const fc = await fetch(CONFIG.viaje.osmUrl).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+        const rutas = fc ? Viaje.desdeOsm(fc) : [];
+        return rutas.length ? { rutas, paradas: Viaje.paradasDeOsm(fc) } : null;
       })();
       cacheViaje.then((r) => { if (!r) cacheViaje = null; });
     }
     return cacheViaje;
+  }
+  async function rutasParaViaje() { const d = await datosParaViaje(); return d ? d.rutas : null; }
+  async function paradasParaViaje() { const d = await datosParaViaje(); return d ? d.paradas : []; }
+
+  /**
+   * Un punto de partida o de llegada para un distrito: el promedio de las celdas de 250 m de sus zonas construibles del plano (donde hay o puede haber viviendas), no el centro
+   * geométrico del polígono, que en Cerro Colorado o Yura cae en el desierto. Es aproximado y se dice. null si el distrito no tiene zonas construibles en el plano.
+   */
+  async function centroUrbanoDistrito(distrito) {
+    await Distritos.load().catch(() => null);
+    const { zonas } = await preparar();
+    const propias = celdasDe(zonas, true).filter((c) => Distritos.nombreDe(c.lat, c.lon) === distrito);
+    if (!propias.length) return null;
+    return { lat: propias.reduce((t, c) => t + c.lat, 0) / propias.length, lon: propias.reduce((t, c) => t + c.lon, 0) / propias.length, celdas: propias.length };
   }
 
   /** Lo que el chat necesita para viajar: las rutas, la distancia a pie y el destino fijado; para la búsqueda de zonas, además las celdas desde las que se llega. */
@@ -265,14 +280,15 @@ const AsistenteUI = (() => {
     const base = await contexto();
     const viajeRutas = await rutasParaViaje();
     const destino = intencion.destino || (api.obtenerDestino ? api.obtenerDestino() : null);
-    const c = { ...base, viajeRutas, caminarM: CONFIG.viaje.caminarM, tiempo: CONFIG.viaje.tiempo, destino };
+    const c = { ...base, viajeRutas, viajeParadas: await paradasParaViaje(), caminarM: CONFIG.viaje.caminarM, trasbordoM: CONFIG.viaje.trasbordoM, maxTrasbordos: CONFIG.viaje.maxTrasbordos, tiempo: CONFIG.viaje.tiempo, destino };
+    if (intencion.origen && intencion.origen.tipo === 'distrito') c.origenPunto = await centroUrbanoDistrito(intencion.origen.distrito);
     if (intencion.tipo === 'ruta_zonas' && viajeRutas && destino) {
       const { zonas } = await preparar();
       const celdas = celdasDe(zonas, false);
       const v = intencion.viaje || {};
-      const hits = Viaje.zonasConRutaDirecta(destino, viajeRutas, celdas, { caminarM: CONFIG.viaje.caminarM, linea: v.linea || null, texto: v.texto || null });
+      const hits = Viaje.zonasConRutaDirecta(destino, viajeRutas, celdas, { caminarM: CONFIG.viaje.caminarM, trasbordoM: CONFIG.viaje.trasbordoM, trasbordo: Boolean(intencion.trasbordo), linea: v.linea || null, texto: v.texto || null });
       await Distritos.load().catch(() => null);
-      c.zonasRuta = { ...Asistente.resumirRutaZonas(hits, celdas, (la, lo) => Distritos.nombreDe(la, lo), { separacionM: CONFIG.asistente.separacionPuntosM }), caminarM: CONFIG.viaje.caminarM, celdasConRuta: hits.map((h) => ({ lat: h.celda.lat, lon: h.celda.lon })) };
+      c.zonasRuta = { ...Asistente.resumirRutaZonas(hits, celdas, (la, lo) => Distritos.nombreDe(la, lo), { separacionM: CONFIG.asistente.separacionPuntosM }), caminarM: CONFIG.viaje.caminarM, trasbordo: Boolean(intencion.trasbordo), trasbordoM: CONFIG.viaje.trasbordoM, celdasConRuta: hits.map((h) => ({ lat: h.celda.lat, lon: h.celda.lon })) };
     }
     return c;
   }
@@ -669,5 +685,5 @@ const AsistenteUI = (() => {
     });
   }
 
-  return { iniciar, activar, rutasParaViaje, datosParaMapa, distanciaQuebradaM, publicarPunto };
+  return { iniciar, activar, rutasParaViaje, paradasParaViaje, centroUrbanoDistrito, datosParaMapa, distanciaQuebradaM, publicarPunto };
 })();

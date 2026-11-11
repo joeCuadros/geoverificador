@@ -148,6 +148,18 @@ describe('Viaje.prepararDestinoTrasbordo: lo que solo depende del destino se cal
   });
 });
 
+describe('Viaje.paradasDeOsm', () => {
+  it('toma de rutas_osm.geojson solo las paradas, con su nombre, su posición y las relaciones a las que sirven', () => {
+    const fc = { features: [
+      { type: 'Feature', properties: { tipo: 'parada', osm: 'node/1', nombre: 'Paucarpata', rutas: ['relation/7'] }, geometry: { type: 'Point', coordinates: [-71.5, -16.4] } },
+      { type: 'Feature', properties: { tipo: 'parada', osm: 'node/2' }, geometry: { type: 'Point', coordinates: [-71.5, -16.4] } },
+      { type: 'Feature', properties: { tipo: 'ruta', osm: 'relation/7' }, geometry: { type: 'LineString', coordinates: [[0, 0], [1, 1]] } },
+    ] };
+    expect(Viaje.paradasDeOsm(fc)).toEqual([{ osm: 'node/1', nombre: 'Paucarpata', lat: -16.4, lon: -71.5, rutas: ['relation/7'] }, { osm: 'node/2', nombre: null, lat: -16.4, lon: -71.5, rutas: [] }]);
+    expect(Viaje.paradasDeOsm(null)).toEqual([]);
+  });
+});
+
 describe('Viaje.rutasConTrasbordo: filtros y entradas inválidas', () => {
   it('sin origen o destino válidos, o sin rutas, no devuelve nada', () => {
     expect(Viaje.rutasConTrasbordo(null, DESTINO, [A, B], {}).trasbordos).toEqual([]);
@@ -168,5 +180,33 @@ describe('Viaje.rutasConTrasbordo: rapidez', () => {
     const ms = Date.now() - t0;
     expect(r.trasbordos.length).toBeGreaterThan(0);
     expect(ms).toBeLessThan(2000);
+  });
+});
+
+describe('Viaje.zonasConRutaDirecta con la opción de un trasbordo (opt-in)', () => {
+  const celdaA = { id: 'cerca de A', ...pt(300, 100) }; // solo se llega con un trasbordo
+  const celdaB = { id: 'cerca de B', ...pt(6100, -1000) }; // B pasa por el destino y por aquí: directa
+  const celdaLejos = { id: 'lejos', ...pt(300, 3000) };
+  const celdas = [celdaA, celdaB, celdaLejos];
+  it('por omisión (sin la opción) solo cuenta las directas, como antes', () => {
+    const h = Viaje.zonasConRutaDirecta(DESTINO, [A, B], celdas, { caminarM: 400 });
+    expect(h.map((x: any) => x.celda.id)).toEqual(['cerca de B']);
+  });
+  it('con la opción suma los orígenes desde los que se llega con un trasbordo, con su tipo, y deja fuera a los que no llegan', () => {
+    const h = Viaje.zonasConRutaDirecta(DESTINO, [A, B], celdas, { caminarM: 400, trasbordo: true, trasbordoM: 200 });
+    expect(Object.fromEntries(h.map((x: any) => [x.celda.id, x.tipo]))).toEqual({ 'cerca de A': 'trasbordo', 'cerca de B': 'directa' });
+    expect(h.find((x: any) => x.celda.id === 'cerca de A').caminarM).toBeLessThan(400);
+  });
+  it('respeta el sentido: con A al revés (el origen queda al final) ya no se llega con un trasbordo', () => {
+    const Ar = ruta('ar', [[...linea([0, 0], [6000, 0])].reverse()], { linea: 'C3' });
+    expect(Viaje.zonasConRutaDirecta(DESTINO, [Ar, B], [celdaA], { caminarM: 400, trasbordo: true })).toEqual([]);
+  });
+  it('coincide con la búsqueda de un origen (directas o rutasConTrasbordo) en varios orígenes', () => {
+    const cs = [celdaA, celdaB, celdaLejos, { id: 'al final de A', ...pt(5900, 30) }, { id: 'al sur', ...pt(300, -300) }];
+    const h = Viaje.zonasConRutaDirecta(DESTINO, [A, B], cs, { caminarM: 400, trasbordo: true });
+    for (const c of cs) {
+      const uno = Viaje.rutasDirectas(c, DESTINO, [A, B], { caminarM: 400 }).directas.length > 0 || Viaje.rutasConTrasbordo(c, DESTINO, [A, B], { tiempo: T }).trasbordos.length > 0;
+      expect(h.some((x: any) => x.celda.id === c.id)).toBe(uno);
+    }
   });
 });

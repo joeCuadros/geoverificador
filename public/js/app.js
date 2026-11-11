@@ -320,6 +320,15 @@
 
   // Tocar el mapa abre el panel «Buscar por punto». Con el reporte abierto el punto no cambia: se cambia con «Cambiar».
   map.on('click', (e) => {
+    if (state.eligiendoDestino) { // «Elegir en el mapa» de la tarjeta «Ir al trabajo»: este toque fija el destino, no el punto de casa
+      state.eligiendoDestino = false;
+      document.body.classList.remove('eligiendo-destino');
+      fijarDestino({ id: 'mapa', nombre: `Punto elegido en el mapa (${e.latlng.lat.toFixed(4).replace('.', ',')}; ${e.latlng.lng.toFixed(4).replace('.', ',')})`, lat: e.latlng.lat, lon: e.latlng.lng, nota: 'Punto que elegiste en el mapa como destino.' });
+      renderViaje();
+      const det = $('card-viaje') && $('card-viaje').querySelector('details');
+      if (det) det.open = true;
+      return;
+    }
     if (state.flujo.paso === 'reporte') { EspacioUI.abrirPunto(); return; }
     colocarPunto(e.latlng.lat, e.latlng.lng);
   });
@@ -1431,6 +1440,12 @@
   async function resolverDestinoEscrito(texto) {
     const conocido = Viaje.resolverDestino(texto, CONFIG.destinos);
     if (conocido) return conocido;
+    await Distritos.load().catch(() => null);
+    const dis = Distritos.buscarNombre(texto);
+    if (dis && dis.enDatos) {
+      const c = await AsistenteUI.centroUrbanoDistrito(dis.distrito);
+      if (c) return { id: 'distrito', nombre: `Distrito de ${Distritos.titulo(dis.distrito)}`, lat: c.lat, lon: c.lon, nota: `Punto aproximado: el centro de la zona urbana del distrito (promedio de sus zonas construibles del plano). Si vas a otra parte, escribe la dirección o elige el punto en el mapa.` };
+    }
     const { results } = await Services.geocode(texto, { bounded: true });
     if (!results.length) return null;
     const r = results[0];
@@ -1441,11 +1456,19 @@
     const host = $('viaje-resultado');
     const d = leerDestino();
     if (!host || !d || !state.point) return;
-    host.innerHTML = '<p class="zon-msg loading"><span class="spinner"></span>Buscando rutas directas…</p>';
+    host.innerHTML = '<p class="zon-msg loading"><span class="spinner"></span>Buscando rutas…</p>';
     const rutas = await AsistenteUI.rutasParaViaje();
     if (!rutas) { host.innerHTML = '<p class="zon-msg error">No pude leer los archivos de rutas.</p>'; return; }
     const resp = Asistente.responder({ tipo: 'viaje', criterios: [], destino: d, viaje: {} }, { punto: state.point, viajeRutas: rutas, caminarM: CONFIG.viaje.caminarM, tiempo: CONFIG.viaje.tiempo });
-    host.innerHTML = resp.texto.split('\n').map((l) => `<p class="${/^•/.test(l) ? 'var-explica' : 'var-meta'}">${esc(l)}</p>`).join('');
+    const lineas = resp.texto.split('\n');
+    const parrafo = (l) => `<p class="${/^•/.test(l) ? 'var-explica' : 'var-meta'}">${esc(l)}</p>`;
+    if (resp.resumen) {
+      // Lo que importa: la mejor opción en una frase; lo demás (alternativas, detalle por tramo, supuestos) plegado.
+      const extra = resp.alternativas && resp.alternativas.length ? `<p class="var-explica"><strong>Otras opciones:</strong></p><ul class="var-lista">${resp.alternativas.map((a) => `<li>${esc(a)}</li>`).join('')}</ul>` : '';
+      host.innerHTML = `<p class="var-mejor"><strong>Mejor opción:</strong> ${esc(resp.resumen)}</p><p class="var-meta">${esc(lineas[0])}</p>${extra}<details class="var-detalle-viaje"><summary>Ver el detalle, el tiempo y los supuestos</summary>${lineas.slice(2).map(parrafo).join('')}</details>`;
+    } else {
+      host.innerHTML = lineas.map(parrafo).join('');
+    }
     if (resp.mapa && resp.mapa.viaje) CapasUI.mostrar({ capas: [{ id: 'viaje', ...resp.mapa.viaje }], distrito: null, sectores: [] });
   }
 
@@ -1456,14 +1479,14 @@
     const opciones = CONFIG.destinos.map((x) => `<option value="${esc(x.nombre)}"></option>`).join('');
     host.innerHTML = tarjetaVariable(VARIABLES.viaje, 'INFORMATIVO', d ? `Destino: ${d.nombre}` : 'Elige dónde trabajas para ver qué combi te lleva',
       `<form class="viaje-form" id="viaje-form" novalidate>
-        <label for="viaje-destino" class="campo-label">¿Adónde vas? <small>(Parque Industrial, o escribe un lugar o dirección)</small></label>
+        <label for="viaje-destino" class="campo-label">¿Adónde vas? <small>(Parque Industrial, un distrito, un lugar o una dirección; o elígelo en el mapa)</small></label>
         <input id="viaje-destino" type="text" list="viaje-opciones" autocomplete="off" value="${esc(d ? d.nombre : '')}" placeholder="Parque Industrial">
         <datalist id="viaje-opciones">${opciones}</datalist>
-        <button type="submit" class="ghost">Ver rutas</button>${d ? ' <button type="button" class="ghost" id="viaje-quitar">Quitar destino</button>' : ''}
+        <button type="submit" class="ghost">Ver rutas</button> <button type="button" class="ghost" id="viaje-mapa">Elegir en el mapa</button>${d ? ' <button type="button" class="ghost" id="viaje-quitar">Quitar destino</button>' : ''}
         <p class="texto-error small" id="viaje-error" role="alert" hidden></p>
       </form>
       <div id="viaje-resultado" aria-live="polite"></div>
-      <p class="var-meta">Rutas de OpenStreetMap (ODbL); pasan a ${esc(fmtUmbral(CONFIG.viaje.caminarM))} o menos a pie de tu punto y del destino, con tu punto antes que el destino en el recorrido. Distancias en línea recta. No sé dónde se sube ni se baja ni si la ruta opera hoy.</p>`);
+      <p class="var-meta">Rutas de OpenStreetMap (ODbL); pasan a ${esc(fmtUmbral(CONFIG.viaje.caminarM))} o menos a pie de tu punto y del destino, con tu punto antes que el destino en el recorrido. Si no hay ninguna directa se ofrecen las de un trasbordo (las dos rutas a ${esc(fmtUmbral(CONFIG.viaje.trasbordoM))} o menos una de otra: ${esc(CONFIG.viaje.fuenteTrasbordo)}). Distancias en línea recta; los minutos son estimaciones. No sé dónde se sube ni se baja ni si la ruta opera hoy.</p>`);
     if (d) calcularViaje();
   }
 
@@ -1487,6 +1510,14 @@
     }
   });
   $('entorno').addEventListener('click', (e) => {
+    if (e.target.closest('#viaje-mapa')) {
+      state.eligiendoDestino = true;
+      document.body.classList.add('eligiendo-destino');
+      const err = $('viaje-error');
+      err.textContent = 'Toca en el mapa el lugar adonde vas.';
+      err.hidden = false;
+      return;
+    }
     if (!e.target.closest('#viaje-quitar')) return;
     fijarDestino(null);
     renderViaje();

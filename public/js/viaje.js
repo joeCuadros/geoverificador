@@ -45,6 +45,14 @@ const Viaje = (() => {
     }).filter((r) => r.partes.length);
   }
 
+  /** Las paradas de OpenStreetMap ligadas a rutas (public/data/rutas_osm.geojson), para el trasbordo: [{ osm, nombre, lat, lon, rutas: [id de relación] }]. */
+  function paradasDeOsm(fc) {
+    return ((fc && fc.features) || []).filter((f) => f && f.properties && f.properties.tipo === 'parada' && f.geometry && f.geometry.type === 'Point').map((f) => {
+      const [lon, lat] = f.geometry.coordinates;
+      return { osm: f.properties.osm, nombre: f.properties.nombre ?? null, lat, lon, rutas: Array.isArray(f.properties.rutas) ? f.properties.rutas : [] };
+    }).filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lon));
+  }
+
   // ------------------------------------------------------------ Trazado densificado
 
   const cache = new WeakMap(); // ruta → { lat, lon, s, bbox }
@@ -446,6 +454,53 @@ const Viaje = (() => {
     return { destino, max, bLat, bLon, casillas, rutas: usadas };
   }
 
+  /**
+   * Como indiceDestino, pero para llegar con UN trasbordo: de cada ruta A solo se guardan los puntos ANTERIORES al último en el que se puede hacer trasbordo a una ruta B que baja a
+   * `caminarM` o menos del destino (B distinta de A y con recorrido útil hasta ese punto). Se consulta con `alcanza`, igual que el índice de las directas.
+   */
+  function indiceDestinoTrasbordo(destino, rutas, opciones = {}) {
+    const prep = opciones.preparado && opciones.preparado.destino === destino ? opciones.preparado : prepararDestinoTrasbordo(destino, rutas, opciones);
+    const { max, trasM, kx, celda, clave, B, rejilla, lista } = prep;
+    const bLat = max / M_POR_GRADO;
+    const bLon = bLat / Math.max(0.2, Math.cos((destino.lat * Math.PI) / 180));
+    const casillas = new Map();
+    const usadas = [];
+    lista.forEach((r) => {
+      const t = densificar(r);
+      const cl = claveRuta(r);
+      const n = t.lat.length;
+      let jMax = -1;
+      for (let j = Math.floor((n - 1) / PASO_GRUESO) * PASO_GRUESO; j >= 0 && jMax < 0; j -= PASO_GRUESO) {
+        const ci = Math.floor((t.lon[j] * kx) / celda);
+        const cj = Math.floor((t.lat[j] * M_POR_GRADO) / celda);
+        for (let p = -1; p <= 1 && jMax < 0; p++) {
+          for (let q = -1; q <= 1 && jMax < 0; q++) {
+            const l = rejilla.get(clave(ci + p, cj + q));
+            if (!l) continue;
+            for (let z = 0; z < l.length; z += 2) {
+              const b = B[l[z]];
+              if (b.r === r || b.clave === cl) continue;
+              const kk = l[z + 1];
+              if (Math.hypot((b.t.lon[kk] - t.lon[j]) * kx, (b.t.lat[kk] - t.lat[j]) * M_POR_GRADO) > trasM) continue;
+              if (b.t.s[b.mejor[kk]] - b.t.s[kk] <= 0) continue;
+              jMax = j;
+              break;
+            }
+          }
+        }
+      }
+      if (jMax <= 0) return;
+      const idx = usadas.push(r) - 1;
+      for (let i = 0; i < jMax; i++) {
+        const c = `${Math.floor(t.lat[i] / bLat)},${Math.floor(t.lon[i] / bLon)}`;
+        let l = casillas.get(c);
+        if (!l) { l = []; casillas.set(c, l); }
+        l.push(idx, t.lat[i], t.lon[i]);
+      }
+    });
+    return { destino, max, bLat, bLon, casillas, rutas: usadas };
+  }
+
   const claveRuta = (r) => [codigoLinea(r.linea), norm(r.ramal), norm(r.desde), norm(r.hasta)].join('|');
 
   /** ¿Se llega al destino del índice desde `origen`? { cumple, caminarM (al punto más cercano de la mejor ruta), ruta, n (rutas distintas que sirven) }. */
@@ -477,10 +532,14 @@ const Viaje = (() => {
   /** De una lista de celdas { lat, lon, … } las que alcanzan el destino sin transbordo: [{ celda, caminarM, ruta, n }]. */
   function zonasConRutaDirecta(destino, rutas, celdas, opciones = {}) {
     const idx = indiceDestino(destino, rutas, opciones);
+    const idxT = opciones.trasbordo ? indiceDestinoTrasbordo(destino, rutas, opciones) : null; // opt-in: también con un trasbordo
     const out = [];
     (celdas || []).forEach((celda) => {
       const a = alcanza(idx, celda);
-      if (a.cumple) out.push({ celda, caminarM: a.caminarM, ruta: a.ruta, n: a.n });
+      if (a.cumple) { out.push({ celda, caminarM: a.caminarM, ruta: a.ruta, n: a.n, tipo: 'directa' }); return; }
+      if (!idxT) return;
+      const t = alcanza(idxT, celda);
+      if (t.cumple) out.push({ celda, caminarM: t.caminarM, ruta: t.ruta, n: t.n, tipo: 'trasbordo' });
     });
     return out;
   }
@@ -532,7 +591,7 @@ const Viaje = (() => {
     return `${r.linea || 'Ruta'}${ramal}${sentido}${op ? ` (${op})` : ''}`;
   }
 
-  return { CAMINAR_M, PASO_M, TRASBORDO_M, MAX_TRASBORDOS, desdeOsm, rutasDirectas, rutasConTrasbordo, prepararDestinoTrasbordo, estimarTiempoTrasbordo, estimarTiempo, cercanas, indiceDestino, alcanza, zonasConRutaDirecta, unir, resolverDestino, textoRuta, codigoLinea, metros };
+  return { CAMINAR_M, PASO_M, TRASBORDO_M, MAX_TRASBORDOS, desdeOsm, paradasDeOsm, rutasDirectas, rutasConTrasbordo, prepararDestinoTrasbordo, estimarTiempoTrasbordo, estimarTiempo, cercanas, indiceDestino, indiceDestinoTrasbordo, alcanza, zonasConRutaDirecta, unir, resolverDestino, textoRuta, codigoLinea, metros };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = Viaje;
