@@ -705,6 +705,37 @@ const dentro = (x, y, anillos) => vueltas(x, y, anillos[0]) && !anillos.slice(1)
   console.log(`INFO  Electricidad: ${f.length} concesiones (${Object.entries(m.conteo_por_concesionaria).map(([k, v]) => `${k} ${v}`).join(', ')}); descargado el ${m.fecha_descarga}; dentro de una concesión: ${dentroN} de ${N_E} puntos al azar de la caja`);
 }
 
+// B7d. Concesiones mineras (INGEMMET, Catastro Minero; scripts/descargar-concesiones-mineras.mjs): el archivo y el módulo del navegador frente al número de vueltas.
+// Es INFORMATIVO: una concesión es un derecho sobre los minerales, no minería en el predio. No se guarda el nombre del titular.
+{
+  const CalcM = createRequire(import.meta.url)('../public/js/calculos.js');
+  const fc = json('data/mineria/concesiones_mineras.geojson');
+  const f = fc.features;
+  const m = fc.metadata || {};
+  const polis = (g) => (g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : []);
+  const CAMPOS_M = ['codigo', 'nombre', 'hectareas', 'estado', 'estado_detalle', 'sustancia', 'explotacion_o_exploracion', 'distritos', 'fecha_denuncio', 'actualizado'];
+  comprobar('Minería: metadata con la fuente (INGEMMET), el enlace del servicio, la fecha de descarga, el aviso de que es referencial y lo que NO dice',
+    /INGEMMET/.test(m.fuente || '') && /^https:\/\/geocatmin\.ingemmet\.gob\.pe\/.*MapServer\/0$/.test(m.url_servicio || '') && /^\d{4}-\d{2}-\d{2}$/.test(m.fecha_descarga || '') && /referencial/.test(m.aviso_del_servicio || '') && /NO dice que haya minería/.test(m.no_dice || '') && /sin umbral/i.test(m.informativo || ''));
+  comprobar('Minería: metadata.registros y conteo_por_estado coinciden con el número de features', m.registros === f.length && f.length > 0 && Object.values(m.conteo_por_estado || {}).reduce((t, n) => t + n, 0) === f.length);
+  comprobar('Minería: cada concesión trae todos sus campos, con código único y estado conocido, y NINGUNA trae el nombre del titular', f.every((x) => CAMPOS_M.every((c) => c in x.properties) && ['TITULADO', 'EN TRÁMITE', 'EXTINGUIDO', 'OTRO'].includes(x.properties.estado) && !('TIT_CONCES' in x.properties) && !('titular' in x.properties)) && new Set(f.map((x) => x.properties.codigo)).size === f.length);
+  comprobar('Minería: solo polígonos con anillos cerrados de 4 o más puntos, en coordenadas WGS84 cerca de Arequipa', f.every((x) => polis(x.geometry).length > 0 && polis(x.geometry).every((p) => p.every((a) => a.length >= 4 && a[0][0] === a.at(-1)[0] && a[0][1] === a.at(-1)[1] && a.every(([lon, lat]) => lon > -73 && lon < -70 && lat > -17.5 && lat < -15.5)))));
+  const plaza = CalcM.evaluarMinera({ lat: -16.3989, lon: -71.5369 }, f, {});
+  comprobar('Minería: la Plaza de Armas de Arequipa no cae en una concesión minera y hay una a distancia finita (módulo del navegador y número de vueltas coinciden)', plaza.dentro === false && Number.isFinite(plaza.distanciaM) && !f.some((x) => x.properties.estado !== 'EXTINGUIDO' && polis(x.geometry).some((p) => dentro(-71.5369, -16.3989, p))));
+  let discrepan = 0;
+  let dentroN = 0;
+  const N_M = 400;
+  for (let i = 0; i < N_M; i++) {
+    const lon = -71.75 + azar() * 0.4;
+    const lat = -16.6 + azar() * 0.4;
+    const nav = CalcM.evaluarMinera({ lat, lon }, f, {}).dentro;
+    const ref = f.some((x) => x.properties.estado !== 'EXTINGUIDO' && polis(x.geometry).some((p) => dentro(lon, lat, p)));
+    if (ref) dentroN++;
+    if (nav !== ref) discrepan++;
+  }
+  comprobar(`Minería: dentro / fuera de una concesión (sin las extinguidas) en ${N_M} puntos al azar de la caja de Arequipa coincide con el número de vueltas`, discrepan === 0 && dentroN > 0 && dentroN < N_M, `${dentroN} dentro, ${discrepan} discrepancias`);
+  console.log(`INFO  Minería: ${f.length} concesiones (${Object.entries(m.conteo_por_estado).map(([k, v]) => `${k} ${v}`).join(', ')}); descargado el ${m.fecha_descarga}; dentro de una concesión viva: ${dentroN} de ${N_M} puntos al azar de la caja`);
+}
+
 // B7c. Censo por manzana (INEI, REDATAM 2017; scripts/descargar-censo-servicios.mjs): los archivos y el módulo del navegador frente al número de vueltas.
 // Es INFORMATIVO: son cifras de la manzana en 2017, no de un predio.
 {
