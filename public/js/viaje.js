@@ -168,6 +168,28 @@ const Viaje = (() => {
     return out;
   }
 
+  /**
+   * Tiempo APROXIMADO de un resultado de rutasDirectas (o de unir), con los supuestos de CONFIG.viaje.tiempo ({ velocidadPieMs, factorRodeo }):
+   *   caminarMin   (caminata de las dos puntas × factorRodeo, si hay) / velocidadPieMs; null sin velocidad
+   *   busMin       la duración que OSM etiqueta para toda la ruta × (distancia recorrida / longitud de la ruta); null si la ruta no la trae (p. ej. solo SmartBus)
+   *   totalSinEsperaMin  caminarMin + busMin; null si falta alguno (no se inventa)
+   *   esperaMediaMin     la mitad del intervalo etiquetado (llegando sin mirar el horario); aparte, no se suma
+   */
+  function estimarTiempo(item, tiempo) {
+    const t = tiempo || {};
+    const rodeo = Number.isFinite(t.factorRodeo) && t.factorRodeo > 0 ? t.factorRodeo : 1;
+    const caminarMin = Number.isFinite(t.velocidadPieMs) && t.velocidadPieMs > 0 ? ((item.caminarOrigenM + item.caminarDestinoM) * rodeo) / t.velocidadPieMs / 60 : null;
+    const r = item.ruta || {};
+    const busMin = Number.isFinite(r.duracionMin) && r.duracionMin > 0 && item.longitudM > 0 ? (r.duracionMin * item.viajeM) / item.longitudM : null;
+    return {
+      caminarMin,
+      busMin,
+      totalSinEsperaMin: caminarMin !== null && busMin !== null ? caminarMin + busMin : null,
+      esperaMediaMin: Number.isFinite(r.intervaloMin) && r.intervaloMin > 0 ? r.intervaloMin / 2 : null,
+      fuenteBus: busMin !== null ? 'duración que etiqueta OpenStreetMap, prorrateada por la distancia' : null,
+    };
+  }
+
   /** Las rutas que pasan a `caminarM` o menos de un punto, una por línea + ramal + sentido: [{ ruta, distanciaM }] (para decir «pasan N cerca del destino»). */
   function cercanas(punto, rutas, opciones = {}) {
     const max = opciones.caminarM ?? CAMINAR_M;
@@ -318,7 +340,7 @@ const Viaje = (() => {
     return `${r.linea || 'Ruta'}${ramal}${sentido}${op ? ` (${op})` : ''}`;
   }
 
-  return { CAMINAR_M, PASO_M, desdeOsm, desdeSmartbus, rutasDirectas, cercanas, indiceDestino, alcanza, zonasConRutaDirecta, unir, resolverDestino, textoRuta, codigoLinea, metros };
+  return { CAMINAR_M, PASO_M, desdeOsm, desdeSmartbus, rutasDirectas, estimarTiempo, cercanas, indiceDestino, alcanza, zonasConRutaDirecta, unir, resolverDestino, textoRuta, codigoLinea, metros };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = Viaje;

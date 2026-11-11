@@ -176,3 +176,29 @@ describe('Viaje.indiceDestino y Viaje.alcanza: desde qué orígenes se llega al 
     expect(r[0].caminarM).toBeCloseTo(100, -1);
   });
 });
+
+describe('Viaje.estimarTiempo: tiempo aproximado, con sus supuestos', () => {
+  const item = { caminarOrigenM: 300, caminarDestinoM: 150, viajeM: 5000, longitudM: 20000, ruta: { duracionMin: 60, intervaloMin: 10 } };
+  const T = { velocidadPieMs: 1.0, factorRodeo: null };
+  it('a pie: la distancia en línea recta de las dos puntas a la velocidad dada; en bus: la duración que etiqueta OSM para toda la ruta, prorrateada por la distancia recorrida', () => {
+    const t = Viaje.estimarTiempo(item, T);
+    expect(t.caminarMin).toBeCloseTo(7.5, 5); // 450 m a 1 m/s
+    expect(t.busMin).toBeCloseTo(15, 5); // 60 min × 5 / 20 km
+    expect(t.totalSinEsperaMin).toBeCloseTo(22.5, 5);
+    expect(t.esperaMediaMin).toBe(5); // la mitad del intervalo de 10 min si llegas sin mirar el horario
+    expect(t.fuenteBus).toMatch(/OpenStreetMap/);
+  });
+  it('con un factor de rodeo (si hubiera una fuente) alarga solo la caminata', () => {
+    const t = Viaje.estimarTiempo(item, { velocidadPieMs: 1.0, factorRodeo: 1.5 });
+    expect(t.caminarMin).toBeCloseTo(11.25, 5);
+    expect(t.busMin).toBeCloseTo(15, 5);
+  });
+  it('sin la duración de la ruta (SmartBus) no inventa el tiempo en bus ni el total; sin velocidad a pie, tampoco la caminata', () => {
+    const sb = { ...item, ruta: { duracionMin: null, intervaloMin: null } };
+    const t = Viaje.estimarTiempo(sb, T);
+    expect(t).toMatchObject({ busMin: null, totalSinEsperaMin: null, esperaMediaMin: null });
+    expect(t.caminarMin).toBeCloseTo(7.5, 5);
+    expect(Viaje.estimarTiempo(item, { velocidadPieMs: null, factorRodeo: null })).toMatchObject({ caminarMin: null, totalSinEsperaMin: null });
+    expect(Viaje.estimarTiempo(item, null)).toMatchObject({ caminarMin: null, busMin: 15, totalSinEsperaMin: null });
+  });
+});

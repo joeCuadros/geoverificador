@@ -225,6 +225,18 @@ const CONFIG = {
     caminarM: 400,
     osmUrl: 'data/rutas_osm.geojson',
     fuenteOsm: 'OpenStreetMap (ODbL), relaciones route=bus de la red SIT',
+    // Tiempo APROXIMADO del viaje, con sus supuestos a la vista. No hay una medición de velocidades de bus ni de peatones en Arequipa que se pueda citar:
+    //  - a pie: la velocidad de diseño de la MUTCD (EE. UU., 2009, sección 4E.06: 3,5 pies/s = 1,07 m/s), prudente, sobre la distancia en línea recta;
+    //    `factorRodeo` (cuánto más largo es el recorrido real por calles que la recta) queda en null: no hay una fuente aplicable a Arequipa y no se inventa uno;
+    //  - en bus: la duración que OpenStreetMap etiqueta (`duration`, minutos) para toda la ruta, prorrateada por la distancia recorrida (velocidad uniforme);
+    //  - espera: la mitad del intervalo etiquetado (`interval`), si llegas sin mirar el horario; se da aparte y no se suma.
+    tiempo: {
+      velocidadPieMs: 1.07,
+      factorRodeo: null,
+      fuentePie: 'MUTCD 2009 (EE. UU.), sección 4E.06: velocidad de caminata de diseño de 3,5 pies/s (1,07 m/s); es una velocidad de diseño prudente, no una medición en Arequipa',
+      fuenteRodeo: 'sin factor: no hay una fuente aplicable a Arequipa; el recorrido real a pie por calles es más largo que la línea recta',
+      fuenteBus: 'la duración que OpenStreetMap etiqueta (duration, en minutos) para toda la ruta, prorrateada por la distancia recorrida; supone velocidad uniforme y es una etiqueta de la comunidad, no una medición oficial',
+    },
   },
 
   // Destinos con nombre que el asistente reconoce («trabajo en el Parque Industrial»). El punto es el de OpenStreetMap que se cita; `nota` dice qué punto es.
@@ -233,7 +245,7 @@ const CONFIG = {
     {
       id: 'parque-industrial', nombre: 'Parque Industrial', tipo: 'zona industrial', alias: ['parque industrial', 'parque industrial de arequipa', 'zona industrial'],
       lat: -16.4179, lon: -71.5497, osm: 'way/491224938',
-      nota: 'Punto de referencia: el centro del polígono «Parque Industrial» de OpenStreetMap (way/491224938), dentro de la zona industrial entre Av. Alfonso Ugarte y Av. Jesús (Aceros Arequipa, Celima, Alicorp…). La zona mide varios cientos de metros: si trabajas en otra parte de ella, fija el punto en la ficha.',
+      nota: 'Punto de referencia: el centro del polígono «Parque Industrial» de OpenStreetMap (way/491224938), dentro de la zona industrial (Aceros Arequipa, Celima, Alicorp…). La zona mide varios cientos de metros: si trabajas en otra parte de ella, fija el punto en la ficha.',
     },
     {
       id: 'ciudad-blanca', nombre: 'Ciudad Blanca', tipo: 'barrio', alias: ['ciudad blanca'],

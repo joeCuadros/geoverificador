@@ -262,7 +262,7 @@ const AsistenteUI = (() => {
     const base = await contexto();
     const viajeRutas = await rutasParaViaje();
     const destino = intencion.destino || (api.obtenerDestino ? api.obtenerDestino() : null);
-    const c = { ...base, viajeRutas, caminarM: CONFIG.viaje.caminarM, destino };
+    const c = { ...base, viajeRutas, caminarM: CONFIG.viaje.caminarM, tiempo: CONFIG.viaje.tiempo, destino };
     if (intencion.tipo === 'ruta_zonas' && viajeRutas && destino) {
       const { zonas } = await preparar();
       const celdas = celdasDe(zonas, false);

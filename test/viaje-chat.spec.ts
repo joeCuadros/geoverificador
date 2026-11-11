@@ -207,3 +207,45 @@ describe('Capas: la capa «viaje» dibuja los tramos de subida a bajada, el orig
     expect(c.limites).not.toBeNull();
   });
 });
+
+// ------------------------------------------------------------------------------ Tiempo de viaje
+
+describe('tiempo de viaje: aproximado, con sus supuestos y sin inventar lo que falta', () => {
+  const TIEMPO = CONFIG.viaje.tiempo;
+  const resp = (c: object = {}) => Asistente.responder({ tipo: 'viaje', criterios: [], destino: PI, viaje: {} }, { ...ctxBase, tiempo: TIEMPO, ...c }).texto;
+
+  it('CONFIG.viaje.tiempo: velocidad a pie con su fuente, sin factor de rodeo (no hay una fuente aplicable a Arequipa) y de dónde sale el tiempo en bus', () => {
+    expect(TIEMPO.velocidadPieMs).toBeCloseTo(1.07, 2);
+    expect(TIEMPO.factorRodeo).toBeNull();
+    expect(TIEMPO.fuentePie).toMatch(/MUTCD/);
+    expect(TIEMPO.fuenteBus).toMatch(/OpenStreetMap/);
+  });
+  it('cada ruta con duración de OSM trae «unos N min» (a pie + en bus) sin contar la espera, y la espera media aparte', () => {
+    const t = resp();
+    const linea = t.split('\n').find((l: string) => /^• C10 ·/.test(l));
+    expect(linea).toMatch(/≈ \d+ min en total sin contar la espera/);
+    expect(linea).toMatch(/≈ \d+ min a pie/);
+    expect(linea).toMatch(/≈ \d+ min en bus/);
+    expect(linea).toMatch(/espera media de ≈ 2,5 min/);
+  });
+  it('dice los supuestos: velocidad a pie y su fuente, línea recta (el recorrido real a pie es más largo), y que el tiempo en bus es la duración de OSM prorrateada', () => {
+    const t = resp();
+    expect(t).toMatch(/1,07 m\/s/);
+    expect(t).toMatch(/MUTCD/);
+    expect(t).toMatch(/más largo/);
+    expect(t).toMatch(/prorrate/i);
+    expect(t).toMatch(/no es una medición/i);
+  });
+  it('una ruta solo de SmartBus no tiene duración: se da la distancia y la caminata, sin total', () => {
+    const solo = ruta('smartbus/9', [traza([-6000, 0], [0, 100], [2000, 100])], { fuente: 'SmartBus', linea: 'C5', ramal: 'Z', desde: 'A', hasta: 'B', duracionMin: null, intervaloMin: null });
+    const t = resp({ viajeRutas: [solo] });
+    const linea = t.split('\n').find((l: string) => /^• C5/.test(l));
+    expect(linea).not.toMatch(/en total/);
+    expect(linea).toMatch(/≈ \d+ min a pie/);
+    expect(linea).toMatch(/sin duración publicada/);
+  });
+  it('sin la configuración de tiempo (o sin ella) la respuesta es la de antes: distancias, sin minutos', () => {
+    const t = Asistente.responder({ tipo: 'viaje', criterios: [], destino: PI, viaje: {} }, ctxBase).texto;
+    expect(t).not.toMatch(/≈ \d+ min/);
+  });
+});

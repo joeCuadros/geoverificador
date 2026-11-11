@@ -1385,7 +1385,7 @@
     host.innerHTML = '<p class="zon-msg loading"><span class="spinner"></span>Buscando rutas directas…</p>';
     const rutas = await AsistenteUI.rutasParaViaje();
     if (!rutas) { host.innerHTML = '<p class="zon-msg error">No pude leer los archivos de rutas.</p>'; return; }
-    const resp = Asistente.responder({ tipo: 'viaje', criterios: [], destino: d, viaje: {} }, { punto: state.point, viajeRutas: rutas, caminarM: CONFIG.viaje.caminarM });
+    const resp = Asistente.responder({ tipo: 'viaje', criterios: [], destino: d, viaje: {} }, { punto: state.point, viajeRutas: rutas, caminarM: CONFIG.viaje.caminarM, tiempo: CONFIG.viaje.tiempo });
     host.innerHTML = resp.texto.split('\n').map((l) => `<p class="${/^•/.test(l) ? 'var-explica' : 'var-meta'}">${esc(l)}</p>`).join('');
     if (resp.mapa && resp.mapa.viaje) CapasUI.mostrar({ capas: [{ id: 'viaje', ...resp.mapa.viaje }], distrito: null, sectores: [] });
   }

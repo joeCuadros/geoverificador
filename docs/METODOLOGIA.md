@@ -455,6 +455,17 @@ La variable V4 sigue siendo el **paradero más cercano de OpenStreetMap** (§6).
 
 **Verificación.** `pnpm datos:verificar` comprueba el archivo (procedencia, ODbL, trazados dentro de Arequipa, sin saltos de más de 300 m entre vías ni tramos rectos de más de 1 km, minutos enteros), que casi todas las rutas de OSM estén también en SmartBus y las mismas líneas, y un viaje conocido (de Paucarpata al Parque Industrial hay rutas directas de las dos fuentes); `test/rutas-osm.spec.ts`, `test/viaje.spec.ts` y `test/viaje-chat.spec.ts` prueban el ensamblado, la búsqueda de rutas directas (sentido, 400 m, bucles, partes, filtros), el asistente, la búsqueda de zonas y la capa del mapa.
 
+### 6c.2 Tiempo aproximado del viaje (informativo)
+
+Cada ruta directa trae un **tiempo aproximado**, con los supuestos a la vista (`CONFIG.viaje.tiempo`, `Viaje.estimarTiempo`): **no es una medición** y no hay en Arequipa una fuente de velocidades de bus ni de peatones que se pueda citar, así que se usa lo siguiente y se dice:
+
+- **A pie:** la distancia en línea recta de las dos puntas a la velocidad de diseño de la MUTCD (EE. UU., 2009, sección 4E.06: 3,5 pies/s = **1,07 m/s**, que es prudente: una velocidad de diseño para quienes caminan más lento, no una medición en Arequipa). **No se aplica un factor de rodeo** (cuánto más largo es el recorrido real por calles que la línea recta): Boeing (2019, «The Morphology and Circuity of Walkable and Drivable Street Networks», arXiv:1708.00836, 40 ciudades de EE. UU. con OpenStreetMap) muestra que las redes de calles suelen ser más largas que la recta y que la caminata tiene menos rodeo que el auto, pero no da un factor que valga para Arequipa; `factorRodeo` queda en `null` y el texto dice que el recorrido real es más largo. No se calculó la distancia por la red de calles de OpenStreetMap (requeriría un grafo peatonal que el proyecto no tiene).
+- **En bus:** la **duración que OpenStreetMap etiqueta** (`duration`, minutos; las 241 rutas la traen, con fecha de reconocimiento en `survey:date`) **para toda la ruta**, prorrateada por la distancia que recorres sobre la longitud total del trazado. Supone velocidad uniforme; es una etiqueta de la comunidad. Una ruta que solo está en SmartBus no tiene duración: se da la caminata y la distancia, sin total. Como referencia, las duraciones etiquetadas implican velocidades comerciales de unos 15 a 16 km/h en el C6 (12,6 km en 50 min).
+- **Espera:** la mitad del intervalo (`interval`) etiquetado por OpenStreetMap si llegas al paradero sin mirar horarios (llegadas al azar); se da **aparte** y no se suma al total.
+- **Total:** caminata + bus, **sin la espera**, solo si hay duración de la ruta. No incluye transbordos, semáforos ni el tiempo en subir y bajar.
+
+Ejemplo (Paucarpata → Parque Industrial, 2026-11-10): C6 B2, 25 + 37 m a pie (≈ 1 min), 7,7 km en bus (≈ 30 min de los 50 min etiquetados para 12,6 km): ≈ 31 min sin la espera de ≈ 2 min; C10, 295 + 39 m a pie (≈ 5 min) y 8,5 km (≈ 32 min): ≈ 37 min. `test/viaje.spec.ts` y `test/viaje-chat.spec.ts` prueban las cuentas, que no se invente lo que falta y que los supuestos salgan en la respuesta.
+
 ## 7. Trazabilidad: de dónde sale cada cifra de la pantalla
 
 | Lo que se ve | Cómo se obtiene | Archivo / código |

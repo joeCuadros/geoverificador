@@ -1100,11 +1100,22 @@ const Asistente = (() => {
     const lineas = [cabecera];
     if (u.length) {
       lineas.push(`Hay ${plural(u.length, 'ruta directa', 'rutas directas')} (pasan a ${fmtDist(max)} o menos a pie de tu punto y del destino, con tu punto antes que el destino en el recorrido):`);
+      const min = (m) => `≈ ${Math.max(1, Math.round(m))} min`;
+      const dec = (m) => String(Number.isInteger(m) ? m : m.toFixed(1)).replace('.', ',');
       u.slice(0, 6).forEach((x) => {
         const r0 = x.ruta;
         const osm = r0.duracionMin ? ` OSM etiqueta ${r0.duracionMin} min de punta a punta${r0.intervaloMin ? `, cada ${r0.intervaloMin} min` : ''}.` : '';
-        lineas.push(`• ${V.textoRuta(r0)}: caminas ${Math.round(x.caminarOrigenM)} m al subir y ${Math.round(x.caminarDestinoM)} m al bajar, ${kmTxt(x.viajeM)} en bus. Fuente: ${fuentesTxt(x.fuentes)}.${osm}`);
+        let tiempo = '';
+        if (c.tiempo) {
+          const t = V.estimarTiempo(x, c.tiempo);
+          const partes = [t.caminarMin !== null ? `${min(t.caminarMin)} a pie` : null, t.busMin !== null ? `${min(t.busMin)} en bus` : null].filter(Boolean);
+          tiempo = t.totalSinEsperaMin !== null
+            ? ` Tiempo aproximado: ${min(t.totalSinEsperaMin)} en total sin contar la espera (${partes.join(' + ')})${t.esperaMediaMin !== null ? `; espera media de ≈ ${dec(t.esperaMediaMin)} min si llegas sin mirar el horario` : ''}.`
+            : t.caminarMin !== null ? ` Caminata ${min(t.caminarMin)} a pie; sin duración publicada para esta ruta, no estimo el tiempo en bus.` : '';
+        }
+        lineas.push(`• ${V.textoRuta(r0)}: caminas ${Math.round(x.caminarOrigenM)} m al subir y ${Math.round(x.caminarDestinoM)} m al bajar, ${kmTxt(x.viajeM)} en bus. Fuente: ${fuentesTxt(x.fuentes)}.${osm}${tiempo}`);
       });
+      if (c.tiempo && c.tiempo.velocidadPieMs) lineas.push(`Los minutos son una aproximación, no es una medición: a pie, ${String(c.tiempo.velocidadPieMs).replace('.', ',')} m/s en línea recta (${c.tiempo.fuentePie}; el recorrido real por calles es más largo); en bus, ${c.tiempo.fuenteBus}.`);
       if (u.length > 6) lineas.push(`Y ${u.length - 6} más.`);
     } else {
       const cd = V.cercanas(dest, c.viajeRutas, filtro).length;
