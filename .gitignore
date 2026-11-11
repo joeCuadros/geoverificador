@@ -79,3 +79,5 @@ qwen-image-ui/
 /.cache-censo/
 /.cache-rutas-osm/
 /.cache-mineria/
+/.cache-acopio/
+/.cache-sunass/
