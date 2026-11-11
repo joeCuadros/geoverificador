@@ -1,0 +1,1483 @@
+{
+ "generado": "2026-11-11",
+ "pasoM": 500,
+ "origenes": 717,
+ "caminarM": 400,
+ "trasbordoM": 200,
+ "destinos": {
+  "parque-industrial": {
+   "nombre": "Parque Industrial",
+   "directa": 220,
+   "trasbordo": 295,
+   "ninguna": 202,
+   "pctDirecta": 31,
+   "pctConSolucion": 72,
+   "porDistrito": {
+    "QUEQUEÑA": {
+     "total": 8,
+     "directa": 0,
+     "trasbordo": 7,
+     "ninguna": 1,
+     "pctConSolucion": 88
+    },
+    "MOLLEBAYA": {
+     "total": 25,
+     "directa": 0,
+     "trasbordo": 12,
+     "ninguna": 13,
+     "pctConSolucion": 48
+    },
+    "SOCABAYA": {
+     "total": 24,
+     "directa": 1,
+     "trasbordo": 23,
+     "ninguna": 0,
+     "pctConSolucion": 100
+    },
+    "UCHUMAYO": {
+     "total": 8,
+     "directa": 4,
+     "trasbordo": 0,
+     "ninguna": 4,
+     "pctConSolucion": 50
+    },
+    "CHARACATO": {
+     "total": 26,
+     "directa": 0,
+     "trasbordo": 24,
+     "ninguna": 2,
+     "pctConSolucion": 92
+    },
+    "SABANDIA": {
+     "total": 20,
+     "directa": 0,
+     "trasbordo": 8,
+     "ninguna": 12,
+     "pctConSolucion": 40
+    },
+    "TIABAYA": {
+     "total": 11,
+     "directa": 8,
+     "trasbordo": 1,
+     "ninguna": 2,
+     "pctConSolucion": 82
+    },
+    "JACOBO HUNTER": {
+     "total": 20,
+     "directa": 14,
+     "trasbordo": 5,
+     "ninguna": 1,
+     "pctConSolucion": 95
+    },
+    "JOSE LUIS BUSTAMANTE Y RIVERO": {
+     "total": 33,
+     "directa": 18,
+     "trasbordo": 15,
+     "ninguna": 0,
+     "pctConSolucion": 100
+    },
+    "SACHACA": {
+     "total": 20,
+     "directa": 19,
+     "trasbordo": 1,
+     "ninguna": 0,
+     "pctConSolucion": 100
+    },
+    "PAUCARPATA": {
+     "total": 41,
+     "directa": 37,
+     "trasbordo": 4,
+     "ninguna": 0,
+     "pctConSolucion": 100
+    },
+    "AREQUIPA": {
+     "total": 41,
+     "directa": 27,
+     "trasbordo": 14,
+     "ninguna": 0,
+     "pctConSolucion": 100
+    },
+    "MARIANO MELGAR": {
+     "total": 21,
+     "directa": 8,
+     "trasbordo": 13,
+     "ninguna": 0,
+     "pctConSolucion": 100
+    },
+    "CERRO COLORADO": {
+     "total": 217,
+     "directa": 56,
+     "trasbordo": 96,
+     "ninguna": 65,
+     "pctConSolucion": 70
+    },
+    "YANAHUARA": {
+     "total": 10,
+     "directa": 1,
+     "trasbordo": 9,
+     "ninguna": 0,
+     "pctConSolucion": 100
+    },
+    "MIRAFLORES": {
+     "total": 18,
+     "directa": 8,
+     "trasbordo": 8,
+     "ninguna": 2,
+     "pctConSolucion": 89
+    },
+    "CAYMA": {
+     "total": 26,
+     "directa": 0,
+     "trasbordo": 25,
+     "ninguna": 1,
+     "pctConSolucion": 96
+    },
+    "YURA": {
+     "total": 101,
+     "directa": 8,
+     "trasbordo": 9,
+     "ninguna": 84,
+     "pctConSolucion": 17
+    },
+    "ALTO SELVA ALEGRE": {
+     "total": 47,
+     "directa": 11,
+     "trasbordo": 21,
+     "ninguna": 15,
+     "pctConSolucion": 68
+    }
+   },
+   "motivos": {
+    "sin_ruta_cerca_del_origen": 200,
+    "sin_trasbordo": 2
+   },
+   "tiempoMs": {
+    "clasificar": {
+     "p95": 33.47,
+     "max": 94.7,
+     "media": 9.65
+    },
+    "busquedaCompleta": {
+     "p95": 51.5,
+     "max": 71.75,
+     "muestras": 400
+    }
+   },
+   "sinSolucion": [
+    {
+     "distrito": "YURA",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 84,
+     "ejemplo": {
+      "lat": -16.38641,
+      "lon": -71.65392
+     }
+    },
+    {
+     "distrito": "CERRO COLORADO",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 63,
+     "ejemplo": {
+      "lat": -16.390909999999998,
+      "lon": -71.63985000000001
+     }
+    },
+    {
+     "distrito": "ALTO SELVA ALEGRE",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 15,
+     "ejemplo": {
+      "lat": -16.35943,
+      "lon": -71.53209
+     }
+    },
+    {
+     "distrito": "MOLLEBAYA",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 13,
+     "ejemplo": {
+      "lat": -16.51232,
+      "lon": -71.49908
+     }
+    },
+    {
+     "distrito": "SABANDIA",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 12,
+     "ejemplo": {
+      "lat": -16.48084,
+      "lon": -71.51319000000001
+     }
+    },
+    {
+     "distrito": "UCHUMAYO",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 4,
+     "ejemplo": {
+      "lat": -16.48534,
+      "lon": -71.61166
+     }
+    },
+    {
+     "distrito": "CHARACATO",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 2,
+     "ejemplo": {
+      "lat": -16.48534,
+      "lon": -71.5085
+     }
+    },
+    {
+     "distrito": "TIABAYA",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 2,
+     "ejemplo": {
+      "lat": -16.47634,
+      "lon": -71.5976
+     }
+    },
+    {
+     "distrito": "MIRAFLORES",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 2,
+     "ejemplo": {
+      "lat": -16.390909999999998,
+      "lon": -71.49924
+     }
+    },
+    {
+     "distrito": "CERRO COLORADO",
+     "motivo": "sin_trasbordo",
+     "celdas": 2,
+     "ejemplo": {
+      "lat": -16.33245,
+      "lon": -71.56492
+     }
+    },
+    {
+     "distrito": "QUEQUEÑA",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 1,
+     "ejemplo": {
+      "lat": -16.52131,
+      "lon": -71.48969
+     }
+    },
+    {
+     "distrito": "JACOBO HUNTER",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 1,
+     "ejemplo": {
+      "lat": -16.435869999999998,
+      "lon": -71.55544
+     }
+    },
+    {
+     "distrito": "CAYMA",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 1,
+     "ejemplo": {
+      "lat": -16.38191,
+      "lon": -71.55081
+     }
+    }
+   ],
+   "peoresOrigenes": [
+    {
+     "lat": -16.3954,
+     "lon": -71.53673,
+     "ms": 94.7
+    },
+    {
+     "lat": -16.39091,
+     "lon": -71.54142,
+     "ms": 82.74
+    },
+    {
+     "lat": -16.39091,
+     "lon": -71.53674,
+     "ms": 77.27
+    }
+   ]
+  },
+  "plaza-de-armas": {
+   "nombre": "Plaza de Armas",
+   "directa": 245,
+   "trasbordo": 271,
+   "ninguna": 201,
+   "pctDirecta": 34,
+   "pctConSolucion": 72,
+   "porDistrito": {
+    "QUEQUEÑA": {
+     "total": 8,
+     "directa": 0,
+     "trasbordo": 7,
+     "ninguna": 1,
+     "pctConSolucion": 88
+    },
+    "MOLLEBAYA": {
+     "total": 25,
+     "directa": 0,
+     "trasbordo": 12,
+     "ninguna": 13,
+     "pctConSolucion": 48
+    },
+    "SOCABAYA": {
+     "total": 24,
+     "directa": 0,
+     "trasbordo": 24,
+     "ninguna": 0,
+     "pctConSolucion": 100
+    },
+    "UCHUMAYO": {
+     "total": 8,
+     "directa": 0,
+     "trasbordo": 4,
+     "ninguna": 4,
+     "pctConSolucion": 50
+    },
+    "CHARACATO": {
+     "total": 26,
+     "directa": 0,
+     "trasbordo": 24,
+     "ninguna": 2,
+     "pctConSolucion": 92
+    },
+    "SABANDIA": {
+     "total": 20,
+     "directa": 0,
+     "trasbordo": 8,
+     "ninguna": 12,
+     "pctConSolucion": 40
+    },
+    "TIABAYA": {
+     "total": 11,
+     "directa": 0,
+     "trasbordo": 8,
+     "ninguna": 3,
+     "pctConSolucion": 73
+    },
+    "JACOBO HUNTER": {
+     "total": 20,
+     "directa": 1,
+     "trasbordo": 18,
+     "ninguna": 1,
+     "pctConSolucion": 95
+    },
+    "JOSE LUIS BUSTAMANTE Y RIVERO": {
+     "total": 33,
+     "directa": 19,
+     "trasbordo": 14,
+     "ninguna": 0,
+     "pctConSolucion": 100
+    },
+    "SACHACA": {
+     "total": 20,
+     "directa": 1,
+     "trasbordo": 19,
+     "ninguna": 0,
+     "pctConSolucion": 100
+    },
+    "PAUCARPATA": {
+     "total": 41,
+     "directa": 14,
+     "trasbordo": 27,
+     "ninguna": 0,
+     "pctConSolucion": 100
+    },
+    "AREQUIPA": {
+     "total": 41,
+     "directa": 22,
+     "trasbordo": 19,
+     "ninguna": 0,
+     "pctConSolucion": 100
+    },
+    "MARIANO MELGAR": {
+     "total": 21,
+     "directa": 4,
+     "trasbordo": 17,
+     "ninguna": 0,
+     "pctConSolucion": 100
+    },
+    "CERRO COLORADO": {
+     "total": 217,
+     "directa": 105,
+     "trasbordo": 49,
+     "ninguna": 63,
+     "pctConSolucion": 71
+    },
+    "YANAHUARA": {
+     "total": 10,
+     "directa": 2,
+     "trasbordo": 8,
+     "ninguna": 0,
+     "pctConSolucion": 100
+    },
+    "MIRAFLORES": {
+     "total": 18,
+     "directa": 7,
+     "trasbordo": 9,
+     "ninguna": 2,
+     "pctConSolucion": 89
+    },
+    "CAYMA": {
+     "total": 26,
+     "directa": 24,
+     "trasbordo": 1,
+     "ninguna": 1,
+     "pctConSolucion": 96
+    },
+    "YURA": {
+     "total": 101,
+     "directa": 17,
+     "trasbordo": 0,
+     "ninguna": 84,
+     "pctConSolucion": 17
+    },
+    "ALTO SELVA ALEGRE": {
+     "total": 47,
+     "directa": 29,
+     "trasbordo": 3,
+     "ninguna": 15,
+     "pctConSolucion": 68
+    }
+   },
+   "motivos": {
+    "sin_ruta_cerca_del_origen": 200,
+    "sin_trasbordo": 1
+   },
+   "tiempoMs": {
+    "clasificar": {
+     "p95": 40.82,
+     "max": 171.65,
+     "media": 12.33
+    },
+    "busquedaCompleta": {
+     "p95": 74.5,
+     "max": 268.91,
+     "muestras": 400
+    }
+   },
+   "sinSolucion": [
+    {
+     "distrito": "YURA",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 84,
+     "ejemplo": {
+      "lat": -16.38641,
+      "lon": -71.65392
+     }
+    },
+    {
+     "distrito": "CERRO COLORADO",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 63,
+     "ejemplo": {
+      "lat": -16.390909999999998,
+      "lon": -71.63985000000001
+     }
+    },
+    {
+     "distrito": "ALTO SELVA ALEGRE",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 15,
+     "ejemplo": {
+      "lat": -16.35943,
+      "lon": -71.53209
+     }
+    },
+    {
+     "distrito": "MOLLEBAYA",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 13,
+     "ejemplo": {
+      "lat": -16.51232,
+      "lon": -71.49908
+     }
+    },
+    {
+     "distrito": "SABANDIA",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 12,
+     "ejemplo": {
+      "lat": -16.48084,
+      "lon": -71.51319000000001
+     }
+    },
+    {
+     "distrito": "UCHUMAYO",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 4,
+     "ejemplo": {
+      "lat": -16.48534,
+      "lon": -71.61166
+     }
+    },
+    {
+     "distrito": "CHARACATO",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 2,
+     "ejemplo": {
+      "lat": -16.48534,
+      "lon": -71.5085
+     }
+    },
+    {
+     "distrito": "TIABAYA",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 2,
+     "ejemplo": {
+      "lat": -16.47634,
+      "lon": -71.5976
+     }
+    },
+    {
+     "distrito": "MIRAFLORES",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 2,
+     "ejemplo": {
+      "lat": -16.390909999999998,
+      "lon": -71.49924
+     }
+    },
+    {
+     "distrito": "QUEQUEÑA",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 1,
+     "ejemplo": {
+      "lat": -16.52131,
+      "lon": -71.48969
+     }
+    },
+    {
+     "distrito": "JACOBO HUNTER",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 1,
+     "ejemplo": {
+      "lat": -16.435869999999998,
+      "lon": -71.55544
+     }
+    },
+    {
+     "distrito": "TIABAYA",
+     "motivo": "sin_trasbordo",
+     "celdas": 1,
+     "ejemplo": {
+      "lat": -16.43138,
+      "lon": -71.59295
+     }
+    },
+    {
+     "distrito": "CAYMA",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 1,
+     "ejemplo": {
+      "lat": -16.38191,
+      "lon": -71.55081
+     }
+    }
+   ],
+   "peoresOrigenes": [
+    {
+     "lat": -16.3999,
+     "lon": -71.52735,
+     "ms": 171.65
+    },
+    {
+     "lat": -16.3999,
+     "lon": -71.52267,
+     "ms": 141.88
+    },
+    {
+     "lat": -16.3954,
+     "lon": -71.50861,
+     "ms": 122.04
+    }
+   ]
+  },
+  "real-plaza": {
+   "nombre": "Real Plaza Arequipa",
+   "directa": 377,
+   "trasbordo": 140,
+   "ninguna": 200,
+   "pctDirecta": 53,
+   "pctConSolucion": 72,
+   "porDistrito": {
+    "QUEQUEÑA": {
+     "total": 8,
+     "directa": 0,
+     "trasbordo": 7,
+     "ninguna": 1,
+     "pctConSolucion": 88
+    },
+    "MOLLEBAYA": {
+     "total": 25,
+     "directa": 0,
+     "trasbordo": 12,
+     "ninguna": 13,
+     "pctConSolucion": 48
+    },
+    "SOCABAYA": {
+     "total": 24,
+     "directa": 16,
+     "trasbordo": 8,
+     "ninguna": 0,
+     "pctConSolucion": 100
+    },
+    "UCHUMAYO": {
+     "total": 8,
+     "directa": 0,
+     "trasbordo": 4,
+     "ninguna": 4,
+     "pctConSolucion": 50
+    },
+    "CHARACATO": {
+     "total": 26,
+     "directa": 7,
+     "trasbordo": 17,
+     "ninguna": 2,
+     "pctConSolucion": 92
+    },
+    "SABANDIA": {
+     "total": 20,
+     "directa": 5,
+     "trasbordo": 3,
+     "ninguna": 12,
+     "pctConSolucion": 40
+    },
+    "TIABAYA": {
+     "total": 11,
+     "directa": 6,
+     "trasbordo": 3,
+     "ninguna": 2,
+     "pctConSolucion": 82
+    },
+    "JACOBO HUNTER": {
+     "total": 20,
+     "directa": 1,
+     "trasbordo": 18,
+     "ninguna": 1,
+     "pctConSolucion": 95
+    },
+    "JOSE LUIS BUSTAMANTE Y RIVERO": {
+     "total": 33,
+     "directa": 23,
+     "trasbordo": 10,
+     "ninguna": 0,
+     "pctConSolucion": 100
+    },
+    "SACHACA": {
+     "total": 20,
+     "directa": 18,
+     "trasbordo": 2,
+     "ninguna": 0,
+     "pctConSolucion": 100
+    },
+    "PAUCARPATA": {
+     "total": 41,
+     "directa": 39,
+     "trasbordo": 2,
+     "ninguna": 0,
+     "pctConSolucion": 100
+    },
+    "AREQUIPA": {
+     "total": 41,
+     "directa": 37,
+     "trasbordo": 4,
+     "ninguna": 0,
+     "pctConSolucion": 100
+    },
+    "MARIANO MELGAR": {
+     "total": 21,
+     "directa": 13,
+     "trasbordo": 8,
+     "ninguna": 0,
+     "pctConSolucion": 100
+    },
+    "CERRO COLORADO": {
+     "total": 217,
+     "directa": 131,
+     "trasbordo": 23,
+     "ninguna": 63,
+     "pctConSolucion": 71
+    },
+    "YANAHUARA": {
+     "total": 10,
+     "directa": 7,
+     "trasbordo": 3,
+     "ninguna": 0,
+     "pctConSolucion": 100
+    },
+    "MIRAFLORES": {
+     "total": 18,
+     "directa": 15,
+     "trasbordo": 1,
+     "ninguna": 2,
+     "pctConSolucion": 89
+    },
+    "CAYMA": {
+     "total": 26,
+     "directa": 24,
+     "trasbordo": 1,
+     "ninguna": 1,
+     "pctConSolucion": 96
+    },
+    "YURA": {
+     "total": 101,
+     "directa": 17,
+     "trasbordo": 0,
+     "ninguna": 84,
+     "pctConSolucion": 17
+    },
+    "ALTO SELVA ALEGRE": {
+     "total": 47,
+     "directa": 18,
+     "trasbordo": 14,
+     "ninguna": 15,
+     "pctConSolucion": 68
+    }
+   },
+   "motivos": {
+    "sin_ruta_cerca_del_origen": 200
+   },
+   "tiempoMs": {
+    "clasificar": {
+     "p95": 22.67,
+     "max": 60.02,
+     "media": 8.01
+    },
+    "busquedaCompleta": {
+     "p95": 34.78,
+     "max": 63.77,
+     "muestras": 340
+    }
+   },
+   "sinSolucion": [
+    {
+     "distrito": "YURA",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 84,
+     "ejemplo": {
+      "lat": -16.38641,
+      "lon": -71.65392
+     }
+    },
+    {
+     "distrito": "CERRO COLORADO",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 63,
+     "ejemplo": {
+      "lat": -16.390909999999998,
+      "lon": -71.63985000000001
+     }
+    },
+    {
+     "distrito": "ALTO SELVA ALEGRE",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 15,
+     "ejemplo": {
+      "lat": -16.35943,
+      "lon": -71.53209
+     }
+    },
+    {
+     "distrito": "MOLLEBAYA",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 13,
+     "ejemplo": {
+      "lat": -16.51232,
+      "lon": -71.49908
+     }
+    },
+    {
+     "distrito": "SABANDIA",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 12,
+     "ejemplo": {
+      "lat": -16.48084,
+      "lon": -71.51319000000001
+     }
+    },
+    {
+     "distrito": "UCHUMAYO",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 4,
+     "ejemplo": {
+      "lat": -16.48534,
+      "lon": -71.61166
+     }
+    },
+    {
+     "distrito": "CHARACATO",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 2,
+     "ejemplo": {
+      "lat": -16.48534,
+      "lon": -71.5085
+     }
+    },
+    {
+     "distrito": "TIABAYA",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 2,
+     "ejemplo": {
+      "lat": -16.47634,
+      "lon": -71.5976
+     }
+    },
+    {
+     "distrito": "MIRAFLORES",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 2,
+     "ejemplo": {
+      "lat": -16.390909999999998,
+      "lon": -71.49924
+     }
+    },
+    {
+     "distrito": "QUEQUEÑA",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 1,
+     "ejemplo": {
+      "lat": -16.52131,
+      "lon": -71.48969
+     }
+    },
+    {
+     "distrito": "JACOBO HUNTER",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 1,
+     "ejemplo": {
+      "lat": -16.435869999999998,
+      "lon": -71.55544
+     }
+    },
+    {
+     "distrito": "CAYMA",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 1,
+     "ejemplo": {
+      "lat": -16.38191,
+      "lon": -71.55081
+     }
+    }
+   ],
+   "peoresOrigenes": [
+    {
+     "lat": -16.40889,
+     "lon": -71.52266,
+     "ms": 60.02
+    },
+    {
+     "lat": -16.44487,
+     "lon": -71.52261,
+     "ms": 59.07
+    },
+    {
+     "lat": -16.44487,
+     "lon": -71.51792,
+     "ms": 49.61
+    }
+   ]
+  },
+  "mall-aventura": {
+   "nombre": "Mall Aventura Plaza",
+   "directa": 221,
+   "trasbordo": 294,
+   "ninguna": 202,
+   "pctDirecta": 31,
+   "pctConSolucion": 72,
+   "porDistrito": {
+    "QUEQUEÑA": {
+     "total": 8,
+     "directa": 0,
+     "trasbordo": 7,
+     "ninguna": 1,
+     "pctConSolucion": 88
+    },
+    "MOLLEBAYA": {
+     "total": 25,
+     "directa": 1,
+     "trasbordo": 11,
+     "ninguna": 13,
+     "pctConSolucion": 48
+    },
+    "SOCABAYA": {
+     "total": 24,
+     "directa": 13,
+     "trasbordo": 11,
+     "ninguna": 0,
+     "pctConSolucion": 100
+    },
+    "UCHUMAYO": {
+     "total": 8,
+     "directa": 0,
+     "trasbordo": 4,
+     "ninguna": 4,
+     "pctConSolucion": 50
+    },
+    "CHARACATO": {
+     "total": 26,
+     "directa": 18,
+     "trasbordo": 6,
+     "ninguna": 2,
+     "pctConSolucion": 92
+    },
+    "SABANDIA": {
+     "total": 20,
+     "directa": 3,
+     "trasbordo": 5,
+     "ninguna": 12,
+     "pctConSolucion": 40
+    },
+    "TIABAYA": {
+     "total": 11,
+     "directa": 3,
+     "trasbordo": 6,
+     "ninguna": 2,
+     "pctConSolucion": 82
+    },
+    "JACOBO HUNTER": {
+     "total": 20,
+     "directa": 12,
+     "trasbordo": 7,
+     "ninguna": 1,
+     "pctConSolucion": 95
+    },
+    "JOSE LUIS BUSTAMANTE Y RIVERO": {
+     "total": 33,
+     "directa": 28,
+     "trasbordo": 5,
+     "ninguna": 0,
+     "pctConSolucion": 100
+    },
+    "SACHACA": {
+     "total": 20,
+     "directa": 9,
+     "trasbordo": 11,
+     "ninguna": 0,
+     "pctConSolucion": 100
+    },
+    "PAUCARPATA": {
+     "total": 41,
+     "directa": 30,
+     "trasbordo": 11,
+     "ninguna": 0,
+     "pctConSolucion": 100
+    },
+    "AREQUIPA": {
+     "total": 41,
+     "directa": 35,
+     "trasbordo": 6,
+     "ninguna": 0,
+     "pctConSolucion": 100
+    },
+    "MARIANO MELGAR": {
+     "total": 21,
+     "directa": 9,
+     "trasbordo": 12,
+     "ninguna": 0,
+     "pctConSolucion": 100
+    },
+    "CERRO COLORADO": {
+     "total": 217,
+     "directa": 26,
+     "trasbordo": 126,
+     "ninguna": 65,
+     "pctConSolucion": 70
+    },
+    "YANAHUARA": {
+     "total": 10,
+     "directa": 8,
+     "trasbordo": 2,
+     "ninguna": 0,
+     "pctConSolucion": 100
+    },
+    "MIRAFLORES": {
+     "total": 18,
+     "directa": 11,
+     "trasbordo": 5,
+     "ninguna": 2,
+     "pctConSolucion": 89
+    },
+    "CAYMA": {
+     "total": 26,
+     "directa": 4,
+     "trasbordo": 21,
+     "ninguna": 1,
+     "pctConSolucion": 96
+    },
+    "YURA": {
+     "total": 101,
+     "directa": 0,
+     "trasbordo": 17,
+     "ninguna": 84,
+     "pctConSolucion": 17
+    },
+    "ALTO SELVA ALEGRE": {
+     "total": 47,
+     "directa": 11,
+     "trasbordo": 21,
+     "ninguna": 15,
+     "pctConSolucion": 68
+    }
+   },
+   "motivos": {
+    "sin_ruta_cerca_del_origen": 200,
+    "sin_trasbordo": 2
+   },
+   "tiempoMs": {
+    "clasificar": {
+     "p95": 28.41,
+     "max": 62.77,
+     "media": 9.16
+    },
+    "busquedaCompleta": {
+     "p95": 47.36,
+     "max": 73.43,
+     "muestras": 400
+    }
+   },
+   "sinSolucion": [
+    {
+     "distrito": "YURA",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 84,
+     "ejemplo": {
+      "lat": -16.38641,
+      "lon": -71.65392
+     }
+    },
+    {
+     "distrito": "CERRO COLORADO",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 63,
+     "ejemplo": {
+      "lat": -16.390909999999998,
+      "lon": -71.63985000000001
+     }
+    },
+    {
+     "distrito": "ALTO SELVA ALEGRE",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 15,
+     "ejemplo": {
+      "lat": -16.35943,
+      "lon": -71.53209
+     }
+    },
+    {
+     "distrito": "MOLLEBAYA",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 13,
+     "ejemplo": {
+      "lat": -16.51232,
+      "lon": -71.49908
+     }
+    },
+    {
+     "distrito": "SABANDIA",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 12,
+     "ejemplo": {
+      "lat": -16.48084,
+      "lon": -71.51319000000001
+     }
+    },
+    {
+     "distrito": "UCHUMAYO",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 4,
+     "ejemplo": {
+      "lat": -16.48534,
+      "lon": -71.61166
+     }
+    },
+    {
+     "distrito": "CHARACATO",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 2,
+     "ejemplo": {
+      "lat": -16.48534,
+      "lon": -71.5085
+     }
+    },
+    {
+     "distrito": "TIABAYA",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 2,
+     "ejemplo": {
+      "lat": -16.47634,
+      "lon": -71.5976
+     }
+    },
+    {
+     "distrito": "MIRAFLORES",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 2,
+     "ejemplo": {
+      "lat": -16.390909999999998,
+      "lon": -71.49924
+     }
+    },
+    {
+     "distrito": "CERRO COLORADO",
+     "motivo": "sin_trasbordo",
+     "celdas": 2,
+     "ejemplo": {
+      "lat": -16.33245,
+      "lon": -71.56492
+     }
+    },
+    {
+     "distrito": "QUEQUEÑA",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 1,
+     "ejemplo": {
+      "lat": -16.52131,
+      "lon": -71.48969
+     }
+    },
+    {
+     "distrito": "JACOBO HUNTER",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 1,
+     "ejemplo": {
+      "lat": -16.435869999999998,
+      "lon": -71.55544
+     }
+    },
+    {
+     "distrito": "CAYMA",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 1,
+     "ejemplo": {
+      "lat": -16.38191,
+      "lon": -71.55081
+     }
+    }
+   ],
+   "peoresOrigenes": [
+    {
+     "lat": -16.41789,
+     "lon": -71.5414,
+     "ms": 62.77
+    },
+    {
+     "lat": -16.37292,
+     "lon": -71.5555,
+     "ms": 59.72
+    },
+    {
+     "lat": -16.36393,
+     "lon": -71.56489,
+     "ms": 55.24
+    }
+   ]
+  },
+  "unsa": {
+   "nombre": "Universidad Nacional de San Agustín",
+   "directa": 257,
+   "trasbordo": 257,
+   "ninguna": 203,
+   "pctDirecta": 36,
+   "pctConSolucion": 72,
+   "porDistrito": {
+    "QUEQUEÑA": {
+     "total": 8,
+     "directa": 0,
+     "trasbordo": 7,
+     "ninguna": 1,
+     "pctConSolucion": 88
+    },
+    "MOLLEBAYA": {
+     "total": 25,
+     "directa": 5,
+     "trasbordo": 7,
+     "ninguna": 13,
+     "pctConSolucion": 48
+    },
+    "SOCABAYA": {
+     "total": 24,
+     "directa": 13,
+     "trasbordo": 11,
+     "ninguna": 0,
+     "pctConSolucion": 100
+    },
+    "UCHUMAYO": {
+     "total": 8,
+     "directa": 0,
+     "trasbordo": 4,
+     "ninguna": 4,
+     "pctConSolucion": 50
+    },
+    "CHARACATO": {
+     "total": 26,
+     "directa": 20,
+     "trasbordo": 4,
+     "ninguna": 2,
+     "pctConSolucion": 92
+    },
+    "SABANDIA": {
+     "total": 20,
+     "directa": 1,
+     "trasbordo": 7,
+     "ninguna": 12,
+     "pctConSolucion": 40
+    },
+    "TIABAYA": {
+     "total": 11,
+     "directa": 0,
+     "trasbordo": 8,
+     "ninguna": 3,
+     "pctConSolucion": 73
+    },
+    "JACOBO HUNTER": {
+     "total": 20,
+     "directa": 11,
+     "trasbordo": 8,
+     "ninguna": 1,
+     "pctConSolucion": 95
+    },
+    "JOSE LUIS BUSTAMANTE Y RIVERO": {
+     "total": 33,
+     "directa": 28,
+     "trasbordo": 5,
+     "ninguna": 0,
+     "pctConSolucion": 100
+    },
+    "SACHACA": {
+     "total": 20,
+     "directa": 9,
+     "trasbordo": 11,
+     "ninguna": 0,
+     "pctConSolucion": 100
+    },
+    "PAUCARPATA": {
+     "total": 41,
+     "directa": 8,
+     "trasbordo": 33,
+     "ninguna": 0,
+     "pctConSolucion": 100
+    },
+    "AREQUIPA": {
+     "total": 41,
+     "directa": 33,
+     "trasbordo": 8,
+     "ninguna": 0,
+     "pctConSolucion": 100
+    },
+    "MARIANO MELGAR": {
+     "total": 21,
+     "directa": 18,
+     "trasbordo": 3,
+     "ninguna": 0,
+     "pctConSolucion": 100
+    },
+    "CERRO COLORADO": {
+     "total": 217,
+     "directa": 50,
+     "trasbordo": 102,
+     "ninguna": 65,
+     "pctConSolucion": 70
+    },
+    "YANAHUARA": {
+     "total": 10,
+     "directa": 3,
+     "trasbordo": 7,
+     "ninguna": 0,
+     "pctConSolucion": 100
+    },
+    "MIRAFLORES": {
+     "total": 18,
+     "directa": 16,
+     "trasbordo": 0,
+     "ninguna": 2,
+     "pctConSolucion": 89
+    },
+    "CAYMA": {
+     "total": 26,
+     "directa": 23,
+     "trasbordo": 2,
+     "ninguna": 1,
+     "pctConSolucion": 96
+    },
+    "YURA": {
+     "total": 101,
+     "directa": 8,
+     "trasbordo": 9,
+     "ninguna": 84,
+     "pctConSolucion": 17
+    },
+    "ALTO SELVA ALEGRE": {
+     "total": 47,
+     "directa": 11,
+     "trasbordo": 21,
+     "ninguna": 15,
+     "pctConSolucion": 68
+    }
+   },
+   "motivos": {
+    "sin_ruta_cerca_del_origen": 200,
+    "sin_trasbordo": 3
+   },
+   "tiempoMs": {
+    "clasificar": {
+     "p95": 37.4,
+     "max": 196.28,
+     "media": 11.75
+    },
+    "busquedaCompleta": {
+     "p95": 50.49,
+     "max": 121.99,
+     "muestras": 400
+    }
+   },
+   "sinSolucion": [
+    {
+     "distrito": "YURA",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 84,
+     "ejemplo": {
+      "lat": -16.38641,
+      "lon": -71.65392
+     }
+    },
+    {
+     "distrito": "CERRO COLORADO",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 63,
+     "ejemplo": {
+      "lat": -16.390909999999998,
+      "lon": -71.63985000000001
+     }
+    },
+    {
+     "distrito": "ALTO SELVA ALEGRE",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 15,
+     "ejemplo": {
+      "lat": -16.35943,
+      "lon": -71.53209
+     }
+    },
+    {
+     "distrito": "MOLLEBAYA",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 13,
+     "ejemplo": {
+      "lat": -16.51232,
+      "lon": -71.49908
+     }
+    },
+    {
+     "distrito": "SABANDIA",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 12,
+     "ejemplo": {
+      "lat": -16.48084,
+      "lon": -71.51319000000001
+     }
+    },
+    {
+     "distrito": "UCHUMAYO",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 4,
+     "ejemplo": {
+      "lat": -16.48534,
+      "lon": -71.61166
+     }
+    },
+    {
+     "distrito": "CHARACATO",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 2,
+     "ejemplo": {
+      "lat": -16.48534,
+      "lon": -71.5085
+     }
+    },
+    {
+     "distrito": "TIABAYA",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 2,
+     "ejemplo": {
+      "lat": -16.47634,
+      "lon": -71.5976
+     }
+    },
+    {
+     "distrito": "MIRAFLORES",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 2,
+     "ejemplo": {
+      "lat": -16.390909999999998,
+      "lon": -71.49924
+     }
+    },
+    {
+     "distrito": "CERRO COLORADO",
+     "motivo": "sin_trasbordo",
+     "celdas": 2,
+     "ejemplo": {
+      "lat": -16.33245,
+      "lon": -71.56492
+     }
+    },
+    {
+     "distrito": "QUEQUEÑA",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 1,
+     "ejemplo": {
+      "lat": -16.52131,
+      "lon": -71.48969
+     }
+    },
+    {
+     "distrito": "JACOBO HUNTER",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 1,
+     "ejemplo": {
+      "lat": -16.435869999999998,
+      "lon": -71.55544
+     }
+    },
+    {
+     "distrito": "TIABAYA",
+     "motivo": "sin_trasbordo",
+     "celdas": 1,
+     "ejemplo": {
+      "lat": -16.43138,
+      "lon": -71.59295
+     }
+    },
+    {
+     "distrito": "CAYMA",
+     "motivo": "sin_ruta_cerca_del_origen",
+     "celdas": 1,
+     "ejemplo": {
+      "lat": -16.38191,
+      "lon": -71.55081
+     }
+    }
+   ],
+   "peoresOrigenes": [
+    {
+     "lat": -16.3999,
+     "lon": -71.5461,
+     "ms": 196.28
+    },
+    {
+     "lat": -16.40889,
+     "lon": -71.51328,
+     "ms": 149.05
+    },
+    {
+     "lat": -16.3999,
+     "lon": -71.55079,
+     "ms": 96.67
+    }
+   ]
+  }
+ }
+}

@@ -220,70 +220,39 @@ const Viaje = (() => {
    *   → { trasbordos: [{ rutaA, rutaB, caminarOrigenM, caminarTrasbordoM, caminarDestinoM, caminarTotalM, viajeAM, viajeBM, viajeM, longitudAM, longitudBM,
    *        subida, bajadaA, subidaB, bajada, trasbordo: { lat, lon }, parada: { nombre, lat, lon, distanciaM } | null, segmentoA, segmentoB }], candidatasA, candidatasB }
    */
-  function rutasConTrasbordo(origen, destino, rutas, opciones = {}) {
-    const vacio = { trasbordos: [], candidatasA: 0, candidatasB: 0 };
-    if (!esPunto(origen) || !esPunto(destino)) return vacio;
+  /**
+   * Lo que solo depende del destino, para no repetirlo en cada consulta (la cobertura de toda la ciudad y la búsqueda de zonas preguntan miles de veces por el mismo destino):
+   * las rutas B candidatas (pasan a ≤ caminarM del destino), con el mejor punto de bajada desde cada vértice, y la rejilla de sus vértices (uno de cada PASO_GRUESO).
+   */
+  function prepararDestinoTrasbordo(destino, rutas, opciones = {}) {
     const max = opciones.caminarM ?? CAMINAR_M;
     const trasM = opciones.trasbordoM ?? TRASBORDO_M;
-    const tope = opciones.max ?? MAX_TRASBORDOS;
-    const tiempo = opciones.tiempo || {};
-    const v = Number.isFinite(tiempo.velocidadPieMs) && tiempo.velocidadPieMs > 0 ? tiempo.velocidadPieMs : null;
-    const rodeo = Number.isFinite(tiempo.factorRodeo) && tiempo.factorRodeo > 0 ? tiempo.factorRodeo : 1;
     const lista = filtrar(rutas, opciones);
-    if (lista.length === 0) return vacio;
-    const kO = Math.cos((origen.lat * Math.PI) / 180) * M_POR_GRADO;
-    const kD = Math.cos((destino.lat * Math.PI) / 180) * M_POR_GRADO;
-    const mLatO = max / M_POR_GRADO;
-    const mLonO = mLatO / Math.max(0.2, Math.cos((origen.lat * Math.PI) / 180));
+    const kx = Math.cos((destino.lat * Math.PI) / 180) * M_POR_GRADO;
+    const celda = Math.max(trasM, 1);
+    const kD = kx;
     const mLatD = max / M_POR_GRADO;
     const mLonD = mLatD / Math.max(0.2, Math.cos((destino.lat * Math.PI) / 180));
-    const cercaDe = (b, p, mLat, mLon) => !(p.lon < b[0] - mLon || p.lon > b[2] + mLon || p.lat < b[1] - mLat || p.lat > b[3] + mLat);
-
-    // Candidatas: A pasa a ≤ caminarM del origen; B pasa a ≤ caminarM del destino. De cada una se guarda, para cada vértice, el mejor punto de subida (A: el más cercano al
-    // origen entre los anteriores) o de bajada (B: el más cercano al destino entre los posteriores).
-    const A = [];
     const B = [];
     lista.forEach((r) => {
       const t = densificar(r);
+      const b = t.bbox;
+      if (destino.lon < b[0] - mLonD || destino.lon > b[2] + mLonD || destino.lat < b[1] - mLatD || destino.lat > b[3] + mLatD) return;
       const n = t.lat.length;
-      if (cercaDe(t.bbox, origen, mLatO, mLonO)) {
-        const d = new Float64Array(n);
-        const mejor = new Int32Array(n);
-        let m = -1;
-        let md = Infinity;
-        for (let k = 0; k < n; k++) {
-          d[k] = Math.hypot((t.lon[k] - origen.lon) * kO, (t.lat[k] - origen.lat) * M_POR_GRADO);
-          if (d[k] <= max && d[k] < md) { md = d[k]; m = k; }
-          mejor[k] = m;
-        }
-        if (m >= 0) A.push({ r, t, d, mejor, n });
+      const d = new Float64Array(n);
+      const mejor = new Int32Array(n);
+      let m = -1;
+      let md = Infinity;
+      for (let k = n - 1; k >= 0; k--) {
+        d[k] = Math.hypot((t.lon[k] - destino.lon) * kD, (t.lat[k] - destino.lat) * M_POR_GRADO);
+        if (d[k] <= max && d[k] < md) { md = d[k]; m = k; }
+        mejor[k] = m;
       }
-      if (cercaDe(t.bbox, destino, mLatD, mLonD)) {
-        const d = new Float64Array(n);
-        const mejor = new Int32Array(n);
-        let m = -1;
-        let md = Infinity;
-        for (let k = n - 1; k >= 0; k--) {
-          d[k] = Math.hypot((t.lon[k] - destino.lon) * kD, (t.lat[k] - destino.lat) * M_POR_GRADO);
-          if (d[k] <= max && d[k] < md) { md = d[k]; m = k; }
-          mejor[k] = m;
-        }
-        if (m >= 0) B.push({ r, t, d, mejor, n });
-      }
+      if (m >= 0) B.push({ r, t, d, mejor, n, clave: claveRuta(r) });
     });
-    const out = { trasbordos: [], candidatasA: A.length, candidatasB: B.length };
-    if (!A.length || !B.length) return out;
-
-    // Búsqueda gruesa y afinada. Los vértices están cada ≤ 15 m: se busca el trasbordo con uno de cada PASO_GRUESO (≈ 60 m) en una rejilla de casillas de `trasM` metros que
-    // reúne los vértices de TODAS las B candidatas (una sola pasada por los de cada A, sin comparar rutas de dos en dos), y luego se afina con todos los vértices cerca del mejor
-    // par de cada combinación de rutas.
-    const lat0 = origen.lat;
-    const kx = Math.cos((lat0 * Math.PI) / 180) * M_POR_GRADO;
-    const celda = Math.max(trasM, 1);
     const clave = (ci, cj) => (ci + 100000) * 1000000 + (cj + 100000);
     const rejilla = new Map();
     B.forEach((b, bi) => {
-      b.clave = claveRuta(b.r);
       for (let k = 0; k < b.n; k += PASO_GRUESO) {
         if (b.mejor[k] < 0) continue; // desde este vértice ya no hay dónde bajar cerca del destino
         const c = clave(Math.floor((b.t.lon[k] * kx) / celda), Math.floor((b.t.lat[k] * M_POR_GRADO) / celda));
@@ -292,7 +261,44 @@ const Viaje = (() => {
         l.push(bi, k);
       }
     });
+    return { destino, max, trasM, kx, celda, clave, B, rejilla, lista };
+  }
 
+  function rutasConTrasbordo(origen, destino, rutas, opciones = {}) {
+    const vacio = { trasbordos: [], candidatasA: 0, candidatasB: 0 };
+    if (!esPunto(origen) || !esPunto(destino)) return vacio;
+    const prep = opciones.preparado && opciones.preparado.destino === destino ? opciones.preparado : prepararDestinoTrasbordo(destino, rutas, opciones);
+    const { max, trasM, kx, celda, clave, B, rejilla, lista } = prep;
+    const tope = opciones.max ?? MAX_TRASBORDOS;
+    const tiempo = opciones.tiempo || {};
+    const v = Number.isFinite(tiempo.velocidadPieMs) && tiempo.velocidadPieMs > 0 ? tiempo.velocidadPieMs : null;
+    const rodeo = Number.isFinite(tiempo.factorRodeo) && tiempo.factorRodeo > 0 ? tiempo.factorRodeo : 1;
+    if (lista.length === 0) return vacio;
+    const kO = Math.cos((origen.lat * Math.PI) / 180) * M_POR_GRADO;
+    const mLatO = max / M_POR_GRADO;
+    const mLonO = mLatO / Math.max(0.2, Math.cos((origen.lat * Math.PI) / 180));
+    // Candidatas A: pasan a ≤ caminarM del origen; de cada una se guarda, para cada vértice, el mejor punto de subida (el más cercano al origen entre los anteriores).
+    const A = [];
+    lista.forEach((r) => {
+      const t = densificar(r);
+      if (origen.lon < t.bbox[0] - mLonO || origen.lon > t.bbox[2] + mLonO || origen.lat < t.bbox[1] - mLatO || origen.lat > t.bbox[3] + mLatO) return;
+      const n = t.lat.length;
+      const d = new Float64Array(n);
+      const mejor = new Int32Array(n);
+      let m = -1;
+      let md = Infinity;
+      for (let k = 0; k < n; k++) {
+        d[k] = Math.hypot((t.lon[k] - origen.lon) * kO, (t.lat[k] - origen.lat) * M_POR_GRADO);
+        if (d[k] <= max && d[k] < md) { md = d[k]; m = k; }
+        mejor[k] = m;
+      }
+      if (m >= 0) A.push({ r, t, d, mejor, n, clave: claveRuta(r) });
+    });
+    const out = { trasbordos: [], candidatasA: A.length, candidatasB: B.length };
+    if (!A.length || !B.length) return out;
+
+    // Búsqueda gruesa y afinada. Los vértices están cada ≤ 15 m: se busca el trasbordo con uno de cada PASO_GRUESO (≈ 60 m) en la rejilla que reúne los vértices de TODAS las B
+    // candidatas (una sola pasada por los de cada A, sin comparar rutas de dos en dos), y luego se afina con todos los vértices cerca del mejor par de cada combinación de rutas.
     const metrica = (caminarM, kmA, kmB, a, b) => {
       const dA = a.r.duracionMin;
       const dB = b.r.duracionMin;
@@ -526,7 +532,7 @@ const Viaje = (() => {
     return `${r.linea || 'Ruta'}${ramal}${sentido}${op ? ` (${op})` : ''}`;
   }
 
-  return { CAMINAR_M, PASO_M, TRASBORDO_M, MAX_TRASBORDOS, desdeOsm, rutasDirectas, rutasConTrasbordo, estimarTiempoTrasbordo, estimarTiempo, cercanas, indiceDestino, alcanza, zonasConRutaDirecta, unir, resolverDestino, textoRuta, codigoLinea, metros };
+  return { CAMINAR_M, PASO_M, TRASBORDO_M, MAX_TRASBORDOS, desdeOsm, rutasDirectas, rutasConTrasbordo, prepararDestinoTrasbordo, estimarTiempoTrasbordo, estimarTiempo, cercanas, indiceDestino, alcanza, zonasConRutaDirecta, unir, resolverDestino, textoRuta, codigoLinea, metros };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = Viaje;

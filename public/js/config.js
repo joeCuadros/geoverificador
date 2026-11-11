@@ -255,6 +255,11 @@ const CONFIG = {
   // e intervalo). `caminarM` es la distancia a pie a la ruta en cada punta: la del paradero (umbrales.transporte, convención del proyecto).
   viaje: {
     caminarM: 400,
+    // Viaje con UN trasbordo (Viaje.rutasConTrasbordo): distancia a pie máxima entre las dos rutas. Es un SUPUESTO del proyecto, no una norma: la mitad de los 400 m del acceso al
+    // paradero (el estándar de captación de transporte público más citado en planificación); no se encontró una guía que fije una distancia de trasbordo. Si hay directas, no se ofrece.
+    trasbordoM: 200,
+    fuenteTrasbordo: 'supuesto del proyecto: la mitad de los 400 m del acceso al paradero; ninguna guía encontrada fija una distancia para el trasbordo',
+    maxTrasbordos: 5,
     osmUrl: 'data/rutas_osm.geojson',
     fuenteOsm: 'OpenStreetMap (ODbL), relaciones route=bus de la red SIT',
     // Tiempo APROXIMADO del viaje, con sus supuestos a la vista. No hay una medición de velocidades de bus ni de peatones en Arequipa que se pueda citar:
@@ -283,6 +288,26 @@ const CONFIG = {
       id: 'ciudad-blanca', nombre: 'Ciudad Blanca', tipo: 'barrio', alias: ['ciudad blanca'],
       lat: -16.4146, lon: -71.4844, osm: 'node/4329651109',
       nota: 'Barrio de Paucarpata (punto de OpenStreetMap, node/4329651109); también es el final de rutas del C2 y el C10.',
+    },
+    {
+      id: 'plaza-de-armas', nombre: 'Plaza de Armas', tipo: 'lugar', alias: ['plaza de armas', 'plaza de armas de arequipa', 'centro de arequipa'],
+      lat: -16.39883, lon: -71.53697, osm: 'way/23811932',
+      nota: 'Punto de referencia: la Plaza de Armas de Arequipa (OpenStreetMap, way/23811932), centro del Cercado.',
+    },
+    {
+      id: 'real-plaza', nombre: 'Real Plaza Arequipa', tipo: 'centro comercial', alias: ['real plaza', 'real plaza arequipa', 'mall real plaza'],
+      lat: -16.38951, lon: -71.54991, osm: 'way/285363096',
+      nota: 'Punto de referencia: el centro del edificio Real Plaza Arequipa (OpenStreetMap, way/285363096), Av. Ejército, Cayma.',
+    },
+    {
+      id: 'mall-aventura', nombre: 'Mall Aventura Plaza', tipo: 'centro comercial', alias: ['mall aventura', 'mall aventura plaza', 'aventura plaza', 'aventura mall'],
+      lat: -16.41722, lon: -71.51432, osm: 'way/437694283',
+      nota: 'Punto de referencia: el centro del edificio Mall Aventura Plaza (OpenStreetMap, way/437694283), Av. Porongoche, Paucarpata.',
+    },
+    {
+      id: 'unsa', nombre: 'Universidad Nacional de San Agustín', tipo: 'universidad', alias: ['unsa', 'san agustin', 'universidad de san agustin', 'universidad nacional de san agustin', 'ciudad universitaria'],
+      lat: -16.40847, lon: -71.52652, osm: 'relation/6365045',
+      nota: 'Punto de referencia: el centro de la Universidad Nacional de San Agustín (OpenStreetMap, relation/6365045), Ciudad Universitaria; la universidad tiene varias sedes.',
     },
   ],
 

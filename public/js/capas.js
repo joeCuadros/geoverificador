@@ -24,7 +24,7 @@
  *                 una línea de leyenda por estado. Solo informativas: una concesión es un derecho sobre los minerales, no dice que haya minería ni de quién es el predio.
  *   censo_luz, censo_agua, censo_desague → manzanas del censo coloreadas por el % de viviendas ocupadas con alumbrado, agua o desagüe por red pública (INEI, 2017):
  *                 informativas; el año va en la etiqueta, el popup y la leyenda. Las manzanas con pocas viviendas no dan porcentaje y las que el censo no contó no se dibujan.
- *   viaje       → «¿qué combi me lleva al trabajo?»: los tramos de cada ruta directa entre donde subes y donde bajas, el origen, el destino y, en la búsqueda de zonas, las celdas desde
+ *   viaje       → «¿qué combi me lleva al trabajo?»: los tramos de cada ruta directa entre donde subes y donde bajas, el origen, el destino, con un trasbordo el punto de trasbordo de cada opción y, en la búsqueda de zonas, las celdas desde
  *                 las que se llega (Viaje.rutasDirectas). Los datos vienen en la propia capa; informativa, sin puntaje.
  *   lineas      → recorridos de bus de OpenStreetMap (un color por línea) y, con un punto, la parada mapeada más cercana de cada una
  * Con una búsqueda se dibujan las entidades que hacen que cada sector cumpla, y UNA región resaltada: los sectores donde se
@@ -347,9 +347,11 @@ const Capas = (() => {
         const tramos = (capa.tramos || []).filter((t) => t && Array.isArray(t.segmento) && t.segmento.length >= 2);
         const celdasViaje = (capa.celdas || []).filter((p) => p && Number.isFinite(p.lat) && Number.isFinite(p.lon));
         if (!capa.destino && tramos.length === 0) { vacias.push('viaje'); return; }
-        viajeOut = { origen: capa.origen || null, destino: capa.destino || null, tramos, celdas: celdasViaje };
+        const trasbordos = (capa.trasbordos || []).filter((p) => p && Number.isFinite(p.lat) && Number.isFinite(p.lon));
+        viajeOut = { origen: capa.origen || null, destino: capa.destino || null, tramos, trasbordos, celdas: celdasViaje };
         const destinoTxt = capa.destino && capa.destino.nombre ? ` a ${capa.destino.nombre}` : '';
-        leyenda.push({ capa: 'viaje', texto: tramos.length ? `Ruta al trabajo${destinoTxt}: ${tramos.length} ${tramos.length === 1 ? 'ruta directa' : 'rutas directas'} (de donde subes a donde bajas)` : `Ruta al trabajo${destinoTxt}${celdasViaje.length ? `: ${celdasViaje.length} celdas desde las que se llega sin transbordo` : ''}`, n: Math.max(tramos.length, celdasViaje.length, 1) });
+        const opciones = new Set(tramos.map((t) => t.opcion).filter((o) => o !== undefined)).size;
+        leyenda.push({ capa: 'viaje', texto: opciones ? `Ruta al trabajo${destinoTxt}: ${opciones} ${opciones === 1 ? 'opción con un trasbordo' : 'opciones con un trasbordo'} (dos rutas, de donde subes a donde bajas)` : tramos.length ? `Ruta al trabajo${destinoTxt}: ${tramos.length} ${tramos.length === 1 ? 'ruta directa' : 'rutas directas'} (de donde subes a donde bajas)` : `Ruta al trabajo${destinoTxt}${celdasViaje.length ? `: ${celdasViaje.length} celdas desde las que se llega sin transbordo` : ''}`, n: Math.max(tramos.length, celdasViaje.length, 1) });
       } else if (id === 'electricidad') {
         // Áreas de concesión de distribución eléctrica: polígonos ENTEROS del registro (no se recortan al distrito). Informativas, sin círculo.
         if (!Array.isArray(electricidad) || electricidad.length === 0) { sinDatos.push('electricidad'); return; }
@@ -461,7 +463,7 @@ const Capas = (() => {
     else if (cajaLineas && valido(cajaLineas) && puntos.length === 0 && poligonos.length === 0) limites = cajaLineas;
     else {
       const todos = [...puntos.map((p) => [p.lon, p.lat]), ...poligonos.flatMap((p) => coordsDe(p.geometry)), ...peligroVolcan.flatMap((p) => coordsDe(p.geometry)), ...riesgoDistritos.flatMap((p) => coordsDe(p.geometry)),
-        ...(viajeOut ? [...(viajeOut.origen ? [[viajeOut.origen.lon, viajeOut.origen.lat]] : []), ...(viajeOut.destino ? [[viajeOut.destino.lon, viajeOut.destino.lat]] : []), ...viajeOut.tramos.flatMap((t) => t.segmento), ...viajeOut.celdas.map((p) => [p.lon, p.lat])] : [])];
+        ...(viajeOut ? [...(viajeOut.origen ? [[viajeOut.origen.lon, viajeOut.origen.lat]] : []), ...(viajeOut.destino ? [[viajeOut.destino.lon, viajeOut.destino.lat]] : []), ...viajeOut.tramos.flatMap((t) => t.segmento), ...(viajeOut.trasbordos || []).map((p) => [p.lon, p.lat]), ...viajeOut.celdas.map((p) => [p.lon, p.lat])] : [])];
       limites = todos.length ? bboxDe(todos) : null;
     }
     if (limites && !valido(limites)) limites = null;

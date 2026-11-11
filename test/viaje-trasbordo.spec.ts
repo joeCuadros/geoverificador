@@ -137,6 +137,17 @@ describe('Viaje.rutasConTrasbordo: la parada mapeada del trasbordo', () => {
   });
 });
 
+describe('Viaje.prepararDestinoTrasbordo: lo que solo depende del destino se calcula una vez', () => {
+  it('con el destino preparado el resultado es el mismo que sin prepararlo, para varios orígenes', () => {
+    const preparado = Viaje.prepararDestinoTrasbordo(DESTINO, [A, B], {});
+    for (const o of [ORIGEN, pt(1000, -100), pt(500, 700)]) {
+      const sin = Viaje.rutasConTrasbordo(o, DESTINO, [A, B], { tiempo: T });
+      const con = Viaje.rutasConTrasbordo(o, DESTINO, [A, B], { tiempo: T, preparado: preparado });
+      expect(con.trasbordos.map((x: any) => [x.rutaA.id, x.rutaB.id, Math.round(x.caminarTotalM)])).toEqual(sin.trasbordos.map((x: any) => [x.rutaA.id, x.rutaB.id, Math.round(x.caminarTotalM)]));
+    }
+  });
+});
+
 describe('Viaje.rutasConTrasbordo: filtros y entradas inválidas', () => {
   it('sin origen o destino válidos, o sin rutas, no devuelve nada', () => {
     expect(Viaje.rutasConTrasbordo(null, DESTINO, [A, B], {}).trasbordos).toEqual([]);

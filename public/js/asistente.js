@@ -1164,7 +1164,20 @@ const Asistente = (() => {
   const fuentesTxt = (fs) => fs.map((f) => FUENTES_VIAJE[f] || f).join(' y ');
   const NOTA_VIAJE = 'Las distancias son en línea recta, no a pie. No sé dónde se sube ni se baja (las paradas de OpenStreetMap son parciales y no se usan aquí) y no sé si la ruta opera hoy; el sentido sale del orden del recorrido publicado. No calculo transbordos.';
 
-  /** «¿Qué combi me lleva de mi punto a mi trabajo?»: las rutas directas (OpenStreetMap, la misma una vez), lo que caminas en cada punta y los km en bus. */
+  const NOTA_TRASBORDO = 'Con trasbordo: las dos rutas pasan a ≤ 200 m una de la otra (un supuesto del proyecto, no una norma) y no sé si hay una parada ahí ni si las frecuencias permiten el enlace. Los tiempos son estimaciones con la duración que etiqueta OpenStreetMap, no un horario garantizado.';
+
+  /** «≈ 35 min»: mínimo 1. */
+  const minTxt = (m) => `≈ ${Math.max(1, Math.round(m))} min`;
+  const decTxt = (m) => String(Number.isInteger(m) ? m : m.toFixed(1)).replace('.', ',');
+
+  /** Nombre de dónde bajar de la primera ruta para tomar la segunda: la parada mapeada si hay una a ≤ 200 m, y si no, el cruce marcado en el mapa. */
+  const dondeBajar = (x) => (x.parada ? `«${x.parada.nombre || 'parada sin nombre'}» (parada mapeada, a ${fmtDist(x.parada.distanciaM)} del cruce)` : 'el cruce marcado en el mapa (paradas no mapeadas)');
+
+  /**
+   * «¿Qué combi me lleva de mi punto a mi trabajo?»: la mejor opción primero, en una frase («C2 → bajar en X → C10, ≈ 35 min, caminas 600 m»), y debajo las alternativas.
+   * Primero las rutas directas (OpenStreetMap, la misma una vez); si no hay ninguna, las de UN trasbordo (`c.trasbordoM`, 200 m por omisión). Devuelve además `resumen` (la frase de la
+   * mejor opción) y `alternativas` (las demás, una línea cada una) para que la ficha las muestre plegadas.
+   */
   function respuestaViaje(intencion, c) {
     const dest = intencion.destino || c.destino || null;
     const vi = intencion.viaje || {};
@@ -1178,43 +1191,80 @@ const Asistente = (() => {
     const u = V.unir(r.directas);
     const rev = V.unir(r.alReves);
     const solo = vi.linea ? `, solo la línea ${vi.linea}` : vi.texto ? `, solo rutas cuyo nombre o letrero diga «${vi.texto}»` : '';
-    const cabecera = `De tu punto a ${dest.nombre}${dest.osm ? ` (punto de OpenStreetMap, ${dest.osm})` : ''}${solo}:`;
+    const nombreOrigen = intencion.origen && intencion.origen.nombre ? intencion.origen.nombre : null;
+    const cabecera = `De ${nombreOrigen ? `${nombreOrigen} (${c.origenNota || 'punto elegido'})` : 'tu punto'} a ${dest.nombre}${dest.osm ? ` (punto de OpenStreetMap, ${dest.osm})` : ''}${solo}:`;
     const lineas = [cabecera];
+    const alternativas = [];
+    let resumen = null;
+    let tramos = [];
+    let trasbordos = [];
+    const tiempoDe = (x) => (c.tiempo ? V.estimarTiempo(x, c.tiempo) : null);
+    const tiempoTxt = (t) => {
+      if (!t) return '';
+      const partes = [t.caminarMin !== null ? `${minTxt(t.caminarMin)} a pie` : null, t.busMin !== null ? `${minTxt(t.busMin)} en bus` : null].filter(Boolean);
+      return t.totalSinEsperaMin !== null
+        ? ` Tiempo aproximado: ${minTxt(t.totalSinEsperaMin)} en total sin contar la espera (${partes.join(' + ')})${t.esperaMediaMin !== null ? `; espera media de ≈ ${decTxt(t.esperaMediaMin)} min${t.esperas === 2 ? ' en total (una por ruta)' : ''} si llegas sin mirar el horario` : ''}.`
+        : t.caminarMin !== null ? ` Caminata ${minTxt(t.caminarMin)} a pie; sin duración publicada para esta ruta, no estimo el tiempo en bus.` : '';
+    };
+
     if (u.length) {
       lineas.push(`Hay ${plural(u.length, 'ruta directa', 'rutas directas')} (pasan a ${fmtDist(max)} o menos a pie de tu punto y del destino, con tu punto antes que el destino en el recorrido):`);
-      const min = (m) => `≈ ${Math.max(1, Math.round(m))} min`;
-      const dec = (m) => String(Number.isInteger(m) ? m : m.toFixed(1)).replace('.', ',');
-      u.slice(0, 6).forEach((x) => {
+      const tx = u.slice(0, 6).map((x) => {
         const r0 = x.ruta;
         const osm = r0.duracionMin ? ` OSM etiqueta ${r0.duracionMin} min de punta a punta${r0.intervaloMin ? `, cada ${r0.intervaloMin} min` : ''}.` : '';
-        let tiempo = '';
-        if (c.tiempo) {
-          const t = V.estimarTiempo(x, c.tiempo);
-          const partes = [t.caminarMin !== null ? `${min(t.caminarMin)} a pie` : null, t.busMin !== null ? `${min(t.busMin)} en bus` : null].filter(Boolean);
-          tiempo = t.totalSinEsperaMin !== null
-            ? ` Tiempo aproximado: ${min(t.totalSinEsperaMin)} en total sin contar la espera (${partes.join(' + ')})${t.esperaMediaMin !== null ? `; espera media de ≈ ${dec(t.esperaMediaMin)} min si llegas sin mirar el horario` : ''}.`
-            : t.caminarMin !== null ? ` Caminata ${min(t.caminarMin)} a pie; sin duración publicada para esta ruta, no estimo el tiempo en bus.` : '';
-        }
-        lineas.push(`• ${V.textoRuta(r0)}: caminas ${Math.round(x.caminarOrigenM)} m al subir y ${Math.round(x.caminarDestinoM)} m al bajar, ${kmTxt(x.viajeM)} en bus. Fuente: ${fuentesTxt(x.fuentes)}.${osm}${tiempo}`);
+        return { x, osm, t: tiempoDe(x) };
       });
+      tx.forEach(({ x, osm, t }) => {
+        lineas.push(`• ${V.textoRuta(x.ruta)}: caminas ${Math.round(x.caminarOrigenM)} m al subir y ${Math.round(x.caminarDestinoM)} m al bajar, ${kmTxt(x.viajeM)} en bus. Fuente: ${fuentesTxt(x.fuentes)}.${osm}${tiempoTxt(t)}`);
+      });
+      const m = tx[0];
+      resumen = `${V.textoRuta(m.x.ruta)}: ruta directa${m.t && m.t.totalSinEsperaMin !== null ? `, ${minTxt(m.t.totalSinEsperaMin)} aprox.` : ''}, caminas ${Math.round(m.x.caminarTotalM)} m.`;
+      tx.slice(1).forEach(({ x, t }) => alternativas.push(`${V.textoRuta(x.ruta)}: directa${t && t.totalSinEsperaMin !== null ? `, ${minTxt(t.totalSinEsperaMin)} aprox.` : ''}, caminas ${Math.round(x.caminarTotalM)} m.`));
       if (c.tiempo && c.tiempo.velocidadPieMs) lineas.push(`Los minutos son una aproximación, no es una medición: a pie, ${String(c.tiempo.velocidadPieMs).replace('.', ',')} m/s en línea recta (${c.tiempo.fuentePie}; el recorrido real por calles es más largo); en bus, ${c.tiempo.fuenteBus}.`);
       if (u.length > 6) lineas.push(`Y ${u.length - 6} más.`);
+      tramos = u.slice(0, 6).map((x) => ({
+        nombre: V.textoRuta(x.ruta), linea: x.ruta.linea, color: x.ruta.color || null, segmento: x.segmento, subida: x.subida, bajada: x.bajada,
+        caminarOrigenM: x.caminarOrigenM, caminarDestinoM: x.caminarDestinoM, fuentes: x.fuentes,
+      }));
     } else {
       const cd = V.cercanas(dest, c.viajeRutas, filtro).length;
       const co = V.cercanas(c.punto, c.viajeRutas, filtro).length;
       lineas.push(`No hay ninguna ruta directa: ${plural(cd, 'ruta pasa', 'rutas pasan')} a ${fmtDist(max)} o menos del destino y ${plural(co, 'ruta pasa', 'rutas pasan')} a esa distancia de tu punto, pero ninguna sirve a los dos en ese orden.`);
+      const trasM = c.trasbordoM || V.TRASBORDO_M;
+      const tr = V.rutasConTrasbordo(c.punto, dest, c.viajeRutas, { ...filtro, trasbordoM: trasM, tiempo: c.tiempo, paradas: c.viajeParadas || [], max: c.maxTrasbordos || V.MAX_TRASBORDOS });
+      if (tr.trasbordos.length) {
+        lineas.push(`Con un trasbordo hay ${plural(tr.trasbordos.length, 'opción', 'opciones')} (subes a la ruta A a ${fmtDist(max)} o menos de tu punto, la dejas donde pasa a ${fmtDist(trasM)} o menos de la ruta B, y bajas de la B a ${fmtDist(max)} o menos del destino; cada ruta en su sentido):`);
+        const tx = tr.trasbordos.map((x) => ({ x, t: V.estimarTiempoTrasbordo(x, c.tiempo), nombre: `${V.textoRuta(x.rutaA)} → bajar en ${dondeBajar(x)} → ${V.textoRuta(x.rutaB)}` }));
+        tx.forEach(({ x, t, nombre }) => {
+          const tt = tiempoTxt({ ...t, esperas: 2 });
+          lineas.push(`• ${nombre}: caminas ${Math.round(x.caminarOrigenM)} m al subir, ${Math.round(x.caminarTrasbordoM)} m entre las dos rutas y ${Math.round(x.caminarDestinoM)} m al bajar (${Math.round(x.caminarTotalM)} m en total); ${kmTxt(x.viajeAM)} y ${kmTxt(x.viajeBM)} en bus. Fuente: OpenStreetMap.${tt}`);
+        });
+        const m = tx[0];
+        resumen = `${m.x.rutaA.linea} → bajar en ${m.x.parada ? `«${m.x.parada.nombre || 'parada sin nombre'}»` : 'el cruce del mapa'} → ${m.x.rutaB.linea}: con un trasbordo${m.t.totalSinEsperaMin !== null ? `, ${minTxt(m.t.totalSinEsperaMin)} aprox. sin esperas` : ''}, caminas ${Math.round(m.x.caminarTotalM)} m.`;
+        tx.slice(1).forEach(({ x, t }) => alternativas.push(`${x.rutaA.linea} → ${x.rutaB.linea}: con un trasbordo${t.totalSinEsperaMin !== null ? `, ${minTxt(t.totalSinEsperaMin)} aprox. sin esperas` : ''}, caminas ${Math.round(x.caminarTotalM)} m.`));
+        if (c.tiempo && c.tiempo.velocidadPieMs) lineas.push(`Los minutos son una aproximación, no es una medición: a pie, ${String(c.tiempo.velocidadPieMs).replace('.', ',')} m/s en línea recta (${c.tiempo.fuentePie}); en bus, ${c.tiempo.fuenteBus}.`);
+        lineas.push(NOTA_TRASBORDO);
+        // En el mapa, las tres mejores: cada una son dos tramos (la ruta A y la B) y un punto de trasbordo.
+        tr.trasbordos.slice(0, 3).forEach((x, k) => {
+          const base = { opcion: k + 1, fuentes: ['OSM'] };
+          tramos.push({ ...base, nombre: `${V.textoRuta(x.rutaA)} (1.ª ruta)`, linea: x.rutaA.linea, color: x.rutaA.color || null, segmento: x.segmentoA, subida: x.subida, bajada: x.bajadaA, caminarOrigenM: x.caminarOrigenM, caminarDestinoM: x.caminarTrasbordoM, detalle: `Subes a esta ruta (caminas ${Math.round(x.caminarOrigenM)} m) y bajas donde marca el mapa para tomar la otra (caminas ${Math.round(x.caminarTrasbordoM)} m en línea recta).` });
+          tramos.push({ ...base, nombre: `${V.textoRuta(x.rutaB)} (2.ª ruta)`, linea: x.rutaB.linea, color: x.rutaB.color || null, segmento: x.segmentoB, subida: x.subidaB, bajada: x.bajada, caminarOrigenM: x.caminarTrasbordoM, caminarDestinoM: x.caminarDestinoM, detalle: `Subes a esta ruta en el trasbordo y bajas a ${Math.round(x.caminarDestinoM)} m del destino (en línea recta).` });
+          trasbordos.push({ opcion: k + 1, lat: x.trasbordo.lat, lon: x.trasbordo.lon, nombre: x.parada ? x.parada.nombre : null, parada: x.parada });
+        });
+      } else {
+        lineas.push(`Tampoco hay una opción con un trasbordo: ninguna combinación de dos rutas cumple a la vez los ${fmtDist(max)} a pie en las puntas, los ${fmtDist(trasM)} entre las dos rutas y el sentido de cada una.`);
+      }
     }
     if (rev.length) lineas.push(`${plural(rev.length, 'ruta pasa', 'rutas pasan')} por los dos puntos en sentido contrario (te sirven para el regreso, no para ir): ${[...new Set(rev.map((x) => V.textoRuta(x.ruta)))].slice(0, 4).join('; ')}.`);
     if (dest.nota) lineas.push(dest.nota);
     lineas.push(NOTA_VIAJE);
-    const tramos = u.slice(0, 6).map((x) => ({
-      nombre: V.textoRuta(x.ruta), linea: x.ruta.linea, color: x.ruta.color || null, segmento: x.segmento, subida: x.subida, bajada: x.bajada,
-      caminarOrigenM: x.caminarOrigenM, caminarDestinoM: x.caminarDestinoM, fuentes: x.fuentes,
-    }));
+    const textoFinal = resumen ? [lineas[0], `Mejor opción: ${resumen}`, ...lineas.slice(1)] : lineas;
     return {
-      texto: lineas.join('\n'),
+      texto: textoFinal.join('\n'),
+      resumen,
+      alternativas,
       sugerencias: ['Dame un resumen del punto', `Busco una zona con ruta directa al ${dest.nombre}`],
-      mapa: { capas: ['viaje'], viaje: { origen: { lat: c.punto.lat, lon: c.punto.lon }, destino: { lat: dest.lat, lon: dest.lon, nombre: dest.nombre }, tramos, celdas: [] } },
+      mapa: { capas: ['viaje'], viaje: { origen: { lat: c.punto.lat, lon: c.punto.lon }, destino: { lat: dest.lat, lon: dest.lon, nombre: dest.nombre }, tramos, trasbordos, celdas: [] } },
     };
   }
 

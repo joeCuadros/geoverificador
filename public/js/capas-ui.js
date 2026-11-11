@@ -87,11 +87,15 @@ const CapasUI = (() => {
     (v.celdas || []).forEach((c) => L.circleMarker([c.lat, c.lon], { radius: 4, color: "#0b5d4f", weight: 0, fillColor: "#0b5d4f", fillOpacity: 0.45, pane: "capasPuntos", interactive: false }).addTo(grupo));
     (v.tramos || []).forEach((t) => {
       const color = t.color || "#0b5d4f";
-      const detalle = `Caminas ${Math.round(t.caminarOrigenM)} m al subir y ${Math.round(t.caminarDestinoM)} m al bajar (en línea recta). Fuente: ${(t.fuentes || []).join(" y ")}. El trazado es el publicado; no sé dónde se sube ni se baja.`;
+      const detalle = `${t.detalle ? `${t.detalle} ` : `Caminas ${Math.round(t.caminarOrigenM)} m al subir y ${Math.round(t.caminarDestinoM)} m al bajar (en línea recta). `}Fuente: ${(t.fuentes || []).join(" y ")}. El trazado es el publicado; no sé dónde se sube ni se baja.`;
       L.polyline(t.segmento.map(([x, y]) => [y, x]), { color, weight: 6, opacity: 0.9, pane: "capasLineas" }).bindPopup(popup(t.nombre, detalle, null)).addTo(grupo);
       [[t.subida, "Subes aquí (el punto de la ruta más cercano a tu casa)"], [t.bajada, "Bajas aquí (el punto de la ruta más cercano al destino)"]].forEach(([p, txt]) => {
         if (p) L.circleMarker([p.lat, p.lon], { radius: 6, color: "#fff", weight: 2, fillColor: color, fillOpacity: 1, pane: "capasPuntos" }).bindPopup(popup(t.nombre, txt, null)).addTo(grupo);
       });
+    });
+    (v.trasbordos || []).forEach((p) => {
+      L.circleMarker([p.lat, p.lon], { radius: 8, color: "#fff", weight: 3, fillColor: "#f59e0b", fillOpacity: 1, pane: "capasPuntos" })
+        .bindPopup(popup("Trasbordo", `Bajas de la 1.ª ruta y caminas hasta la 2.ª (en línea recta).${p.nombre ? ` Parada mapeada cerca: ${p.nombre}.` : ' No hay una parada mapeada cerca: el cruce es el punto de la ruta más cercano a la otra.'}`, null)).addTo(grupo);
     });
     if (v.origen) L.circleMarker([v.origen.lat, v.origen.lon], { radius: 9, color: "#fff", weight: 3, fillColor: "#1d4ed8", fillOpacity: 1, pane: "capasPuntos" }).bindPopup(popup("Tu punto (de donde sales)", null, null)).addTo(grupo);
     if (v.destino) L.circleMarker([v.destino.lat, v.destino.lon], { radius: 9, color: "#fff", weight: 3, fillColor: "#b91c1c", fillOpacity: 1, pane: "capasPuntos" }).bindPopup(popup(v.destino.nombre || "Destino", "Destino (punto de referencia)", null)).addTo(grupo);

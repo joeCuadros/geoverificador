@@ -1288,6 +1288,31 @@ console.log('\n== Registro oficial del SIT frente a las rutas de OpenStreetMap =
   console.log(`INFO  Registro SIT (2017): unidades en OSM ${c.unidades.enOsm} de ${c.unidades.oficiales} (${Math.round((100 * c.unidades.enOsm) / c.unidades.oficiales)} %); rutas de OSM cuya empresa coincide con el concesionario ${c.empresa.total.coincide} de ${c.empresa.total.rutasOsm}; ramales distintos de OSM ${Object.values(c.rutas).reduce((t, r) => t + r.ramalesOsm, 0)} frente a ${Object.values(c.rutas).reduce((t, r) => t + r.oficiales, 0)} rutas oficiales de las mismas unidades; unidades con menos ramales en OSM que rutas oficiales: ${menos.join(', ') || 'ninguna'}`);
 }
 
+// Y3. Cobertura del viaje en combi o bus sobre toda la ciudad (scripts/cobertura-viaje.mjs, scripts/lib/cobertura-viaje.js): no debe empeorar, y la búsqueda debe caber en 2 s.
+console.log('\n== Viaje en combi o bus: cobertura de la ciudad y tiempo de búsqueda ==');
+{
+  const CobR = createRequire(import.meta.url)('./lib/cobertura-viaje.js');
+  const VR = createRequire(import.meta.url)('../public/js/viaje.js');
+  const base = json('../docs/validacion/cobertura-viaje.json');
+  const rutasV = VR.desdeOsm(json('data/rutas_osm.geojson'));
+  const celdas = CobR.celdasUrbanas({ zonas: json('data/zonas_aqp.geojson'), reglas: json('data/reglas_zonas.json'), distritos: json('data/distritos_aqp.geojson'), pasoM: base.pasoM });
+  comprobar('Cobertura viaje: la rejilla de orígenes (cada 500 m, zonas edificables o condicionadas del plano dentro de un distrito) es la de la línea base', celdas.length === base.origenes && base.caminarM === CONFIG.viaje.caminarM && base.trasbordoM === CONFIG.viaje.trasbordoM, `${celdas.length} orígenes`);
+  const d = CONFIG.destinos.find((x) => x.id === 'parque-industrial');
+  const destino = { lat: d.lat, lon: d.lon };
+  const op = { caminarM: CONFIG.viaje.caminarM, trasbordoM: CONFIG.viaje.trasbordoM, tiempo: CONFIG.viaje.tiempo };
+  const prep = VR.prepararDestinoTrasbordo(destino, rutasV, op);
+  const ms = [];
+  const filas = celdas.map((c) => { const t0 = performance.now(); const r = CobR.clasificar({ lat: c.lat, lon: c.lon }, destino, rutasV, { ...op, preparado: prep }); ms.push(performance.now() - t0); return { ...c, ...r }; });
+  const r = CobR.resumir(filas);
+  const b = base.destinos['parque-industrial'];
+  comprobar('Cobertura viaje: al Parque Industrial el porcentaje de orígenes con solución (directa o con un trasbordo) no baja de la línea base (2 puntos de tolerancia)', r.pctConSolucion >= b.pctConSolucion - 2 && r.directa >= b.directa - 10, `${r.pctConSolucion} % con solución (base ${b.pctConSolucion} %); directa ${r.directa} (base ${b.directa}), con un trasbordo ${r.trasbordo} (base ${b.trasbordo}), ninguna ${r.ninguna}`);
+  comprobar('Cobertura viaje: los orígenes «sin_trasbordo» (hay rutas cerca de los dos extremos pero ninguna combinación respeta el sentido) no aumentan respecto de la línea base', (r.motivos.sin_trasbordo || 0) <= (b.motivos.sin_trasbordo || 0) + 2, `${r.motivos.sin_trasbordo || 0} (base ${b.motivos.sin_trasbordo || 0})`);
+  const max = Math.max(...ms);
+  const completos = filas.filter((f) => f.estado !== 'directa').slice(0, 150).map((f) => { const t0 = performance.now(); VR.rutasConTrasbordo({ lat: f.lat, lon: f.lon }, destino, rutasV, { ...op, max: 5 }); return performance.now() - t0; });
+  comprobar('Viaje: la búsqueda de viajes con un trasbordo desde cualquier origen de la rejilla cabe en el presupuesto de 2 s (peor caso, con el destino sin preparar)', max < 2000 && Math.max(...completos) < 2000, `peor caso ${max.toFixed(0)} ms con el destino preparado y ${Math.max(...completos).toFixed(0)} ms sin prepararlo`);
+  console.log(`INFO  Cobertura al Parque Industrial: directa ${r.directa}, con un trasbordo ${r.trasbordo}, ninguna ${r.ninguna} de ${r.total} orígenes; motivos ${JSON.stringify(r.motivos)}`);
+}
+
 console.log(`\n${pruebas - fallos} de ${pruebas} comprobaciones correctas.`);
 if (fallos) {
   console.error(`${fallos} FALLARON.`);
