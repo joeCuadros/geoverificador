@@ -14,7 +14,7 @@
  *  NO comprueba que la zonificación coincida con el plano oficial ni que las denuncias reflejen la realidad:
  *  eso se valida contra fuentes externas (ver docs/VALIDACION.md).
  */
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
@@ -1176,6 +1176,67 @@ console.log('\n== D. Rutas de SmartBus: integridad y cálculos frente a métodos
   const plazaRutas = RutasMod.cerca(indice, CONFIG.center[0], CONFIG.center[1], D);
   console.log(`INFO  Plaza de Armas: ${RutasMod.resumen(plazaRutas, 20)}`);
   comprobar('Rutas: lejos de toda ruta (Pampa de Majes, 120 km al oeste) no se inventa ninguna línea', RutasMod.cerca(indice, -16.35, -72.65, D).lineas.length === 0);
+}
+
+// Y. Agua (scripts/convertir-acopio-sedapar.mjs y scripts/descargar-interrupciones-sunass.mjs): los puntos de acopio de SEDAPAR (datos de 2017) y las interrupciones del servicio de
+// agua (SUNASS, 2019-2024). INFORMATIVOS. La conversión de UTM se comprueba con otra proyección escrita aparte (Snyder, de latitud y longitud a UTM).
+{
+  const CalcW = createRequire(import.meta.url)('../public/js/calculos.js');
+  const fc = json('data/agua/puntos_acopio.geojson');
+  const f = fc.features;
+  const m = fc.metadata || {};
+  comprobar('Agua/acopio: metadata con la fuente (SEDAPAR), el enlace de gob.pe, la fecha de publicación (2024-02-16), el periodo de los datos (2017), que es informativo y lo que NO dice', /SEDAPAR/.test(m.fuente || '') && /gob\.pe\/institucion\/sedapar\/informes-publicaciones\/5198948/.test(m.url_pagina || '') && m.fecha_publicacion === '2024-02-16' && /2017/.test(m.periodo_de_los_datos || '') && /sin umbral/i.test(m.informativo || '') && /NO dice que haya agua/.test(m.no_dice || ''));
+  comprobar('Agua/acopio: las 582 fichas son los puntos más los 7 descartados con su motivo, y el conteo por distrito suma los puntos', m.fichas_en_la_fuente === 582 && f.length === m.registros && m.registros + m.descartados.length === 582 && m.descartados.length === 7 && m.descartados.every((d) => d.distrito && d.pagina_pdf && d.motivo) && Object.values(m.conteo_por_distrito).reduce((t, n) => t + n, 0) === f.length);
+  comprobar('Agua/acopio: la verificación contra los 16 PDF coincidió en todas las fichas y lo que el CSV no recoge son exactamente las 7 descartadas', m.verificacion_contra_pdf && m.verificacion_contra_pdf.pdf_comprobados === 16 && m.verificacion_contra_pdf.sin_coincidencia === 0 && m.verificacion_contra_pdf.fichas_del_csv_comparadas === f.length && m.verificacion_contra_pdf.fichas_del_pdf_que_el_csv_no_recoge.length === 7);
+  // Proyección de latitud y longitud a UTM 19 sur (Snyder, 1987): otro método que el de la conversión; debe devolver el norte y el este de la ficha.
+  const aUtm = (latG, lonG) => {
+    const a = 6378137; const e2 = 0.00669437999014; const ep2 = e2 / (1 - e2); const k0 = 0.9996;
+    const fi = (latG * Math.PI) / 180; const l = ((lonG + 69) * Math.PI) / 180;
+    const N = a / Math.sqrt(1 - e2 * Math.sin(fi) ** 2); const T = Math.tan(fi) ** 2; const C = ep2 * Math.cos(fi) ** 2; const A = l * Math.cos(fi);
+    const M = a * ((1 - e2 / 4 - (3 * e2 ** 2) / 64 - (5 * e2 ** 3) / 256) * fi - ((3 * e2) / 8 + (3 * e2 ** 2) / 32 + (45 * e2 ** 3) / 1024) * Math.sin(2 * fi) + ((15 * e2 ** 2) / 256 + (45 * e2 ** 3) / 1024) * Math.sin(4 * fi) - ((35 * e2 ** 3) / 3072) * Math.sin(6 * fi));
+    const x = k0 * N * (A + ((1 - T + C) * A ** 3) / 6 + ((5 - 18 * T + T ** 2 + 72 * C - 58 * ep2) * A ** 5) / 120);
+    const y = k0 * (M + N * Math.tan(fi) * (A ** 2 / 2 + ((5 - T + 9 * C + 4 * C ** 2) * A ** 4) / 24 + ((61 - 58 * T + T ** 2 + 600 * C - 330 * ep2) * A ** 6) / 720));
+    return { este: 500000 + x, norte: 10000000 + y };
+  };
+  const peor = f.reduce((mx, x) => { const u = aUtm(x.geometry.coordinates[1], x.geometry.coordinates[0]); return Math.max(mx, Math.abs(u.norte - x.properties.utm_norte), Math.abs(u.este - x.properties.utm_este)); }, 0);
+  comprobar('Agua/acopio: la coordenada de cada punto, proyectada de vuelta a UTM con otro método, da el norte y el este de su ficha a menos de 0,5 m', peor < 0.5, `diferencia máxima ${peor.toFixed(3)} m`);
+  comprobar('Agua/acopio: solo puntos dentro de la caja de Arequipa metropolitana, con distrito y dirección', f.every((x) => x.geometry.type === 'Point' && x.geometry.coordinates[0] > -71.75 && x.geometry.coordinates[0] < -71.35 && x.geometry.coordinates[1] > -16.6 && x.geometry.coordinates[1] < -16.2 && x.properties.distrito && typeof x.properties.direccion === 'string'));
+  const plaza = CalcW.evaluarAcopio({ lat: -16.3989, lon: -71.5369 }, f, { fuente: m.fuente, fecha: m.fecha_publicacion, fechaDatos: m.periodo_de_los_datos });
+  const indep = Math.min(...f.map((x) => { const dLa = ((x.geometry.coordinates[1] + 16.3989) * Math.PI) / 180; const dLo = ((x.geometry.coordinates[0] + 71.5369) * Math.PI) / 180; const h = Math.sin(dLa / 2) ** 2 + Math.cos((16.3989 * Math.PI) / 180) * Math.cos((x.geometry.coordinates[1] * Math.PI) / 180) * Math.sin(dLo / 2) ** 2; return 2 * 6371008.8 * Math.asin(Math.sqrt(h)); }));
+  comprobar('Agua/acopio: desde la Plaza de Armas el más cercano (módulo del navegador) coincide con un cálculo independiente y está a menos de 500 m', plaza.estado === 'INFORMATIVO' && Math.abs(plaza.distanciaM - indep) < 0.01 && plaza.distanciaM < 500, `${plaza.distanciaM.toFixed(1)} m`);
+
+  const it = json('data/agua/interrupciones_sedapar.json');
+  const mi = it.metadata || {};
+  comprobar('Agua/interrupciones: metadata con la fuente (SUNASS), los enlaces, la licencia ODC-By, la fecha de descarga, la huella del CSV, el periodo (2019-10-03 a 2024-04-26), los años completos y parciales, que es informativo y lo que NO dice', /SUNASS/.test(mi.fuente || '') && /datosabiertos\.gob\.pe\/dataset\/registro-de-interrupciones/.test(mi.url_pagina || '') && /Interrupciones_Dataset\.csv$/.test(mi.url_csv || '') && /ODC-By/.test(mi.licencia || '') && /^\d{4}-\d{2}-\d{2}$/.test(mi.fecha_descarga || '') && /^[0-9a-f]{64}$/.test(mi.sha256_csv || '') && mi.periodo.desde === '2019-10-03' && mi.periodo.hasta === '2024-04-26' && mi.anios_completos.join() === '2020,2021,2022,2023' && mi.anios_parciales.join() === '2019,2024' && /sin umbral/i.test(mi.informativo || '') && /reportad/i.test(mi.no_dice || ''));
+  const ds = Object.entries(it.distritos);
+  comprobar('Agua/interrupciones: en cada distrito los años suman el total, las imprevistas y programadas suman el total y las horas del total son las de los años', ds.length > 10 && ds.every(([, d]) => Object.values(d.por_anio).reduce((t, v) => t + v.n, 0) === d.total.n && d.total.imprevistas + d.total.programadas === d.total.n && Math.abs(Object.values(d.por_anio).reduce((t, v) => t + v.horas, 0) - d.total.horas) < 0.1));
+  comprobar('Agua/interrupciones: el total de interrupciones contadas de la metadata es la suma de los distritos y ningún distrito del archivo está fuera de los de distritos_aqp.geojson', mi.interrupciones_contadas === ds.reduce((t, [, d]) => t + d.total.n, 0) && ds.every(([k]) => json('data/distritos_aqp.geojson').features.some((x) => x.properties.distrito === k)));
+  // Recuento independiente contra el CSV de la SUNASS, si está en la caché (.cache-sunass/, lo deja pnpm datos:interrupciones): sin la biblioteca del script, con un bucle simple.
+  const rutaCsv = join(RAIZ, '..', '.cache-sunass', 'Interrupciones_Dataset.csv');
+  if (existsSync(rutaCsv)) {
+    const texto = readFileSync(rutaCsv, 'utf8').replace(/^\uFEFF/, '').split(/\r?\n/);
+    const cab = texto[0].split(',');
+    const ix = Object.fromEntries(cab.map((c, i) => [c, i]));
+    const sin = (s) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase();
+    const horas = (r) => { const t = (fe, ho) => Date.UTC(+fe.slice(0, 4), +fe.slice(4, 6) - 1, +fe.slice(6, 8), +ho.split(':')[0], +ho.split(':')[1]); return (t(r[ix.FECHAFIN], r[ix.HORAFIN]) - t(r[ix.FECHAINICIO], r[ix.HORAINICIO])) / 3600000; };
+    const quiero = ['CERRO COLORADO', 'AREQUIPA', 'CAYMA'];
+    const vistos = new Set();
+    const cuenta = Object.fromEntries(quiero.map((q) => [q, { n: 0, h: 0 }]));
+    for (const linea of texto.slice(1)) {
+      if (!linea) continue;
+      const r = linea.split(','); // los registros de SEDAPAR no traen comas dentro de comillas en estas columnas
+      if (r.length !== cab.length || sin(r[ix.EPS]) !== 'SEDAPAR' || sin(r[ix.TIPOSERVICIO]) !== 'AGUA POTABLE') continue;
+      const d = sin(r[ix.DISTRITO]);
+      if (!quiero.includes(d) || vistos.has(r[ix.IDINTERRUPCION] + '|' + d)) continue;
+      vistos.add(r[ix.IDINTERRUPCION] + '|' + d);
+      cuenta[d].n++;
+      cuenta[d].h += horas(r);
+    }
+    comprobar('Agua/interrupciones: un recuento independiente del CSV de la SUNASS (bucle simple, sin la biblioteca) da el mismo número de interrupciones y de horas en Cerro Colorado, Arequipa y Cayma', quiero.every((q) => cuenta[q].n === it.distritos[q].total.n && Math.abs(cuenta[q].h - it.distritos[q].total.horas) < 0.5), quiero.map((q) => `${q} ${cuenta[q].n}/${it.distritos[q].total.n}`).join(', '));
+  } else console.log('INFO  Agua/interrupciones: no está .cache-sunass/ (corre pnpm datos:interrupciones): se omitió el recuento independiente contra el CSV');
+  const rc = CalcW.resumirInterrupciones('Cerro Colorado', it);
+  comprobar('Agua/interrupciones: el resumen del módulo del navegador para Cerro Colorado sale del archivo: promedio por año completo y años parciales aparte', rc.estado === 'INFORMATIVO' && rc.promedioN === Math.round([2020, 2021, 2022, 2023].reduce((t, a) => t + it.distritos['CERRO COLORADO'].por_anio[a].n, 0) / 4) && rc.parciales.length === 2);
+  console.log(`INFO  Agua: ${f.length} puntos de acopio (de 582 fichas; datos de 2017, publicado ${m.fecha_publicacion}); ${mi.interrupciones_contadas} interrupciones de SEDAPAR en ${ds.length} distritos (${mi.periodo.desde} a ${mi.periodo.hasta}); diferencia máxima de la proyección UTM ${peor.toFixed(3)} m`);
 }
 
 // Z. Rutas de bus de OpenStreetMap (scripts/descargar-rutas-osm.mjs) y el viaje en combi (public/js/viaje.js); va al final porque guarda en memoria los trazados densificados y eso ralentiza las pruebas de tiempo: el archivo, su acuerdo con SmartBus y un viaje conocido.

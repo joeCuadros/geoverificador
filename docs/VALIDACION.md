@@ -325,3 +325,7 @@ Opciones: `--radios=50,100,200` (m), `--umbral-nombre=0.9`, `--paso=500` (separa
 - [ ] Revisión del mapa de calor con conocedores (§3.3).
 - [x] Descargar RENIPRESS y el padrón de ESCALE, fijar los criterios de aceptación y correr `pnpm datos:validar-oficial` (§3.4; hecho el 2026-11-09, y repetido el mismo día con los filtros oficiales corregidos). Fuente primaria decidida e implementada: RENIPRESS y ESCALE, con OpenStreetMap de respaldo. Falta revisar a mano una muestra de los no emparejados.
 - [ ] Registrar resultados en las plantillas y completar este documento.
+
+## Agua: puntos de acopio de SEDAPAR y conversión de coordenadas
+
+**Qué se midió.** Que las coordenadas de los puntos de acopio (UTM zona 19 sur, EPSG:32719, del directorio de SEDAPAR) llegan bien a longitud y latitud WGS84 y coinciden con lo que dicen los PDF. (1) `scripts/lib/utm.js` frente a PROJ (proyección independiente): menos de 1 cm en cinco puntos. (2) Cada uno de los 575 puntos, proyectado de vuelta a UTM con otra fórmula (Snyder) en `pnpm datos:verificar`: diferencia máxima 0,006 m. (3) `pnpm datos:acopio --verificar-pdf`: las coordenadas de las 575 fichas del CSV están, exactas, en el texto de su PDF (16 PDF, 2026-11-11); los PDF traen 582 fichas y las 7 que no se usan son las que traen una coordenada imposible. **Cómo leerlo.** Valida la conversión y la transcripción; no valida que los puntos sigan vigentes (los datos son de 2017) ni que haya agua en ellos.
