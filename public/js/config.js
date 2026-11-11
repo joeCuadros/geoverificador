@@ -123,6 +123,16 @@ const CONFIG = {
     mercado: null,       // pendiente de decisión del usuario; referencia propuesta: ninguna verificada
     supermercado: null,  // pendiente de decisión del usuario; referencia propuesta: ninguna verificada
     mall: null,          // pendiente de decisión del usuario; referencia propuesta: ninguna verificada
+    // Servicios de la vida diaria (OpenStreetMap): finanzas (bancos y cajeros), comida_fuera (restaurantes y cafés) y recreacion (juegos infantiles) son necesidades
+    // INFORMATIVAS del comercio (Calculos.COMERCIO); banco, cajero, restaurante, cafe y juego_infantil son los tipos de cada una. Los parques ya son areaVerde.
+    finanzas: null,
+    comida_fuera: null,
+    recreacion: null,
+    banco: null,
+    cajero: null,
+    restaurante: null,
+    cafe: null,
+    juego_infantil: null,
     // Electricidad: área de concesión de distribución (MINEM-DGE). INFORMATIVA: ninguna distancia aplica; dentro o fuera de una concesión no es una conexión.
     electricidad: null,
     // Concesiones mineras (Catastro Minero de INGEMMET): INFORMATIVAS; una concesión es un derecho sobre los minerales, no una distancia ni una norma.
@@ -142,6 +152,14 @@ const CONFIG = {
     comercio_barrio: 'Sin umbral: pendiente de decisión del usuario; referencia propuesta: ninguna con fuente verificada en metros; se muestra solo como dato informativo',
     mercado: 'Sin umbral: pendiente de decisión del usuario; referencia propuesta: ninguna con fuente verificada en metros; se muestra solo como dato informativo',
     supermercado: 'Sin umbral: pendiente de decisión del usuario; referencia propuesta: ninguna con fuente verificada en metros; se muestra solo como dato informativo',
+    finanzas: 'Sin umbral: pendiente de decisión del usuario; referencia propuesta: ninguna con fuente verificada en metros; se muestra solo como dato informativo',
+    comida_fuera: 'Sin umbral: pendiente de decisión del usuario; referencia propuesta: ninguna con fuente verificada en metros; se muestra solo como dato informativo',
+    recreacion: 'Sin umbral: pendiente de decisión del usuario; referencia propuesta: ninguna con fuente verificada en metros; se muestra solo como dato informativo',
+    banco: 'Sin umbral: pendiente de decisión del usuario; referencia propuesta: ninguna con fuente verificada en metros; se muestra solo como dato informativo',
+    cajero: 'Sin umbral: pendiente de decisión del usuario; referencia propuesta: ninguna con fuente verificada en metros; se muestra solo como dato informativo',
+    restaurante: 'Sin umbral: pendiente de decisión del usuario; referencia propuesta: ninguna con fuente verificada en metros; se muestra solo como dato informativo',
+    cafe: 'Sin umbral: pendiente de decisión del usuario; referencia propuesta: ninguna con fuente verificada en metros; se muestra solo como dato informativo',
+    juego_infantil: 'Sin umbral: pendiente de decisión del usuario; referencia propuesta: ninguna con fuente verificada en metros; se muestra solo como dato informativo',
     mall: 'Sin umbral: pendiente de decisión del usuario; referencia propuesta: ninguna con fuente verificada en metros; se muestra solo como dato informativo',
     censo: 'Sin umbral: son cifras del censo de la manzana (año 2017), no una distancia ni una norma; se muestran solo como dato informativo',
     mineria: 'Sin umbral: no aplica una distancia de referencia; dentro o fuera de una concesión minera no dice si hay minería ni qué se puede hacer en el predio; se muestra solo como dato informativo',
@@ -214,6 +232,9 @@ const CONFIG = {
       supermercados: 'data/equipamiento/supermercados.geojson', // supermercados: informativos, aparte de los mercados
       mineria: 'data/mineria/concesiones_mineras.geojson', // concesiones mineras (INGEMMET): informativo (scripts/descargar-concesiones-mineras.mjs)
       electricidad: 'data/electricidad/concesiones_distribucion.geojson', // áreas de concesión de distribución eléctrica (MINEM-DGE): informativo (scripts/descargar-concesiones-electricas.mjs)
+      finanzas: 'data/equipamiento/finanzas.geojson', // bancos y cajeros: informativos (scripts/descargar-servicios-osm.mjs)
+      comida_fuera: 'data/equipamiento/comida_fuera.geojson', // restaurantes y cafés: informativos
+      recreacion: 'data/equipamiento/recreacion.geojson', // áreas de juegos infantiles: informativas (los parques son areasVerdes)
       malls: 'data/equipamiento/malls.geojson', // malls (centros comerciales): informativos; polígonos donde OSM los tiene
       educacion: 'data/equipamiento/educacion.geojson',
       transporte: 'data/equipamiento/transporte.geojson',

@@ -136,8 +136,13 @@ const Asistente = (() => {
       abastecimiento: /\b(mercados?|mercadillos?|super\s?mercados?|hipermercados?|abastecimiento|viveres|abarrotes|(?:comprar|conseguir)\s+(?:la\s+|mi\s+)?(?:comida|alimentos|verduras|frutas))\b/,
       compras_ocio: /\b(malls?|centros? comercial(?:es)?|shopping|outlets?|ocio|ir de compras)\b/,
       comercio_barrio: /\b(galerias?(?:\s+comercial(?:es)?)?|comercio\s+(?:de|del)\s+barrio|comercio\s+vecinal|tiendas?\s+de\s+barrio)\b/,
+      // Servicios de la vida diaria (informativos): finanzas (banco, cajero), comida fuera de casa (restaurante, café) y recreación (juegos infantiles).
+      // «Parque» solo sigue siendo el criterio de área verde; «parque infantil» y «juegos infantiles» son recreación.
+      finanzas: /\b(bancos?|cajeros?(?:\s+automaticos?)?|atm|agencias? bancarias?|sacar (?:plata|dinero|efectivo))\b/,
+      comida_fuera: /\b(restaurantes?|restaurant|cafes?|cafeterias?|comer fuera|salir a comer|donde comer)\b/,
+      recreacion: /\b(juegos? infantil(?:es)?|parques? infantil(?:es)?|parques? de juegos|areas? de juegos|columpios?|resbaladeras?|playgrounds?)\b/,
     },
-    comercioTodo: /\b(mercados?|mercadillos?|super\s?mercados?|hipermercados?|abastecimiento|viveres|abarrotes|(?:comprar|conseguir)\s+(?:la\s+|mi\s+)?(?:comida|alimentos|verduras|frutas)|malls?|centros? comercial(?:es)?|shopping|outlets?|ocio|ir de compras|galerias?(?:\s+comercial(?:es)?)?|comercio\s+(?:de|del)\s+barrio|comercio\s+vecinal|tiendas?\s+de\s+barrio)\b/g,
+    comercioTodo: /\b(mercados?|mercadillos?|super\s?mercados?|hipermercados?|abastecimiento|viveres|abarrotes|(?:comprar|conseguir)\s+(?:la\s+|mi\s+)?(?:comida|alimentos|verduras|frutas)|malls?|centros? comercial(?:es)?|shopping|outlets?|ocio|ir de compras|galerias?(?:\s+comercial(?:es)?)?|comercio\s+(?:de|del)\s+barrio|comercio\s+vecinal|tiendas?\s+de\s+barrio|bancos?|cajeros?(?:\s+automaticos?)?|atm|agencias? bancarias?|sacar (?:plata|dinero|efectivo)|restaurantes?|restaurant|cafes?|cafeterias?|comer fuera|salir a comer|donde comer|juegos? infantil(?:es)?|parques? infantil(?:es)?|parques? de juegos|areas? de juegos|columpios?|resbaladeras?|playgrounds?)\b/g,
     // Electricidad (informativo): «¿hay luz?», electricidad, servicio o energía eléctrica, SEAL. «Luz» sola no cuenta («luz del día»).
     electricidad: /\b(electricidad|electric[oa]s?|electrificacion|seal|(?:hay|tiene|tienen|tengo|con|sin|falta|cuenta con)\s+(?:la\s+)?luz|luz\s+(?:electrica|en\s+(?:mi|el|este|esta|la))|concesion de distribucion)\b/,
     // Agua y desagüe (informativo): «¿hay agua en mi punto?», agua potable, desagüe, alcantarillado. «Agua» sola cuenta; «río» y «quebrada» siguen siendo cauces.
@@ -555,6 +560,7 @@ const Asistente = (() => {
    * Ordena los datos de OpenStreetMap y de zonificación para evaluarlos rápido.
    *   entrada: { salud, educacion, transporte, areasVerdes } (listas de Feature, como los archivos congelados)
    *            + consultorios?: lista de Feature de los consultorios médicos (informativos: solo se muestran y se cuentan)
+   *            + finanzas?, comida_fuera?, recreacion?: listas de Feature de bancos y cajeros, restaurantes y cafés, y juegos infantiles (informativos; cada Feature trae su `tipo`)
    *            + mercados?, supermercados?, malls?: listas de Feature (puntos o polígonos; informativos, como los consultorios); se reparten por necesidad (C.agruparComercio)
    *            + cauces?: [{ nombre, geometry }] (líneas de la red hidrográfica de la ANA; solo para «lejos de quebradas»)
    *   zonas:   [{ codigo, bbox, polys, regla }] (Zonificacion.zonas)
@@ -588,7 +594,7 @@ const Asistente = (() => {
       niveles.forEach((n) => colegios[n].push(puntoDe(f, n)));
       if (niveles.length > 0) colegiosLista.push({ ...puntoDe(f, niveles[0]), niveles });
     });
-    const comercio = C.agruparComercio({ mercados: e.mercados, supermercados: e.supermercados, malls: e.malls });
+    const comercio = C.agruparComercio({ mercados: e.mercados, supermercados: e.supermercados, malls: e.malls, finanzas: e.finanzas, comida_fuera: e.comida_fuera, recreacion: e.recreacion });
     const verdesTodos = (e.areasVerdes || [])
       .filter((f) => f && f.geometry)
       .map((f) => ({ geometry: f.geometry, areaM2: C.areaGeometriaM2(f.geometry), nombre: f.properties.nombre || null, osm: f.properties.osm || null, tags: f.properties.tags || {} }))
@@ -606,6 +612,9 @@ const Asistente = (() => {
       abastecimiento: comercioDe(comercio.abastecimiento), // comercio por necesidad: informativo, ninguna búsqueda lo usa
       compras_ocio: comercioDe(comercio.compras_ocio),
       comercio_barrio: comercioDe(comercio.comercio_barrio),
+      finanzas: comercioDe(comercio.finanzas), // servicios de la vida diaria: informativos, ninguna búsqueda los usa
+      comida_fuera: comercioDe(comercio.comida_fuera),
+      recreacion: comercioDe(comercio.recreacion),
       colegios,
       colegiosLista,
       verdesTodos,
@@ -978,10 +987,11 @@ const Asistente = (() => {
     return `${def.etiqueta} (informativo): ${r.nombre || 'sin nombre'} ${r.distanciaM === 0 ? 'con tu punto dentro de su terreno' : `a ${fmtDist(r.distanciaM)}`}${dentro ? ` (${dentro})` : ''}.${r.verificado ? ' Verificado con su fuente.' : ''}`;
   }
 
-  /** De un distrito: cuántos mercados y supermercados hay entre sus puntos de abastecimiento (vacío si no se sabe). */
-  function desgloseAbastecimiento(lista) {
-    const n = (tipo) => (lista || []).filter((p) => p.tipo === tipo).length;
-    const partes = [[n('mercado'), 'mercado de abastos', 'mercados de abastos'], [n('supermercado'), 'supermercado', 'supermercados']].filter(([k]) => k > 0).map(([k, uno, varios]) => plural(k, uno, varios));
+  /** De un distrito: cuántos hay de cada tipo entre los elementos de una necesidad con más de un tipo (mercados y supermercados, bancos y cajeros, restaurantes y cafés); vacío si no aplica. */
+  function desgloseTipos(id, lista) {
+    const def = C.COMERCIO[id];
+    if (!def || def.tipos.length < 2) return '';
+    const partes = def.tipos.map((t) => [(lista || []).filter((p) => p.tipo === t).length, C.COMERCIO_TIPO[t].singular, C.COMERCIO_TIPO[t].plural]).filter(([k]) => k > 0).map(([k, uno, varios]) => plural(k, uno, varios));
     return partes.length ? `: ${partes.join(' y ')}` : '';
   }
 
@@ -1003,7 +1013,7 @@ const Asistente = (() => {
         if (!k) return `${def.etiqueta}: todavía no tengo ese dato.`;
         if (k.total === 0) return `En ${t} no encontré ${def.plural} en mis datos: puede que existan sin estar mapeados.`;
         const fuentes = Object.entries(k.fuentes || {}).map(([f, n]) => `${f === 'OSM' ? 'OpenStreetMap' : f}: ${n}`).join(', ');
-        return `En ${t} hay ${plural(k.total, def.singular, def.plural)}${id === 'abastecimiento' ? desgloseAbastecimiento(k.lista) : ''} (${fuentes}; ${c.fecha || 'sin fecha'}; puede faltar alguno).`;
+        return `En ${t} hay ${plural(k.total, def.singular, def.plural)}${desgloseTipos(id, k.lista)} (${fuentes}; ${c.fecha || 'sin fecha'}; puede faltar alguno).`;
       });
       return {
         texto: [...lineas, C.NOTA_COMERCIO, 'Los marqué en el mapa.'].join('\n'),
@@ -1028,6 +1038,16 @@ const Asistente = (() => {
         };
         return `${def.etiqueta}, el punto más cercano a tu punto es ${r.nombre || 'uno sin nombre'} (${tipo}${dentro ? `, ${dentro}` : ''}), ${donde(r)}. Fuente: ${fuenteComercio(r)} ${otro('mercado')} ${otro('supermercado')}${r.dentroDeMall ? ' Un supermercado dentro de un mall cuenta como abastecimiento; el mall, no.' : ''}`;
       }
+      if (id === 'finanzas' || id === 'comida_fuera' || id === 'recreacion') {
+        const T = C.COMERCIO_TIPO[r.tipo || def.tipos[0]];
+        const otros = def.tipos.length > 1 ? def.tipos.map((t) => {
+          const x = r.porTipo && r.porTipo[t];
+          if (!x || x.estado === 'SIN DATO' || x.distanciaM === null) return `No tengo ${C.COMERCIO_TIPO[t].plural} en los datos.`;
+          return `El ${C.COMERCIO_TIPO[t].singular} más cercano es ${x.nombre || 'uno sin nombre'}, ${donde(x)}.`;
+        }).join(' ') : '';
+        const aviso = id === 'recreacion' ? ' Los parques y jardines no están aquí: son el criterio «área verde» (pregúntame por el parque más cercano).' : '';
+        return `${def.etiqueta}, el ${T.singular} más cercano a tu punto es ${r.nombre || 'uno sin nombre'}, ${donde(r)}. ${otros ? `${otros} ` : ''}Fuente: ${fuenteComercio(r)}${aviso}`;
+      }
       if (id === 'compras_ocio') return `${def.etiqueta} (escala de ciudad), el mall confirmado más cercano a tu punto es ${r.nombre || 'uno sin nombre'}, ${donde(r)}. Fuente: ${fuenteComercio(r)}`;
       return `${def.etiqueta} (galerías y centros comerciales pequeños), el más cercano a tu punto es ${r.nombre || 'uno sin nombre'}, ${donde(r)}. Fuente: ${fuenteComercio(r)} OpenStreetMap lo etiqueta como mall, pero no está entre los malls confirmados: cuenta como comercio de barrio, no como un mall de ciudad.`;
     });
@@ -1036,7 +1056,7 @@ const Asistente = (() => {
 
   /** Aviso cuando una búsqueda nombra un mall, un mercado, un supermercado o una galería: la búsqueda sigue sin ellos. */
   function notaComercio() {
-    return 'El abastecimiento (mercados y supermercados), las compras y el ocio (malls) y el comercio de barrio (galerías) no entran en la búsqueda: son datos informativos (no hay una distancia de referencia, es una decisión pendiente). Busqué solo por lo demás. Pregúntame aparte por el más cercano a tu punto: «¿hay un mall cerca de mi punto?» o «¿dónde puedo comprar comida cerca?».';
+    return 'El abastecimiento (mercados y supermercados), las compras y el ocio (malls) y el comercio de barrio (galerías) no entran en la búsqueda: son datos informativos (no hay una distancia de referencia, es una decisión pendiente). Busqué solo por lo demás. Lo mismo vale para las finanzas (bancos y cajeros), la comida fuera de casa (restaurantes y cafés) y la recreación (juegos infantiles). Pregúntame aparte por el más cercano a tu punto: «¿hay un mall cerca de mi punto?» o «¿dónde puedo comprar comida cerca?».';
   }
 
   // ---------------------------------------------------------- Electricidad (informativo)
@@ -1563,6 +1583,7 @@ const Asistente = (() => {
     '• Comercio por necesidad —abastecimiento (mercados y supermercados), compras y ocio (malls confirmados) y comercio de barrio (galerías)—: OpenStreetMap (ODbL), informativos y sin umbral; el CENAMA 2016 (INEI, PRODUCE) solo se usa para contar mercados por distrito. Los malls conocidos se contrastan con la fuente de cada uno.',
     '• Electricidad: áreas de concesión de distribución eléctrica del MINEM (Dirección General de Electricidad, licencia ODC-By), copia congelada con su fecha de descarga. Dicen a quién le corresponde el servicio, no si un predio está conectado.',
     '• Concesiones mineras: Catastro Minero de INGEMMET (GEOCATMIN), copia congelada con su fecha de descarga; es referencial y se actualiza a diario. Es un derecho sobre los minerales, no dice si hay minería ni de quién es el predio.',
+    '• Finanzas (bancos y cajeros), comida fuera de casa (restaurantes y cafés) y recreación (áreas de juegos infantiles): OpenStreetMap (ODbL), informativas y sin umbral, copia congelada con su fecha de extracción. Los parques y jardines no se repiten ahí: ya son el criterio «área verde».',
     '• Agua, desagüe y alumbrado por manzana: Censos Nacionales 2017 del INEI (REDATAM en línea), copia congelada con su fecha de descarga; solo área urbana. El censo de 2025 ya se levantó pero el INEI aún no lo abre por manzana: del 2025 solo uso el dato del departamento de Arequipa (nota de prensa del INEI de julio de 2026).',
     '• Líneas de transporte (recorridos y paradas): SmartBus (smartbus.app), usados con su autorización verbal (confirmación escrita pendiente). Sin frecuencias ni horarios.',
     '• Umbrales: colegios 500 m inicial, 1500 m primaria y 3000 m secundaria (MINEDU); área verde ≥ 0,5 ha a 300 m (OMS Europa); salud 1000 m, paradero 400 m y borde de zona 20 m son convenciones del proyecto.',
@@ -1624,7 +1645,7 @@ const Asistente = (() => {
     precio: 'No tengo el precio de una casa, un terreno ni un alquiler en particular, ni puedo decirte qué zona es más barata. Solo conozco el precio de oferta por m² promedio de algunos distritos (Aptología): pregúntame «¿cuánto cuesta el m² en Cayma?».',
     volcan_busqueda: 'Todavía no puedo buscar zonas según el peligro volcánico. Sí puedo decirte en qué zonas de peligro del Misti cae tu punto («¿hay lahares cerca de mi punto?») o qué parte de un distrito cae en cada una («¿Paucarpata está en peligro por el Misti?»).',
     cenepred_busqueda: 'Todavía no puedo buscar zonas según el riesgo de inundación o de movimientos en masa. Sí puedo decirte qué estima el CENEPRED para el distrito de tu punto («¿qué dice el CENEPRED de mi punto?») o para un distrito («¿Paucarpata se inunda?»).',
-    comercio_busqueda: 'No puedo buscar zonas «cerca de un mall, un supermercado, un mercado o una galería»: son datos informativos, porque no hay una distancia de referencia (es una decisión pendiente) y no los uso para elegir un lugar. Sí puedo decirte cuál es el más cercano a tu punto según lo que necesites —abastecimiento (mercados y supermercados), compras y ocio (malls) o comercio de barrio (galerías)— («¿hay un mall y un mercado cerca de mi punto?») o cuántos hay en un distrito («¿cuántos mercados hay en Cayma?»). Es informativo: no dice si está cerca o lejos.',
+    comercio_busqueda: 'No puedo buscar zonas «cerca de un mall, un supermercado, un mercado o una galería»: son datos informativos, porque no hay una distancia de referencia (es una decisión pendiente) y no los uso para elegir un lugar. Sí puedo decirte cuál es el más cercano a tu punto según lo que necesites —abastecimiento (mercados y supermercados), compras y ocio (malls) o comercio de barrio (galerías)— («¿hay un mall y un mercado cerca de mi punto?») o cuántos hay en un distrito («¿cuántos mercados hay en Cayma?»). Lo mismo vale para las finanzas (bancos y cajeros), la comida fuera de casa (restaurantes y cafés) y la recreación (juegos infantiles): «¿hay un banco cerca de mi punto?». Es informativo: no dice si está cerca o lejos.',
     agua_busqueda: 'No puedo buscar zonas «con agua» o «con desagüe»: lo que tengo son las cifras del censo de 2017 por manzana (qué porcentaje de las viviendas censadas tenía agua y desagüe por red pública), que describen una manzana en 2017 y no uso para elegir un lugar. Sí puedo decirte qué dice el censo de la manzana de tu punto («¿hay agua en mi punto?»). Es informativo: no dice si un predio está conectado.',
     mineria_busqueda: 'No puedo buscar zonas «sin minas» o «lejos de concesiones mineras»: el Catastro Minero de INGEMMET es referencial y una concesión es un derecho sobre los minerales, no un indicio de minería ni una distancia de seguridad, y no la uso para elegir un lugar. Sí puedo decirte si tu punto cae dentro de una concesión minera o cuál es la más cercana («¿hay una concesión minera en mi punto?»). Es informativo.',
     electricidad_busqueda: 'No puedo buscar zonas «con luz»: lo que tengo son las áreas de concesión de distribución eléctrica (SEAL y otras), que dicen a qué empresa le corresponde el servicio, no dónde hay conexión, y no las uso para elegir un lugar. Sí puedo decirte si tu punto está dentro de una («¿hay luz en mi punto?»). Es informativo: una concesión no es una conexión.',
@@ -2047,14 +2068,14 @@ const Asistente = (() => {
   const LIM_OSM = 'OpenStreetMap es colaborativo: lo que no figura puede existir. «Sin dato» no significa que no exista.';
   const LIM_OFICIAL = 'Los registros oficiales no ubican todos los establecimientos (cerca del 42 % de los de salud de Arequipa en RENIPRESS no trae coordenadas) y ESCALE ubica el local que reportó la UGEL. Un establecimiento oficial puede estar y no verse; uno de OpenStreetMap solo aparece donde no hay un punto oficial cerca.';
   const LIM_CONSULTORIO = 'Los consultorios médicos (RENIPRESS: clasificación «consultorios»; OpenStreetMap: amenity=doctors y healthcare=doctor) son una categoría aparte de los establecimientos de salud: son solo informativos, sin distancia de referencia (decisión pendiente), y no cuentan como «salud cerca».';
-  const FUENTE_COMERCIO = 'Abastecimiento (mercados y supermercados), compras y ocio (solo los malls confirmados) y comercio de barrio (el resto de lo que se etiqueta mall): OpenStreetMap (ODbL), copia congelada con su fecha de extracción; los malls conocidos de Arequipa se contrastan con el sitio de cada mall o de su operador. El Censo Nacional de Mercados de Abastos 2016 (INEI, publicado por PRODUCE) no trae nombres ni coordenadas: solo sirve para comparar cuántos mercados había por distrito.';
+  const FUENTE_COMERCIO = 'Abastecimiento (mercados y supermercados), compras y ocio (solo los malls confirmados) y comercio de barrio (el resto de lo que se etiqueta mall): OpenStreetMap (ODbL), copia congelada con su fecha de extracción; los malls conocidos de Arequipa se contrastan con el sitio de cada mall o de su operador. El Censo Nacional de Mercados de Abastos 2016 (INEI, publicado por PRODUCE) no trae nombres ni coordenadas: solo sirve para comparar cuántos mercados había por distrito. Finanzas (bancos y cajeros), comida fuera de casa (restaurantes y cafés) y recreación (áreas de juegos infantiles): también de OpenStreetMap (ODbL), copia congelada con su fecha de extracción; los parques no se repiten ahí porque ya son el criterio «área verde».';
   const FUENTE_ELECTRICIDAD = 'Electricidad: áreas de concesión de distribución eléctrica del MINEM (Dirección General de Electricidad, servicio ArcGIS REST del geoportal; datasets de datosabiertos.gob.pe, licencia ODC-By), copia congelada con su fecha de descarga.';
   const LIM_ELECTRICIDAD = 'La concesión eléctrica dice a qué empresa le corresponde dar el servicio de distribución en esa zona; no dice que un predio esté conectado ni que haya red en su calle (la cobertura real vendría de un censo, que aún no tengo). Los polígonos del registro son poco detallados y su borde puede ser impreciso; que un punto quede fuera no significa que no haya servicio.';
   const FUENTE_MINERIA = 'Concesiones mineras: Catastro Minero de INGEMMET (GEOCATMIN, servicio ArcGIS REST), copia congelada con su fecha de descarga; el propio servicio lo declara referencial y de actualización diaria. No se guarda el nombre del titular.';
   const LIM_MINERIA = 'El Catastro Minero dice dónde hay derechos mineros (concesiones tituladas, en trámite y otras); no dice que haya minería en el lugar, de quién es el predio ni qué se puede hacer en él. Que un punto quede fuera no garantiza que no haya otros derechos: consulta el GEOCATMIN de INGEMMET.';
   const FUENTE_CENSO = 'Agua, desagüe y alumbrado por manzana: Censos Nacionales 2017 del INEI (REDATAM en línea, https://censos2017.inei.gob.pe/) con los polígonos de manzana del INEI, copia congelada con su fecha de descarga; solo área urbana. De 2025 solo se usa el dato del departamento de Arequipa (nota de prensa del INEI del 17 de julio de 2026).';
   const LIM_CENSO = 'Las cifras del censo son de 2017 y de toda la manzana, calculadas sobre las viviendas ocupadas con personas presentes que se censaron: no dicen si un predio en particular está conectado ni cómo está hoy. Con menos de 5 viviendas ocupadas no doy el porcentaje. El censo de 2025 todavía no está abierto por manzana (REDATAM 2025 pide iniciar sesión).';
-  const LIM_COMERCIO = 'El abastecimiento (mercados y supermercados), las compras y el ocio (malls confirmados) y el comercio de barrio (galerías) son categorías informativas, sin distancia de referencia (es una decisión pendiente): no se dice si están cerca o lejos y no suman al puntaje. Un supermercado dentro de un mall cuenta como abastecimiento; el mall, no. OpenStreetMap puede no tener todos y a veces etiqueta de más: por distrito, el número de mercados mapeados no coincide con el del censo de 2016 (en unos hay menos y en otros más), amenity=marketplace incluye ferias y comercios mal etiquetados, y shop=mall incluye galerías y centros comerciales pequeños, no solo malls. No distingue un mercado minorista de uno mayorista. «Sin dato» no significa que no exista.';
+  const LIM_COMERCIO = 'El abastecimiento (mercados y supermercados), las compras y el ocio (malls confirmados) y el comercio de barrio (galerías) son categorías informativas, sin distancia de referencia (es una decisión pendiente): no se dice si están cerca o lejos y no suman al puntaje. Un supermercado dentro de un mall cuenta como abastecimiento; el mall, no. OpenStreetMap puede no tener todos y a veces etiqueta de más: por distrito, el número de mercados mapeados no coincide con el del censo de 2016 (en unos hay menos y en otros más), amenity=marketplace incluye ferias y comercios mal etiquetados, y shop=mall incluye galerías y centros comerciales pequeños, no solo malls. No distingue un mercado minorista de uno mayorista. «Sin dato» no significa que no exista. Los bancos, cajeros, restaurantes, cafés y juegos infantiles son igual de informativos y sin distancia de referencia: amenity=bank y amenity=atm no distinguen una agencia de un cajero corresponsal, un restaurante o café no dice calidad, precio ni horario, y leisure=playground a menudo está dentro de un parque (que cuenta aparte, como área verde).';
   const LIM_PLANO = 'El plano se extrajo de un PDF y cerca del borde entre dos zonas el resultado puede no ser exacto. La vigencia del PDM 2016-2025 es incierta y hay un PDM nuevo en trámite.';
   const FUENTE_ANA = 'Cauces congelados con su fecha de extracción: la red hidrográfica de la Autoridad Nacional del Agua (ANA, 2018), las quebradas y ríos del Instituto Geofísico del Perú (IGP, sin fecha de elaboración) y los cauces de OpenStreetMap (ODbL). Cada cauce dice de cuál fuente viene.';
   const FUENTE_IGP = 'Sismos reportados, Instituto Geofísico del Perú (IGP), congelados con su fecha de extracción.';
@@ -2138,7 +2159,7 @@ const Asistente = (() => {
       limites: [LIM_ELECTRICIDAD, C.NOTA_ELECTRICIDAD, LIM_REFERENCIAL],
     },
     comercio: {
-      porque: ['Ordena el comercio por lo que necesitas: abastecimiento (mercados y supermercados, comida), compras y ocio (solo malls confirmados) y comercio de barrio (galerías). Busca el más cercano de cada uno a tu punto (o cuenta los del distrito) y dice su distancia en línea recta; de un mall o mercado con forma en el mapa, hasta su borde. No lo compara con ninguna distancia de referencia, porque no hay una.'],
+      porque: ['Ordena el comercio por lo que necesitas: abastecimiento (mercados y supermercados, comida), compras y ocio (solo malls confirmados) y comercio de barrio (galerías). Busca el más cercano de cada uno a tu punto (o cuenta los del distrito) y dice su distancia en línea recta; de un mall o mercado con forma en el mapa, hasta su borde. No lo compara con ninguna distancia de referencia, porque no hay una. Con el mismo método da el banco y el cajero más cercanos (finanzas), el restaurante y el café (comida fuera de casa) y el área de juegos infantiles (recreación).'],
       fuente: [FUENTE_COMERCIO],
       limites: [LIM_COMERCIO, LIM_RECTA, LIM_REFERENCIAL],
     },

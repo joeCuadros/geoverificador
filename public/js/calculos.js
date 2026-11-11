@@ -201,6 +201,11 @@ const Calculos = (() => {
       { clave: 'landuse', valores: ['retail'], nombre: NOMBRE_MALL },
       { clave: 'building', valores: ['retail', 'commercial'], nombre: NOMBRE_MALL },
     ],
+    // Servicios de la vida diaria (OpenStreetMap), también INFORMATIVOS y sin umbral; entran en el comercio por necesidad (ver COMERCIO).
+    // Los parques y jardines (leisure=park, garden) NO están aquí: ya son areasVerdes, el criterio «área verde».
+    finanzas: [{ clave: 'amenity', valores: ['bank', 'atm'] }],
+    comida_fuera: [{ clave: 'amenity', valores: ['restaurant', 'cafe'] }],
+    recreacion: [{ clave: 'leisure', valores: ['playground'] }],
     educacion: [{ clave: 'amenity', valores: ['school', 'kindergarten'] }],
     transporte: [
       { clave: 'highway', valores: ['bus_stop'] },
@@ -437,29 +442,48 @@ const Calculos = (() => {
   // ----------------------------------------------- Comercio por NECESIDAD (mercados, supermercados y malls)
 
   /**
-   * El comercio se organiza por lo que la persona necesita, no por la etiqueta de OpenStreetMap. Las tres necesidades son INFORMATIVAS (sin
+   * El comercio se organiza por lo que la persona necesita, no por la etiqueta de OpenStreetMap. Las seis necesidades son INFORMATIVAS (sin
    * umbral: ninguna norma peruana fija metros para un mercado o un mall) y no suman al puntaje ni a la búsqueda de zonas.
    *   abastecimiento   comida, a escala de barrio: mercados (amenity=marketplace) + supermercados (shop=supermarket). Un supermercado dentro del polígono
    *                    de un mall es el punto de abastecimiento; el mall, no.
    *   compras_ocio     compras y ocio, a escala metropolitana: SOLO los malls confirmados con su fuente (lista curada, propiedad `verificado`).
    *   comercio_barrio  el resto de lo que OSM etiqueta shop=mall (galerías y centros comerciales pequeños).
+   *   finanzas         bancos (amenity=bank) y cajeros automáticos (amenity=atm).
+   *   comida_fuera     restaurantes (amenity=restaurant) y cafés (amenity=cafe).
+   *   recreacion       áreas de juegos infantiles (leisure=playground). Los parques ya son el criterio «área verde» y no se repiten aquí.
+   * `tipos` son los tipos de elemento de la necesidad (ver COMERCIO_TIPO); con más de uno, la ficha y el chat dan además el más cercano de cada tipo.
    * `capa` es el id de la capa del mapa; `capas`, los archivos de datos de donde sale.
    */
   const COMERCIO = {
     abastecimiento: {
-      capa: 'abastecimiento', capas: ['mercados', 'supermercados'], escala: 'barrio', etiqueta: 'Abastecimiento (comida)',
+      capa: 'abastecimiento', capas: ['mercados', 'supermercados'], tipos: ['mercado', 'supermercado'], escala: 'barrio', etiqueta: 'Abastecimiento (comida)',
       singular: 'punto de abastecimiento', plural: 'puntos de abastecimiento', corto: 'punto de abastecimiento', cortos: 'puntos de abastecimiento',
       alcance: 'Cuenta los mercados (amenity=marketplace) y los supermercados (shop=supermarket) de OpenStreetMap. Un supermercado dentro del polígono de un mall es el punto de abastecimiento: el mall no lo es.',
     },
     compras_ocio: {
-      capa: 'compras_ocio', capas: ['malls'], escala: 'metropolitana', etiqueta: 'Compras y ocio',
+      capa: 'compras_ocio', capas: ['malls'], tipos: ['mall'], escala: 'metropolitana', etiqueta: 'Compras y ocio',
       singular: 'mall confirmado', plural: 'malls confirmados', corto: 'mall', cortos: 'malls',
       alcance: 'Cuenta solo los malls confirmados con la fuente de cada uno (lista curada) y ubicados en OpenStreetMap; la distancia es al borde de su polígono. Un mall confirmado que OpenStreetMap no tiene no se mide.',
     },
     comercio_barrio: {
-      capa: 'comercio_barrio', capas: ['malls'], escala: 'barrio', etiqueta: 'Comercio de barrio',
+      capa: 'comercio_barrio', capas: ['malls'], tipos: ['mall'], escala: 'barrio', etiqueta: 'Comercio de barrio',
       singular: 'galería o centro comercial pequeño', plural: 'galerías y centros comerciales pequeños', corto: 'galería', cortos: 'galerías',
       alcance: 'Cuenta lo que OpenStreetMap etiqueta shop=mall (o terreno comercial con nombre de mall) y no está en la lista de malls confirmados: galerías y centros comerciales pequeños, que son comercio de barrio.',
+    },
+    finanzas: {
+      capa: 'finanzas', capas: ['finanzas'], tipos: ['banco', 'cajero'], escala: 'barrio', etiqueta: 'Finanzas (bancos y cajeros)',
+      singular: 'banco o cajero automático', plural: 'bancos y cajeros automáticos', corto: 'banco o cajero', cortos: 'bancos y cajeros',
+      alcance: 'Cuenta los bancos (amenity=bank) y los cajeros automáticos (amenity=atm) de OpenStreetMap; no distingue entre agencias, cajeros corresponsales ni cajeros dentro de una tienda, y puede faltar alguno.',
+    },
+    comida_fuera: {
+      capa: 'comida_fuera', capas: ['comida_fuera'], tipos: ['restaurante', 'cafe'], escala: 'barrio', etiqueta: 'Comida fuera de casa',
+      singular: 'restaurante o café', plural: 'restaurantes y cafés', corto: 'restaurante o café', cortos: 'restaurantes y cafés',
+      alcance: 'Cuenta los restaurantes (amenity=restaurant) y los cafés (amenity=cafe) de OpenStreetMap, sin la comida al paso (fast_food) ni los bares; no dice la calidad, el precio ni el horario, y puede faltar alguno.',
+    },
+    recreacion: {
+      capa: 'recreacion', capas: ['recreacion'], tipos: ['juego_infantil'], escala: 'barrio', etiqueta: 'Recreación (juegos infantiles)',
+      singular: 'área de juegos infantiles', plural: 'áreas de juegos infantiles', corto: 'área de juegos infantiles', cortos: 'áreas de juegos infantiles',
+      alcance: 'Cuenta las áreas de juegos infantiles (leisure=playground) de OpenStreetMap. Los parques y jardines (leisure=park, garden) no se cuentan aquí: ya son el criterio «área verde», con su distancia de referencia.',
     },
   };
 
@@ -468,11 +492,16 @@ const Calculos = (() => {
     mercado: { capa: 'mercados', singular: 'mercado de abastos', plural: 'mercados de abastos', etiqueta: 'Mercado' },
     supermercado: { capa: 'supermercados', singular: 'supermercado', plural: 'supermercados', etiqueta: 'Supermercado' },
     mall: { capa: 'malls', singular: 'mall (centro comercial)', plural: 'malls (centros comerciales)', etiqueta: 'Mall' },
+    banco: { capa: 'finanzas', singular: 'banco', plural: 'bancos', etiqueta: 'Banco' },
+    cajero: { capa: 'finanzas', singular: 'cajero automático', plural: 'cajeros automáticos', etiqueta: 'Cajero automático' },
+    restaurante: { capa: 'comida_fuera', singular: 'restaurante', plural: 'restaurantes', etiqueta: 'Restaurante' },
+    cafe: { capa: 'comida_fuera', singular: 'café', plural: 'cafés', etiqueta: 'Café' },
+    juego_infantil: { capa: 'recreacion', singular: 'área de juegos infantiles', plural: 'áreas de juegos infantiles', etiqueta: 'Juegos infantiles' },
   };
   const TIPO_DE_CAPA = { mercados: 'mercado', supermercados: 'supermercado', malls: 'mall' };
-  const CAPA_DE_TIPO = { mercado: 'mercados', supermercado: 'supermercados', mall: 'malls' };
+  const CAPA_DE_TIPO = Object.fromEntries(Object.entries(COMERCIO_TIPO).map(([tipo, d]) => [tipo, d.capa])); // el archivo de donde sale cada tipo
 
-  const NOTA_COMERCIO = 'Es informativo: el abastecimiento (mercados y supermercados), las compras y el ocio (malls) y el comercio de barrio (galerías) no tienen una distancia de referencia (es una decisión pendiente), así que no se dice si están cerca o lejos, no suman al puntaje ni a la búsqueda de zonas y no se elige un lugar por ellos.';
+  const NOTA_COMERCIO = 'Es informativo: el abastecimiento (mercados y supermercados), las compras y el ocio (malls), el comercio de barrio (galerías), las finanzas (bancos y cajeros), la comida fuera de casa (restaurantes y cafés) y la recreación (juegos infantiles) no tienen una distancia de referencia (es una decisión pendiente), así que no se dice si están cerca o lejos, no suman al puntaje ni a la búsqueda de zonas y no se elige un lugar por ellos.';
 
   /**
    * A qué necesidad pertenece un elemento de una capa de OSM (`capa`: mercados | supermercados | malls; `props`: sus propiedades): mercados y
@@ -481,6 +510,7 @@ const Calculos = (() => {
   function necesidadComercio(capa, props) {
     if (capa === 'mercados' || capa === 'supermercados') return 'abastecimiento';
     if (capa === 'malls') return props && props.verificado ? 'compras_ocio' : 'comercio_barrio';
+    if (capa === 'finanzas' || capa === 'comida_fuera' || capa === 'recreacion') return capa; // el archivo es la necesidad; el tipo lo trae cada elemento
     return null;
   }
 
@@ -526,12 +556,12 @@ const Calculos = (() => {
     const e = entrada || {};
     const validos = (lista) => (lista || []).filter((f) => f && f.geometry);
     const malls = validos(e.malls);
-    const grupos = { abastecimiento: [], compras_ocio: [], comercio_barrio: [] };
-    for (const capa of ['mercados', 'supermercados', 'malls']) {
+    const grupos = { abastecimiento: [], compras_ocio: [], comercio_barrio: [], finanzas: [], comida_fuera: [], recreacion: [] };
+    for (const capa of ['mercados', 'supermercados', 'malls', 'finanzas', 'comida_fuera', 'recreacion']) {
       for (const f of validos(e[capa])) {
         if (esComercioExcluido(capa, f.properties)) continue;
         const necesidad = necesidadComercio(capa, f.properties);
-        const extra = { tipo: TIPO_DE_CAPA[capa], necesidad };
+        const extra = { tipo: TIPO_DE_CAPA[capa] || (f.properties && f.properties.tipo) || null, necesidad };
         if (capa === 'supermercados') {
           const c = posicionDe(f.geometry);
           const m = c ? mallQueContiene(c, malls) : null;

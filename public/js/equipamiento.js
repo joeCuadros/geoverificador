@@ -259,7 +259,7 @@ const Equipamiento = (() => {
     const ids = Object.keys(Calculos.COMERCIO);
     let leidos;
     try {
-      const nombres = Object.values(Calculos.COMERCIO_TIPO).map((t) => t.capa);
+      const nombres = [...new Set(Object.values(Calculos.COMERCIO_TIPO).map((t) => t.capa))];
       leidos = Object.fromEntries(await Promise.all(nombres.map(async (c) => [c, await archivo(c)])));
     } catch (err) {
       console.error('[Equipamiento] comercio', err);
@@ -271,14 +271,14 @@ const Equipamiento = (() => {
       const def = Calculos.COMERCIO[id];
       const faltan = def.capas.filter((c) => !leidos[c]);
       if (faltan.length) {
-        out[id] = sinDato(`No se encontró el archivo de ${faltan.map((c) => Object.values(Calculos.COMERCIO_TIPO).find((x) => x.capa === c).plural).join(' ni de ')}.`, CONFIG.umbrales[id]);
+        out[id] = sinDato(`No se encontró el archivo de ${faltan.map((c) => Object.values(Calculos.COMERCIO_TIPO).filter((x) => x.capa === c).map((x) => x.plural).join(' y ')).join(' ni de ')}.`, CONFIG.umbrales[id]);
         continue;
       }
       const archivosDe = def.capas.map((c) => leidos[c]);
       try {
         out[id] = comercio(id, archivosDe, grupos[id], punto);
-        if (id === 'abastecimiento') {
-          out[id].porTipo = Object.fromEntries(['mercado', 'supermercado'].map((tipo) => {
+        if (def.tipos.length > 1) { // abastecimiento (mercado, supermercado), finanzas (banco, cajero), comida_fuera (restaurante, café): además el más cercano de cada tipo
+          out[id].porTipo = Object.fromEntries(def.tipos.map((tipo) => {
             const t = Calculos.COMERCIO_TIPO[tipo];
             return [tipo, comercio(id, [leidos[t.capa]], grupos[id].filter((f) => f.properties.tipo === tipo), punto, CONFIG.umbrales[tipo], t.singular)];
           }));
@@ -410,7 +410,7 @@ const Equipamiento = (() => {
 
   /** Los archivos de mercados, supermercados y malls tal como se leyeron: { mercados, supermercados, malls }, cada uno { features, fecha, origen } o null si falta. */
   async function comercioDatos() {
-    const ids = Object.values(Calculos.COMERCIO_TIPO).map((d) => d.capa);
+    const ids = [...new Set(Object.values(Calculos.COMERCIO_TIPO).map((d) => d.capa))];
     const lista = await Promise.all(ids.map((c) => archivo(c).catch(() => null)));
     return Object.fromEntries(ids.map((c, i) => [c, lista[i]]));
   }

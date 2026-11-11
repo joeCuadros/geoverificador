@@ -69,8 +69,8 @@ describe('CONFIG: los tres grupos de comercio siguen sin umbral', () => {
 });
 
 describe('Calculos.COMERCIO: una entrada por necesidad', () => {
-  it('son abastecimiento, compras_ocio y comercio_barrio, con etiqueta y escala', () => {
-    expect(Object.keys(Calculos.COMERCIO)).toEqual(['abastecimiento', 'compras_ocio', 'comercio_barrio']);
+  it('son abastecimiento, compras_ocio y comercio_barrio (más finanzas, comida_fuera y recreacion: ver servicios-diarios.spec.ts), con etiqueta y escala', () => {
+    expect(Object.keys(Calculos.COMERCIO)).toEqual(['abastecimiento', 'compras_ocio', 'comercio_barrio', 'finanzas', 'comida_fuera', 'recreacion']);
     expect(Calculos.COMERCIO.abastecimiento).toMatchObject({ etiqueta: 'Abastecimiento (comida)', escala: 'barrio' });
     expect(Calculos.COMERCIO.compras_ocio).toMatchObject({ etiqueta: 'Compras y ocio', escala: 'metropolitana' });
     expect(Calculos.COMERCIO.comercio_barrio).toMatchObject({ etiqueta: 'Comercio de barrio', escala: 'barrio' });
@@ -170,8 +170,8 @@ describe('Calculos.agruparComercio: reparte por necesidad sin cortar ni mover na
     expect(g.compras_ocio[0].properties.verificado).toEqual(VERIFICADO);
     expect((SUPER_DENTRO.properties as any).necesidad).toBeUndefined();
   });
-  it('sin listas, los tres grupos están vacíos', () => {
-    expect(Calculos.agruparComercio({})).toEqual({ abastecimiento: [], compras_ocio: [], comercio_barrio: [] });
+  it('sin listas, todos los grupos están vacíos', () => {
+    expect(Calculos.agruparComercio({})).toEqual({ abastecimiento: [], compras_ocio: [], comercio_barrio: [], finanzas: [], comida_fuera: [], recreacion: [] });
   });
 });
 

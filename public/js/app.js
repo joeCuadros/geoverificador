@@ -93,7 +93,7 @@
 
   // Documentación automática de lo que realmente se consulta (mismas definiciones que usan la extracción y la clasificación)
   const code = (v) => `<code>${esc(v)}</code>`;
-  const NOMBRE_VARIABLE = { salud: 'Salud', consultorios: 'Consultorios médicos (aparte de la salud, informativos)', mercados: 'Mercados de abastos (abastecimiento, informativos)', supermercados: 'Supermercados (abastecimiento, informativos)', malls: 'Malls o centros comerciales (compras y ocio si están confirmados con su fuente; si no, comercio de barrio; informativos)', educacion: 'Educación', transporte: 'Transporte', areasVerdes: 'Áreas verdes' };
+  const NOMBRE_VARIABLE = { finanzas: 'Bancos y cajeros automáticos (finanzas, informativos)', comida_fuera: 'Restaurantes y cafés (comida fuera de casa, informativos)', recreacion: 'Áreas de juegos infantiles (recreación, informativos; los parques son «Áreas verdes»)', salud: 'Salud', consultorios: 'Consultorios médicos (aparte de la salud, informativos)', mercados: 'Mercados de abastos (abastecimiento, informativos)', supermercados: 'Supermercados (abastecimiento, informativos)', malls: 'Malls o centros comerciales (compras y ocio si están confirmados con su fuente; si no, comercio de barrio; informativos)', educacion: 'Educación', transporte: 'Transporte', areasVerdes: 'Áreas verdes' };
   $('filters-doc').innerHTML = Object.entries(Calculos.FILTROS).map(([cat, filtros]) => `
     <h4>${NOMBRE_VARIABLE[cat]}</h4>
     <ul>${filtros.map((f) => `<li>${code(f.clave)} = ${f.valores ? f.valores.map(code).join(', ') : `cualquier valor${f.excluir ? ` salvo ${f.excluir.map(code).join(', ')}` : ''}`}${f.nombre ? ` y nombre que cumpla ${code(f.nombre)}` : ''}</li>`).join('')}</ul>`).join('')
@@ -110,6 +110,7 @@
       <li>Servicios de la manzana según el censo (alumbrado, agua y desagüe por red pública): sin umbral (${esc(CONFIG.fuentesUmbral.censo.toLowerCase())}).</li>
       <li>Electricidad (área de concesión de distribución): sin umbral (${esc(CONFIG.fuentesUmbral.electricidad.toLowerCase())}).</li>
       <li>Abastecimiento (mercados y supermercados), compras y ocio (malls confirmados) y comercio de barrio (galerías): sin umbral (${esc(CONFIG.fuentesUmbral.abastecimiento.toLowerCase())}).</li>
+      <li>Finanzas (bancos y cajeros), comida fuera de casa (restaurantes y cafés) y recreación (juegos infantiles): sin umbral (${esc(CONFIG.fuentesUmbral.finanzas.toLowerCase())}).</li>
       <li>Educación: inicial ${CONFIG.umbrales.educacion.inicial} m, primaria ${CONFIG.umbrales.educacion.primaria} m, secundaria ${CONFIG.umbrales.educacion.secundaria} m (${esc(CONFIG.fuentesUmbral.educacion)}).</li>
       <li>Transporte: ${CONFIG.umbrales.transporte} m (${esc(CONFIG.fuentesUmbral.transporte.toLowerCase())}).</li>
       <li>Área verde: al menos ${CONFIG.umbrales.areaVerde.areaMinM2} m² a ${CONFIG.umbrales.areaVerde.distanciaM} m (${esc(CONFIG.fuentesUmbral.areaVerde)}).</li>
@@ -154,6 +155,9 @@
     abastecimiento: { titulo: 'Abastecimiento (comida): mercados y supermercados', icono: 'comercio' },
     compras_ocio: { titulo: 'Compras y ocio: malls', icono: 'comercio' },
     comercio_barrio: { titulo: 'Comercio de barrio: galerías', icono: 'comercio' },
+    finanzas: { titulo: 'Finanzas: bancos y cajeros', icono: 'comercio' },
+    comida_fuera: { titulo: 'Comida fuera de casa: restaurantes y cafés', icono: 'comercio' },
+    recreacion: { titulo: 'Recreación: juegos infantiles', icono: 'verde' },
     educacion: { titulo: 'Colegio', icono: 'colegio' },
     transporte: { titulo: 'Paradero', icono: 'paradero' },
     areaVerde: { titulo: 'Área verde', icono: 'verde' },
@@ -1115,6 +1119,9 @@
     mineria: 'Dice si el punto cae dentro de una concesión del Catastro Minero de INGEMMET (tituladas, en trámite y otras; las extinguidas no cuentan) y, si no, cuál es la más cercana. Una concesión minera es el derecho a explorar y explotar los minerales dentro de su perímetro, separado del predio: NO dice que haya minería en el lugar, de quién es el predio ni qué se puede hacer en él. El catastro es referencial y se actualiza a diario; la copia que usamos tiene la fecha indicada. No se muestra el nombre del titular.',
     electricidad: 'Dice si el punto cae dentro de un polígono de concesión de distribución eléctrica del registro del MINEM (SEAL en Arequipa y, si toca la zona, otras empresas): a quién le corresponde dar el servicio ahí. NO dice si el predio está conectado, si hay red en la calle ni si el suministro es continuo; la cobertura real vendría de un censo que aún no tenemos. Los polígonos son poco detallados y su borde puede ser impreciso: un punto fuera no significa que no haya servicio.',
     abastecimiento: 'Cuenta los mercados (amenity=marketplace, que incluye mercados de abastos, ferias y mercadillos: no distingue minorista de mayorista) y los supermercados (shop=supermarket, sin tiendas de conveniencia ni bodegas) de OpenStreetMap, y puede faltar alguno (el censo de mercados de 2016 del INEI solo sirve para contar por distrito, no trae ubicaciones). Un supermercado dentro de un mall es el punto de abastecimiento; el mall, no. Sin distancia de referencia.',
+    finanzas: 'Cuenta los bancos (amenity=bank) y los cajeros automáticos (amenity=atm) de OpenStreetMap, y puede faltar alguno. No distingue una agencia de un cajero corresponsal ni de uno dentro de una tienda, y no dice el horario, las comisiones ni si el cajero tiene efectivo. Sin distancia de referencia.',
+    comida_fuera: 'Cuenta los restaurantes (amenity=restaurant) y los cafés (amenity=cafe) de OpenStreetMap, y puede faltar alguno; no incluye la comida al paso ni los bares. No dice la calidad, el precio, el horario ni si el local sigue abierto. Sin distancia de referencia.',
+    recreacion: 'Cuenta las áreas de juegos infantiles (leisure=playground) de OpenStreetMap, que hay pocas mapeadas (muchas están dentro de un parque y no están marcadas aparte). Los parques y jardines no se cuentan aquí: son la variable «Área verde», con su distancia de referencia. No dice el estado de los juegos ni si son seguros. Sin distancia de referencia.',
     compras_ocio: 'Cuenta solo los malls confirmados con la fuente de cada uno (lista curada) que OpenStreetMap tiene ubicados; uno confirmado que OpenStreetMap no tiene (por ejemplo Mallplaza) no se mide. Si OpenStreetMap tiene el edificio, la distancia se mide hasta su borde. No cuenta las galerías ni los centros comerciales pequeños. Sin distancia de referencia.',
     comercio_barrio: 'Cuenta lo que OpenStreetMap etiqueta shop=mall (y los terrenos comerciales con nombre de mall) y no está en la lista de malls confirmados: galerías y centros comerciales pequeños, que son comercio de barrio. Si OpenStreetMap tiene el edificio, la distancia se mide hasta su borde. Sin distancia de referencia.',
     educacion: 'Cuenta los locales activos de educación básica regular del padrón de ESCALE (MINEDU), públicos y privados, con el nivel de cada institución. OpenStreetMap solo completa donde ESCALE no tiene un local del mismo nivel a 200 m, y allí casi no etiqueta el nivel: uno sin nivel se toma como candidato a primaria y secundaria. La ubicación es la del local que reportó la UGEL; no dice si hay vacantes.',
@@ -1271,7 +1278,7 @@
       if (!r) return '';
       const def = Calculos.COMERCIO[id];
       const tipo = r.tipo ? `<p class="var-meta"><b>Tipo:</b> ${esc(Calculos.COMERCIO_TIPO[r.tipo].singular)}${dentroDe(r) ? `, ${dentroDe(r)} (cuenta como abastecimiento; el mall, no)` : ''}.</p>` : '';
-      const porTipo = id === 'abastecimiento' && r.porTipo ? ['mercado', 'supermercado'].map((t) => {
+      const porTipo = def.tipos.length > 1 && r.porTipo ? def.tipos.map((t) => {
         const x = r.porTipo[t];
         const nombre = Calculos.COMERCIO_TIPO[t].singular;
         return x && x.distanciaM !== null && x.nombre
@@ -1854,6 +1861,7 @@
       electricidad: state.entorno && state.entorno.electricidad, // informativo, sin umbral: un área de concesión no es una conexión
       abastecimiento: state.entorno && state.entorno.abastecimiento && { ...state.entorno.abastecimiento, forma: undefined, porTipo: state.entorno.abastecimiento.porTipo && Object.fromEntries(Object.entries(state.entorno.abastecimiento.porTipo).map(([k, x]) => [k, { ...x, forma: undefined }])) }, // mercados + supermercados; informativo, sin umbral
       compras_ocio: state.entorno && state.entorno.compras_ocio && { ...state.entorno.compras_ocio, forma: undefined }, // solo malls confirmados con su fuente; informativo, sin umbral
+      ...Object.fromEntries(['finanzas', 'comida_fuera', 'recreacion'].map((k) => [k, state.entorno && state.entorno[k] && { ...state.entorno[k], forma: undefined, porTipo: state.entorno[k].porTipo && Object.fromEntries(Object.entries(state.entorno[k].porTipo).map(([t, x]) => [t, { ...x, forma: undefined }])) }])), // servicios de la vida diaria: informativos, sin umbral
       comercio_barrio: state.entorno && state.entorno.comercio_barrio && { ...state.entorno.comercio_barrio, forma: undefined }, // galerías (shop=mall sin fuente); informativo, sin umbral
       educacion: state.entorno && state.entorno.educacion,
       transporte: state.entorno && state.entorno.transporte,

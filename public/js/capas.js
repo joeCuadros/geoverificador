@@ -5,7 +5,7 @@
  *   colegios    → los colegios mismos, con un icono por nivel (y un círculo tenue con la distancia de referencia si son pocos)
  *   salud       → los establecimientos de salud (círculo de 1000 m si son pocos)
  *   consultorios → los consultorios médicos, aparte de la salud y solo informativos: sin círculo (no hay distancia de referencia)
- *   abastecimiento (mercados + supermercados), compras_ocio (malls confirmados), comercio_barrio (galerías) → comercio por necesidad, solo informativo: sin círculo
+ *   abastecimiento (mercados + supermercados), compras_ocio (malls confirmados), comercio_barrio (galerías), finanzas (bancos + cajeros), comida_fuera (restaurantes + cafés), recreacion (juegos infantiles) → comercio por necesidad, solo informativo: sin círculo
  *                 (no hay distancia de referencia); el mall o la galería se dibuja como polígono si OSM lo tiene
  *   paraderos   → los paraderos (círculo de 400 m si son pocos)
  *   parques     → los parques, como polígonos rellenos
@@ -49,6 +49,9 @@ const Capas = (() => {
     { id: 'abastecimiento', etiqueta: 'Abastecimiento (mercados y supermercados)', grupo: 'servicio' }, // comercio por necesidad: informativo, sin círculo de distancia
     { id: 'compras_ocio', etiqueta: 'Compras y ocio (malls)', grupo: 'servicio' },
     { id: 'comercio_barrio', etiqueta: 'Comercio de barrio (galerías)', grupo: 'servicio' },
+    { id: 'finanzas', etiqueta: 'Finanzas (bancos y cajeros)', grupo: 'servicio' }, // servicios de la vida diaria (OSM): informativos, sin círculo de distancia
+    { id: 'comida_fuera', etiqueta: 'Comida fuera de casa (restaurantes y cafés)', grupo: 'servicio' },
+    { id: 'recreacion', etiqueta: 'Recreación (juegos infantiles)', grupo: 'servicio' }, // los parques son la capa «parques» (área verde)
     { id: 'paraderos', etiqueta: 'Paraderos', grupo: 'servicio' },
     { id: 'parques', etiqueta: 'Parques', grupo: 'servicio' },
     { id: 'residencial', etiqueta: 'Zona residencial', grupo: 'zona' },
@@ -193,7 +196,7 @@ const Capas = (() => {
 
     // Cómo se nombra cada capa en el resumen: [singular, plural].
     const NOMBRES = {
-      colegios: ['colegio', 'colegios'], salud: ['establecimiento de salud', 'establecimientos de salud'], consultorios: ['consultorio médico', 'consultorios médicos'], abastecimiento: ['punto de abastecimiento', 'puntos de abastecimiento'], compras_ocio: ['mall confirmado', 'malls confirmados'], comercio_barrio: ['galería o comercio de barrio', 'galerías y comercios de barrio'], paraderos: ['paradero', 'paraderos'], parques: ['parque', 'parques'],
+      colegios: ['colegio', 'colegios'], salud: ['establecimiento de salud', 'establecimientos de salud'], consultorios: ['consultorio médico', 'consultorios médicos'], abastecimiento: ['punto de abastecimiento', 'puntos de abastecimiento'], compras_ocio: ['mall confirmado', 'malls confirmados'], comercio_barrio: ['galería o comercio de barrio', 'galerías y comercios de barrio'], finanzas: ['banco o cajero', 'bancos y cajeros'], comida_fuera: ['restaurante o café', 'restaurantes y cafés'], recreacion: ['área de juegos infantiles', 'áreas de juegos infantiles'], paraderos: ['paradero', 'paraderos'], parques: ['parque', 'parques'],
       residencial: ['zona residencial', 'zonas residenciales'], tranquilo: ['zona tranquila', 'zonas tranquilas'], campina: ['zona de campiña', 'zonas de campiña'],
       comercial: ['zona comercial', 'zonas comerciales'], historico: ['zona del centro histórico', 'zonas del centro histórico'],
       quebradas: ['tramo de quebrada o río', 'tramos de quebradas y ríos'], sismos: ['sismo', 'sismos'], volcan: ['zona de peligro volcánico', 'zonas de peligro volcánico'], cenepred_inundacion: ['distrito coloreado por su riesgo ante inundaciones', 'distritos coloreados por su riesgo ante inundaciones'], cenepred_mm: ['distrito coloreado por su riesgo ante movimientos en masa', 'distritos coloreados por su riesgo ante movimientos en masa'], lineas: ['línea de bus', 'líneas de bus'], electricidad: ['área de concesión eléctrica', 'áreas de concesión eléctrica'], mineria: ['concesión minera', 'concesiones mineras'], viaje: ['ruta al trabajo', 'rutas al trabajo'], censo_luz: ['manzana con cifras de alumbrado', 'manzanas con cifras de alumbrado'], censo_agua: ['manzana con cifras de agua', 'manzanas con cifras de agua'], censo_desague: ['manzana con cifras de desagüe', 'manzanas con cifras de desagüe'], sectores: ['sector', 'sectores'],
@@ -245,8 +248,8 @@ const Capas = (() => {
         const elegidos = (datos[id] || []).filter((p) => enArea(p.lat, p.lon));
         elegidos.forEach((p) => {
           // El icono dice qué es (mercado, supermercado, mall o galería); el detalle, para qué necesidad cuenta y, de un supermercado, en qué mall está.
-          const tipo = id === 'abastecimiento' ? p.tipo : id === 'compras_ocio' ? 'mall' : 'galeria';
-          const detalle = `${def.etiqueta}${id === 'abastecimiento' ? `: ${C.COMERCIO_TIPO[p.tipo].singular}` : ''}${p.dentroDeMall ? ` · dentro de ${p.dentroDeMall.nombre || 'un mall'}` : ''}`;
+          const tipo = id === 'compras_ocio' ? 'mall' : id === 'comercio_barrio' ? 'galeria' : p.tipo; // abastecimiento y los servicios de la vida diaria traen su propio tipo
+          const detalle = `${def.etiqueta}${def.tipos.length > 1 && C.COMERCIO_TIPO[p.tipo] ? `: ${C.COMERCIO_TIPO[p.tipo].singular}` : ''}${p.dentroDeMall ? ` · dentro de ${p.dentroDeMall.nombre || 'un mall'}` : ''}`;
           const titulo = p.nombre || `${def.etiqueta} sin nombre en OpenStreetMap`;
           puntos.push({
             capa: id, tipo, subtipo: id, lat: p.lat, lon: p.lon, nombre: p.nombre, osm: p.osm, fuente: 'OSM', fuenteTexto: C.textoFuenteComercio(p), verificado: p.verificado || null,
@@ -451,7 +454,7 @@ const Capas = (() => {
     const resumen = !leyenda.length && !vacias.length && !sinDatos.length
       ? (cajaArea ? 'Marqué el distrito en el mapa. Elige arriba qué quieres ver dentro de él.' : '')
       : vacias.length && !leyenda.length
-      ? `En esta zona no hay ${vacias.map((v) => ({ colegios: 'colegios', salud: 'establecimientos de salud', consultorios: 'consultorios médicos', abastecimiento: 'puntos de abastecimiento', compras_ocio: 'malls confirmados', comercio_barrio: 'galerías o comercio de barrio', electricidad: 'áreas de concesión eléctrica', censo_luz: 'manzanas con cifras del censo', censo_agua: 'manzanas con cifras del censo', censo_desague: 'manzanas con cifras del censo', paraderos: 'paraderos', parques: 'parques', volcan: 'zonas de peligro volcánico' }[v] || v)).join(' ni ')} en los datos.`
+      ? `En esta zona no hay ${vacias.map((v) => ({ colegios: 'colegios', salud: 'establecimientos de salud', consultorios: 'consultorios médicos', abastecimiento: 'puntos de abastecimiento', compras_ocio: 'malls confirmados', comercio_barrio: 'galerías o comercio de barrio', finanzas: 'bancos o cajeros', comida_fuera: 'restaurantes o cafés', recreacion: 'áreas de juegos infantiles', electricidad: 'áreas de concesión eléctrica', censo_luz: 'manzanas con cifras del censo', censo_agua: 'manzanas con cifras del censo', censo_desague: 'manzanas con cifras del censo', paraderos: 'paraderos', parques: 'parques', volcan: 'zonas de peligro volcánico' }[v] || v)).join(' ni ')} en los datos.`
       : `Muestro ${listaEs(porCapa.map((l) => `${l.n} ${nombreDe(l.capa, l.n)}`))}.${vacias.length ? ` No hay ${listaEs(vacias.map((v) => nombreDe(v, 2)))} en esta zona.` : ''}`;
     return { puntos, circulos, poligonos, lineas, viaje: viajeOut, sismos: sism, peligroVolcan, riesgoDistritos, sectores: regiones, lineasBus, paradasBus, leyenda, vacias, sinDatos, resumen, limites };
   }

@@ -47,7 +47,7 @@ describe('clasificación de etiquetas de comercio', () => {
   it('no confunde con otras categorías ni con tiendas', () => {
     expect(Calculos.categoriasDe({ shop: 'convenience' })).toEqual([]);
     expect(Calculos.categoriasDe({ shop: 'department_store' })).toEqual([]);
-    expect(Calculos.categoriasDe({ amenity: 'bank' })).toEqual([]);
+    expect(Calculos.categoriasDe({ amenity: 'pharmacy' })).toEqual([]); // el banco ya es «finanzas»: ver servicios-diarios.spec.ts
   });
   it('selectoresOverpass de comercio (shop=mall, landuse=retail con nombre)', () => {
     expect(Calculos.selectoresOverpass('mercados')).toEqual(['["amenity"="marketplace"]']);

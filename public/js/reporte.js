@@ -130,8 +130,8 @@ const Reporte = (() => {
       filas.push(fila('Distancia', donde(r)));
       if (r.osm) filas.push(fila('Fuente', `OpenStreetMap (${esc(r.osm)})`));
       if (r.verificado) filas.push(fila('Confirmado con', `${esc(r.verificado.nombre)}: ${esc(r.verificado.url)}`));
-      if (id === 'abastecimiento' && r.porTipo) {
-        ['mercado', 'supermercado'].forEach((tipo) => {
+      if (def.tipos.length > 1 && r.porTipo) { // abastecimiento, finanzas, comida fuera: además el más cercano de cada tipo
+        def.tipos.forEach((tipo) => {
           const x = r.porTipo[tipo];
           const nombre = CALC.COMERCIO_TIPO[tipo].singular;
           if (x && x.distanciaM !== null && x.nombre) filas.push(fila(`${nombre.charAt(0).toUpperCase()}${nombre.slice(1)} más cercano`, `${esc(x.nombre)}${dentroDe(x) ? ` (${dentroDe(x)})` : ''} · ${donde(x)}`));

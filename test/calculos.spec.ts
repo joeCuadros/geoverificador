@@ -322,7 +322,7 @@ describe('clasificación de etiquetas y consulta Overpass', () => {
   });
 
   it('no clasifica el mercado ni otras etiquetas fuera del alcance', () => {
-    expect(Calculos.categoriasDe({ amenity: 'bank' })).toEqual([]);
+    expect(Calculos.categoriasDe({ amenity: 'bar' })).toEqual([]); // el banco ya es «finanzas»: ver servicios-diarios.spec.ts
     expect(Calculos.categoriasDe({ leisure: 'pitch' })).toEqual([]);
     expect(Calculos.categoriasDe({ amenity: 'bus_station' })).toEqual([]);
   });

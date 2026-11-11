@@ -192,6 +192,7 @@ const AsistenteUI = (() => {
         const datos = Asistente.prepararDatos({
           salud: congelados.salud.features, consultorios: consultorios ? consultorios.features : [],
           mercados: comercio.mercados ? comercio.mercados.features : [], supermercados: comercio.supermercados ? comercio.supermercados.features : [], malls: comercio.malls ? comercio.malls.features : [],
+          finanzas: comercio.finanzas ? comercio.finanzas.features : [], comida_fuera: comercio.comida_fuera ? comercio.comida_fuera.features : [], recreacion: comercio.recreacion ? comercio.recreacion.features : [],
           educacion: congelados.educacion.features, transporte: congelados.transporte.features, areasVerdes: congelados.areasVerdes.features,
           cauces: cauces ? cauces.lista : [],
         }, zonas, umbrales());
