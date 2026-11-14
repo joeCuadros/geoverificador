@@ -1,0 +1,81 @@
+{
+ "ok": true,
+ "data": [
+  {
+   "id": "17664795",
+   "shortName": "Atalaya",
+   "longName": "Atalaya : Atalaya → Estadio Melgar",
+   "agency": {
+    "id": "9",
+    "name": "C5 - EtraBus"
+   },
+   "color": "#FF0000",
+   "textColor": "#FFFFFF",
+   "stopsCount": 14
+  },
+  {
+   "id": "17607753",
+   "shortName": "Cettar",
+   "longName": "Cettar : Ciudad Municipal → Terminal Terrestre",
+   "agency": {
+    "id": "3",
+    "name": "C2 - Cono Norte"
+   },
+   "color": "#DBD9D1",
+   "textColor": "#FFFFFF",
+   "stopsCount": 51
+  },
+  {
+   "id": "17445532",
+   "shortName": "Enace",
+   "longName": "Enace : Urbanización Deán Valdivia → Avenida Venezuela",
+   "agency": {
+    "id": "0",
+    "name": "C3 - Transcayma"
+   },
+   "color": "#FEDD00",
+   "textColor": "#FFFFFF",
+   "stopsCount": 39
+  },
+  {
+   "id": "21420188",
+   "shortName": "S: Terminal Terrestre",
+   "longName": "S: Terminal Terrestre : Terminal Terrestre → Santa María",
+   "agency": {
+    "id": "10",
+    "name": "Albotran"
+   },
+   "color": "#FFFFFF",
+   "textColor": "#FFFFFF",
+   "stopsCount": 34
+  },
+  {
+   "id": "21427589",
+   "shortName": "P",
+   "longName": "P : Calle Espinar → Espiritu Santo",
+   "agency": {
+    "id": "11",
+    "name": "Chiguata"
+   },
+   "color": "#FFFFFF",
+   "textColor": "#FFFFFF",
+   "stopsCount": 60
+  },
+  {
+   "id": "17608045",
+   "shortName": "BR",
+   "longName": "BR : Apipa → Terminal Terrestre",
+   "agency": {
+    "id": "3",
+    "name": "C2 - Cono Norte"
+   },
+   "color": "#DBD9D1",
+   "textColor": "#FFFFFF",
+   "stopsCount": 46
+  }
+ ],
+ "meta": {
+  "count": 6,
+  "nota": "Extracto de 6 rutas de las 241 de la respuesta real del 2026-11-12"
+ }
+}
