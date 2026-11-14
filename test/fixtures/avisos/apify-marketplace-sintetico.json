@@ -1,0 +1,28 @@
+{
+  "_nota": "SINTETICO: hecho a mano con los nombres de campo de la pagina publica de apify/facebook-marketplace-scraper; NO es una salida real de Apify y no esta verificado. Los campos de vendedor existen a proposito para probar que nunca llegan a la salida.",
+  "items": [
+    {
+      "id": "1111111111",
+      "listingUrl": "https://www.facebook.com/marketplace/item/1111111111/",
+      "marketplace_listing_title": "Casa en venta en Cayma 200 m2",
+      "listing_price": { "amount": "250000.00", "formatted_amount": "S/ 250,000" },
+      "location": { "reverse_geocode": { "city": "Cayma", "state": "AR" } },
+      "marketplace_listing_seller": { "name": "VENDEDOR_QUE_NO_DEBE_SALIR", "id": "999888777" },
+      "seller_name": "VENDEDOR_QUE_NO_DEBE_SALIR",
+      "primary_listing_photo": { "image": { "uri": "https://scontent.example/foto.jpg" } },
+      "description": "Casa amplia, llamar al 987654321",
+      "coordinates": { "latitude": -16.37, "longitude": -71.55 },
+      "timestamp": 1760000000
+    },
+    {
+      "id": "2222222222",
+      "marketplace_listing_title": "Terreno",
+      "listing_price": { "formatted_amount": "US$45,000" },
+      "location": { "reverse_geocode": { "city": "Arequipa" } }
+    },
+    { "id": "3333333333", "marketplace_listing_title": "Sin precio", "location": { "reverse_geocode": { "city": "Lima" } } },
+    { "id": "4444444444", "marketplace_listing_title": "Vendido", "is_sold": true },
+    { "marketplace_listing_title": "Sin id" },
+    42
+  ]
+}

@@ -1,0 +1,149 @@
+{
+  "_nota": "CLAVES REALES, VALORES SINTETICOS: las claves de los tres ultimos items (Desarrollo) son las de una salida real de scrapers_lat en modo lista (informadas tras la corrida de pago del 2026-11-12), pero los valores son inventados y los textos son marcadores; NO es una salida real recortada. Los primeros items usan nombres de campo supuestos (coordinates, builtAreaM2, etc.) que el modo lista real NO trae, y se conservan para probar la tolerancia. Los campos description, publisherLogo, imageUrl, ai*, agent*, publisher y whatsapp existen a proposito para probar que nunca llegan a la salida.",
+  "items": [
+    {
+      "listingId": "151184336",
+      "postingCode": "ABC123",
+      "title": "Departamentos en Preventa en Cayma, Urb. Los Girasoles",
+      "price": 617000,
+      "currency": "PEN",
+      "pricePen": 617000,
+      "priceUsd": 182500,
+      "pricePerM2": 5412,
+      "operationType": "venta",
+      "propertyType": "Departamento",
+      "bedrooms": 3,
+      "bathrooms": 2,
+      "parkingSpaces": 1,
+      "totalAreaM2": 120,
+      "builtAreaM2": 114,
+      "location": "Cayma, Arequipa",
+      "address": "Urb. Los Girasoles",
+      "district": "Cayma",
+      "city": "Arequipa",
+      "province": "Arequipa",
+      "region": "Arequipa",
+      "coordinates": {
+        "lat": -16.3699633,
+        "lng": -71.5455032
+      },
+      "url": "/inmueble/clasificado/veclapin-departamentos-en-preventa-en-cayma-151184336",
+      "publishedDate": "2026-10-01T10:00:00.000Z",
+      "agentName": "AGENTE_QUE_NO_DEBE_SALIR",
+      "agentPhone": "999111222",
+      "whatsapp": "999111222",
+      "publisher": {
+        "name": "INMOBILIARIA_QUE_NO_DEBE_SALIR",
+        "url": "/inmobiliarias/secreta"
+      }
+    },
+    {
+      "url": "https://urbania.pe/inmueble/clasificado/veclcain-casa-en-yanahuara-150000001",
+      "title": "Casa en Yanahuara",
+      "priceUsd": 250000,
+      "operationType": "Venta",
+      "propertyType": "House",
+      "totalAreaM2": 300,
+      "location": "Yanahuara, Arequipa, Arequipa",
+      "latitude": -16.39,
+      "longitude": -71.54
+    },
+    {
+      "listingId": 150000002,
+      "title": "Terreno",
+      "price": "S/ 120,000",
+      "propertyType": "Terreno",
+      "totalAreaM2": "300",
+      "url": "https://urbania.pe/inmueble/clasificado/terreno-150000002",
+      "district": "Paucarpata",
+      "address": "=HYPERLINK(\"http://malo\")"
+    },
+    {
+      "listingId": "150000003",
+      "title": "Departamento en alquiler",
+      "price": 1500,
+      "currency": "PEN",
+      "operationType": "alquiler",
+      "url": "https://urbania.pe/inmueble/clasificado/alquiler-150000003"
+    },
+    {
+      "title": "Sin id ni url"
+    },
+    null,
+    "no soy un objeto",
+    {
+      "listingId": "150000004",
+      "url": "https://urbania.pe/x-150000004",
+      "price": {
+        "raro": true
+      },
+      "totalAreaM2": -5,
+      "coordinates": "no"
+    },
+    {
+      "title": "Edificio Ejemplo - departamentos de 2 y 3 dormitorios",
+      "price": 300000,
+      "currency": "PEN",
+      "priceUsd": 88000,
+      "pricePen": 300000,
+      "maintenanceFee": 150,
+      "maintenanceFeeCurrency": "PEN",
+      "operationType": "Venta",
+      "observedAt": "2026-11-12T10:00:00.000Z",
+      "detailError": null,
+      "error": null,
+      "pricePerM2Currency": "PEN",
+      "description": "MARCADOR_DESCRIPCION_NO_DEBE_SALIR llamar al 987654321",
+      "publisherLogo": "https://img.example/MARCADOR_LOGO_NO_DEBE_SALIR.png",
+      "imageUrl": "https://img.example/MARCADOR_IMAGEN_NO_DEBE_SALIR.jpg",
+      "propertyType": "Desarrollo",
+      "bedrooms": 2,
+      "bathrooms": 2,
+      "totalAreaM2": 60,
+      "location": "Cayma, Arequipa",
+      "url": "https://urbania.pe/inmueble/proyecto/edificio-ejemplo-4461355",
+      "listingId": "4461355",
+      "pricePerM2": 5000
+    },
+    {
+      "title": "Residencial Muestra",
+      "price": 410000,
+      "currency": "PEN",
+      "priceUsd": 120000,
+      "pricePen": 410000,
+      "maintenanceFee": 150,
+      "maintenanceFeeCurrency": "PEN",
+      "operationType": "Venta",
+      "observedAt": "2026-11-12T10:00:00.000Z",
+      "detailError": null,
+      "error": null,
+      "pricePerM2Currency": "PEN",
+      "description": "MARCADOR_DESCRIPCION_NO_DEBE_SALIR llamar al 987654321",
+      "publisherLogo": "https://img.example/MARCADOR_LOGO_NO_DEBE_SALIR.png",
+      "imageUrl": "https://img.example/MARCADOR_IMAGEN_NO_DEBE_SALIR.jpg",
+      "propertyType": "Desarrollo",
+      "isDevelopment": true,
+      "aiListingSummary": "MARCADOR_IA_NO_DEBE_SALIR",
+      "aiFeatures": [
+        "MARCADOR_IA_NO_DEBE_SALIR"
+      ],
+      "aiListingEnglish": "MARCADOR_IA_NO_DEBE_SALIR",
+      "bedrooms": 3,
+      "bathrooms": 2,
+      "totalAreaM2": 90,
+      "location": "Cayma, Arequipa",
+      "url": "https://www.adondevivir.com/propiedades/proyecto/residencial-muestra-4461356.html",
+      "listingId": "4461356",
+      "pricePerM2": 4555
+    },
+    {
+      "title": "Proyecto sin pista de tipo",
+      "price": 200000,
+      "currency": "PEN",
+      "propertyType": "Desarrollo",
+      "location": "Yanahuara, Arequipa",
+      "url": "https://urbania.pe/inmueble/proyecto/sin-pista-4461357",
+      "listingId": "4461357"
+    }
+  ]
+}
