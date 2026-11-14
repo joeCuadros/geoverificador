@@ -1,0 +1,292 @@
+<title>Plan GeoVerificador Agente</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap">
+<style>
+/* Layout: one reading column with a fixed-width phase index on wide screens; phases are a real sequence, so they are numbered. */
+:root{
+  --bg:#f5f7f8; --surface:#ffffff; --fg:#16212a; --muted:#56646f; --line:#d6dde2;
+  --accent:#0b6b6f; --accent-soft:#e0f0f0;
+  --ok:#1f7a3d; --ok-bg:#e2f3e7; --warn:#8a5a00; --warn-bg:#fbefd2; --bad:#a3312b; --bad-bg:#fbe4e2;
+  --display:"Space Grotesk","Segoe UI",system-ui,sans-serif;
+  --body:"Inter","Segoe UI",system-ui,sans-serif;
+  --mono:ui-monospace,"Cascadia Code",Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#10171c; --surface:#18222a; --fg:#e6edf1; --muted:#9aa9b4; --line:#2c3a44;
+  --accent:#5cc4c4; --accent-soft:#143538;
+  --ok:#7fd49a; --ok-bg:#173524; --warn:#f0c463; --warn-bg:#3a2e10; --bad:#f09a94; --bad-bg:#43201d;
+  color-scheme:dark } }
+:root[data-theme="dark"]{
+  --bg:#10171c; --surface:#18222a; --fg:#e6edf1; --muted:#9aa9b4; --line:#2c3a44;
+  --accent:#5cc4c4; --accent-soft:#143538;
+  --ok:#7fd49a; --ok-bg:#173524; --warn:#f0c463; --warn-bg:#3a2e10; --bad:#f09a94; --bad-bg:#43201d;
+  color-scheme:dark }
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:16px;line-height:1.6}
+.wrap{max-width:1080px;margin:0 auto;padding-block:40px 72px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;grid-template-columns:minmax(0,1fr);gap:40px}
+@media (min-width:900px){.wrap{grid-template-columns:210px minmax(0,1fr)} nav.idx{position:sticky;top:calc(env(safe-area-inset-top,0px) + 24px);align-self:start}}
+main{min-width:0;display:flex;flex-direction:column;gap:48px}
+h1,h2,h3{font-family:var(--display);text-wrap:balance;line-height:1.2;margin:0}
+h1{font-size:2.1rem;font-weight:600}
+h2{font-size:1.45rem;font-weight:600}
+h3{font-size:1.05rem;font-weight:600}
+p{margin:0;max-width:68ch}
+section{display:flex;flex-direction:column;gap:16px}
+.eyebrow{font-size:.75rem;letter-spacing:.09em;text-transform:uppercase;color:var(--accent);font-weight:600}
+.lead{font-size:1.1rem;color:var(--muted)}
+nav.idx{display:flex;flex-direction:column;gap:6px;font-size:.9rem}
+nav.idx a{color:var(--muted);text-decoration:none;padding:3px 0}
+nav.idx a:hover,nav.idx a:focus-visible{color:var(--accent)}
+a{color:var(--accent)} a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+blockquote{margin:0;padding:18px 20px;background:var(--accent-soft);border-radius:6px;font-size:1.05rem;max-width:68ch}
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:6px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:.92rem;min-width:620px}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-weight:600;color:var(--muted);font-size:.78rem;letter-spacing:.05em;text-transform:uppercase}
+tr:last-child td{border-bottom:0}
+.pill{display:inline-block;font-size:.76rem;font-weight:600;padding:2px 9px;border-radius:999px;white-space:nowrap}
+.ok{color:var(--ok);background:var(--ok-bg)} .warn{color:var(--warn);background:var(--warn-bg)} .bad{color:var(--bad);background:var(--bad-bg)}
+.phase{border-top:2px solid var(--fg);padding-top:18px;display:flex;flex-direction:column;gap:14px}
+.phase header{display:flex;flex-wrap:wrap;align-items:baseline;gap:10px 14px}
+.num{font-family:var(--display);font-size:.9rem;color:var(--accent);font-weight:600}
+.size{font-size:.78rem;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:1px 7px}
+ol.tasks{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:10px}
+ol.tasks li{display:grid;grid-template-columns:52px minmax(0,1fr);gap:10px}
+ol.tasks .id{font-family:var(--mono);font-size:.8rem;color:var(--muted);padding-top:3px}
+.done{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:12px 14px;font-size:.93rem}
+.done b{color:var(--accent)}
+ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;max-width:68ch}
+code{font-family:var(--mono);font-size:.88em;background:var(--accent-soft);padding:1px 5px;border-radius:3px;overflow-wrap:anywhere}
+.flow{display:flex;flex-wrap:wrap;gap:8px;align-items:stretch}
+.flow div{flex:1 1 150px;min-width:0;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:12px;font-size:.88rem}
+.flow div b{display:block;font-family:var(--display);margin-bottom:4px}
+.note{font-size:.88rem;color:var(--muted)}
+</style>
+
+<div class="wrap">
+<nav class="idx" aria-label="Índice">
+  <a href="#vision">Visión</a>
+  <a href="#hoy">Dónde estamos</a>
+  <a href="#brecha">Qué pide la consulta</a>
+  <a href="#decisiones">Decisiones previas</a>
+  <a href="#arquitectura">Arquitectura objetivo</a>
+  <a href="#f1">1 · Ordenar el repositorio</a>
+  <a href="#f2">2 · Base de datos única</a>
+  <a href="#f3">3 · Avisos confiables</a>
+  <a href="#f4">4 · Datos que faltan</a>
+  <a href="#f5">5 · Migración a Next.js</a>
+  <a href="#f6">6 · Agente</a>
+  <a href="#f7">7 · Pruebas</a>
+  <a href="#f8">8 · Salida a producción</a>
+  <a href="#riesgos">Riesgos</a>
+</nav>
+
+<main>
+<section>
+  <span class="eyebrow">GeoVerificador · Arequipa Metropolitana · 14 nov 2026</span>
+  <h1>Plan para terminar el producto</h1>
+  <p class="lead">Paso a paso para pasar de un visor de datos con asistente de reglas a un agente que responde pedidos de vivienda en lenguaje natural, sobre Next.js y una sola base de datos.</p>
+</section>
+
+<section id="vision">
+  <h2>Visión</h2>
+  <blockquote>«Quiero un departamento cerca de mi trabajo, cerca de un mall, con agua y luz, cerca de un colegio y de una universidad, y que no cueste más de medio millón.»</blockquote>
+  <p>La persona escribe eso. El agente pregunta lo que falta (dónde queda el trabajo, soles o dólares), busca avisos reales que cumplen, y responde con una lista corta donde cada aviso muestra qué criterios cumple, con qué dato y de qué fecha, y el enlace al aviso original.</p>
+  <h3>Otros casos que el mismo agente debe resolver</h3>
+  <ul>
+    <li>Familia con hijos: casa de 3 dormitorios, colegio inicial y primaria a menos de 10 minutos a pie, fuera de quebradas y de zona de peligro volcánico alto.</li>
+    <li>Estudiante: cuarto o departamento chico con combi directa a la UNSA, sin trasbordo.</li>
+    <li>Adulto mayor: departamento en primer piso o con ascensor, hospital o centro de salud cerca, mercado a pie.</li>
+    <li>Inversionista: terreno de más de 200 m² con zonificación que permita comercio, dentro de concesión eléctrica.</li>
+    <li>Comparación: «entre estos dos avisos, ¿cuál queda mejor para llegar al Parque Industrial?»</li>
+    <li>Verificación: «me ofrecen este terreno en Yura, ¿qué debería revisar?» (hoy ya lo cubre la ficha de un punto).</li>
+  </ul>
+</section>
+
+<section id="hoy">
+  <h2>Dónde estamos</h2>
+  <div class="tbl"><table>
+    <tr><th>Pieza</th><th>Estado real</th><th></th></tr>
+    <tr><td>Interfaz</td><td>JavaScript sin framework ni paso de compilación: 40 archivos, unas 14.700 líneas, 37 etiquetas <code>script</code> en orden fijo, Leaflet desde CDN.</td><td><span class="pill warn">A migrar</span></td></tr>
+    <tr><td>Lógica de negocio</td><td>25 bibliotecas puras en <code>public/js</code> (cálculos, viaje, sectores, asistente), sin DOM, con unas 1.600 pruebas.</td><td><span class="pill ok">Reutilizable</span></td></tr>
+    <tr><td>Servidor</td><td>En producción solo corren funciones de Vercel (<code>api/chat.js</code>, <code>api/auth/*</code>). NestJS sirve únicamente en local.</td><td><span class="pill warn">Nest sobra</span></td></tr>
+    <tr><td>Datos</td><td>56 archivos GeoJSON/JSON en <code>public/data</code> (23 a 28 MB). No hay base de datos.</td><td><span class="pill warn">Dispersos</span></td></tr>
+    <tr><td>Asistente</td><td>Motor de reglas más Gemini en dos tareas acotadas (interpretar la consulta y redactar). Busca <em>zonas</em>, no avisos. No hay ciclo de agente con herramientas.</td><td><span class="pill warn">Base útil</span></td></tr>
+    <tr><td>Avisos</td><td>CLI <code>pnpm datos:avisos</code> en la rama <code>feat/cli-avisos</code>, sin confirmar. Nexo funciona directo; Urbania y Adondevivir por Apify (10 de 10 avisos reales mapeados). Nada llega a la aplicación.</td><td><span class="pill warn">Parcial</span></td></tr>
+    <tr><td>Marketplace</td><td>Probado hoy con <code>apify/facebook-marketplace-scraper</code> (USD 0,06). El actor respondió, pero devolvió 10 artículos de Florida: Facebook ignoró la URL de Arequipa. Además el precio no se leyó y el CLI aceptó artículos que no son inmuebles.</td><td><span class="pill bad">No sirve aún</span></td></tr>
+    <tr><td>Transporte</td><td>241 rutas y 411 paraderos de OSM, viaje directo y con un trasbordo, tiempos aproximados. Cubre el 72 % de la ciudad. No hay red vial.</td><td><span class="pill warn">Parcial</span></td></tr>
+    <tr><td>Ramas</td><td>Varias ramas apiladas sin integrar a <code>main</code> (censo, rutas, tiempo de viaje, minería, agua, trasbordo, avisos).</td><td><span class="pill bad">Bloquea</span></td></tr>
+  </table></div>
+</section>
+
+<section id="brecha">
+  <h2>Qué pide la consulta y qué tenemos</h2>
+  <p>La consulta de ejemplo, criterio por criterio. Esta tabla define el trabajo de datos.</p>
+  <div class="tbl"><table>
+    <tr><th>Lo que dice la persona</th><th>Dato que lo responde</th><th>Hoy</th><th>Falta</th></tr>
+    <tr><td>Un departamento</td><td>Avisos con tipo de inmueble</td><td><span class="pill warn">Parcial</span></td><td>Los proyectos salen sin tipo cuando se busca «todos».</td></tr>
+    <tr><td>Cerca de mi trabajo</td><td>Dirección del trabajo, tiempo de viaje</td><td><span class="pill warn">Parcial</span></td><td>Los avisos en modo lista no traen coordenadas. El tiempo de viaje es aproximado y no existe para el 28 % de los orígenes.</td></tr>
+    <tr><td>Cerca de un mall</td><td><code>malls.geojson</code></td><td><span class="pill ok">Listo</span></td><td>Solo 4 centros comerciales reales; los otros 47 son galerías. Hay que decirlo en la respuesta.</td></tr>
+    <tr><td>Con agua y luz</td><td>Censo 2017 por manzana, concesiones eléctricas</td><td><span class="pill warn">Parcial</span></td><td>El censo es de 2017 y solo 11.250 de 31.277 manzanas tienen cifras. No existe dato por lote. El agente informa cobertura de la manzana, nunca garantiza el servicio.</td></tr>
+    <tr><td>Cerca de un colegio</td><td><code>educacion.geojson</code> (1.713)</td><td><span class="pill ok">Listo</span></td><td>La licencia de ESCALE no es abierta: revisar antes de usarla en un producto comercial.</td></tr>
+    <tr><td>Cerca de una universidad</td><td>Ninguno</td><td><span class="pill bad">Falta</span></td><td>No hay capa de universidades. La UNSA solo figura como destino con nombre.</td></tr>
+    <tr><td>No más de medio millón</td><td>Precio del aviso y moneda</td><td><span class="pill warn">Parcial</span></td><td>Los portales mezclan soles y dólares. Hoy los precios en la aplicación cubren 3 de 25 distritos.</td></tr>
+  </table></div>
+</section>
+
+<section id="decisiones">
+  <h2>Decisiones previas</h2>
+  <p>Cuatro decisiones del dueño del producto. Sin ellas, las fases 3 y 6 no tienen un objetivo definido.</p>
+  <div class="tbl"><table>
+    <tr><th>Código</th><th>Decisión</th><th>Por qué bloquea</th></tr>
+    <tr><td>D1</td><td>Cambiar los principios del producto.</td><td><code>PRODUCT.md</code> y <code>METODOLOGIA.md</code> prohíben hoy un puntaje global, nombrar «la mejor zona», ordenar por precio y mostrar avisos. La visión los contradice. Propuesta: mantener «sin puntaje opaco» y ordenar por cantidad de criterios cumplidos, mostrando cada uno.</td></tr>
+    <tr><td>D2</td><td>Base legal para mostrar avisos de terceros.</td><td>Lo recolectado hoy está marcado «no publicar ni redistribuir». Facebook prohíbe el acceso automatizado en su <code>robots.txt</code>. Caminos: mostrar solo datos mínimos más enlace al original, acuerdos con portales o inmobiliarias, o que agentes carguen sus propios avisos. Requiere revisión de un abogado.</td></tr>
+    <tr><td>D3</td><td>Presupuesto mensual.</td><td>Apify gratis entrega 10 registros por corrida. Con volumen real se estimó entre USD 19 y 35 al mes. Faltan estimar la base de datos y el modelo de lenguaje.</td></tr>
+    <tr><td>D4</td><td>Alcance de Marketplace.</td><td>Es la fuente más cara de mantener y la de mayor riesgo legal, y hoy no funciona. Propuesta: dejarla fuera de la primera versión.</td></tr>
+  </table></div>
+  <p class="note">Pendiente inmediato de seguridad: regenerar el token de Apify, que quedó expuesto en una conversación, y reemplazar las claves de ejemplo de <code>ObserveModule</code>.</p>
+</section>
+
+<section id="arquitectura">
+  <h2>Arquitectura objetivo</h2>
+  <div class="flow">
+    <div><b>Recolectores</b>CLI de avisos, descargas oficiales y OSM. Corren programados, fuera de la web.</div>
+    <div><b>PostgreSQL + PostGIS</b>Lugares, zonas, manzanas, rutas, peligros, avisos y su historial, con fuente, licencia y fecha.</div>
+    <div><b>Núcleo de dominio</b>Las bibliotecas puras actuales (cálculos, viaje, sectores) en TypeScript.</div>
+    <div><b>Herramientas del agente</b>Funciones tipadas que consultan la base y el núcleo.</div>
+    <div><b>Next.js</b>Mapa, ficha, comparación y chat. Rutas de servidor para chat y sesión.</div>
+  </div>
+  <p>Regla que se conserva del asistente actual: el modelo de lenguaje interpreta y redacta; los números salen siempre de las herramientas y se verifican antes de mostrar la respuesta.</p>
+</section>
+
+<section>
+  <h2>Fases</h2>
+  <p>El orden importa: cada fase usa lo que deja la anterior. Las fases 3 y 4 pueden avanzar en paralelo con la 5. Tamaño relativo: S (días), M (una a dos semanas), L (varias semanas) para un equipo de dos o tres personas; es una estimación a ajustar por el equipo.</p>
+
+  <div class="phase" id="f1">
+    <header><span class="num">Fase 1</span><h3>Ordenar el repositorio</h3><span class="size">S</span></header>
+    <ol class="tasks">
+      <li><span class="id">1.1</span><span>Integrar a <code>main</code> las ramas apiladas, en su orden. Al integrar, debe prevalecer el borrado de SmartBus (<code>rutas_smartbus.geojson</code> y su script).</span></li>
+      <li><span class="id">1.2</span><span>Revisar y confirmar <code>feat/cli-avisos</code>. Decidir si el recolector de SmartBus se queda: solo hay permiso verbal y sus datos no pueden entrar al producto.</span></li>
+      <li><span class="id">1.3</span><span>Fijar <code>engines</code> (Node 24) y pnpm en <code>package.json</code>; hoy solo los fija el CI.</span></li>
+      <li><span class="id">1.4</span><span>Medir cobertura de <code>public/js</code> y <code>api/</code>, y extender el lint a esas carpetas. Hoy solo se mide <code>src/</code>.</span></li>
+      <li><span class="id">1.5</span><span>Abrir <code>docs/adr/</code> y registrar D1 a D4.</span></li>
+    </ol>
+    <div class="done"><b>Hecho cuando:</b> una sola rama principal con CI en verde (lint, pruebas, <code>datos:verificar</code>) y las cuatro decisiones escritas.</div>
+  </div>
+
+  <div class="phase" id="f2">
+    <header><span class="num">Fase 2</span><h3>Base de datos única</h3><span class="size">M</span></header>
+    <ol class="tasks">
+      <li><span class="id">2.1</span><span>Crear PostgreSQL con PostGIS (proveedor del Marketplace de Vercel) y migraciones versionadas.</span></li>
+      <li><span class="id">2.2</span><span>Esquema: <code>fuente</code> (licencia, fecha, URL), <code>lugar</code> (categoría, punto), <code>zona</code>, <code>manzana_censo</code>, <code>ruta</code> y <code>paradero</code>, <code>peligro</code>, <code>distrito</code>, <code>aviso</code> y <code>aviso_precio</code> (historial).</span></li>
+      <li><span class="id">2.3</span><span>Cargadores desde los 56 archivos actuales. Cada <code>pnpm datos:*</code> pasa a escribir en la base además del archivo.</span></li>
+      <li><span class="id">2.4</span><span>Índices espaciales y consultas base: lugares a menos de N metros, manzana que contiene un punto, zona y peligros de un punto.</span></li>
+      <li><span class="id">2.5</span><span>Adaptar <code>datos:verificar</code> para comparar la base contra los archivos (hoy 259 comprobaciones).</span></li>
+      <li><span class="id">2.6</span><span>Servir las capas pesadas del mapa (rutas 3,4 MB, zonas 2,8 MB, censo 11 MB) por recorte o teselas, no como archivo completo.</span></li>
+    </ol>
+    <div class="done"><b>Hecho cuando:</b> la ficha de un punto se puede armar con consultas a la base y da los mismos valores que la aplicación actual en los puntos de validación.</div>
+  </div>
+
+  <div class="phase" id="f3">
+    <header><span class="num">Fase 3</span><h3>Avisos confiables</h3><span class="size">L</span></header>
+    <ol class="tasks">
+      <li><span class="id">3.1</span><span>Reemplazar la muestra inventada de las pruebas por una real recortada (ya hay muestras locales de Urbania, Adondevivir y Marketplace).</span></li>
+      <li><span class="id">3.2</span><span>Coordenadas: correr con <code>--con-detalles</code> o geocodificar la dirección. Sin coordenadas un aviso no puede responder «cerca de».</span></li>
+      <li><span class="id">3.3</span><span>Conservar la zona («Heresi, Cayma») e inferir el tipo de los proyectos.</span></li>
+      <li><span class="id">3.4</span><span>Normalizar moneda: guardar precio original y equivalente en soles con tipo de cambio fechado.</span></li>
+      <li><span class="id">3.5</span><span>Detectar el mismo inmueble publicado en dos portales (precio, área, ubicación, título).</span></li>
+      <li><span class="id">3.6</span><span>Ciclo de vida: fecha de primera y última vez visto; marcar como caído lo que deja de aparecer.</span></li>
+      <li><span class="id">3.7</span><span>Ficha de entorno precalculada por aviso: distancia al colegio, universidad, mall, salud y paradero más cercanos; servicios de la manzana; zonificación; peligros.</span></li>
+      <li><span class="id">3.8</span><span>Corrida programada con tope de gasto y un reporte por corrida (recibidos, descartados, sin coordenadas, sin distrito).</span></li>
+      <li><span class="id">3.9</span><span>Marketplace, solo si D4 lo aprueba: URL que fije Arequipa, leer el precio de <code>listing_price.amount_with_offset_in_currency</code>, y rechazar lo que no sea inmueble o esté fuera de Arequipa.</span></li>
+    </ol>
+    <div class="done"><b>Hecho cuando:</b> la base tiene avisos vigentes de al menos 15 de los 25 distritos, más del 90 % con coordenadas y ficha de entorno, y se actualizan solos.</div>
+  </div>
+
+  <div class="phase" id="f4">
+    <header><span class="num">Fase 4</span><h3>Datos que faltan</h3><span class="size">M</span></header>
+    <ol class="tasks">
+      <li><span class="id">4.1</span><span>Universidades e institutos: lista de SUNEDU más OSM, con sedes.</span></li>
+      <li><span class="id">4.2</span><span>Red vial peatonal de OSM para medir distancia caminando real en lugar de línea recta.</span></li>
+      <li><span class="id">4.3</span><span>Electricidad: hoy son 5 polígonos de concesión. Buscar redes de SEAL o declarar el límite en la respuesta.</span></li>
+      <li><span class="id">4.4</span><span>Zonificación: el plan 2016-2025 venció. Conseguir el plan vigente en formato vectorial.</span></li>
+      <li><span class="id">4.5</span><span>Licencias sin verificar (ESCALE, INEI, INGEMMET, IGP, ANA, CENEPRED, SEDAPAR): confirmar o pedir autorización por escrito.</span></li>
+      <li><span class="id">4.6</span><span>Malls: revisar las 47 galerías y decidir cuáles cuentan para «cerca de un mall».</span></li>
+    </ol>
+    <div class="done"><b>Hecho cuando:</b> cada criterio de la tabla «Qué pide la consulta» tiene un dato cargado y su límite escrito en una frase que el agente puede citar.</div>
+  </div>
+
+  <div class="phase" id="f5">
+    <header><span class="num">Fase 5</span><h3>Migración a Next.js</h3><span class="size">L</span></header>
+    <p>Migración por partes. La aplicación actual sigue publicada hasta que la nueva la iguale.</p>
+    <ol class="tasks">
+      <li><span class="id">5.1</span><span>Crear la aplicación Next.js (App Router, TypeScript) en el mismo repositorio.</span></li>
+      <li><span class="id">5.2</span><span>Mover las 25 bibliotecas puras a un paquete de dominio con módulos ES y tipos. Eliminar las variables globales y la carga doble <code>typeof X !== 'undefined' ? X : require()</code>. Las 1.600 pruebas deben seguir pasando sin cambiar lo que afirman.</span></li>
+      <li><span class="id">5.3</span><span>Pasar <code>api/chat.js</code> y <code>api/auth/*</code> a rutas de servidor. Sus núcleos ya son funciones <code>(req) → {status, cuerpo}</code>.</span></li>
+      <li><span class="id">5.4</span><span>Mapa como componente de cliente, con Leaflet instalado como dependencia en lugar del CDN.</span></li>
+      <li><span class="id">5.5</span><span>Portar la interfaz por paneles, en este orden: ficha del punto, capas, viaje, comparación, reporte, asistente. <code>app.js</code> (2.077 líneas) se divide, no se copia.</span></li>
+      <li><span class="id">5.6</span><span>Estado: lo que hoy vive en <code>localStorage</code> (destino, comparación, umbrales) pasa a un almacén de cliente tipado.</span></li>
+      <li><span class="id">5.7</span><span>Lista de paridad función por función y pruebas de extremo a extremo sobre los 4 puntos de la auditoría.</span></li>
+      <li><span class="id">5.8</span><span>Retirar NestJS, <code>public/index.html</code> y la publicación en GitHub Pages.</span></li>
+    </ol>
+    <div class="done"><b>Hecho cuando:</b> la lista de paridad está completa, la versión nueva reemplaza a la anterior en el dominio de producción y NestJS ya no está en <code>package.json</code>.</div>
+  </div>
+
+  <div class="phase" id="f6">
+    <header><span class="num">Fase 6</span><h3>Agente</h3><span class="size">L</span></header>
+    <ol class="tasks">
+      <li><span class="id">6.1</span><span>Definir las herramientas con esquema de entrada y salida:
+        <code>geocodificar_lugar</code>, <code>buscar_avisos</code> (tipo, precio máximo, moneda, distrito, dormitorios), <code>entorno_de_aviso</code>, <code>tiempo_de_viaje</code>, <code>buscar_zonas</code> (la búsqueda por cuadrícula actual), <code>explicar_fuente</code>.</span></li>
+      <li><span class="id">6.2</span><span>Ciclo de agente con varios pasos de herramienta. El asistente actual hace una sola llamada forzada; aquí hay que encadenar geocodificar, buscar, medir y redactar. Dejar el proveedor del modelo detrás de una interfaz y elegirlo con la evaluación de 6.6.</span></li>
+      <li><span class="id">6.3</span><span>Preguntas de aclaración: si falta el lugar de trabajo, la moneda o el tipo de inmueble, el agente pregunta una sola cosa antes de buscar.</span></li>
+      <li><span class="id">6.4</span><span>Orden de resultados transparente (D1): cuántos criterios cumple cada aviso, con el valor medido de cada uno. Sin puntaje oculto.</span></li>
+      <li><span class="id">6.5</span><span>Verificación de la respuesta: todo número y nombre del texto debe existir en la salida de alguna herramienta; si no, se usa la redacción determinista. Ya existe para el asistente actual.</span></li>
+      <li><span class="id">6.6</span><span>Conjunto de evaluación: 40 a 60 consultas reales con la interpretación esperada y los avisos que deben o no aparecer. Se corre en CI y decide el modelo.</span></li>
+      <li><span class="id">6.7</span><span>Límites escritos en el producto: informa, no asesora legal ni financieramente; agua y luz son cobertura de la manzana en 2017; todo aviso lleva fecha y enlace al original.</span></li>
+      <li><span class="id">6.8</span><span>Interfaz de chat con resultados en el mapa, tarjetas de aviso y el detalle de cada criterio. Límite de uso por sesión.</span></li>
+    </ol>
+    <div class="done"><b>Hecho cuando:</b> la consulta de ejemplo devuelve avisos reales bajo el precio pedido, cada uno con sus cinco criterios medidos y fechados, y la evaluación pasa el umbral que fije el equipo sin un solo número inventado.</div>
+  </div>
+
+  <div class="phase" id="f7">
+    <header><span class="num">Fase 7</span><h3>Pruebas</h3><span class="size">M</span></header>
+    <ol class="tasks">
+      <li><span class="id">7.1</span><span>Unitarias: conservar las actuales sobre el núcleo de dominio.</span></li>
+      <li><span class="id">7.2</span><span>Integración contra una base PostGIS de prueba: consultas espaciales y cargadores.</span></li>
+      <li><span class="id">7.3</span><span>Contrato de recolectores: muestras reales por portal; una prueba semanal contra la fuente viva detecta cambios de formato.</span></li>
+      <li><span class="id">7.4</span><span>Extremo a extremo en navegador: ficha, viaje, comparación y una conversación completa.</span></li>
+      <li><span class="id">7.5</span><span>Evaluación del agente (6.6) y costo por conversación.</span></li>
+      <li><span class="id">7.6</span><span>Accesibilidad y uso en teléfono; prueba con cinco personas que estén buscando vivienda.</span></li>
+    </ol>
+    <div class="done"><b>Hecho cuando:</b> todo corre en CI y un cambio de formato en un portal rompe una prueba antes de romper la aplicación.</div>
+  </div>
+
+  <div class="phase" id="f8">
+    <header><span class="num">Fase 8</span><h3>Salida a producción</h3><span class="size">M</span></header>
+    <ol class="tasks">
+      <li><span class="id">8.1</span><span>Entornos de vista previa y producción con despliegue automático desde Git (hoy pendiente).</span></li>
+      <li><span class="id">8.2</span><span>Variables de entorno y secretos por entorno; ninguno en el repositorio ni en conversaciones.</span></li>
+      <li><span class="id">8.3</span><span>Tareas programadas: recolección de avisos, refresco de fuentes oficiales, verificación de datos.</span></li>
+      <li><span class="id">8.4</span><span>Monitoreo: errores, gasto de Apify y del modelo, avisos vencidos, consultas sin resultados.</span></li>
+      <li><span class="id">8.5</span><span>Términos de uso, política de privacidad y página de fuentes con licencia y fecha de cada dato.</span></li>
+      <li><span class="id">8.6</span><span>Beta cerrada con un grupo chico, luego apertura.</span></li>
+    </ol>
+    <div class="done"><b>Hecho cuando:</b> una persona externa completa una búsqueda real sin ayuda y el equipo ve su costo y sus errores en un tablero.</div>
+  </div>
+</section>
+
+<section id="riesgos">
+  <h2>Riesgos</h2>
+  <div class="tbl"><table>
+    <tr><th>Riesgo</th><th>Efecto</th><th>Respuesta</th></tr>
+    <tr><td>Mostrar avisos de portales sin permiso</td><td>Reclamo legal o bloqueo de la fuente</td><td>Resolver D2 antes de la fase 6. Empezar por Nexo (permite rastreo) y acuerdos directos.</td></tr>
+    <tr><td>Los portales cambian su formato o bloquean</td><td>La base se queda sin avisos nuevos</td><td>Pruebas de contrato (7.3), reporte por corrida (3.8), más de una fuente.</td></tr>
+    <tr><td>El agente afirma servicios que no existen</td><td>Una persona compra confiando en un dato de 2017</td><td>Verificación 6.5, límites 6.7, fecha visible en cada dato.</td></tr>
+    <tr><td>Datos vencidos (censo 2017, zonificación vencida)</td><td>Respuestas correctas en forma y falsas en contenido</td><td>Fase 4 y aviso de antigüedad en la respuesta.</td></tr>
+    <tr><td>Migración larga con dos aplicaciones vivas</td><td>Doble mantenimiento</td><td>Congelar funciones nuevas en la aplicación vieja desde que empieza la fase 5.</td></tr>
+    <tr><td>Costo variable de Apify y del modelo</td><td>Gasto sin techo</td><td>Tope por corrida (ya existe), límite por sesión, monitoreo 8.4.</td></tr>
+  </table></div>
+  <p class="note">Fuente del estado actual: relevamiento del repositorio el 14 de noviembre de 2026 (ramas <code>feat/viaje-un-trasbordo</code> y <code>feat/cli-avisos</code>) y <code>docs/AUDITORIA-DATOS.md</code>.</p>
+</section>
+</main>
+</div>
