@@ -68,3 +68,6 @@ qwen-image-ui/
 
 # Respuestas crudas de SmartBus (scripts/descargar-rutas-smartbus.mjs)
 /.cache-smartbus/
+
+# Avisos de venta de terceros y perfil de navegador de Marketplace (scripts/recolectar-avisos.mjs): datos crudos, no se suben ni se publican
+/datos-crudos/

@@ -15,6 +15,8 @@
     "start:prod": "node dist/main",
     "datos:extraer": "node scripts/extraer-equipamiento.mjs",
     "datos:rutas": "node scripts/descargar-rutas-smartbus.mjs",
+    "datos:avisos": "node scripts/recolectar-avisos.mjs",
+    "datos:smartbus": "node scripts/recolectar-smartbus.mjs",
     "datos:verificar": "node scripts/verificar-datos.mjs",
     "datos:validar-osm": "node scripts/validar-zonificacion-osm.mjs",
     "datos:validar-oficial": "node scripts/validar-osm-oficial.mjs",
