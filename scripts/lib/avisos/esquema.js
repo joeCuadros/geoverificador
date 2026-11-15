@@ -96,7 +96,7 @@ function normalizarTipo(v) {
   if (/^departamentos?$|^desarrollos? verticales?$/.test(k)) return 'departamento';
   if (/^casas?$/.test(k)) return 'casa';
   if (/^terrenos?(\s*[/-]?\s*lotes?)?$|^lotes?$/.test(k)) return 'terreno';
-  if (/^locales? comerciales?$|^locales?$/.test(k)) return 'local';
+  if (/^local(es)? comercial(es)?$|^local(es)?$/.test(k)) return 'local';
   if (/^oficinas?$/.test(k)) return 'oficina';
   return null;
 }

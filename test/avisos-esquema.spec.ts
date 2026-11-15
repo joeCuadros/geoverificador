@@ -41,6 +41,10 @@ describe('Esquema.normalizarTipo', () => {
     expect(E.normalizarTipo('Oficinas')).toBe('oficina');
     expect(E.normalizarTipo('Desarrollos verticales')).toBe('departamento');
   });
+  it('«local» y «local comercial» en singular también son local', () => {
+    expect(E.normalizarTipo('Local')).toBe('local');
+    expect(E.normalizarTipo('Local comercial')).toBe('local');
+  });
   it('un tipo desconocido es null', () => {
     expect(E.normalizarTipo('Chacras')).toBeNull();
     expect(E.normalizarTipo(undefined)).toBeNull();
