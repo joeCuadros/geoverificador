@@ -46,13 +46,35 @@ function distritoDeTexto(texto, conocidos) {
 }
 
 const TIPOS_EN = { apartment: 'departamento', flat: 'departamento', house: 'casa', land: 'terreno', lot: 'terreno', plot: 'terreno', commercial: 'local', 'commercial space': 'local', office: 'oficina' };
-/** Pista de tipo en el título (solo se usa para proyectos cuando la búsqueda mezclaba varios tipos). */
+/**
+ * Pista de tipo en el título. Se usa para proyectos cuando la búsqueda mezclaba varios tipos y, en Marketplace, para decidir si un
+ * ítem es un inmueble y de qué tipo.
+ */
 function tipoDeTitulo(titulo) {
   if (typeof titulo !== 'string') return null;
-  if (/\b(departamentos?|dptos?\.?|flats?|d[uú]plex)\b/i.test(titulo)) return 'departamento';
+  if (/\b((mini\s*)?departamentos?|dptos?\.?|deptos?|depas?|flats?|d[uú]plex)\b/i.test(titulo)) return 'departamento';
   if (/\bcasas?\b/i.test(titulo)) return 'casa';
   if (/\b(terrenos?|lotes?)\b/i.test(titulo)) return 'terreno';
+  if (/\blocal(es)?\b/i.test(titulo)) return 'local';
+  if (/\boficinas?\b/i.test(titulo)) return 'oficina';
   return null;
+}
+
+/**
+ * Heurística de Marketplace: ¿el título nombra un inmueble? Es una heurística porque los ids de categoría de Marketplace para
+ * inmuebles NO están verificados (no se inventa ninguna lista de ids). Además del tipo, aceptan «inmueble» y «propiedad».
+ */
+const esTituloInmueble = (titulo) => tipoDeTitulo(titulo) !== null || (typeof titulo === 'string' && /\b(inmuebles?|propiedad(es)?)\b/i.test(titulo));
+
+/**
+ * ¿La ubicación de Marketplace es de Arequipa? Sí cuando la ciudad, el estado o city_page.display_name nombran Arequipa o un
+ * distrito conocido (sin distinguir tildes ni mayúsculas). La forma real del «estado» para Perú no se conoce (la única muestra real
+ * es de Florida), por eso se compara por palabra completa y se prueban los tres textos. Sin ningún texto de ubicación: no.
+ */
+function ubicacionEnZona(rg, conocidos) {
+  if (!esObjeto(rg)) return false;
+  const textos = [rg.city, rg.state, esObjeto(rg.city_page) ? rg.city_page.display_name : null].filter((t) => typeof t === 'string' && t.trim() !== '');
+  return textos.some((t) => /\bAREQUIPA\b/.test(Precios.claveDistrito(t)) || t.split(',').some((tramo) => Marketplace.ubicarCiudad(tramo.trim(), conocidos).distrito !== null));
 }
 const tipoDe = (v) => (typeof v === 'string' ? E.normalizarTipo(v) || TIPOS_EN[v.trim().toLowerCase()] || null : null);
 
@@ -149,13 +171,22 @@ function mapearMarketplace(item, ctx) {
   const id = String(crudoId).trim();
   const url = typeof item.listingUrl === 'string' && /^https?:\/\//i.test(item.listingUrl) ? item.listingUrl : `https://www.facebook.com/marketplace/item/${id}/`;
 
-  const lp = item.listing_price ?? item.price;
-  const texto = esObjeto(lp) ? lp.formatted_amount : lp;
-  const parseado = Marketplace.parsearPrecio(typeof texto === 'string' ? texto : undefined);
-  const precio = (esObjeto(lp) ? montoDe(lp.amount) : null) ?? parseado.monto;
-
   const rg = esObjeto(item.location) && esObjeto(item.location.reverse_geocode) ? item.location.reverse_geocode : null;
   const conocidos = ctx.distritosConocidos || [];
+  if (!ubicacionEnZona(rg, conocidos)) return { descarte: 'fuera_de_zona' };
+  const titulo = item.marketplace_listing_title ?? item.title;
+  if (!esTituloInmueble(titulo)) return { descarte: 'no_inmueble' };
+
+  // Precio: manda el texto visible («formatted_price.text», p. ej. «$350» o «S/ 250,000»), que da monto y moneda. Si no se entiende,
+  // se prueban los campos anteriores (listing_price.formatted_amount / amount) y por último el monto con offset. Ese monto viene en
+  // centésimas («35000» junto a «$350» en la única muestra real), así que se divide entre 100; esa escala NO está confirmada con más
+  // muestras ni para soles, y el monto con offset no trae moneda.
+  const lp = item.listing_price ?? item.price;
+  const textos = [esObjeto(item.formatted_price) ? item.formatted_price.text : item.formatted_price, esObjeto(lp) ? lp.formatted_amount : lp];
+  const parseado = textos.map((t) => Marketplace.parsearPrecio(typeof t === 'string' ? t : undefined)).find((p) => p.monto !== null) ?? { monto: null, moneda: null };
+  const conOffset = esObjeto(lp) ? montoDe(lp.amount_with_offset_in_currency) : null;
+  const precio = parseado.monto ?? (esObjeto(lp) ? montoDe(lp.amount) : null) ?? (conOffset === null ? null : conOffset / 100);
+
   const { distrito, zona } = Marketplace.ubicarCiudad(rg ? rg.city : null, conocidos);
   const { lat, lon } = coordenadas(item);
   const aviso = E.crearAviso(
@@ -163,7 +194,8 @@ function mapearMarketplace(item, ctx) {
       fuente: ctx.fuente,
       id_fuente: id,
       url,
-      titulo: item.marketplace_listing_title ?? item.title,
+      titulo,
+      tipo_inmueble: tipoDeTitulo(titulo),
       precio,
       moneda: parseado.moneda,
       distrito,
@@ -183,10 +215,10 @@ const MAPEADORES = { scrapers_lat: mapearScrapersLat, marketplace: mapearMarketp
 
 /**
  * Mapea una lista de ítems. Un ítem que falla se cuenta y no detiene a los demás.
- * → { avisos, noMapeados, descartados: { no_venta, vendido } }. `ctx`: { fuente, base?, actor, distritosConocidos, ahora }.
+ * → { avisos, noMapeados, descartados: { no_venta, vendido, fuera_de_zona, no_inmueble } }. `ctx`: { fuente, base?, actor, distritosConocidos, ahora }.
  */
 function mapearItems(items, tipo, ctx) {
-  const salida = { avisos: [], noMapeados: 0, descartados: { no_venta: 0, vendido: 0 } };
+  const salida = { avisos: [], noMapeados: 0, descartados: { no_venta: 0, vendido: 0, fuera_de_zona: 0, no_inmueble: 0 } };
   const mapear = MAPEADORES[tipo];
   if (!mapear) throw new Error(`Tipo de actor desconocido: ${tipo}`);
   if (!Array.isArray(items)) return salida;

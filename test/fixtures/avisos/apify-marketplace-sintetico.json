@@ -20,7 +20,7 @@
       "listing_price": { "formatted_amount": "US$45,000" },
       "location": { "reverse_geocode": { "city": "Arequipa" } }
     },
-    { "id": "3333333333", "marketplace_listing_title": "Sin precio", "location": { "reverse_geocode": { "city": "Lima" } } },
+    { "id": "3333333333", "marketplace_listing_title": "Departamento sin precio", "location": { "reverse_geocode": { "city": "Yanahuara" } } },
     { "id": "4444444444", "marketplace_listing_title": "Vendido", "is_sold": true },
     { "marketplace_listing_title": "Sin id" },
     42

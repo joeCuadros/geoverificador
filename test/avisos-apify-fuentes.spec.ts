@@ -27,7 +27,7 @@ describe('Mapeo.mapearScrapersLat (salida sintética de scrapers_lat)', () => {
 
   it('cuenta lo mapeado, lo descartado por no ser venta y lo que no se pudo mapear, sin lanzar excepciones', () => {
     expect(r.avisos.map((a: Aviso) => a.id_fuente)).toEqual(['151184336', '150000001', '150000002', '150000004', '4461355', '4461356', '4461357']);
-    expect(r.descartados).toEqual({ no_venta: 1, vendido: 0 });
+    expect(r.descartados).toEqual({ no_venta: 1, vendido: 0, fuera_de_zona: 0, no_inmueble: 0 });
     expect(r.noMapeados).toBe(3);
   });
 
@@ -136,7 +136,7 @@ describe('Mapeo.mapearMarketplace (salida sintética de apify/facebook-marketpla
 
   it('cuenta mapeados, vendidos y no mapeables', () => {
     expect(r.avisos.map((a: Aviso) => a.id_fuente)).toEqual(['1111111111', '2222222222', '3333333333']);
-    expect(r.descartados).toEqual({ no_venta: 0, vendido: 1 });
+    expect(r.descartados).toEqual({ no_venta: 0, vendido: 1, fuera_de_zona: 0, no_inmueble: 0 });
     expect(r.noMapeados).toBe(2);
   });
 
@@ -145,7 +145,7 @@ describe('Mapeo.mapearMarketplace (salida sintética de apify/facebook-marketpla
       fuente: 'marketplace',
       url: 'https://www.facebook.com/marketplace/item/1111111111/',
       titulo: 'Casa en venta en Cayma 200 m2',
-      tipo_inmueble: null,
+      tipo_inmueble: 'casa',
       precio: 250000,
       moneda: 'PEN',
       distrito: 'CAYMA',
@@ -159,13 +159,159 @@ describe('Mapeo.mapearMarketplace (salida sintética de apify/facebook-marketpla
 
   it('sin detalles: sin coordenadas ni fecha (null); la ciudad «Arequipa» no es distrito; sin precio, null', () => {
     expect(por('2222222222')).toMatchObject({ precio: 45000, moneda: 'USD', distrito: null, zona: 'Arequipa', lat: null, lon: null, fecha_publicacion: null, url: 'https://www.facebook.com/marketplace/item/2222222222/' });
-    expect(por('3333333333')).toMatchObject({ precio: null, moneda: null, zona: 'Lima' });
+    expect(por('3333333333')).toMatchObject({ precio: null, moneda: null, distrito: 'YANAHUARA', zona: null, tipo_inmueble: 'departamento' });
   });
 
   it('no deja nada del vendedor ni la descripción (que puede traer teléfonos) ni las fotos', () => {
     const texto = JSON.stringify(r.avisos);
     expect(texto).not.toMatch(/NO_DEBE_SALIR|999888777|987654321|seller|scontent|Casa amplia/i);
     for (const a of r.avisos) expect(Object.keys(a)).toEqual(E.COLUMNAS);
+  });
+
+  // Forma tomada de la salida REAL del actor (10 ítems, todos de Florida): el precio viene en «formatted_price.text» y en
+  // «listing_price.amount_with_offset_in_currency», y la ubicación en «location.reverse_geocode». No hay muestra real de Arequipa:
+  // los ítems de Arequipa de abajo son inventados con esa misma forma.
+  describe('forma real del actor', () => {
+    const ctxMkt = { fuente: 'marketplace', actor: ACTOR, distritosConocidos: DISTRITOS, ahora: AHORA };
+    const florida = (extra: Aviso = {}): Aviso => ({
+      id: '1651024006430072',
+      listing_price: { amount_with_offset_in_currency: '35000' },
+      formatted_price: { text: '$350' },
+      location: { reverse_geocode: { city: 'Fort McCoy', state: 'FL', city_page: { display_name: 'Fort McCoy, Florida', id: '109411022411109' } } },
+      marketplace_listing_category_id: '895487550471874',
+      marketplace_listing_title: 'Mini Bikes',
+      is_sold: false,
+      listingUrl: 'https://www.facebook.com/marketplace/item/1651024006430072',
+      ...extra,
+    });
+    const arequipa = (extra: Aviso = {}): Aviso =>
+      florida({
+        id: '5550001',
+        marketplace_listing_title: 'Casa en venta en Cayma',
+        listing_price: { amount_with_offset_in_currency: '25000000' },
+        formatted_price: { text: 'S/ 250,000' },
+        location: { reverse_geocode: { city: 'Cayma', state: 'Arequipa', city_page: { display_name: 'Cayma, Arequipa', id: '1' } } },
+        listingUrl: 'https://www.facebook.com/marketplace/item/5550001',
+        ...extra,
+      });
+    const mapear = (item: unknown) => Mapeo.mapearMarketplace(item, ctxMkt);
+
+    describe('fuera de zona', () => {
+      it('un ítem de Florida se descarta como fuera_de_zona', () => {
+        expect(mapear(florida())).toEqual({ descarte: 'fuera_de_zona' });
+      });
+      it('la zona se juzga antes que el título: un inmueble de Florida también es fuera_de_zona', () => {
+        expect(mapear(florida({ marketplace_listing_title: 'Casa en venta' }))).toEqual({ descarte: 'fuera_de_zona' });
+      });
+      it('un ítem vendido se descarta como vendido antes de mirar la zona', () => {
+        expect(mapear(florida({ is_sold: true }))).toEqual({ descarte: 'vendido' });
+      });
+      it('sin ningún dato de ubicación no se puede ubicar: fuera_de_zona', () => {
+        expect(mapear(florida({ location: undefined }))).toEqual({ descarte: 'fuera_de_zona' });
+        expect(mapear(florida({ location: { reverse_geocode: {} } }))).toEqual({ descarte: 'fuera_de_zona' });
+      });
+      it('un distrito conocido en la ciudad, sin que el estado diga Arequipa, es de la zona', () => {
+        const r = mapear(arequipa({ location: { reverse_geocode: { city: 'Yanahuara', state: 'XX' } } }));
+        expect(r.aviso).toMatchObject({ distrito: 'YANAHUARA' });
+      });
+      it('«Arequipa» en la ciudad, en el estado o en city_page cuenta, sin importar tildes ni mayúsculas', () => {
+        for (const rg of [{ city: 'Arequipa' }, { state: 'AREQUIPA' }, { city: 'Lugar', state: 'Región Arequipa' }, { city: 'Lugar', city_page: { display_name: 'Lugar, Arequipa' } }]) {
+          expect(mapear(arequipa({ location: { reverse_geocode: rg } })).aviso).toBeDefined();
+        }
+      });
+      it('el distrito sale de city_page cuando la ciudad no lo dice', () => {
+        const r = mapear(arequipa({ location: { reverse_geocode: { city: 'Lugar', city_page: { display_name: 'José Luis Bustamante y Rivero' } } } }));
+        expect(r.aviso).toBeDefined();
+      });
+      it('un nombre que solo contiene el de un distrito o «Arequipa» como parte de otra palabra no cuenta', () => {
+        expect(mapear(arequipa({ location: { reverse_geocode: { city: 'Nuevo Arequipas', state: 'FL' } } }))).toEqual({ descarte: 'fuera_de_zona' });
+      });
+    });
+
+    describe('no inmueble', () => {
+      it('un ítem de Arequipa con un título que no es de inmueble se descarta como no_inmueble', () => {
+        expect(mapear(arequipa({ marketplace_listing_title: 'Bicicleta montañera' }))).toEqual({ descarte: 'no_inmueble' });
+        expect(mapear(arequipa({ marketplace_listing_title: undefined }))).toEqual({ descarte: 'no_inmueble' });
+      });
+      it.each([
+        ['Casa en venta', 'casa'],
+        ['Departamento 3 dormitorios', 'departamento'],
+        ['Depa en Cayma', 'departamento'],
+        ['Dpto. nuevo', 'departamento'],
+        ['Minidepartamento amoblado', 'departamento'],
+        ['Dúplex en Yanahuara', 'departamento'],
+        ['Terreno de 200 m2', 'terreno'],
+        ['Lote en Paucarpata', 'terreno'],
+        ['Local comercial en el Centro', 'local'],
+        ['Oficina en Cercado', 'oficina'],
+      ])('«%s» es inmueble y el tipo pasa al aviso (%s)', (titulo, tipo) => {
+        expect(mapear(arequipa({ marketplace_listing_title: titulo })).aviso).toMatchObject({ tipo_inmueble: tipo });
+      });
+      it.each(['Inmueble en venta', 'Propiedad en Sachaca'])('«%s» es inmueble aunque no dé un tipo (tipo_inmueble null)', (titulo) => {
+        expect(mapear(arequipa({ marketplace_listing_title: titulo })).aviso).toMatchObject({ tipo_inmueble: null });
+      });
+      it('una palabra que solo contiene otra («casaca», «localidad») no cuenta', () => {
+        expect(mapear(arequipa({ marketplace_listing_title: 'Casaca de cuero' }))).toEqual({ descarte: 'no_inmueble' });
+        expect(mapear(arequipa({ marketplace_listing_title: 'Localidad numerada' }))).toEqual({ descarte: 'no_inmueble' });
+      });
+    });
+
+    describe('precio', () => {
+      it('«$»: toma monto y moneda del texto visible («formatted_price.text»)', () => {
+        const r = mapear(arequipa({ formatted_price: { text: '$350' }, listing_price: { amount_with_offset_in_currency: '35000' } }));
+        expect(r.aviso).toMatchObject({ precio: 350, moneda: 'USD' });
+      });
+      it('«S/»: toma monto y moneda del texto visible', () => {
+        expect(mapear(arequipa()).aviso).toMatchObject({ precio: 250000, moneda: 'PEN' });
+      });
+      it('el texto visible manda sobre el monto con offset', () => {
+        const r = mapear(arequipa({ formatted_price: { text: 'S/ 250,000' }, listing_price: { amount_with_offset_in_currency: '1' } }));
+        expect(r.aviso).toMatchObject({ precio: 250000, moneda: 'PEN' });
+      });
+      it('si el texto no se entiende, el monto con offset se divide entre 100 y no hay moneda', () => {
+        const r = mapear(arequipa({ formatted_price: { text: 'GRATIS' }, listing_price: { amount_with_offset_in_currency: '35000' } }));
+        expect(r.aviso).toMatchObject({ precio: 350, moneda: null });
+        const sinTexto = mapear(arequipa({ formatted_price: undefined, listing_price: { amount_with_offset_in_currency: '35000' } }));
+        expect(sinTexto.aviso).toMatchObject({ precio: 350, moneda: null });
+      });
+      it('un monto con offset en cero o ilegible da precio null', () => {
+        expect(mapear(arequipa({ formatted_price: { text: 'FREE' }, listing_price: { amount_with_offset_in_currency: '0' } })).aviso).toMatchObject({ precio: null, moneda: null });
+        expect(mapear(arequipa({ formatted_price: undefined, listing_price: { amount_with_offset_in_currency: 'abc' } })).aviso).toMatchObject({ precio: null });
+      });
+      it('los campos anteriores (listing_price.amount / formatted_amount) siguen funcionando', () => {
+        const viejo = arequipa({ formatted_price: undefined, listing_price: { amount: '120000.00', formatted_amount: 'US$120,000' } });
+        expect(mapear(viejo).aviso).toMatchObject({ precio: 120000, moneda: 'USD' });
+        const soloMonto = arequipa({ formatted_price: undefined, listing_price: { amount: '90000.00' } });
+        expect(mapear(soloMonto).aviso).toMatchObject({ precio: 90000, moneda: null });
+      });
+    });
+
+    it('mapearItems cuenta cada motivo de descarte y no pierde ningún ítem', () => {
+      const items = [
+        florida({ id: '1' }),
+        florida({ id: '2', marketplace_listing_title: 'Casa' }),
+        florida({ id: '3', is_sold: true }),
+        arequipa({ id: '4', marketplace_listing_title: 'Bicicleta' }),
+        arequipa({ id: '5' }),
+        { marketplace_listing_title: 'Sin id' },
+      ];
+      const x = Mapeo.mapearItems(items, 'marketplace', ctxMkt);
+      expect(x.descartados).toEqual({ no_venta: 0, vendido: 1, fuera_de_zona: 2, no_inmueble: 1 });
+      expect(x.avisos.map((a: Aviso) => a.id_fuente)).toEqual(['5']);
+      expect(x.noMapeados).toBe(1);
+      const total = x.avisos.length + x.noMapeados + Object.values(x.descartados as Record<string, number>).reduce((s, n) => s + n, 0);
+      expect(total).toBe(items.length);
+    });
+
+    it('apify-fuentes informa los dos motivos nuevos y no lo toma por formato inesperado cuando todo se descartó', async () => {
+      const cliente = { ejecutar: jest.fn(async () => [florida({ id: '1' }), florida({ id: '2' }), arequipa({ id: '3', marketplace_listing_title: 'Bicicleta' })]) };
+      const apify = { cliente, topeUsd: 0.5, detalles: false, maxItems: null, actores: AF.resolverActores({ flags: {}, env: {} }), urlMarketplace: 'https://www.facebook.com/marketplace/arequipa/propertyforsale' };
+      const res = await AF.buscar('marketplace', { tipo: 'todos', distrito: null }, { apify, paginas: 2, distritosConocidos: DISTRITOS, ahora: AHORA, log: jest.fn() });
+      expect(res.estado).toBe('ok');
+      expect(res.avisos).toEqual([]);
+      expect(res.mensaje).toMatch(/2 fuera de la zona/);
+      expect(res.mensaje).toMatch(/1 no eran inmuebles/);
+    });
   });
 });
 

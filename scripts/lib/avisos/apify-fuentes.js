@@ -98,9 +98,12 @@ async function buscar(nombre, filtros, ctx) {
   const notas = [`ejecución de Apify: ${items.length} ítem(s) recibidos`];
   if (mapeado.descartados.no_venta) notas.push(`${mapeado.descartados.no_venta} no eran de venta y se descartaron`);
   if (mapeado.descartados.vendido) notas.push(`${mapeado.descartados.vendido} ya vendidos se descartaron`);
+  if (mapeado.descartados.fuera_de_zona) notas.push(`${mapeado.descartados.fuera_de_zona} fuera de la zona (Arequipa) se descartaron`);
+  if (mapeado.descartados.no_inmueble) notas.push(`${mapeado.descartados.no_inmueble} no eran inmuebles y se descartaron`);
   if (mapeado.noMapeados) notas.push(`${mapeado.noMapeados} ítem(s) no se pudieron mapear`);
   if (items.length === 0) return resultado('ok', `el actor no devolvió ítems (${notas[0]})`);
-  if (mapeado.avisos.length === 0 && mapeado.descartados.no_venta + mapeado.descartados.vendido < items.length) {
+  const totalDescartados = Object.values(mapeado.descartados).reduce((suma, n) => suma + n, 0);
+  if (mapeado.avisos.length === 0 && totalDescartados < items.length) {
     return resultado('error', `formato inesperado: ningún ítem de ${actor} se pudo mapear (${notas.join('; ')}). Los nombres de campo del actor pueden haber cambiado.`);
   }
   return resultado(mapeado.noMapeados > 0 ? 'parcial' : 'ok', notas.join('; '), mapeado.avisos);
