@@ -106,7 +106,42 @@ const CONFIG = {
   // «Convención del proyecto» significa que no hay una norma que lo fije y que se eligió como criterio de la herramienta.
   umbrales: {
     bordeZona: 20, // V1a: aviso si otra zona queda a esta distancia o menos del punto (convención del proyecto)
-    salud: 1000, // V2 (convención del proyecto)
+    salud: 1000, // V2 (convención del proyecto): se evalúa SOLO con establecimientos de salud, no con consultorios
+    // Consultorio médico: categoría aparte de la salud. NO hay umbral: la distancia de referencia es una decisión PENDIENTE de la persona
+    // responsable del proyecto (ninguna norma la fija). Con null la variable es INFORMATIVA: se muestra el más cercano y su distancia,
+    // sin cumple / no cumple, sin efecto en el puntaje ni en la búsqueda de zonas del asistente. No inventar un valor aquí.
+    consultorio: null,
+    // Mercado de abastos, supermercado y mall (centro comercial): categorías INFORMATIVAS, sin umbral. El valor es una decisión de la persona
+    // responsable del proyecto. Referencia propuesta: ninguna en metros con fuente verificada (docs/METODOLOGIA.md §6.4: el Sistema Nacional de
+    // Estándares de Urbanismo, MVCS 2011, es una propuesta preliminar que fija población por equipamiento, no un radio de influencia en metros).
+    // Con null se muestra el más cercano y su distancia, sin cumple / no cumple, sin efecto en el puntaje ni en la búsqueda de zonas. No inventar un valor aquí.
+    // El comercio se organiza por NECESIDAD (Calculos.COMERCIO): abastecimiento (mercados + supermercados), compras_ocio (malls confirmados) y
+    // comercio_barrio (galerías). Las tres son informativas y sus umbrales son null; mercado, supermercado y mall son los de cada categoría de OSM.
+    abastecimiento: null,    // pendiente de decisión del usuario; referencia propuesta: ninguna verificada
+    compras_ocio: null,      // pendiente de decisión del usuario; referencia propuesta: ninguna verificada
+    comercio_barrio: null,   // pendiente de decisión del usuario; referencia propuesta: ninguna verificada
+    mercado: null,       // pendiente de decisión del usuario; referencia propuesta: ninguna verificada
+    supermercado: null,  // pendiente de decisión del usuario; referencia propuesta: ninguna verificada
+    mall: null,          // pendiente de decisión del usuario; referencia propuesta: ninguna verificada
+    // Servicios de la vida diaria (OpenStreetMap): finanzas (bancos y cajeros), comida_fuera (restaurantes y cafés) y recreacion (juegos infantiles) son necesidades
+    // INFORMATIVAS del comercio (Calculos.COMERCIO); banco, cajero, restaurante, cafe y juego_infantil son los tipos de cada una. Los parques ya son areaVerde.
+    finanzas: null,
+    comida_fuera: null,
+    recreacion: null,
+    banco: null,
+    cajero: null,
+    restaurante: null,
+    cafe: null,
+    juego_infantil: null,
+    // Electricidad: área de concesión de distribución (MINEM-DGE). INFORMATIVA: ninguna distancia aplica; dentro o fuera de una concesión no es una conexión.
+    electricidad: null,
+    // Concesiones mineras (Catastro Minero de INGEMMET): INFORMATIVAS; una concesión es un derecho sobre los minerales, no una distancia ni una norma.
+    mineria: null,
+    // Agua: punto de acopio de SEDAPAR (directorio publicado en 2024 con datos de 2017) e interrupciones del servicio (SUNASS): INFORMATIVOS, sin distancia ni frecuencia de referencia.
+    acopio: null,
+    interrupciones: null,
+    // Servicios de la manzana según el censo (alumbrado, agua y desagüe por red pública): INFORMATIVOS, sin umbral. Son cifras de un año de censo, no una norma.
+    censo: null,
     educacion: { inicial: 500, primaria: 1500, secundaria: 3000 }, // V3
     transporte: 400, // V4 (convención del proyecto)
     areaVerde: { distanciaM: 300, areaMinM2: 5000, areaGrandeM2: 10000 }, // V5: ≥ 0,5 ha a ≤ 300 m; sensibilidad: ≥ 1 ha
@@ -114,9 +149,29 @@ const CONFIG = {
   fuentesUmbral: {
     bordeZona: 'Convención del proyecto',
     salud: 'Convención del proyecto',
-    educacion: 'MEF/MINEDU, Instructivo FTE, Cuadro N.° 1 (RVM 104-2019-MINEDU y 208-2019-MINEDU)',
+    consultorio: 'Sin umbral: pendiente de una decisión del proyecto; se muestra solo como dato informativo',
+    abastecimiento: 'Sin umbral: pendiente de decisión del usuario; referencia propuesta: ninguna con fuente verificada en metros; se muestra solo como dato informativo',
+    compras_ocio: 'Sin umbral: pendiente de decisión del usuario; referencia propuesta: ninguna con fuente verificada en metros; se muestra solo como dato informativo',
+    comercio_barrio: 'Sin umbral: pendiente de decisión del usuario; referencia propuesta: ninguna con fuente verificada en metros; se muestra solo como dato informativo',
+    mercado: 'Sin umbral: pendiente de decisión del usuario; referencia propuesta: ninguna con fuente verificada en metros; se muestra solo como dato informativo',
+    supermercado: 'Sin umbral: pendiente de decisión del usuario; referencia propuesta: ninguna con fuente verificada en metros; se muestra solo como dato informativo',
+    finanzas: 'Sin umbral: pendiente de decisión del usuario; referencia propuesta: ninguna con fuente verificada en metros; se muestra solo como dato informativo',
+    comida_fuera: 'Sin umbral: pendiente de decisión del usuario; referencia propuesta: ninguna con fuente verificada en metros; se muestra solo como dato informativo',
+    recreacion: 'Sin umbral: pendiente de decisión del usuario; referencia propuesta: ninguna con fuente verificada en metros; se muestra solo como dato informativo',
+    banco: 'Sin umbral: pendiente de decisión del usuario; referencia propuesta: ninguna con fuente verificada en metros; se muestra solo como dato informativo',
+    cajero: 'Sin umbral: pendiente de decisión del usuario; referencia propuesta: ninguna con fuente verificada en metros; se muestra solo como dato informativo',
+    restaurante: 'Sin umbral: pendiente de decisión del usuario; referencia propuesta: ninguna con fuente verificada en metros; se muestra solo como dato informativo',
+    cafe: 'Sin umbral: pendiente de decisión del usuario; referencia propuesta: ninguna con fuente verificada en metros; se muestra solo como dato informativo',
+    juego_infantil: 'Sin umbral: pendiente de decisión del usuario; referencia propuesta: ninguna con fuente verificada en metros; se muestra solo como dato informativo',
+    mall: 'Sin umbral: pendiente de decisión del usuario; referencia propuesta: ninguna con fuente verificada en metros; se muestra solo como dato informativo',
+    censo: 'Sin umbral: son cifras del censo de la manzana (año 2017), no una distancia ni una norma; se muestran solo como dato informativo',
+    acopio: 'Sin umbral: no aplica una distancia de referencia; un punto de acopio es un lugar de reparto con camiones cisterna ante un desabastecimiento, con datos de 2017; se muestra solo como dato informativo',
+    interrupciones: 'Sin umbral: no hay una frecuencia de interrupciones de referencia con fuente verificada; son interrupciones reportadas por SEDAPAR a la SUNASS y se muestran solo como dato informativo',
+    mineria: 'Sin umbral: no aplica una distancia de referencia; dentro o fuera de una concesión minera no dice si hay minería ni qué se puede hacer en el predio; se muestra solo como dato informativo',
+    electricidad: 'Sin umbral: no aplica una distancia de referencia; dentro o fuera de un área de concesión no es una conexión; se muestra solo como dato informativo',
+    educacion: 'MINEDU, numeral 7.1, Cuadro N.° 1, distancias referenciales: inicial 500 m (RVM 104-2019-MINEDU), primaria 1500 m y secundaria 3000 m (RVM 208-2019-MINEDU)',
     transporte: 'Convención del proyecto',
-    areaVerde: 'Indicador básico de la OMS Europa (2016): un espacio verde de al menos 0,5 ha a 300 m en línea recta',
+    areaVerde: 'Indicador básico de la OMS Europa (2016), «Urban green spaces and health», p. 39: un espacio verde de al menos 0,5 ha a 300 m en línea recta; es un indicador de monitoreo, no una norma peruana',
   },
 
   // V1b Zonificación proyectada: solo un aviso de texto. Se muestra ÚNICAMENTE si hay fuente y fecha; con null no se
@@ -149,11 +204,45 @@ const CONFIG = {
     umbralesZona: { campina: 500, comercial: 600, historico: 800 },
   },
 
+  // Censo por MANZANA (INEI, REDATAM): alumbrado, agua y desagüe por red pública, viviendas y personas. Congelado por distrito con scripts/descargar-censo-servicios.mjs
+  // (pnpm datos:censo): un índice con la procedencia y una pieza por distrito que se carga solo cuando el punto cae en él. Es INFORMATIVO: cifras de la manzana en el
+  // año del censo, nunca «tu predio tiene». El censo de 2025 ya se levantó, pero el INEI solo ha publicado sus resultados por departamento (REDATAM 2025 y su
+  // geoservidor piden iniciar sesión), así que el único dato de 2025 que se usa es el del departamento, de la nota de prensa del INEI.
+  censo: {
+    indiceUrl: 'data/censo/index.json',
+    carpetaUrl: 'data/censo/',
+    anio: 2017,
+    manzanaCercanaM: 30, // un punto en la calle se asigna a la manzana más cercana si su borde está a esta distancia o menos (convención del proyecto)
+    minViviendasPct: 5, // con menos viviendas ocupadas no se da el porcentaje (señalaría a una vivienda; convención del proyecto, el INEI no lo suprime)
+    // Censos Nacionales 2025, departamento de Arequipa (viviendas particulares con ocupantes presentes), nota de prensa del INEI del 17-07-2026. Es el único dato de 2025 que usa el proyecto.
+    departamento2025: {
+      anio: 2025,
+      departamento: 'Arequipa',
+      aguaDentro: 71.8, // % con agua conectada a la red pública dentro de la vivienda
+      higienicoDentro: 69.6, // % con servicio higiénico conectado a la red pública dentro de la vivienda
+      alumbrado: 92.6, // % con alumbrado eléctrico por red pública
+      universo: 'viviendas particulares con ocupantes presentes',
+      fuente: 'INEI, Censos Nacionales 2025, nota de prensa del 17 de julio de 2026',
+      url: 'https://www.gob.pe/institucion/inei/noticias/1420177-censos-nacionales-2025-poblacion-total-de-arequipa-alcanza-1-millon-815-mil-habitantes',
+    },
+  },
+
   // Equipamiento de OpenStreetMap: archivos congelados con scripts/extraer-equipamiento.mjs (pnpm datos:extraer).
   // Solo si falta un archivo se consulta Overpass en vivo, alrededor del punto y en este radio.
   equipamiento: {
     archivos: {
       salud: 'data/equipamiento/salud.geojson',
+      consultorios: 'data/equipamiento/consultorios.geojson', // consultorios médicos: informativos, aparte de la salud
+      mercados: 'data/equipamiento/mercados.geojson', // mercados de abastos: informativos (scripts/descargar-comercio.mjs)
+      supermercados: 'data/equipamiento/supermercados.geojson', // supermercados: informativos, aparte de los mercados
+      acopio: 'data/agua/puntos_acopio.geojson', // puntos de acopio de agua de SEDAPAR (directorio publicado en 2024, datos de 2017): informativo (scripts/convertir-acopio-sedapar.mjs)
+      interrupciones: 'data/agua/interrupciones_sedapar.json', // interrupciones del servicio de agua por distrito (SUNASS): informativo (scripts/descargar-interrupciones-sunass.mjs)
+      mineria: 'data/mineria/concesiones_mineras.geojson', // concesiones mineras (INGEMMET): informativo (scripts/descargar-concesiones-mineras.mjs)
+      electricidad: 'data/electricidad/concesiones_distribucion.geojson', // áreas de concesión de distribución eléctrica (MINEM-DGE): informativo (scripts/descargar-concesiones-electricas.mjs)
+      finanzas: 'data/equipamiento/finanzas.geojson', // bancos y cajeros: informativos (scripts/descargar-servicios-osm.mjs)
+      comida_fuera: 'data/equipamiento/comida_fuera.geojson', // restaurantes y cafés: informativos
+      recreacion: 'data/equipamiento/recreacion.geojson', // áreas de juegos infantiles: informativas (los parques son areasVerdes)
+      malls: 'data/equipamiento/malls.geojson', // malls (centros comerciales): informativos; polígonos donde OSM los tiene
       educacion: 'data/equipamiento/educacion.geojson',
       transporte: 'data/equipamiento/transporte.geojson',
       areasVerdes: 'data/equipamiento/areas_verdes.geojson',
@@ -162,13 +251,71 @@ const CONFIG = {
     respaldoRadioM: 5000,
   },
 
-  // Líneas de transporte público (recorridos y paradas de SmartBus), congeladas con scripts/descargar-rutas-smartbus.mjs. Se usan con
-  // autorización verbal de SmartBus; la confirmación escrita está pendiente. La distancia para decir que una línea «pasa cerca» es
-  // la misma de `umbrales.transporte` (convención del proyecto, no una norma).
+  // «¿Qué combi me lleva de mi punto a mi trabajo?» (public/js/viaje.js): rutas directas sobre los trazados de OpenStreetMap (rutas_osm.geojson, ODbL, con de/a, duración
+  // e intervalo). `caminarM` es la distancia a pie a la ruta en cada punta: la del paradero (umbrales.transporte, convención del proyecto).
+  viaje: {
+    caminarM: 400,
+    // Viaje con UN trasbordo (Viaje.rutasConTrasbordo): distancia a pie máxima entre las dos rutas. Es un SUPUESTO del proyecto, no una norma: la mitad de los 400 m del acceso al
+    // paradero (el estándar de captación de transporte público más citado en planificación); no se encontró una guía que fije una distancia de trasbordo. Si hay directas, no se ofrece.
+    trasbordoM: 200,
+    fuenteTrasbordo: 'supuesto del proyecto: la mitad de los 400 m del acceso al paradero; ninguna guía encontrada fija una distancia para el trasbordo',
+    maxTrasbordos: 5,
+    osmUrl: 'data/rutas_osm.geojson',
+    fuenteOsm: 'OpenStreetMap (ODbL), relaciones route=bus de la red SIT',
+    // Tiempo APROXIMADO del viaje, con sus supuestos a la vista. No hay una medición de velocidades de bus ni de peatones en Arequipa que se pueda citar:
+    //  - a pie: la velocidad de diseño de la MUTCD (EE. UU., 2009, sección 4E.06: 3,5 pies/s = 1,07 m/s), prudente, sobre la distancia en línea recta;
+    //    `factorRodeo` (cuánto más largo es el recorrido real por calles que la recta) queda en null: no hay una fuente aplicable a Arequipa y no se inventa uno;
+    //  - en bus: la duración que OpenStreetMap etiqueta (`duration`, minutos) para toda la ruta, prorrateada por la distancia recorrida (velocidad uniforme);
+    //  - espera: la mitad del intervalo etiquetado (`interval`), si llegas sin mirar el horario; se da aparte y no se suma.
+    tiempo: {
+      velocidadPieMs: 1.07,
+      factorRodeo: null,
+      fuentePie: 'MUTCD 2009 (EE. UU.), sección 4E.06: velocidad de caminata de diseño de 3,5 pies/s (1,07 m/s); es una velocidad de diseño prudente, no una medición en Arequipa',
+      fuenteRodeo: 'sin factor: no hay una fuente aplicable a Arequipa; el recorrido real a pie por calles es más largo que la línea recta',
+      fuenteBus: 'la duración que OpenStreetMap etiqueta (duration, en minutos) para toda la ruta, prorrateada por la distancia recorrida; supone velocidad uniforme y es una etiqueta de la comunidad, no una medición oficial',
+    },
+  },
+
+  // Destinos con nombre que el asistente reconoce («trabajo en el Parque Industrial»). El punto es el de OpenStreetMap que se cita; `nota` dice qué punto es.
+  // La persona puede fijar otro destino en la ficha («Ir al trabajo»). «Ciudad Blanca» es un barrio y el final de rutas del C2 y el C10, no una empresa.
+  destinos: [
+    {
+      id: 'parque-industrial', nombre: 'Parque Industrial', tipo: 'zona industrial', alias: ['parque industrial', 'parque industrial de arequipa', 'zona industrial'],
+      lat: -16.4179, lon: -71.5497, osm: 'way/491224938',
+      nota: 'Punto de referencia: el centro del polígono «Parque Industrial» de OpenStreetMap (way/491224938), dentro de la zona industrial (Aceros Arequipa, Celima, Alicorp…). La zona mide varios cientos de metros: si trabajas en otra parte de ella, fija el punto en la ficha.',
+    },
+    {
+      id: 'ciudad-blanca', nombre: 'Ciudad Blanca', tipo: 'barrio', alias: ['ciudad blanca'],
+      lat: -16.4146, lon: -71.4844, osm: 'node/4329651109',
+      nota: 'Barrio de Paucarpata (punto de OpenStreetMap, node/4329651109); también es el final de rutas del C2 y el C10.',
+    },
+    {
+      id: 'plaza-de-armas', nombre: 'Plaza de Armas', tipo: 'lugar', alias: ['plaza de armas', 'plaza de armas de arequipa', 'centro de arequipa'],
+      lat: -16.39883, lon: -71.53697, osm: 'way/23811932',
+      nota: 'Punto de referencia: la Plaza de Armas de Arequipa (OpenStreetMap, way/23811932), centro del Cercado.',
+    },
+    {
+      id: 'real-plaza', nombre: 'Real Plaza Arequipa', tipo: 'centro comercial', alias: ['real plaza', 'real plaza arequipa', 'mall real plaza'],
+      lat: -16.38951, lon: -71.54991, osm: 'way/285363096',
+      nota: 'Punto de referencia: el centro del edificio Real Plaza Arequipa (OpenStreetMap, way/285363096), Av. Ejército, Cayma.',
+    },
+    {
+      id: 'mall-aventura', nombre: 'Mall Aventura Plaza', tipo: 'centro comercial', alias: ['mall aventura', 'mall aventura plaza', 'aventura plaza', 'aventura mall'],
+      lat: -16.41722, lon: -71.51432, osm: 'way/437694283',
+      nota: 'Punto de referencia: el centro del edificio Mall Aventura Plaza (OpenStreetMap, way/437694283), Av. Porongoche, Paucarpata.',
+    },
+    {
+      id: 'unsa', nombre: 'Universidad Nacional de San Agustín', tipo: 'universidad', alias: ['unsa', 'san agustin', 'universidad de san agustin', 'universidad nacional de san agustin', 'ciudad universitaria'],
+      lat: -16.40847, lon: -71.52652, osm: 'relation/6365045',
+      nota: 'Punto de referencia: el centro de la Universidad Nacional de San Agustín (OpenStreetMap, relation/6365045), Ciudad Universitaria; la universidad tiene varias sedes.',
+    },
+  ],
+
+  // Líneas de transporte público (recorridos y paradas de OpenStreetMap, ODbL), congeladas con scripts/descargar-rutas-osm.mjs: es la única fuente de rutas y paradas. La
+  // distancia para decir que una línea «pasa cerca» es la misma de `umbrales.transporte` (convención del proyecto, no una norma).
   rutas: {
-    geojsonUrl: 'data/rutas_smartbus.geojson',
-    fuente: 'SmartBus (smartbus.app)',
-    atribucion: 'Rutas: SmartBus (smartbus.app)',
-    permiso: 'autorización verbal de SmartBus; confirmación escrita pendiente',
+    geojsonUrl: 'data/rutas_osm.geojson',
+    fuente: 'OpenStreetMap (ODbL), relaciones route=bus de la red SIT y paradas de bus',
+    atribucion: '© colaboradores de OpenStreetMap (ODbL)',
   },
 };

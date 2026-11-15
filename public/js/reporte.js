@@ -86,6 +86,7 @@ const Reporte = (() => {
     if (r.error) return [fila('Resultado', `No se pudo obtener el dato: ${esc(r.error)}`)];
     const f = [fila('Estado', estado(r.estado))];
     if (r.nombre) f.push(fila('Más cercano', esc(r.nombre)));
+    if (r.fuenteElemento) f.push(fila('Fuente del establecimiento', esc(CALC.textoFuenteElemento(r))));
     f.push(fila('Distancia', r.distanciaM === null ? 'Sin dato' : r.distanciaM === 0 ? 'El punto está dentro del área' : `${dist(r.distanciaM)} en línea recta`));
     f.push(fila('Umbral', `${dist(r.umbralM)} (${esc(fuenteUmbral)})`));
     return f;
@@ -97,20 +98,162 @@ const Reporte = (() => {
     return `<table class="rp-tabla">${filasDe(r, d.fuentesUmbral.salud).join('')}</table><p class="rp-nota">${esc(r.metodo)}</p>`;
   }
 
+  /** Consultorio médico más cercano: categoría aparte de la salud, INFORMATIVA (sin umbral, sin cumple / no cumple). */
+  function consultorio(d) {
+    const r = d.variables && d.variables.consultorio;
+    if (!r) return '';
+    if (r.error) return `<table class="rp-tabla">${fila('Resultado', `No se pudo obtener el dato: ${esc(r.error)}`)}</table>`;
+    const filas = [fila('Estado', r.estado === 'SIN DATO' ? estado('SIN DATO') : estado('INFORMATIVO'))];
+    if (r.nombre) filas.push(fila('Más cercano', esc(r.nombre)));
+    if (r.fuenteElemento) filas.push(fila('Fuente del establecimiento', esc(CALC.textoFuenteElemento(r))));
+    filas.push(fila('Distancia', r.distanciaM === null ? 'Sin dato' : r.distanciaM === 0 ? 'El punto está dentro del área' : `${dist(r.distanciaM)} en línea recta`));
+    return `<table class="rp-tabla">${filas.join('')}</table><p class="rp-nota">${esc(CALC.NOTA_CONSULTORIO)} ${esc(r.metodo)}</p>`;
+  }
+
+  /**
+   * Las tres necesidades de comercio más cercanas (abastecimiento, compras y ocio, comercio de barrio): INFORMATIVAS (sin umbral, sin cumple / no cumple),
+   * una tabla por necesidad. Del mall o la galería con polígono la distancia es al borde. Un mall confirmado con su fuente la cita; un supermercado dentro
+   * de un mall dice en cuál está, y el abastecimiento trae además el mercado y el supermercado más cercanos.
+   */
+  function comercio(d) {
+    const v = d.variables || {};
+    const donde = (x) => (x.distanciaM === null ? 'Sin dato' : x.distanciaM === 0 ? 'El punto está dentro del terreno' : `${dist(x.distanciaM)} en línea recta${x.forma ? ' hasta su borde' : ''}`);
+    const dentroDe = (x) => (x.dentroDeMall ? `dentro de ${esc(x.dentroDeMall.nombre || 'un mall')}` : '');
+    const bloques = Object.entries(CALC.COMERCIO).filter(([id]) => v[id]).map(([id, def]) => {
+      const r = v[id];
+      if (r.error) return `<p class="rp-muted"><strong>${esc(def.etiqueta)}</strong></p><table class="rp-tabla">${fila('Resultado', `No se pudo obtener el dato: ${esc(r.error)}`)}</table>`;
+      const filas = [fila(def.etiqueta, r.estado === 'SIN DATO' ? estado('SIN DATO') : estado('INFORMATIVO'))];
+      if (r.nombre) {
+        const tipo = r.tipo ? CALC.COMERCIO_TIPO[r.tipo].singular : '';
+        filas.push(fila('Más cercano', `${esc(r.nombre)}${tipo ? ` (${esc(tipo)}${dentroDe(r) ? `, ${dentroDe(r)}` : ''})` : ''}`));
+      }
+      filas.push(fila('Distancia', donde(r)));
+      if (r.osm) filas.push(fila('Fuente', `OpenStreetMap (${esc(r.osm)})`));
+      if (r.verificado) filas.push(fila('Confirmado con', `${esc(r.verificado.nombre)}: ${esc(r.verificado.url)}`));
+      if (def.tipos.length > 1 && r.porTipo) { // abastecimiento, finanzas, comida fuera: además el más cercano de cada tipo
+        def.tipos.forEach((tipo) => {
+          const x = r.porTipo[tipo];
+          const nombre = CALC.COMERCIO_TIPO[tipo].singular;
+          if (x && x.distanciaM !== null && x.nombre) filas.push(fila(`${nombre.charAt(0).toUpperCase()}${nombre.slice(1)} más cercano`, `${esc(x.nombre)}${dentroDe(x) ? ` (${dentroDe(x)})` : ''} · ${donde(x)}`));
+        });
+      }
+      return `<table class="rp-tabla">${filas.join('')}</table>`;
+    });
+    const metodo = Object.keys(CALC.COMERCIO).map((id) => v[id] && v[id].metodo).find(Boolean);
+    return `${bloques.join('')}<p class="rp-nota">${esc(CALC.NOTA_COMERCIO)}${metodo ? ` ${esc(metodo)}` : ''}</p>`;
+  }
+
+  /**
+   * Agua: el punto de acopio más cercano (directorio de SEDAPAR, datos de 2017), las interrupciones del servicio de agua del distrito (SUNASS) y lo que conviene pedir al
+   * comprar. INFORMATIVA (sin umbral): ni el acopio ni las interrupciones dicen que el predio tenga o no tenga agua.
+   */
+  function agua(d) {
+    const a = d.variables && d.variables.acopio;
+    const i = d.variables && d.variables.interrupciones;
+    const filas = [];
+    if (a) {
+      filas.push(fila('Punto de acopio de agua', a.estado === 'SIN DATO' ? estado('SIN DATO') : estado('INFORMATIVO')));
+      if (a.estado !== 'SIN DATO') {
+        filas.push(fila('Más cercano', `${esc(a.direccion || 'sin dirección')}${a.distrito ? ` (${esc(a.distrito)})` : ''}`));
+        filas.push(fila('Distancia', `${dist(a.distanciaM)} en línea recta`));
+        filas.push(fila('Puntos a 500 m / a 1 km', `${a.a500m} / ${a.a1000m}`));
+        filas.push(fila('Datos de', `${esc(a.fechaDatos || '2017')} (directorio publicado el ${esc(a.fecha || 'sin fecha')})`));
+      } else filas.push(fila('Resultado', esc(CALC.textoAcopio(a))));
+    }
+    if (i) {
+      filas.push(fila('Interrupciones del servicio de agua', i.estado === 'SIN DATO' ? estado('SIN DATO') : estado('INFORMATIVO')));
+      if (i.estado === 'SIN DATO' || !i.registros) filas.push(fila('Resultado', esc(CALC.textoInterrupciones(i))));
+      else {
+        const k = i.aniosCompletos;
+        if (k.length) filas.push(fila(`Promedio por año completo (${k[0]} a ${k.at(-1)})`, `${i.promedioN} interrupciones · ${i.promedioHoras} horas`));
+        if (i.total && i.periodo) filas.push(fila(`Todo el periodo (${esc(i.periodo.desde)} a ${esc(i.periodo.hasta)})`, `${i.total.n} interrupciones · ${Math.round(i.total.horas)} horas (${i.total.imprevistas} imprevistas, ${i.total.programadas} programadas)`));
+        i.parciales.forEach((p) => filas.push(fila(`Año parcial ${p.anio}`, `${p.n} interrupciones · ${Math.round(p.horas)} horas`)));
+      }
+    }
+    const notas = [a ? CALC.NOTA_ACOPIO : '', i ? CALC.NOTA_INTERRUPCIONES : ''].filter(Boolean).map((t) => `<p class="rp-nota">${esc(t)}</p>`).join('');
+    const lista = `<p class="rp-nota"><strong>Si vas a comprar, lo que conviene pedir:</strong></p><ul class="rp-lista">${CALC.LISTA_COMPRADOR.map((x) => `<li>${esc(x.texto)}</li>`).join('')}</ul>`;
+    return `<table class="rp-tabla">${filas.join('')}</table>${notas}${lista}`;
+  }
+
+  /**
+   * Concesión minera: ¿el punto cae dentro de una concesión del Catastro Minero de INGEMMET? INFORMATIVA (sin umbral). Una concesión es un derecho a explorar y explotar los
+   * minerales, separado del predio: no dice que haya minería ni de quién es el predio. No se guarda el nombre del titular.
+   */
+  function mineria(d) {
+    const r = d.variables && d.variables.mineria;
+    if (!r) return '';
+    if (r.error) return `<table class="rp-tabla">${fila('Resultado', `No se pudo obtener el dato: ${esc(r.error)}`)}</table><p class="rp-nota">${esc(CALC.NOTA_MINERA)}</p>`;
+    const filas = [fila('Estado', r.estado === 'SIN DATO' ? estado('SIN DATO') : estado('INFORMATIVO')), fila('Resultado', esc(CALC.textoMinera(r)))];
+    if (r.dentro) {
+      r.concesiones.forEach((c) => filas.push(fila(`Concesión ${esc(c.codigo)}`, `${esc(c.nombre)} · ${esc(c.estado)}${c.sustancia ? ` · ${esc(c.sustancia)}` : ''}${c.hectareas ? ` · ${Math.round(c.hectareas)} ha` : ''}${c.explotacion_o_exploracion ? ` · ${esc(c.explotacion_o_exploracion)}` : ''}`)));
+    } else if (r.dentro === false && r.cercana) {
+      filas.push(fila('Distancia al borde de la más cercana', `${dist(r.distanciaM)} en línea recta (${esc(r.cercana.nombre)}, ${esc(r.cercana.estado)})`));
+    }
+    return `<table class="rp-tabla">${filas.join('')}</table><p class="rp-nota">${esc(CALC.NOTA_MINERA)} ${esc(r.metodo || '')}</p>`;
+  }
+
+  /**
+   * Electricidad: ¿el punto está dentro de un área de concesión de distribución eléctrica (SEAL u otra)? INFORMATIVA (sin umbral). Una concesión dice a
+   * quién le corresponde el servicio; NO que el predio esté conectado, y la cobertura real de conexión vendría de un censo que el proyecto aún no tiene.
+   */
+  function electricidad(d) {
+    const r = d.variables && d.variables.electricidad;
+    if (!r) return '';
+    if (r.error) return `<table class="rp-tabla">${fila('Resultado', `No se pudo obtener el dato: ${esc(r.error)}`)}</table><p class="rp-nota">${esc(CALC.NOTA_ELECTRICIDAD)}</p>`;
+    const filas = [fila('Estado', r.estado === 'SIN DATO' ? estado('SIN DATO') : estado('INFORMATIVO'))];
+    if (r.dentro !== null) {
+      filas.push(fila('Resultado', esc(CALC.textoElectricidad(r))));
+      if (r.dentro) {
+        r.concesiones.forEach((c) => filas.push(fila(`Concesión (${c.concesionaria || 'empresa'})`, `${esc(c.nombre_zona)} · ${esc(c.empresa)} · expediente ${esc(c.expediente)} · ${esc(String(c.situacion || '').toLowerCase())}`)));
+      } else {
+        filas.push(fila('Distancia al borde de la más cercana', `${dist(r.distanciaM)} en línea recta (${esc(r.concesionaria || '')}${r.cercana ? `, ${esc(r.cercana.nombre_zona)}` : ''})`));
+      }
+    } else filas.push(fila('Resultado', esc(CALC.textoElectricidad(r))));
+    return `<table class="rp-tabla">${filas.join('')}</table><p class="rp-nota">${esc(CALC.NOTA_ELECTRICIDAD)} ${esc(r.metodo || '')}</p>`;
+  }
+
+  /**
+   * Servicios de la manzana según el censo (INEI): alumbrado, agua y desagüe por red pública. INFORMATIVOS (sin umbral). Son cifras de TODA la manzana en el año del
+   * censo (hoy 2017), sobre las viviendas ocupadas con personas presentes que se censaron: no son de un predio ni de hoy. Con menos de 5 viviendas no hay porcentaje.
+   */
+  function censo(d) {
+    const r = d.variables && d.variables.censo;
+    if (!r) return '';
+    const filas = [fila('Estado', r.estado === 'SIN DATO' ? estado('SIN DATO') : estado('INFORMATIVO'))];
+    const p = (x) => (x === null || x === undefined ? 'sin porcentaje' : `${String(x).replace('.', ',')} %`);
+    if (r.tieneCifras) {
+      filas.push(fila('Manzana', `${esc(r.manzana)} · ${r.modo === 'cercana' ? `la más cercana, a ${dist(r.distanciaM)} de su borde (el punto está en la calle)` : 'el punto está dentro'}`));
+      filas.push(fila(`Viviendas ocupadas con personas presentes (censo ${r.anio})`, `${esc(r.ocupadas)} (de ${esc(r.viviendas)} viviendas contadas; ${esc(r.personas)} personas)`));
+      filas.push(fila('Alumbrado eléctrico por red pública', p(r.luz.pct)));
+      filas.push(fila('Agua por red pública', `${p(r.agua.pct)}${r.agua.pctDentro !== null && r.agua.pctDentro !== r.agua.pct ? ` (${p(r.agua.pctDentro)} dentro de la vivienda)` : ''}`));
+      filas.push(fila('Desagüe por red pública', `${p(r.desague.pct)}${r.desague.pctDentro !== null && r.desague.pctDentro !== r.desague.pct ? ` (${p(r.desague.pctDentro)} dentro de la vivienda)` : ''}`));
+    }
+    filas.push(fila('Resultado', esc(CALC.textoCenso(r))));
+    const dep = d.departamento2025 ? ` ${esc(CALC.textoCenso2025(d.departamento2025, 'agua'))} ${esc(CALC.textoCenso2025(d.departamento2025, 'luz'))}` : '';
+    return `<table class="rp-tabla">${filas.join('')}</table><p class="rp-nota">${esc(CALC.NOTA_CENSO)} ${esc(r.metodo || '')}${dep}</p>`;
+  }
+
+  const hayComercio = (d) => Boolean(d.variables && Object.keys(CALC.COMERCIO).some((id) => d.variables[id]));
+  const fuenteComercio = (d) => {
+    const r = Object.keys(CALC.COMERCIO).map((id) => d.variables[id]).find((x) => x && x.fuente);
+    return r ? fuenteDe(r) : '';
+  };
+
   function educacion(d) {
     const e = d.variables && d.variables.educacion;
     if (!e) return sinResultado;
     const filas = NIVELES.flatMap((n) => {
       const r = e[n];
       if (r.error) return [fila(nombreNivel(n), `No se pudo obtener el dato: ${esc(r.error)}`)];
-      const det = r.nombre ? `${esc(r.nombre)} · ${r.distanciaM === null ? 'sin distancia' : `${dist(r.distanciaM)} en línea recta`} · umbral ${dist(r.umbralM)}` : `Sin dato · umbral ${dist(r.umbralM)}`;
+      const origen = r.fuenteElemento ? ` · fuente: ${esc(CALC.textoFuenteElemento(r))}` : '';
+      const det = r.nombre ? `${esc(r.nombre)} · ${r.distanciaM === null ? 'sin distancia' : `${dist(r.distanciaM)} en línea recta`} · umbral ${dist(r.umbralM)}${origen}` : `Sin dato · umbral ${dist(r.umbralM)}`;
       return [fila(nombreNivel(n), `${estado(r.estado)} ${det}`)];
     });
     return `<table class="rp-tabla">${filas.join('')}</table>
-      <p class="rp-nota">Umbrales: ${esc(d.fuentesUmbral.educacion)}. OpenStreetMap casi no etiqueta el nivel de los colegios: uno sin nivel se toma como candidato a primaria y secundaria; los jardines (amenity=kindergarten) cuentan como inicial.</p>`;
+      <p class="rp-nota">Umbrales: ${esc(d.fuentesUmbral.educacion)}. Los colegios salen del padrón de ESCALE (MINEDU), que dice el nivel de cada local; OpenStreetMap solo completa donde ESCALE no tiene un local a 200 m, y allí casi no etiqueta el nivel: uno sin nivel se toma como candidato a primaria y secundaria, y los jardines (amenity=kindergarten) cuentan como inicial.</p>`;
   }
 
-  // Líneas de SmartBus que pasan cerca del punto: fuente distinta del paradero de OpenStreetMap, con su permiso y sus límites.
+  // Líneas de transporte (relaciones route=bus de OpenStreetMap) que pasan cerca del punto, aparte del paradero más cercano, con su licencia y sus límites.
   function lineasTransporte(t, d) {
     const r = t.rutas;
     if (!r) return '';
@@ -119,13 +262,13 @@ const Reporte = (() => {
     const filas = r.lineas.length
       ? r.lineas.map((l) => {
         const ramales = [...new Set(l.ramales.map((x) => x.ramal))];
-        const parada = l.parada ? ` · parada más cercana «${esc(l.parada.nombre)}» a ${dist(l.parada.distanciaM)}` : '';
+        const parada = l.parada ? ` · parada mapeada más cercana ${l.parada.nombre ? `«${esc(l.parada.nombre)}»` : '(sin nombre)'} a ${dist(l.parada.distanciaM)}` : l.paradasMapeadas === 0 ? ' · paradas no mapeadas' : ` · ninguna parada mapeada a ${dist(r.distanciaM)} o menos`;
         return fila(RT.etiquetaLinea(l), `trazado a ${dist(l.distanciaM)}${parada} · ${esc(ramales.slice(0, 4).join(', '))}${ramales.length > 4 ? ` y ${ramales.length - 4} más` : ''}`);
       })
-      : [fila('Líneas', `Ninguna línea publicada por SmartBus pasa a ${dist(r.distanciaM)} o menos`)];
+      : [fila('Líneas', `Ninguna línea mapeada en OpenStreetMap pasa a ${dist(r.distanciaM)} o menos`)];
     return `<p class="rp-destacado"><strong>Líneas que pasan a ${dist(r.distanciaM)} o menos</strong> ${r.lineas.length ? esc(RT.listaTexto(r.lineas)) : '(ninguna)'}</p>
       <table class="rp-tabla">${filas.join('')}</table>
-      <p class="rp-nota">Fuente: ${esc(r.fuente)}, recorridos descargados el ${esc(r.fecha || 'sin fecha')}, usados con ${esc(r.permiso || '')}. Distancia en línea recta del punto al trazado de cada recorrido; referencia de ${ref}. Son los recorridos publicados, no un servicio garantizado: sin frecuencias ni horarios, y un cambio de ruta por tramos puede no estar reflejado.</p>`;
+      <p class="rp-nota">Fuente: ${esc(r.fuente)}, recorridos extraídos el ${esc(r.fecha || 'sin fecha')}, ${esc(r.atribucion || '')}. Distancia en línea recta del punto al trazado de cada recorrido; referencia de ${ref}. Son los recorridos mapeados por la comunidad de OpenStreetMap, no un servicio garantizado: sin frecuencias ni horarios, y un cambio de ruta por tramos puede no estar reflejado. Las paradas de OSM son parciales.</p>`;
   }
 
   function transporte(d) {
@@ -315,8 +458,14 @@ const Reporte = (() => {
     const lista = [
       ['Zonificación vigente y proyectada', '#4f46e5', zonificacion(d), d.fuentes.zonificacion],
       ['Salud', '#c2410c', salud(d), d.variables ? fuenteDe(d.variables.salud) : ''],
+      ...(d.variables && d.variables.consultorio ? [['Consultorio médico (informativo)', '#b45309', consultorio(d), fuenteDe(d.variables.consultorio)]] : []),
+      ...(hayComercio(d) ? [['Comercio por necesidad: abastecimiento, compras y ocio, comercio de barrio (informativo)', '#be185d', comercio(d), fuenteComercio(d)]] : []),
+      ...(d.variables && (d.variables.acopio || d.variables.interrupciones) ? [['Agua: puntos de acopio e interrupciones del servicio (informativo)', '#0369a1', agua(d), [d.variables.acopio ? `${d.variables.acopio.fuente || 'SEDAPAR'} (publicado el ${d.variables.acopio.fecha || 'sin fecha'}; datos de ${d.variables.acopio.fechaDatos || '2017'})` : '', d.variables.interrupciones && d.variables.interrupciones.registros !== null ? `${d.variables.interrupciones.fuente || 'SUNASS'}, interrupciones reportadas por SEDAPAR (${d.variables.interrupciones.licencia || 'ODC-By'}, descargado el ${d.variables.interrupciones.fecha || 'sin fecha'})` : ''].filter(Boolean).join('; ')]] : []),
+      ...(d.variables && d.variables.mineria ? [['Concesión minera (informativo)', '#7c2d12', mineria(d), fuenteDe(d.variables.mineria)]] : []),
+      ...(d.variables && d.variables.electricidad ? [['Electricidad (informativo)', '#ca8a04', electricidad(d), fuenteDe(d.variables.electricidad)]] : []),
+      ...(d.variables && d.variables.censo ? [[`Servicios de la manzana (censo ${d.variables.censo.anio || 2017}, informativo)`, '#0e7490', censo(d), d.variables.censo.fuente ? fuenteDe(d.variables.censo) : '']] : []),
       ['Educación por nivel', '#7c3aed', educacion(d), d.variables ? fuenteDe(d.variables.educacion.inicial) : ''],
-      ['Transporte', '#1d4ed8', transporte(d), d.variables ? [fuenteDe(d.variables.transporte), d.variables.transporte.rutas && !d.variables.transporte.rutas.error ? `${d.variables.transporte.rutas.atribucion || 'Rutas: SmartBus (smartbus.app)'}` : ''].filter(Boolean).join('; ') : ''],
+      ['Transporte', '#1d4ed8', transporte(d), d.variables ? [fuenteDe(d.variables.transporte), d.variables.transporte.rutas && !d.variables.transporte.rutas.error ? `${d.variables.transporte.rutas.atribucion || '© colaboradores de OpenStreetMap (ODbL)'}` : ''].filter(Boolean).join('; ') : ''],
       ['Área verde', '#15803d', areaVerde(d), d.variables ? fuenteDe(d.variables.areaVerde) : ''],
       ['Quebradas y cauces', '#0369a1', seccionQuebradas(d), fuenteCauce(d.cauce)],
       ['Contexto de riesgo (informativo)', '#64748b', seccionContexto(d), fuenteContexto(d.contextoRiesgo)],
@@ -335,10 +484,16 @@ const Reporte = (() => {
     const l = [
       'La zonificación vigente es la del PDM 2016-2025, cuya vigencia de 10 años se cumplió; hay un PDM nuevo en trámite y una sentencia (183-2019) que suspendió ciertos actos para predios antes agrícolas o de reserva paisajista. La zonificación proyectada no se muestra: solo se advierte su estado, con la fuente indicada.',
       'Los polígonos de la zonificación se extrajeron de un PDF: cerca del borde entre dos zonas el resultado puede no ser exacto (por eso se avisa cuando otra zona queda a 20 m o menos).',
-      'Salud, educación, transporte y área verde salen de OpenStreetMap, un mapa colaborativo: algo ausente puede existir. Los datos se extrajeron una vez (fecha indicada en cada sección) y no se actualizan solos.',
-      'Las líneas de transporte son los recorridos que SmartBus (smartbus.app) publicó en la fecha indicada, usados con su autorización verbal (confirmación escrita pendiente): no traen frecuencias ni horarios, y un cambio de ruta por tramos puede no estar reflejado.',
-      'Todas las distancias son en línea recta, no recorrido a pie. Los umbrales de salud (1000 m), transporte (400 m) y borde de zona (20 m) son convenciones del proyecto; los de educación vienen del Instructivo FTE del MEF/MINEDU y el de área verde, de la OMS Europa (2016).',
-      'OpenStreetMap casi no etiqueta el nivel de los colegios: un colegio sin nivel se toma como candidato a primaria y secundaria, lo que puede sobrestimar la oferta de un nivel.',
+      'Salud sale de RENIPRESS (SUSALUD) y educación del padrón de ESCALE (MINEDU), como fuente primaria; OpenStreetMap, un mapa colaborativo, solo sirve de respaldo donde ningún registro oficial tiene un punto a 200 m, y es la fuente de transporte y área verde: algo ausente puede existir. RENIPRESS no trae las coordenadas de cerca del 42 % de los establecimientos de Arequipa, que por eso no pueden ubicarse. Los datos se extrajeron una vez (fecha indicada en cada sección) y no se actualizan solos.',
+      'Las líneas de transporte son los recorridos que la comunidad de OpenStreetMap tenía mapeados en la fecha indicada (ODbL): no traen frecuencias ni horarios, y un cambio de ruta por tramos puede no estar reflejado. Las paradas de OpenStreetMap son parciales: una línea puede tener pocas o ninguna parada mapeada.',
+      'Todas las distancias son en línea recta, no recorrido a pie. Los umbrales de salud (1000 m), transporte (400 m) y borde de zona (20 m) son convenciones del proyecto; los de educación son distancias referenciales de las normas del MINEDU (RVM 104-2019 y 208-2019, numeral 7.1) y el de área verde es un indicador de la OMS Europa (2016), no una norma peruana.',
+      'Los locales de ESCALE dicen su nivel. Los colegios de OpenStreetMap que completan el mapa casi no lo etiquetan: uno sin nivel se toma como candidato a primaria y secundaria, lo que puede sobrestimar la oferta de un nivel.',
+      ...(d.variables && d.variables.consultorio ? ['El consultorio médico es una categoría aparte de los establecimientos de salud y es solo informativo: no tiene una distancia de referencia (es una decisión pendiente), así que no se dice si está cerca o lejos, no suma a ningún puntaje y no cuenta como «salud cerca».'] : []),
+      ...(d.variables && d.variables.censo ? ['Servicios de la manzana: alumbrado, agua y desagüe por red pública según el censo de 2017 del INEI (REDATAM), solo área urbana. Son cifras de toda la manzana, calculadas sobre las viviendas ocupadas con personas presentes que se censaron, no de un predio ni de hoy; con menos de 5 viviendas no se da el porcentaje. El censo de 2025 ya se levantó pero el INEI todavía no lo abre por manzana. Es informativo y no suma a ningún puntaje.'] : []),
+      ...(d.variables && (d.variables.acopio || d.variables.interrupciones) ? ['Agua: los puntos de acopio vienen del directorio de SEDAPAR y la Municipalidad Provincial de Arequipa (publicado en gob.pe en 2024 con datos de abril a junio de 2017) y son lugares de reparto con camiones cisterna ante un desabastecimiento: no dicen que haya agua en ellos hoy, que sigan vigentes ni que una zona tenga conexión. Las interrupciones son las que SEDAPAR reportó a la SUNASS (de octubre de 2019 a abril de 2024), contadas una vez por distrito y sin pesar por las viviendas afectadas: no se comparan distritos y no dicen nada de un predio. Los datos de conexión de un predio en particular no están publicados. Es informativo y no suma a ningún puntaje.'] : []),
+      ...(d.variables && d.variables.mineria ? ['Concesión minera: el Catastro Minero de INGEMMET es referencial y se actualiza a diario; una concesión minera es un derecho a explorar y explotar los minerales, separado del predio (art. 9 de la Ley General de Minería): no dice que haya minería en el lugar, de quién es el predio ni qué se puede hacer en él, y que el punto quede fuera no garantiza que no haya otros derechos. Es informativo y no suma a ningún puntaje.'] : []),
+      ...(d.variables && d.variables.electricidad ? ['Electricidad: el área de concesión de distribución eléctrica (MINEM, Dirección General de Electricidad) dice a qué empresa le corresponde dar el servicio en esa zona; una concesión no es una conexión: no dice que el predio esté conectado ni que haya red en su calle, y los polígonos del registro son poco detallados (su borde puede ser impreciso). La cobertura real de conexión vendría de un censo (INEI) que este proyecto aún no tiene. Es informativo y no suma a ningún puntaje.'] : []),
+      ...(hayComercio(d) ? ['El comercio se ordena por necesidad —abastecimiento (mercados y supermercados), compras y ocio (solo los malls confirmados con su fuente) y comercio de barrio (el resto de lo que se etiqueta mall)— y es informativo: no tiene una distancia de referencia (es una decisión pendiente), así que no se dice si está cerca o lejos y no suma a ningún puntaje. Un supermercado dentro de un mall cuenta como abastecimiento; el mall, no. Sale de OpenStreetMap, que puede no tenerlos todos (por distrito, el número de mercados mapeados no coincide con el del censo de 2016), etiqueta de más —amenity=marketplace incluye ferias y comercios mal etiquetados y shop=mall incluye galerías pequeñas, no solo malls— y no distingue un mercado minorista de uno mayorista; de un mall con forma en el mapa la distancia es al borde.'] : []),
       'Quebradas y cauces: no existe una distancia normativa a una quebrada, así que el estado es INFORMATIVO salvo que la persona fije su propio umbral («según tu umbral»). Los cauces vienen de la ANA, el IGP y OpenStreetMap; ninguna fuente es completa, no son un mapa de peligro y no delimitan la faja marginal.',
       'El contexto de riesgo (peligros geológicos de INGEMMET, sismos reportados por el IGP en el periodo indicado y zonas de peligro volcánico del Misti del IGP, de escala regional y sin fecha de elaboración, y el escenario de riesgo del CENEPRED ante El Niño, que es una estimación por distrito) es informativo: no es una evaluación del predio, no predice sismos, erupciones ni lluvias y que no haya registros o zonas no significa que el lugar sea seguro.',
       'El precio de oferta por m² del distrito (Aptología, CC BY 4.0) es informativo: son precios pedidos en avisos, no de cierre, y es la mediana del distrito, no el precio de este inmueble. Solo hay cifra en los distritos con al menos 30 avisos.',
@@ -430,7 +585,7 @@ const Reporte = (() => {
     const secciones = construirSecciones(d);
     const resumen = [...d.resumen, ...filasResumenExtra(d)];
 
-    const datos = ['MPA/IMPLA (zonificación)', '© colaboradores de OpenStreetMap (ODbL)', 'ANA, IGP y OpenStreetMap (cauces)', 'INGEMMET (peligros geológicos)', 'IGP (sismos reportados y zonas de peligro volcánico)', 'CENEPRED (escenario de riesgo ante El Niño por distrito)', 'Datos: Aptologia (precio de oferta, CC BY 4.0)'];
+    const datos = ['MPA/IMPLA (zonificación)', 'RENIPRESS (SUSALUD, ODC-By)', 'Padrón de ESCALE (MINEDU)', '© colaboradores de OpenStreetMap (ODbL, respaldo y transporte)', 'ANA, IGP y OpenStreetMap (cauces)', 'INGEMMET (peligros geológicos)', 'IGP (sismos reportados y zonas de peligro volcánico)', 'CENEPRED (escenario de riesgo ante El Niño por distrito)', 'Datos: Aptologia (precio de oferta, CC BY 4.0)'];
     if (m.desastre) datos.push('INGEMMET (GEOCATMIN), INEI, MVCS (E.030)');
     if (m.seguridad) datos.push('MININTER (SIDPOL)');
 

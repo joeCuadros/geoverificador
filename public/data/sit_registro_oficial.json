@@ -1,0 +1,553 @@
+{
+ "metadata": {
+  "fuente": "Municipalidad Provincial de Arequipa (MPA): bases integradas de la tercera licitación de operación de rutas del Sistema Integrado de Transporte (anexos) y contratos de concesión",
+  "url_pagina": "https://www.muniarequipa.gob.pe/sistema_transporte/",
+  "url_anexos": "https://www.muniarequipa.gob.pe/descargas/transportes/operaciones/anexos_08_06_2017.pdf",
+  "url_contratos": "https://www.muniarequipa.gob.pe/descargas/transportes/operaciones/",
+  "fecha_de_los_datos": "2017-06-08 (bases integradas); los contratos y adendas son posteriores",
+  "fecha_extraccion": "2026-11-11",
+  "sha256_anexos": "f952d221ad2f1912384b6e3129f6f0ed121acc276bec14e200f813086bfdedac",
+  "licencia": "La página no declara una licencia. Es información pública de una entidad del Estado (transparencia); se atribuye a la Municipalidad Provincial de Arequipa.",
+  "conteos": {
+   "unidades": 12,
+   "rutas": 79,
+   "rutas_con_longitud": 56
+  },
+  "vigente": false,
+  "plan_vigente": {
+   "norma": "Ordenanza Municipal N.° 1355-MPA, que aprueba el Plan de Optimización de Rutas para la etapa pre operativa del Sistema Integrado de Transportes de la Ciudad de Arequipa",
+   "fecha": "2024-12-26 (sesión extraordinaria del 2024-12-18); publicada en El Peruano el 2025-01-25",
+   "url": "https://busquedas.elperuano.pe/dispositivo/NL/2360973-1",
+   "nota": "La ordenanza solo aprueba el plan y delega las actualizaciones en la Gerencia de Transporte Urbano y Circulación Vial; el texto del plan (los circuitos, 97 según la prensa) y sus anexos no están publicados en el portal de la MPA ni en El Peruano. Hay que pedirlos por la Ley 27806 (transparencia)."
+  },
+  "nota": "Es el registro de 2017: 12 unidades de negocio (C-1A y C-1B troncales, C-2 a C-11) con las rutas (códigos A#, T#, BT#) que las componen y su longitud en km por sentido. Los códigos de ruta no son los nombres de ramal de OpenStreetMap; no trae terminales, paraderos, frecuencias ni horarios. El concesionario sale de los contratos y adendas publicados en la misma página; C-1B no tiene uno identificado.",
+  "generado": "2026-11-11"
+ },
+ "unidades": [
+  {
+   "codigo": "C1A",
+   "nombre": "Troncal 1",
+   "concesionario": "Integra Arequipa S.A.C.",
+   "claves": [
+    "integra"
+   ],
+   "documento": "contratos/CONTRATO INTEGRA AREQUIPA SAC.pdf",
+   "rutas": [
+    {
+     "codigo": "BT1",
+     "longitud_km": null,
+     "vehiculo": null
+    }
+   ]
+  },
+  {
+   "codigo": "C1B",
+   "nombre": "Troncal 2",
+   "concesionario": null,
+   "claves": [],
+   "documento": null,
+   "rutas": [
+    {
+     "codigo": "BT2",
+     "longitud_km": null,
+     "vehiculo": null
+    }
+   ]
+  },
+  {
+   "codigo": "C2",
+   "nombre": "Cono Norte",
+   "concesionario": "Empresa de Transportes Cono Norte S.A.C.",
+   "claves": [
+    "conorte"
+   ],
+   "documento": "contratos/EMPRESA DE TRANSPORTES CONO NORTE S.A.C. C-2.pdf",
+   "rutas": [
+    {
+     "codigo": "A25",
+     "longitud_km": 12.5,
+     "vehiculo": "Bus 60"
+    },
+    {
+     "codigo": "A27",
+     "longitud_km": 10.8,
+     "vehiculo": "Bus 42"
+    },
+    {
+     "codigo": "A28",
+     "longitud_km": 18.5,
+     "vehiculo": "Bus 80"
+    },
+    {
+     "codigo": "A29",
+     "longitud_km": 8.5,
+     "vehiculo": "Bus 42"
+    },
+    {
+     "codigo": "A30",
+     "longitud_km": 16.1,
+     "vehiculo": "Bus 60"
+    },
+    {
+     "codigo": "A32",
+     "longitud_km": 10.6,
+     "vehiculo": "Bus 60"
+    },
+    {
+     "codigo": "A33",
+     "longitud_km": 13.2,
+     "vehiculo": "Bus 60"
+    },
+    {
+     "codigo": "A37",
+     "longitud_km": 9,
+     "vehiculo": "Bus 60"
+    },
+    {
+     "codigo": "A38",
+     "longitud_km": 15,
+     "vehiculo": "Bus 80"
+    }
+   ]
+  },
+  {
+   "codigo": "C3",
+   "nombre": "Cayma",
+   "concesionario": "Empresa de Transportes Transcayma S.A.",
+   "claves": [
+    "transcayma"
+   ],
+   "documento": "contratos/C3 CAYMA.pdf",
+   "rutas": [
+    {
+     "codigo": "A5",
+     "longitud_km": 24.9,
+     "vehiculo": "Bus 80"
+    },
+    {
+     "codigo": "A26",
+     "longitud_km": 17,
+     "vehiculo": "Bus 80"
+    },
+    {
+     "codigo": "A31",
+     "longitud_km": 13,
+     "vehiculo": "Bus 60"
+    },
+    {
+     "codigo": "A34",
+     "longitud_km": 37.1,
+     "vehiculo": "Bus 42"
+    },
+    {
+     "codigo": "A36",
+     "longitud_km": 21,
+     "vehiculo": "Bus 60"
+    },
+    {
+     "codigo": "A39",
+     "longitud_km": 14.7,
+     "vehiculo": "Bus 60"
+    }
+   ]
+  },
+  {
+   "codigo": "C4",
+   "nombre": "Alto Selva Alegre - Miraflores",
+   "concesionario": "Empresa de Transportes Unión AQP S.A.",
+   "claves": [
+    "unionaqp"
+   ],
+   "documento": "contratos/EMPRESA DE TRANSPORTES UNION AQP S.A. C-4.pdf",
+   "rutas": [
+    {
+     "codigo": "A14",
+     "longitud_km": 20.4,
+     "vehiculo": "Bus 42"
+    },
+    {
+     "codigo": "A40",
+     "longitud_km": 16,
+     "vehiculo": "Bus 60"
+    },
+    {
+     "codigo": "A41",
+     "longitud_km": 16.7,
+     "vehiculo": "Bus 42"
+    },
+    {
+     "codigo": "T15",
+     "longitud_km": 16.1,
+     "vehiculo": "Bus 60"
+    },
+    {
+     "codigo": "T16",
+     "longitud_km": 20,
+     "vehiculo": "Bus 60"
+    },
+    {
+     "codigo": "T17",
+     "longitud_km": 23.6,
+     "vehiculo": "Bus 60"
+    },
+    {
+     "codigo": "T18",
+     "longitud_km": 22.1,
+     "vehiculo": "Bus 60"
+    },
+    {
+     "codigo": "A15",
+     "longitud_km": 13.9,
+     "vehiculo": "Bus 42"
+    },
+    {
+     "codigo": "T13",
+     "longitud_km": 16.4,
+     "vehiculo": "Bus 42"
+    },
+    {
+     "codigo": "T14",
+     "longitud_km": 20.4,
+     "vehiculo": "Bus 42"
+    },
+    {
+     "codigo": "T38",
+     "longitud_km": 22.3,
+     "vehiculo": "Bus 42"
+    }
+   ]
+  },
+  {
+   "codigo": "C5",
+   "nombre": "Mariano Melgar",
+   "concesionario": "Empresa de Transportes Buses Mariano Melgar S.A. (ETRABUS S.A.)",
+   "claves": [
+    "etrabus"
+   ],
+   "documento": "contratos/C5 MARIANO MELGAR.pdf",
+   "rutas": [
+    {
+     "codigo": "A43",
+     "longitud_km": 13.9,
+     "vehiculo": "Bus 60"
+    },
+    {
+     "codigo": "T35",
+     "longitud_km": 16.8,
+     "vehiculo": "Bus 42"
+    },
+    {
+     "codigo": "T7",
+     "longitud_km": 13.4,
+     "vehiculo": "Bus 42"
+    },
+    {
+     "codigo": "T8",
+     "longitud_km": 11.9,
+     "vehiculo": "Bus 60"
+    }
+   ]
+  },
+  {
+   "codigo": "C6",
+   "nombre": "Paucarpata - Miguel Grau",
+   "concesionario": "Empresa de Transportes Unión Grau S.A.C.",
+   "claves": [
+    "uniongrau"
+   ],
+   "documento": "contratos/EMPRESA DE TRANSPORTES UNION GRAU S.A.C. C-6.pdf",
+   "rutas": [
+    {
+     "codigo": "T11",
+     "longitud_km": 21.8,
+     "vehiculo": "Bus 60"
+    },
+    {
+     "codigo": "T3",
+     "longitud_km": 16.9,
+     "vehiculo": "Bus 60"
+    },
+    {
+     "codigo": "T4",
+     "longitud_km": 18,
+     "vehiculo": "Bus 60"
+    },
+    {
+     "codigo": "T33",
+     "longitud_km": 19.8,
+     "vehiculo": "Bus 60"
+    },
+    {
+     "codigo": "T32",
+     "longitud_km": 15,
+     "vehiculo": "Bus 42"
+    },
+    {
+     "codigo": "T5",
+     "longitud_km": 17.5,
+     "vehiculo": "Bus 42"
+    }
+   ]
+  },
+  {
+   "codigo": "C7",
+   "nombre": "Paucarpata - Ciudad Blanca",
+   "concesionario": "Empresa de Transportes AQP Masivo Arequipa S.A.C.",
+   "claves": [
+    "aqpmasivo"
+   ],
+   "documento": "contratos/EMPRESA DE TRANSPORTES AQP MASIVO AREQUIPA S.A.C. C-7.pdf",
+   "rutas": [
+    {
+     "codigo": "T9",
+     "longitud_km": 14.9,
+     "vehiculo": "Bus 42"
+    },
+    {
+     "codigo": "T12",
+     "longitud_km": 20.7,
+     "vehiculo": "Bus 42"
+    },
+    {
+     "codigo": "A7",
+     "longitud_km": 19.5,
+     "vehiculo": "Bus 60"
+    },
+    {
+     "codigo": "T37",
+     "longitud_km": 19.1,
+     "vehiculo": "Bus 42"
+    },
+    {
+     "codigo": "A10",
+     "longitud_km": 20.8,
+     "vehiculo": "Bus 42"
+    },
+    {
+     "codigo": "T6",
+     "longitud_km": 18.4,
+     "vehiculo": "Bus 42"
+    }
+   ]
+  },
+  {
+   "codigo": "C8",
+   "nombre": "Sabandía",
+   "concesionario": "Empresa de Transportes Characato Sabandía C-8 S.A.",
+   "claves": [
+    "characato"
+   ],
+   "documento": "contratos/EMPRESA DE TRANSPORTES CHARACATO SABANDIA C-8 S.A.pdf",
+   "rutas": [
+    {
+     "codigo": "A6",
+     "longitud_km": 23.9,
+     "vehiculo": "Bus 60"
+    },
+    {
+     "codigo": "A21",
+     "longitud_km": 17.3,
+     "vehiculo": "Bus 60"
+    },
+    {
+     "codigo": "T1",
+     "longitud_km": null,
+     "vehiculo": null
+    },
+    {
+     "codigo": "T2",
+     "longitud_km": null,
+     "vehiculo": null
+    }
+   ]
+  },
+  {
+   "codigo": "C9",
+   "nombre": "Socabaya",
+   "concesionario": "Empresarios Arequipeños Emarsistran S.A.",
+   "claves": [
+    "emarsistran"
+   ],
+   "documento": "contratos/C9 SOCABAYA.pdf",
+   "rutas": [
+    {
+     "codigo": "A11",
+     "longitud_km": 19.6,
+     "vehiculo": "Bus 60"
+    },
+    {
+     "codigo": "A12",
+     "longitud_km": null,
+     "vehiculo": null
+    },
+    {
+     "codigo": "A13",
+     "longitud_km": null,
+     "vehiculo": null
+    },
+    {
+     "codigo": "A18",
+     "longitud_km": null,
+     "vehiculo": null
+    },
+    {
+     "codigo": "A35",
+     "longitud_km": 14.5,
+     "vehiculo": "Bus 60"
+    },
+    {
+     "codigo": "T22",
+     "longitud_km": null,
+     "vehiculo": null
+    },
+    {
+     "codigo": "T23",
+     "longitud_km": null,
+     "vehiculo": null
+    },
+    {
+     "codigo": "T36",
+     "longitud_km": null,
+     "vehiculo": null
+    },
+    {
+     "codigo": "A44",
+     "longitud_km": null,
+     "vehiculo": null
+    }
+   ]
+  },
+  {
+   "codigo": "C10",
+   "nombre": "Hunter",
+   "concesionario": "Empresa de Transportes Megabus AQP S.A.C.",
+   "claves": [
+    "megabus"
+   ],
+   "documento": "contratos/EMPRESA DE TRANSPORTES MEGABUS AQP S.A.C. C-10.pdf",
+   "rutas": [
+    {
+     "codigo": "A19",
+     "longitud_km": null,
+     "vehiculo": null
+    },
+    {
+     "codigo": "A22",
+     "longitud_km": null,
+     "vehiculo": null
+    },
+    {
+     "codigo": "A42",
+     "longitud_km": null,
+     "vehiculo": null
+    },
+    {
+     "codigo": "T29",
+     "longitud_km": null,
+     "vehiculo": null
+    },
+    {
+     "codigo": "T30",
+     "longitud_km": null,
+     "vehiculo": null
+    },
+    {
+     "codigo": "T31",
+     "longitud_km": null,
+     "vehiculo": null
+    },
+    {
+     "codigo": "A20",
+     "longitud_km": null,
+     "vehiculo": null
+    },
+    {
+     "codigo": "T19",
+     "longitud_km": null,
+     "vehiculo": null
+    },
+    {
+     "codigo": "T20",
+     "longitud_km": null,
+     "vehiculo": null
+    },
+    {
+     "codigo": "T21",
+     "longitud_km": null,
+     "vehiculo": null
+    },
+    {
+     "codigo": "T26",
+     "longitud_km": null,
+     "vehiculo": null
+    },
+    {
+     "codigo": "T28",
+     "longitud_km": null,
+     "vehiculo": null
+    }
+   ]
+  },
+  {
+   "codigo": "C11",
+   "nombre": "Pachacútec",
+   "concesionario": "COTUM Express S.A.C. (contrato original: Gran Pachacútec S.A.C.)",
+   "claves": [
+    "cotum"
+   ],
+   "documento": "contratos/GRAN PACHACUTEC S.A.C C11.pdf; adendas/C11.pdf",
+   "rutas": [
+    {
+     "codigo": "A1",
+     "longitud_km": 12.1,
+     "vehiculo": "Bus 60"
+    },
+    {
+     "codigo": "A2",
+     "longitud_km": 12.6,
+     "vehiculo": "Bus 60"
+    },
+    {
+     "codigo": "A3",
+     "longitud_km": 15.5,
+     "vehiculo": "Bus 60"
+    },
+    {
+     "codigo": "A4",
+     "longitud_km": 11.6,
+     "vehiculo": "Bus 60"
+    },
+    {
+     "codigo": "A8",
+     "longitud_km": 13,
+     "vehiculo": "Bus 60"
+    },
+    {
+     "codigo": "A9",
+     "longitud_km": 9,
+     "vehiculo": "Bus 42"
+    },
+    {
+     "codigo": "A17",
+     "longitud_km": 18.1,
+     "vehiculo": "Bus 60"
+    },
+    {
+     "codigo": "A24",
+     "longitud_km": 13.1,
+     "vehiculo": "Bus 60"
+    },
+    {
+     "codigo": "T24",
+     "longitud_km": 12.8,
+     "vehiculo": "Bus 60"
+    },
+    {
+     "codigo": "T25",
+     "longitud_km": 18.8,
+     "vehiculo": "Bus 80"
+    }
+   ]
+  }
+ ]
+}

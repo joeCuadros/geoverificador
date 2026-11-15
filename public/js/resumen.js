@@ -56,14 +56,14 @@ const Resumen = (() => {
   const sinDato = (r) => !r || r.estado === 'SIN DATO' || r.error;
 
   /**
-   * Las líneas de SmartBus que pasan cerca, en una frase («Pasan 2 líneas a menos de 400 m: C2 (Cono Norte), C5 (EtraBus).»), o
+   * Las líneas de transporte (OpenStreetMap) que pasan cerca, en una frase («Pasan 2 líneas a menos de 400 m: C2 (Cono Norte), C5 (EtraBus).»), o
    * null si no se calcularon o no se pudieron leer: no se dice nada que no se sepa.
    */
   function frasePasanLineas(rutas) {
     if (!rutas || rutas.error || !Array.isArray(rutas.lineas) || !Number.isFinite(rutas.distanciaM)) return null;
     const ref = fmtRef(rutas.distanciaM);
     const n = rutas.lineas.length;
-    if (n === 0) return `Ninguna línea de SmartBus pasa a menos de ${ref}.`;
+    if (n === 0) return `Ninguna línea mapeada en OpenStreetMap pasa a menos de ${ref}.`;
     return `${n === 1 ? 'Pasa 1 línea' : `Pasan ${n} líneas`} a menos de ${ref}: ${RT().listaTexto(rutas.lineas, 6)}.`;
   }
 

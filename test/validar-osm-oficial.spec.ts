@@ -72,6 +72,23 @@ describe('leerEscale', () => {
   });
 });
 
+describe('estado activo (corrección de la corrida del 2026-11-09)', () => {
+  it('RENIPRESS: el cierre temporal y la baja no son activos, y una fila sin estado tampoco cuando el archivo trae la columna', () => {
+    const t = 'COD_IPRESS;NOMBRE;DEPARTAMENTO;PROVINCIA;ESTADO;NORTE;ESTE'+'\n1;A;AREQUIPA;AREQUIPA;ACTIVO;-16.40;-71.50\n2;B;AREQUIPA;AREQUIPA;CIERRE TEMPORAL DE OFICIO;-16.41;-71.50\n3;C;AREQUIPA;AREQUIPA;BAJA DEFINITIVA;-16.42;-71.50\n4;D;AREQUIPA;AREQUIPA;;-16.43;-71.50\n';
+    const r = V.leerRenipress(t);
+    expect(r.registros.map((x: { id: string }) => x.id)).toEqual(['1']);
+    expect(r.descartados.inactivos).toBe(3);
+  });
+  it('ESCALE: con ESTADO (1 o 2) y D_ESTADO a la vez manda el texto; solo el código también sirve (2 es inactivo)', () => {
+    const t = 'CODLOCAL,CEN_EDU,NIV_MOD,ESTADO,D_ESTADO,NLAT_IE,NLONG_IE\n1,A,B0,1,Activo,-16.4,-71.5\n2,B,B0,2,Inactivo,-16.41,-71.5\n';
+    expect(V.leerEscale(t).locales.map((l: { codLocal: string }) => l.codLocal)).toEqual(['1']);
+  });
+  it('la cuna-jardín (A3) es inicial y la primaria de adultos y la educación especial no son educación básica regular', () => {
+    const t = 'CODLOCAL,CEN_EDU,NIV_MOD,D_NIV_MOD,NLAT_IE,NLONG_IE\n1,A,A3,Inicial - Cuna-jardín,-16.4,-71.5\n2,B,C0,Primaria de Adultos,-16.41,-71.5\n3,C,E1,Básica Especial-Inicial,-16.42,-71.5\n';
+    expect(V.leerEscale(t).locales.map((l: { codLocal: string }) => l.codLocal)).toEqual(['1']);
+  });
+});
+
 describe('normalizarNombre y similitud', () => {
   it('quita tildes, signos y palabras vacías', () => {
     expect(V.normalizarNombre('I.E. N° 40001 "Glorioso Colegio Nacional" de Varones')).toBe('40001 glorioso nacional varones'.replace('nacional ', '')); // «colegio» y «nacional» son vacías
@@ -225,6 +242,22 @@ describe('validar e informe, de punta a punta con los CSV de muestra', () => {
     expect(r.salud.impacto.puntos).toBe(puntos.length);
     expect(r.educacion.porNivel.inicial.impacto.umbralM).toBe(500);
     expect(r.salud.impacto.cambian).toBe(r.salud.impacto.osmCumpleOficialNo + r.salud.impacto.oficialCumpleOsmNo);
+  });
+  it('sin consultorios en la entrada, no hay sección de consultorios', () => {
+    expect(r.consultorios).toBeUndefined();
+    expect(V.informe(r, { renipress, escale })).not.toMatch(/CONSULTORIOS/);
+  });
+  it('con consultorios los mide aparte, sin umbral ni impacto, y no cambia las métricas de salud', () => {
+    const consultorio = { id: 'c1', nombre: 'Consultorio Dr. Perez', lat: -16.39, lon: -71.545, distrito: 'YANAHUARA', tipo: 'CONSULTORIOS MEDICOS Y DE OTROS PROFESIONALES DE LA SALUD', categoria: 'I-1' };
+    const osmCons = [{ id: 'n9', nombre: 'Consultorio Dr. Perez', ...mover(consultorio, 20) }, { id: 'n10', nombre: 'Dr. Otro', lat: -16.5, lon: -71.6 }];
+    const c = V.validar({ renipress, escale, osmSalud, osmEducacion, puntos, umbrales, radiosM: [50, 100, 200], consultorios: { renipress: [consultorio], osm: osmCons } });
+    expect(c.salud.metricas).toEqual(r.salud.metricas);
+    expect(c.consultorios).toMatchObject({ oficiales: 1, osm: 2 });
+    expect(c.consultorios.metricas.map((m: { emparejados: number }) => m.emparejados)).toEqual([1, 1, 1]);
+    expect(c.consultorios.impacto).toBeUndefined();
+    const t = V.informe(c, { renipress, escale });
+    expect(t).toMatch(/CONSULTORIOS \(informativo/);
+    expect(t).toMatch(/sin umbral/);
   });
   it('el informe trae todo lo que pide el protocolo y recuerda fijar los criterios antes', () => {
     const t = V.informe(r, { renipress, escale, meta: { renipress: 'renipress.csv (2026-09)', escale: 'escale.csv', osm: 'OSM congelado' } });

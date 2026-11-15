@@ -93,10 +93,10 @@
 
   // Documentación automática de lo que realmente se consulta (mismas definiciones que usan la extracción y la clasificación)
   const code = (v) => `<code>${esc(v)}</code>`;
-  const NOMBRE_VARIABLE = { salud: 'Salud', educacion: 'Educación', transporte: 'Transporte', areasVerdes: 'Áreas verdes' };
+  const NOMBRE_VARIABLE = { finanzas: 'Bancos y cajeros automáticos (finanzas, informativos)', comida_fuera: 'Restaurantes y cafés (comida fuera de casa, informativos)', recreacion: 'Áreas de juegos infantiles (recreación, informativos; los parques son «Áreas verdes»)', salud: 'Salud', consultorios: 'Consultorios médicos (aparte de la salud, informativos)', mercados: 'Mercados de abastos (abastecimiento, informativos)', supermercados: 'Supermercados (abastecimiento, informativos)', malls: 'Malls o centros comerciales (compras y ocio si están confirmados con su fuente; si no, comercio de barrio; informativos)', educacion: 'Educación', transporte: 'Transporte', areasVerdes: 'Áreas verdes' };
   $('filters-doc').innerHTML = Object.entries(Calculos.FILTROS).map(([cat, filtros]) => `
     <h4>${NOMBRE_VARIABLE[cat]}</h4>
-    <ul>${filtros.map((f) => `<li>${code(f.clave)} = ${f.valores ? f.valores.map(code).join(', ') : `cualquier valor${f.excluir ? ` salvo ${f.excluir.map(code).join(', ')}` : ''}`}</li>`).join('')}</ul>`).join('')
+    <ul>${filtros.map((f) => `<li>${code(f.clave)} = ${f.valores ? f.valores.map(code).join(', ') : `cualquier valor${f.excluir ? ` salvo ${f.excluir.map(code).join(', ')}` : ''}`}${f.nombre ? ` y nombre que cumpla ${code(f.nombre)}` : ''}</li>`).join('')}</ul>`).join('')
     + `<h4>Niveles educativos</h4>
     <ul>
       <li>${code('amenity')} = ${code('kindergarten')} → inicial.</li>
@@ -105,7 +105,12 @@
     </ul>
     <h4>Umbrales</h4>
     <ul>
-      <li>Salud: ${CONFIG.umbrales.salud} m (${esc(CONFIG.fuentesUmbral.salud.toLowerCase())}).</li>
+      <li>Salud: ${CONFIG.umbrales.salud} m (${esc(CONFIG.fuentesUmbral.salud.toLowerCase())}); solo establecimientos de salud.</li>
+      <li>Consultorio médico: sin umbral (${esc(CONFIG.fuentesUmbral.consultorio.toLowerCase())}).</li>
+      <li>Servicios de la manzana según el censo (alumbrado, agua y desagüe por red pública): sin umbral (${esc(CONFIG.fuentesUmbral.censo.toLowerCase())}).</li>
+      <li>Electricidad (área de concesión de distribución): sin umbral (${esc(CONFIG.fuentesUmbral.electricidad.toLowerCase())}).</li>
+      <li>Abastecimiento (mercados y supermercados), compras y ocio (malls confirmados) y comercio de barrio (galerías): sin umbral (${esc(CONFIG.fuentesUmbral.abastecimiento.toLowerCase())}).</li>
+      <li>Finanzas (bancos y cajeros), comida fuera de casa (restaurantes y cafés) y recreación (juegos infantiles): sin umbral (${esc(CONFIG.fuentesUmbral.finanzas.toLowerCase())}).</li>
       <li>Educación: inicial ${CONFIG.umbrales.educacion.inicial} m, primaria ${CONFIG.umbrales.educacion.primaria} m, secundaria ${CONFIG.umbrales.educacion.secundaria} m (${esc(CONFIG.fuentesUmbral.educacion)}).</li>
       <li>Transporte: ${CONFIG.umbrales.transporte} m (${esc(CONFIG.fuentesUmbral.transporte.toLowerCase())}).</li>
       <li>Área verde: al menos ${CONFIG.umbrales.areaVerde.areaMinM2} m² a ${CONFIG.umbrales.areaVerde.distanciaM} m (${esc(CONFIG.fuentesUmbral.areaVerde)}).</li>
@@ -143,6 +148,16 @@
   const icono = (id, extra = '') => `<svg class="ico${extra ? ` ${extra}` : ''}" aria-hidden="true"><use href="#i-${id}"/></svg>`;
   const VARIABLES = {
     salud: { titulo: 'Salud', icono: 'salud' },
+    consultorio: { titulo: 'Consultorio médico', icono: 'salud' },
+    electricidad: { titulo: 'Servicios básicos: luz, agua y desagüe', icono: 'electricidad' },
+    mineria: { titulo: 'Concesión minera', icono: 'mapa' },
+    viaje: { titulo: 'Ir al trabajo en combi o bus', icono: 'paradero' },
+    abastecimiento: { titulo: 'Abastecimiento (comida): mercados y supermercados', icono: 'comercio' },
+    compras_ocio: { titulo: 'Compras y ocio: malls', icono: 'comercio' },
+    comercio_barrio: { titulo: 'Comercio de barrio: galerías', icono: 'comercio' },
+    finanzas: { titulo: 'Finanzas: bancos y cajeros', icono: 'comercio' },
+    comida_fuera: { titulo: 'Comida fuera de casa: restaurantes y cafés', icono: 'comercio' },
+    recreacion: { titulo: 'Recreación: juegos infantiles', icono: 'verde' },
     educacion: { titulo: 'Colegio', icono: 'colegio' },
     transporte: { titulo: 'Paradero', icono: 'paradero' },
     areaVerde: { titulo: 'Área verde', icono: 'verde' },
@@ -305,6 +320,15 @@
 
   // Tocar el mapa abre el panel «Buscar por punto». Con el reporte abierto el punto no cambia: se cambia con «Cambiar».
   map.on('click', (e) => {
+    if (state.eligiendoDestino) { // «Elegir en el mapa» de la tarjeta «Ir al trabajo»: este toque fija el destino, no el punto de casa
+      state.eligiendoDestino = false;
+      document.body.classList.remove('eligiendo-destino');
+      fijarDestino({ id: 'mapa', nombre: `Punto elegido en el mapa (${e.latlng.lat.toFixed(4).replace('.', ',')}; ${e.latlng.lng.toFixed(4).replace('.', ',')})`, lat: e.latlng.lat, lon: e.latlng.lng, nota: 'Punto que elegiste en el mapa como destino.' });
+      renderViaje();
+      const det = $('card-viaje') && $('card-viaje').querySelector('details');
+      if (det) det.open = true;
+      return;
+    }
     if (state.flujo.paso === 'reporte') { EspacioUI.abrirPunto(); return; }
     colocarPunto(e.latlng.lat, e.latlng.lng);
   });
@@ -693,6 +717,12 @@
     if (e) {
       const t = (r) => `${r.estado.toLowerCase()}${r.distanciaM !== null ? `, ${fmtDist(r.distanciaM)}` : ''}`;
       partes.push(`Salud: ${t(e.salud)}`);
+      if (e.consultorio) partes.push(`Consultorio médico (informativo): ${e.consultorio.distanciaM !== null ? fmtDist(e.consultorio.distanciaM) : 'sin dato'}`);
+      if (e.censo) partes.push(`Servicios de la manzana (censo ${e.censo.anio}, informativo): ${e.censo.tieneCifras && !e.censo.pocas ? `luz ${e.censo.luz.pct} %, agua ${e.censo.agua.pct} %, desagüe ${e.censo.desague.pct} %` : 'sin porcentaje'}`);
+      if (e.acopio) partes.push(`Agua (informativo): ${e.acopio.estado === 'SIN DATO' ? 'sin dato del punto de acopio' : `punto de acopio a ${fmtDist(e.acopio.distanciaM)} (directorio de SEDAPAR, datos de 2017)`}${e.interrupciones && e.interrupciones.registros && e.interrupciones.promedioN !== null ? `; ≈ ${e.interrupciones.promedioN} interrupciones del servicio al año en el distrito (SUNASS)` : ''}`);
+      if (e.mineria) partes.push(`Concesión minera (informativo): ${e.mineria.dentro === null ? 'sin dato' : e.mineria.dentro ? `dentro de ${e.mineria.concesiones.length} (derecho sobre los minerales, no minería en el predio)` : e.mineria.cercana ? `fuera de toda concesión; la más cercana a ${fmtDist(e.mineria.distanciaM)} del borde` : 'fuera de toda concesión'}`);
+      if (e.electricidad) partes.push(`Electricidad (informativo): ${e.electricidad.dentro === null ? 'sin dato' : e.electricidad.dentro ? `dentro del área de concesión de ${e.electricidad.concesionarias.join(' y ')}` : `fuera de las áreas de concesión, a ${fmtDist(e.electricidad.distanciaM)} del borde`}`);
+      Object.keys(Calculos.COMERCIO).forEach((id) => { if (e[id]) partes.push(`${Calculos.COMERCIO[id].etiqueta} (informativo): ${e[id].distanciaM !== null ? fmtDist(e[id].distanciaM) : 'sin dato'}`); });
       const niv = Equipamiento.NIVELES;
       partes.push(`Colegio: ${niv.filter((n) => e.educacion[n].estado === 'CUMPLE').length} de ${niv.length} niveles cumplen`);
       partes.push(`Paradero: ${t(e.transporte)}`);
@@ -1069,6 +1099,8 @@
   const fmtFechaDato = (iso) => (iso ? new Date(`${iso}T12:00:00Z`).toLocaleDateString('es-PE', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }) : 'sin fecha');
   const NIVEL_TXT = { inicial: 'Inicial', primaria: 'Primaria', secundaria: 'Secundaria' };
   const SIN_DATO_TXT = 'Puede existir pero no estar en nuestros datos: OpenStreetMap es un mapa colaborativo.';
+  // Salud y colegios salen de los registros oficiales (RENIPRESS, ESCALE), que tampoco ubican todo.
+  const SIN_DATO_OFICIAL_TXT = 'Puede existir pero no estar en nuestros datos: los registros oficiales no ubican todos los establecimientos y OpenStreetMap, que completa donde faltan, es un mapa colaborativo.';
 
   // Distancia grande y, debajo, el nombre del más cercano.
   function datoPrincipal(r) {
@@ -1084,17 +1116,29 @@
   // Explicación en una frase: qué significa el estado frente a la distancia de referencia.
   function explicacion(r, cosa) {
     if (r.error) return '';
-    if (r.estado === 'SIN DATO') return `<p class="var-vacio"><strong>Sin dato.</strong> No hay ${cosa} en nuestros datos. ${SIN_DATO_TXT}</p>`;
+    if (r.estado === 'SIN DATO') return `<p class="var-vacio"><strong>Sin dato.</strong> No hay ${cosa} en nuestros datos. ${/salud|colegios/.test(cosa) ? SIN_DATO_OFICIAL_TXT : SIN_DATO_TXT}</p>`;
     if (r.distanciaM === null) return `<p class="var-explica">No se encontró ${cosa} dentro de los datos cercanos. Distancia de referencia: ${fmtUmbral(r.umbralM)}.</p>`;
     return `<p class="var-explica">${r.estado === 'CUMPLE' ? `Está dentro de la distancia de referencia (${fmtUmbral(r.umbralM)}).` : `Está más lejos que la distancia de referencia (${fmtUmbral(r.umbralM)}).`}</p>`;
   }
 
   // Lo que cada dato NO dice. Va dentro de cada tarjeta, junto a la fuente y la fecha.
   const QUE_NO_CUBRE = {
-    salud: 'Solo cuenta lo mapeado en OpenStreetMap con etiquetas de salud. No dice si atiende emergencias, su horario ni su categoría, y la distancia es en línea recta, no recorrido a pie.',
-    educacion: 'OpenStreetMap casi no etiqueta el nivel: un colegio sin nivel se toma como candidato a primaria y secundaria, y los jardines cuentan como inicial. No dice si es público o privado, ni si hay vacantes.',
+    salud: 'Cuenta los establecimientos de salud activos de RENIPRESS (SUSALUD) con categoría I-1 a III-E y coordenadas (hospitales, clínicas, centros y puestos de salud, policlínicos…), sin los consultorios médicos, que son otra categoría, y los de OpenStreetMap solo donde RENIPRESS no tiene un punto de salud a 200 m. Cerca del 42 % de los establecimientos de Arequipa en RENIPRESS no trae coordenadas y no puede contarse. No dice si atiende emergencias ni su horario, y la distancia es en línea recta, no recorrido a pie.',
+    consultorio: 'Cuenta los consultorios médicos activos de RENIPRESS (SUSALUD) —su clasificación dice «consultorios»— y los de OpenStreetMap (amenity=doctors, healthcare=doctor) solo donde RENIPRESS no tiene un consultorio a 200 m. Tampoco trae las coordenadas de todos. No dice la especialidad, el horario ni si atiende al público.',
+    censo: 'Son cifras del Censo Nacional de 2017 (INEI, REDATAM) de toda la manzana, sobre las viviendas particulares ocupadas con personas presentes que se censaron. No son de un predio ni de hoy: pasaron años y la ciudad creció. Solo cubre el área urbana; una manzana que el censo no contó queda sin cifras (no es un cero) y con menos de 5 viviendas ocupadas no se da el porcentaje. El censo de 2025 ya se levantó, pero el INEI todavía no abre sus resultados por manzana (REDATAM 2025 pide iniciar sesión): del 2025 solo se muestra el dato del departamento.',
+    acopio: 'Es el punto de acopio de agua potable más cercano del directorio de SEDAPAR y la Municipalidad Provincial de Arequipa: un lugar donde se previó repartir agua con camiones cisterna ante un desabastecimiento. El directorio se publicó el 16 de febrero de 2024 pero sus fichas son de abril a junio de 2017: pueden haber cambiado. NO dice que haya agua en el punto hoy, que el reparto sea permanente ni si tu predio tiene conexión; la distancia es en línea recta. Siete fichas del directorio traen coordenadas imposibles y no se usan.',
+    interrupciones: 'Cuenta las interrupciones del servicio de agua potable que SEDAPAR reportó a la SUNASS en el distrito, contadas una vez por distrito, y suma sus horas (de inicio a fin de cada una, sin multiplicar por las viviendas afectadas). El archivo va de octubre de 2019 a abril de 2024: 2020 a 2023 son años completos y 2019 y 2024, parciales. NO dice cuántas viviendas afectó cada una, en qué calle fue, si el distrito tiene peor o mejor servicio que otro (uno más grande tiene más registros) ni que tu predio haya tenido cortes.',
+    mineria: 'Dice si el punto cae dentro de una concesión del Catastro Minero de INGEMMET (tituladas, en trámite y otras; las extinguidas no cuentan) y, si no, cuál es la más cercana. Una concesión minera es el derecho a explorar y explotar los minerales dentro de su perímetro, separado del predio: NO dice que haya minería en el lugar, de quién es el predio ni qué se puede hacer en él. El catastro es referencial y se actualiza a diario; la copia que usamos tiene la fecha indicada. No se muestra el nombre del titular.',
+    electricidad: 'Dice si el punto cae dentro de un polígono de concesión de distribución eléctrica del registro del MINEM (SEAL en Arequipa y, si toca la zona, otras empresas): a quién le corresponde dar el servicio ahí. NO dice si el predio está conectado, si hay red en la calle ni si el suministro es continuo; la cobertura real vendría de un censo que aún no tenemos. Los polígonos son poco detallados y su borde puede ser impreciso: un punto fuera no significa que no haya servicio.',
+    abastecimiento: 'Cuenta los mercados (amenity=marketplace, que incluye mercados de abastos, ferias y mercadillos: no distingue minorista de mayorista) y los supermercados (shop=supermarket, sin tiendas de conveniencia ni bodegas) de OpenStreetMap, y puede faltar alguno (el censo de mercados de 2016 del INEI solo sirve para contar por distrito, no trae ubicaciones). Un supermercado dentro de un mall es el punto de abastecimiento; el mall, no. Sin distancia de referencia.',
+    finanzas: 'Cuenta los bancos (amenity=bank) y los cajeros automáticos (amenity=atm) de OpenStreetMap, y puede faltar alguno. No distingue una agencia de un cajero corresponsal ni de uno dentro de una tienda, y no dice el horario, las comisiones ni si el cajero tiene efectivo. Sin distancia de referencia.',
+    comida_fuera: 'Cuenta los restaurantes (amenity=restaurant) y los cafés (amenity=cafe) de OpenStreetMap, y puede faltar alguno; no incluye la comida al paso ni los bares. No dice la calidad, el precio, el horario ni si el local sigue abierto. Sin distancia de referencia.',
+    recreacion: 'Cuenta las áreas de juegos infantiles (leisure=playground) de OpenStreetMap, que hay pocas mapeadas (muchas están dentro de un parque y no están marcadas aparte). Los parques y jardines no se cuentan aquí: son la variable «Área verde», con su distancia de referencia. No dice el estado de los juegos ni si son seguros. Sin distancia de referencia.',
+    compras_ocio: 'Cuenta solo los malls confirmados con la fuente de cada uno (lista curada) que OpenStreetMap tiene ubicados; uno confirmado que OpenStreetMap no tiene (por ejemplo Mallplaza) no se mide. Si OpenStreetMap tiene el edificio, la distancia se mide hasta su borde. No cuenta las galerías ni los centros comerciales pequeños. Sin distancia de referencia.',
+    comercio_barrio: 'Cuenta lo que OpenStreetMap etiqueta shop=mall (y los terrenos comerciales con nombre de mall) y no está en la lista de malls confirmados: galerías y centros comerciales pequeños, que son comercio de barrio. Si OpenStreetMap tiene el edificio, la distancia se mide hasta su borde. Sin distancia de referencia.',
+    educacion: 'Cuenta los locales activos de educación básica regular del padrón de ESCALE (MINEDU), públicos y privados, con el nivel de cada institución. OpenStreetMap solo completa donde ESCALE no tiene un local del mismo nivel a 200 m, y allí casi no etiqueta el nivel: uno sin nivel se toma como candidato a primaria y secundaria. La ubicación es la del local que reportó la UGEL; no dice si hay vacantes.',
     transporte: 'Un paradero no es un servicio: el de OpenStreetMap no dice qué líneas lo usan, su horario ni su frecuencia, y las paradas informales (combis, micros) rara vez están completas.',
-    rutas: 'Son los recorridos que SmartBus publicó en la fecha indicada, no un servicio garantizado: no traen frecuencias ni horarios, y un cambio de ruta por tramos puede no estar reflejado. La distancia es al trazado, no a donde se puede subir. Una línea de otra empresa que SmartBus no publica no aparece.',
+    rutas: 'Son los recorridos que la comunidad de OpenStreetMap tenía mapeados en la fecha indicada, no un servicio garantizado: no traen frecuencias ni horarios, y un cambio de ruta por tramos puede no estar reflejado. La distancia es al trazado, no a donde se puede subir. Las paradas de OpenStreetMap son parciales (hay rutas con pocas o ninguna parada mapeada) y no se inventa ninguna. Una línea que nadie mapeó no aparece.',
     areaVerde: `Solo cuenta polígonos cerrados en OpenStreetMap de al menos ${fmtNum(CONFIG.umbrales.areaVerde.areaMinM2)} m²; una plaza mapeada de otra forma no cuenta. No dice si el acceso es público ni cómo está mantenida.`,
   };
 
@@ -1108,17 +1152,19 @@
     </dl>`;
   }
 
-  // Líneas de SmartBus que pasan cerca del punto (Rutas.cerca): otra fuente distinta del paradero de OpenStreetMap.
+  // Líneas de transporte que pasan cerca del punto (Rutas.cerca): las relaciones route=bus de OpenStreetMap, aparte del paradero más cercano.
   function bloqueRutas(t) {
     const r = t && t.rutas;
     if (!r) return '';
     if (r.error) return `<div class="var-rutas"><p class="zon-msg error"><strong>No se pudieron cargar las líneas.</strong> ${esc(r.error)}</p></div>`;
     const ref = fmtUmbral(r.distanciaM);
-    const nota = `<p class="var-meta">Fuente: ${esc(r.fuente)}, recorridos del ${esc(fmtFechaDato(r.fecha))}. Distancia de referencia de ${ref}: ${esc(CONFIG.fuentesUmbral.transporte.toLowerCase())}.</p>`;
-    if (!r.lineas.length) return `<div class="var-rutas"><p class="var-rutas-t"><strong>Líneas que pasan a ≤${ref}:</strong> ninguna en los recorridos publicados por SmartBus.</p>${nota}</div>`;
+    const nota = `<p class="var-meta">Fuente: ${esc(r.fuente)}, recorridos extraídos el ${esc(fmtFechaDato(r.fecha))}. Distancia de referencia de ${ref}: ${esc(CONFIG.fuentesUmbral.transporte.toLowerCase())}.</p>`;
+    if (!r.lineas.length) return `<div class="var-rutas"><p class="var-rutas-t"><strong>Líneas que pasan a ≤${ref}:</strong> ninguna en los recorridos mapeados en OpenStreetMap.</p>${nota}</div>`;
     const items = r.lineas.map((l) => {
       const ramales = [...new Set(l.ramales.map((x) => x.ramal))];
-      const parada = l.parada ? ` · parada más cercana «${esc(l.parada.nombre)}» a ${fmtDist(l.parada.distanciaM)}` : '';
+      const parada = l.parada
+        ? ` · parada mapeada más cercana ${l.parada.nombre ? `«${esc(l.parada.nombre)}»` : '(sin nombre)'} a ${fmtDist(l.parada.distanciaM)}`
+        : l.paradasMapeadas === 0 ? ' · paradas no mapeadas' : ` · ninguna parada mapeada a ≤${ref}`;
       return `<li><strong>${esc(Rutas.etiquetaLinea(l))}</strong><span class="var-meta">trazado a ${fmtDist(l.distanciaM)}${parada} · ${esc(ramales.slice(0, 4).join(', '))}${ramales.length > 4 ? ` y ${ramales.length - 4} más` : ''}</span></li>`;
     }).join('');
     return `<div class="var-rutas"><p class="var-rutas-t"><strong>Líneas que pasan a ≤${ref}:</strong> ${esc(Rutas.listaTexto(r.lineas))}</p><ul class="var-rutas-lista">${items}</ul>${nota}</div>`;
@@ -1127,11 +1173,18 @@
   function detalleRutas(r) {
     if (!r || r.error) return '';
     return `<dl class="var-detalle">
-      <div><dt>Fuente de las líneas</dt><dd>${esc(r.fuente)}. Datos usados con ${esc(r.permiso || CONFIG.rutas.permiso)}.</dd></div>
+      <div><dt>Fuente de las líneas</dt><dd>${esc(r.fuente)}. ${esc(r.atribucion || CONFIG.rutas.atribucion)}.</dd></div>
       <div><dt>Fecha de los datos</dt><dd>${esc(fmtFechaDato(r.fecha))} (descarga)</dd></div>
       <div><dt>Método</dt><dd>Distancia en línea recta del punto al trazado de cada recorrido (plano local, como el resto de distancias). Se agrupan los recorridos de ida y vuelta por línea. Referencia: ${fmtUmbral(r.distanciaM)}.</dd></div>
       <div><dt>Qué no cubre</dt><dd>${esc(QUE_NO_CUBRE.rutas)}</dd></div>
     </dl>`;
+  }
+
+  // Tarjeta de una variable INFORMATIVA (sin umbral): la distancia al más cercano, sin distancia de referencia ni cumple / no cumple.
+  function lineaResumenInformativa(r) {
+    if (r.error) return 'No se pudo obtener el dato';
+    if (r.estado === 'SIN DATO' || r.distanciaM === null) return 'Sin dato';
+    return `${r.distanciaM === 0 ? '0 m (dentro del área)' : `${fmtDist(r.distanciaM)} en línea recta`} · sin distancia de referencia`;
   }
 
   // Línea de la tarjeta cerrada: distancia frente a la distancia de referencia.
@@ -1156,10 +1209,131 @@
 
   function renderEntorno() {
     const e = state.entorno;
-    const etiq = (r) => (r.etiqueta ? `<p class="var-meta">Etiqueta de OpenStreetMap: <code>${esc(r.etiqueta)}</code></p>` : '');
+    // De qué fuente es el establecimiento más cercano (RENIPRESS, ESCALE u OpenStreetMap de respaldo), con su código oficial.
+    const etiq = (r) => {
+      const fuente = Calculos.textoFuenteElemento(r);
+      return (fuente ? `<p class="var-meta"><b>Fuente del establecimiento:</b> ${esc(fuente)}</p>` : '')
+        + (r.etiqueta ? `<p class="var-meta">Etiqueta de OpenStreetMap: <code>${esc(r.etiqueta)}</code></p>` : '');
+    };
 
     const salud = tarjetaVariable(VARIABLES.salud, e.salud.estado, lineaResumen(e.salud),
       datoPrincipal(e.salud) + explicacion(e.salud, 'establecimientos de salud') + etiq(e.salud) + detalleDato(e.salud, QUE_NO_CUBRE.salud));
+
+    // Consultorio médico: categoría aparte de la salud, informativa (sin umbral): no suma al estado de Salud ni a nada más.
+    const cons = e.consultorio;
+    const consultorio = cons ? tarjetaVariable(VARIABLES.consultorio, cons.estado, lineaResumenInformativa(cons),
+      datoPrincipal(cons)
+      + (cons.error ? '' : cons.estado === 'SIN DATO' ? explicacion(cons, 'consultorios médicos') : `<p class="var-explica"><strong>Informativo.</strong> ${esc(Calculos.NOTA_CONSULTORIO.replace(/^Es informativo: /, ''))}</p>`)
+      + etiq(cons) + detalleDato(cons, QUE_NO_CUBRE.consultorio), cons.estado === 'INFORMATIVO' ? 'Informativo' : null) : '';
+
+    // Electricidad: ¿dentro de un área de concesión de distribución? Informativa. Una concesión no es una conexión: nunca se dice «tiene luz».
+    const el = e.electricidad;
+    const nombreConc = (r) => (r.concesionarias && r.concesionarias.length ? r.concesionarias.join(' y ') : r.concesionaria || 'una empresa');
+    const bloqueElec = (estado, resumen, cuerpo) => ({ estado, resumen, cuerpo });
+    const concesion = el ? bloqueElec(el.estado,
+      el.error ? 'No se pudo obtener el dato' : el.dentro === null ? 'Sin dato'
+        : el.dentro ? `Dentro del área de concesión de ${nombreConc(el)} · no es una conexión`
+          : `Fuera de las áreas de concesión · a ${fmtDist(el.distanciaM)} del borde de la de ${nombreConc(el)}`,
+      (el.error ? `<p class="zon-msg error"><strong>No se pudo obtener el dato.</strong> ${esc(el.error)}</p>` : '')
+      + (el.dentro === null ? (el.error ? '' : explicacion(el, 'áreas de concesión eléctrica'))
+        : el.dentro
+          ? `<div class="var-dato"><p class="var-dist">Dentro <small>del área de concesión de ${esc(nombreConc(el))}</small></p><p class="var-nombre">${esc([...new Set(el.concesiones.map((c) => c.nombre_zona))].join(' · '))}</p></div>`
+            + el.concesiones.map((c) => `<p class="var-meta"><b>${esc(c.nombre_zona)}:</b> ${esc(c.empresa)} · expediente ${esc(c.expediente)} · ${esc(String(c.situacion || '').toLowerCase())}.</p>`).join('')
+          : `<div class="var-dato"><p class="var-dist">${fmtDist(el.distanciaM)} <small>hasta el borde de la concesión más cercana</small></p><p class="var-nombre">${esc(nombreConc(el))}${el.nombre ? ` · ${esc(el.nombre)}` : ''}</p></div>`)
+      + (el.dentro === null ? '' : `<p class="var-explica"><strong>Informativo.</strong> ${esc(Calculos.textoElectricidad(el))}</p>`)
+      + `<p class="var-explica">${esc(Calculos.NOTA_ELECTRICIDAD)}</p>`
+      + detalleDato(el, QUE_NO_CUBRE.electricidad)) : null;
+
+    // Concesión minera (Catastro Minero de INGEMMET): informativa. Un derecho sobre los minerales, no «minería en tu predio».
+    const mi = e.mineria;
+    const mineria = mi ? tarjetaVariable(VARIABLES.mineria, mi.estado,
+      mi.error ? 'No se pudo obtener el dato' : mi.dentro === null ? 'Sin dato'
+        : mi.dentro ? `Dentro de ${mi.concesiones.length} ${mi.concesiones.length === 1 ? 'concesión minera' : 'concesiones mineras'} · es un derecho sobre los minerales`
+          : mi.cercana ? `Fuera de toda concesión · la más cercana, a ${fmtDist(mi.distanciaM)} del borde` : 'Fuera de toda concesión',
+      (mi.error ? `<p class="zon-msg error"><strong>No se pudo obtener el dato.</strong> ${esc(mi.error)}</p>` : '')
+      + (mi.dentro === null ? (mi.error ? '' : explicacion(mi, 'concesiones mineras'))
+        : mi.dentro
+          ? `<div class="var-dato"><p class="var-dist">Dentro <small>de ${mi.concesiones.length === 1 ? 'una concesión minera' : `${mi.concesiones.length} concesiones mineras`}</small></p></div>`
+            + mi.concesiones.map((c) => `<p class="var-meta"><b>${esc(c.nombre || c.codigo)}</b> (código ${esc(c.codigo)}): ${esc(c.estado.toLowerCase())}${c.estado_detalle ? ` · ${esc(c.estado_detalle)}` : ''}${c.sustancia ? ` · sustancia ${esc(c.sustancia)}` : ''}${c.hectareas ? ` · ${fmtNum(Math.round(c.hectareas))} ha` : ''}${c.explotacion_o_exploracion ? ` · ${esc(c.explotacion_o_exploracion.toLowerCase())}` : ''}.</p>`).join('')
+          : `<div class="var-dato"><p class="var-dist">${mi.cercana ? fmtDist(mi.distanciaM) : '—'} <small>hasta el borde de la concesión más cercana</small></p>${mi.cercana ? `<p class="var-nombre">${esc(mi.cercana.nombre || mi.cercana.codigo)} · ${esc(mi.cercana.estado.toLowerCase())}</p>` : ''}</div>`)
+      + (mi.dentro === null ? '' : `<p class="var-explica"><strong>Informativo.</strong> ${esc(Calculos.textoMinera(mi))}</p>`)
+      + `<p class="var-explica">${esc(Calculos.NOTA_MINERA)}</p>`
+      + detalleDato(mi, QUE_NO_CUBRE.mineria), mi.estado === 'INFORMATIVO' ? 'Informativo' : null) : '';
+
+    // Censo por manzana (INEI, 2017): alumbrado, agua y desagüe por red pública de la MANZANA del punto. Informativo; nunca «tu predio tiene».
+    const ce = e.censo;
+    const dep25 = CONFIG.censo.departamento2025;
+    const pctC = (x) => (x === null || x === undefined ? '—' : `${String(x).replace('.', ',')} %`);
+    const resumenCenso = !ce ? '' : ce.estado === 'SIN DATO' || !ce.tieneCifras ? 'sin cifras para esta manzana'
+      : ce.pocas ? `solo ${ce.ocupadas} viviendas ocupadas (sin porcentaje)` : `luz ${pctC(ce.luz.pct)}, agua ${pctC(ce.agua.pct)}, desagüe ${pctC(ce.desague.pct)}`;
+    const censoHtml = !ce ? '' : `<h4 class="var-sub">Lo que dijo el censo de ${ce.anio} sobre tu manzana</h4>`
+      + (ce.tieneCifras && !ce.pocas
+        ? `<table class="var-tabla"><tbody>
+            <tr><th scope="row">Alumbrado eléctrico por red pública</th><td>${pctC(ce.luz.pct)}</td></tr>
+            <tr><th scope="row">Agua por red pública</th><td>${pctC(ce.agua.pct)}${ce.agua.pctDentro !== null && ce.agua.pctDentro !== ce.agua.pct ? ` <small>(${pctC(ce.agua.pctDentro)} dentro de la vivienda)</small>` : ''}</td></tr>
+            <tr><th scope="row">Desagüe por red pública</th><td>${pctC(ce.desague.pct)}${ce.desague.pctDentro !== null && ce.desague.pctDentro !== ce.desague.pct ? ` <small>(${pctC(ce.desague.pctDentro)} dentro de la vivienda)</small>` : ''}</td></tr>
+          </tbody></table>
+          <p class="var-meta">Sobre ${fmtNum(ce.ocupadas)} viviendas ocupadas con personas presentes (${fmtNum(ce.viviendas)} contadas, ${fmtNum(ce.personas)} personas) en la manzana ${esc(ce.manzana)}${ce.modo === 'cercana' ? `; tu punto está en la calle, a ${fmtDist(ce.distanciaM)} de su borde` : ''}. Censo ${ce.anio}, INEI.</p>`
+        : '')
+      + `<p class="var-explica"><strong>Informativo.</strong> ${esc(Calculos.textoCenso(ce))}</p>`
+      + `<p class="var-explica">${esc(Calculos.NOTA_CENSO.replace(/^Es informativo: /, ''))}</p>`
+      + (dep25 ? `<p class="var-meta"><b>Censo ${dep25.anio} (más reciente), departamento de ${esc(dep25.departamento)}:</b> ${pctC(dep25.alumbrado)} con alumbrado eléctrico, ${pctC(dep25.aguaDentro)} con agua de red pública dentro de la vivienda y ${pctC(dep25.higienicoDentro)} con servicio higiénico de red pública dentro de la vivienda (${esc(dep25.universo)}). Es un dato del departamento, no de tu manzana; <a href="${esc(dep25.url)}" target="_blank" rel="noopener">fuente: ${esc(dep25.fuente)}</a>.</p>` : '')
+      + detalleDato(ce, QUE_NO_CUBRE.censo);
+    // Agua: el punto de acopio más cercano (directorio de SEDAPAR, datos de 2017) y las interrupciones del servicio en el distrito (SUNASS). Informativos; nunca «tu predio tiene agua».
+    const ac = e.acopio;
+    const itr = e.interrupciones;
+    const acopioHtml = !ac ? '' : (ac.error ? `<p class="zon-msg error"><strong>No se pudo obtener el dato.</strong> ${esc(ac.error)}</p>` : '')
+      + (ac.estado === 'SIN DATO' ? (ac.error ? '' : explicacion(ac, 'puntos de acopio de agua'))
+        : `<div class="var-dato"><p class="var-dist">${fmtDist(ac.distanciaM)} <small>hasta el punto de acopio de agua más cercano</small></p><p class="var-nombre">${esc(ac.direccion || 'sin dirección')}${ac.distrito ? ` · ${esc(capitalizar(ac.distrito))}` : ''}</p></div>
+          <p class="var-meta">A 500 m o menos: ${ac.a500m} · a 1 km o menos: ${ac.a1000m} (de ${fmtNum(ac.total)} puntos del directorio). Datos de ${esc(ac.fechaDatos || '2017')}; directorio publicado el ${esc(ac.fecha || 'sin fecha')}.</p>
+          <p class="var-explica"><strong>Informativo.</strong> ${esc(Calculos.textoAcopio(ac))}</p>`)
+      + `<p class="var-explica">${esc(Calculos.NOTA_ACOPIO)}</p>` + detalleDato(ac, QUE_NO_CUBRE.acopio);
+    const filaAnio = (a) => {
+      const v = itr.porAnio[a];
+      const parcial = itr.parciales.some((p) => String(p.anio) === String(a));
+      return `<tr><th scope="row">${esc(a)}${parcial ? ' <small>(año parcial)</small>' : ''}</th><td>${fmtNum(v.n)}</td><td>${fmtNum(v.horas)}</td></tr>`;
+    };
+    const interrupcionesHtml = !itr ? '' : itr.estado === 'SIN DATO' || !itr.registros
+      ? `<p class="var-explica"><strong>Informativo.</strong> ${esc(Calculos.textoInterrupciones(itr))}</p>`
+      : `<h4 class="var-sub">Interrupciones del servicio de agua en ${esc(capitalizar(itr.distrito))} (SUNASS)</h4>
+          <table class="var-tabla"><thead><tr><th scope="col">Año</th><th scope="col">Interrupciones</th><th scope="col">Horas</th></tr></thead><tbody>${Object.keys(itr.porAnio).sort().map(filaAnio).join('')}</tbody></table>
+          <p class="var-meta">Periodo del archivo: ${esc(itr.periodo.desde)} a ${esc(itr.periodo.hasta)}. Fuente: ${esc(itr.fuente || 'SUNASS')}, licencia ${esc(itr.licencia || 'ODC-By')}, descargado el ${esc(itr.fecha || 'sin fecha')}.</p>
+          <p class="var-explica"><strong>Informativo.</strong> ${esc(Calculos.textoInterrupciones(itr))}</p>
+          <p class="var-explica">${esc(Calculos.NOTA_INTERRUPCIONES)}</p>${detalleDato(itr, QUE_NO_CUBRE.interrupciones, { metodo: false })}`;
+    const listaHtml = `<h4 class="var-sub">Si vas a comprar</h4><ul class="var-lista">${Calculos.LISTA_COMPRADOR.map((x) => `<li>${esc(x.texto)}</li>`).join('')}</ul>`;
+    const aguaHtml = `<h4 class="var-sub">Agua: punto de acopio e interrupciones del servicio</h4>${acopioHtml}${interrupcionesHtml}${listaHtml}`;
+    const resumenAgua = [
+      ac && ac.estado === 'INFORMATIVO' ? `punto de acopio a ${fmtDist(ac.distanciaM)} (datos de 2017)` : null,
+      itr && itr.registros && itr.promedioN !== null ? `≈ ${itr.promedioN} interrupciones de agua al año (SUNASS)` : null,
+    ].filter(Boolean).join(', ');
+
+    const partesResumen = [concesion ? concesion.resumen : null, ce ? `manzana, censo ${ce.anio}: ${resumenCenso}` : null, resumenAgua || null].filter(Boolean);
+    const hayInfo = (concesion && concesion.estado === 'INFORMATIVO') || (ce && ce.estado === 'INFORMATIVO') || (ac && ac.estado === 'INFORMATIVO') || (itr && itr.estado === 'INFORMATIVO');
+    const electricidad = concesion || ce || ac || itr ? tarjetaVariable(VARIABLES.electricidad, hayInfo ? 'INFORMATIVO' : 'SIN DATO', partesResumen.join(' · '),
+      (concesion ? `<h4 class="var-sub">Electricidad: área de concesión de distribución</h4>${concesion.cuerpo}` : '') + censoHtml + (ac || itr ? aguaHtml : listaHtml), hayInfo ? 'Informativo' : null) : '';
+
+    // Abastecimiento, compras y ocio, comercio de barrio: necesidades informativas (sin umbral): no suman al estado de nada. Del mall o la galería se mide la distancia al borde de su polígono.
+    const dentroDe = (x) => (x && x.dentroDeMall ? `dentro de ${esc(x.dentroDeMall.nombre || 'un mall')}` : '');
+    const donde = (x) => (x.distanciaM === 0 ? 'el punto está dentro de su terreno' : `${fmtDist(x.distanciaM)} en línea recta${x.forma ? ' hasta su borde' : ''}`);
+    const comercio = Object.keys(Calculos.COMERCIO).map((id) => {
+      const r = e[id];
+      if (!r) return '';
+      const def = Calculos.COMERCIO[id];
+      const tipo = r.tipo ? `<p class="var-meta"><b>Tipo:</b> ${esc(Calculos.COMERCIO_TIPO[r.tipo].singular)}${dentroDe(r) ? `, ${dentroDe(r)} (cuenta como abastecimiento; el mall, no)` : ''}.</p>` : '';
+      const porTipo = def.tipos.length > 1 && r.porTipo ? def.tipos.map((t) => {
+        const x = r.porTipo[t];
+        const nombre = Calculos.COMERCIO_TIPO[t].singular;
+        return x && x.distanciaM !== null && x.nombre
+          ? `<p class="var-meta"><b>${esc(nombre.charAt(0).toUpperCase() + nombre.slice(1))} más cercano:</b> ${esc(x.nombre)}${dentroDe(x) ? ` (${dentroDe(x)})` : ''}, ${donde(x)}.</p>`
+          : `<p class="var-meta"><b>${esc(nombre.charAt(0).toUpperCase() + nombre.slice(1))} más cercano:</b> sin dato en nuestros datos.</p>`;
+      }).join('') : '';
+      const verif = r.verificado ? `<p class="var-meta">Confirmado con <a href="${esc(r.verificado.url)}" target="_blank" rel="noopener">${esc(r.verificado.nombre)}</a> (${esc(r.verificado.entidad)}).</p>` : '';
+      const escala = `<p class="var-meta"><b>Escala:</b> ${def.escala === 'metropolitana' ? 'metropolitana (destino de la ciudad)' : 'de barrio'}.</p>`;
+      return tarjetaVariable(VARIABLES[id], r.estado, lineaResumenInformativa(r),
+        datoPrincipal(r)
+        + (r.error ? '' : r.estado === 'SIN DATO' ? explicacion(r, def.plural) : `<p class="var-explica"><strong>Informativo.</strong> ${esc(Calculos.NOTA_COMERCIO.replace(/^Es informativo: /, ''))}</p>`)
+        + tipo + porTipo + verif + escala + detalleDato(r, QUE_NO_CUBRE[id]), r.estado === 'INFORMATIVO' ? 'Informativo' : null);
+    }).join('');
 
     const niveles = Equipamiento.NIVELES.map((n) => {
       const r = e.educacion[n];
@@ -1193,12 +1367,13 @@
       + `<p class="var-meta">Criterio: un área verde de al menos ${fmtNum(u.areaMinM2)} m² a ${u.distanciaM} m o menos.</p>` + sens
       + detalleDato(v, QUE_NO_CUBRE.areaVerde));
 
-    $('entorno').innerHTML = salud + educacion + transporte + areaVerde + '<div id="card-quebradas"></div>';
+    $('entorno').innerHTML = salud + consultorio + comercio + electricidad + mineria + educacion + transporte + '<div id="card-viaje"></div>' + areaVerde + '<div id="card-quebradas"></div>';
+    renderViaje(); // «Ir al trabajo»: qué combi o bus lleva de este punto al destino
     renderQuebradas(); // llega aparte (archivo congelado de la ANA)
     $('entorno').setAttribute('aria-busy', 'false');
     $('entorno-toggle').hidden = false;
     actualizarToggleTarjetas();
-    $('entorno-fuente').textContent = 'Distancias en línea recta, no recorrido a pie. OpenStreetMap es colaborativo: algo ausente puede existir. Las distancias de referencia de salud, paradero y borde de zona son convenciones del proyecto. Las líneas de transporte son recorridos publicados por SmartBus, sin frecuencias ni horarios.';
+    $('entorno-fuente').textContent = 'Distancias en línea recta, no recorrido a pie. Salud y consultorios médicos: RENIPRESS (SUSALUD); colegios: padrón de ESCALE (MINEDU); OpenStreetMap, colaborativo, solo de respaldo donde no hay un punto oficial de la misma categoría a 200 m y para paraderos y áreas verdes: algo ausente puede existir. Cada establecimiento dice de qué fuente es. Las distancias de referencia de salud, paradero y borde de zona son convenciones del proyecto; el consultorio médico no tiene distancia de referencia y es solo informativo. Las líneas de transporte y sus paradas son de OpenStreetMap, sin frecuencias ni horarios.';
   }
 
   // ------------------------------------------------------ Quebradas y cauces (ANA, IGP y OpenStreetMap)
@@ -1247,6 +1422,106 @@
         <div><dt>Qué no cubre</dt><dd>${cubre}</dd></div>
       </dl>`;
   }
+
+  // ------------------------------------------------------------ Ir al trabajo (combi o bus)
+
+  /** El destino que la persona fijó («Ir al trabajo»): se recuerda en este navegador (si deja). */
+  function leerDestino() {
+    if (state.destino !== undefined) return state.destino;
+    try { state.destino = JSON.parse(localStorage.getItem('gv.destino') || 'null'); } catch (_) { state.destino = null; }
+    return state.destino;
+  }
+  function fijarDestino(d) {
+    state.destino = d;
+    try { if (d) localStorage.setItem('gv.destino', JSON.stringify(d)); else localStorage.removeItem('gv.destino'); } catch (_) { /* sin almacenamiento: vale solo en esta sesión */ }
+  }
+
+  /** Resuelve lo escrito: primero la lista de CONFIG.destinos (Parque Industrial…) y, si no está, el buscador de direcciones (Nominatim, dentro de Arequipa). */
+  async function resolverDestinoEscrito(texto) {
+    const conocido = Viaje.resolverDestino(texto, CONFIG.destinos);
+    if (conocido) return conocido;
+    await Distritos.load().catch(() => null);
+    const dis = Distritos.buscarNombre(texto);
+    if (dis && dis.enDatos) {
+      const c = await AsistenteUI.centroUrbanoDistrito(dis.distrito);
+      if (c) return { id: 'distrito', nombre: `Distrito de ${Distritos.titulo(dis.distrito)}`, lat: c.lat, lon: c.lon, nota: `Punto aproximado: el centro de la zona urbana del distrito (promedio de sus zonas construibles del plano). Si vas a otra parte, escribe la dirección o elige el punto en el mapa.` };
+    }
+    const { results } = await Services.geocode(texto, { bounded: true });
+    if (!results.length) return null;
+    const r = results[0];
+    return { id: 'busqueda', nombre: r.name.split(',').slice(0, 2).join(',').trim(), lat: r.lat, lon: r.lon, osm: r.osm, nota: 'Punto que devolvió el buscador de direcciones (Nominatim); si no es donde trabajas, escribe otro lugar o la dirección completa.' };
+  }
+
+  async function calcularViaje() {
+    const host = $('viaje-resultado');
+    const d = leerDestino();
+    if (!host || !d || !state.point) return;
+    host.innerHTML = '<p class="zon-msg loading"><span class="spinner"></span>Buscando rutas…</p>';
+    const rutas = await AsistenteUI.rutasParaViaje();
+    if (!rutas) { host.innerHTML = '<p class="zon-msg error">No pude leer los archivos de rutas.</p>'; return; }
+    const resp = Asistente.responder({ tipo: 'viaje', criterios: [], destino: d, viaje: {} }, { punto: state.point, viajeRutas: rutas, caminarM: CONFIG.viaje.caminarM, tiempo: CONFIG.viaje.tiempo });
+    const lineas = resp.texto.split('\n');
+    const parrafo = (l) => `<p class="${/^•/.test(l) ? 'var-explica' : 'var-meta'}">${esc(l)}</p>`;
+    if (resp.resumen) {
+      // Lo que importa: la mejor opción en una frase; lo demás (alternativas, detalle por tramo, supuestos) plegado.
+      const extra = resp.alternativas && resp.alternativas.length ? `<p class="var-explica"><strong>Otras opciones:</strong></p><ul class="var-lista">${resp.alternativas.map((a) => `<li>${esc(a)}</li>`).join('')}</ul>` : '';
+      host.innerHTML = `<p class="var-mejor"><strong>Mejor opción:</strong> ${esc(resp.resumen)}</p><p class="var-meta">${esc(lineas[0])}</p>${extra}<details class="var-detalle-viaje"><summary>Ver el detalle, el tiempo y los supuestos</summary>${lineas.slice(2).map(parrafo).join('')}</details>`;
+    } else {
+      host.innerHTML = lineas.map(parrafo).join('');
+    }
+    if (resp.mapa && resp.mapa.viaje) CapasUI.mostrar({ capas: [{ id: 'viaje', ...resp.mapa.viaje }], distrito: null, sectores: [] });
+  }
+
+  function renderViaje() {
+    const host = $('card-viaje');
+    if (!host) return;
+    const d = leerDestino();
+    const opciones = CONFIG.destinos.map((x) => `<option value="${esc(x.nombre)}"></option>`).join('');
+    host.innerHTML = tarjetaVariable(VARIABLES.viaje, 'INFORMATIVO', d ? `Destino: ${d.nombre}` : 'Elige dónde trabajas para ver qué combi te lleva',
+      `<form class="viaje-form" id="viaje-form" novalidate>
+        <label for="viaje-destino" class="campo-label">¿Adónde vas? <small>(Parque Industrial, un distrito, un lugar o una dirección; o elígelo en el mapa)</small></label>
+        <input id="viaje-destino" type="text" list="viaje-opciones" autocomplete="off" value="${esc(d ? d.nombre : '')}" placeholder="Parque Industrial">
+        <datalist id="viaje-opciones">${opciones}</datalist>
+        <button type="submit" class="ghost">Ver rutas</button> <button type="button" class="ghost" id="viaje-mapa">Elegir en el mapa</button>${d ? ' <button type="button" class="ghost" id="viaje-quitar">Quitar destino</button>' : ''}
+        <p class="texto-error small" id="viaje-error" role="alert" hidden></p>
+      </form>
+      <div id="viaje-resultado" aria-live="polite"></div>
+      <p class="var-meta">Rutas de OpenStreetMap (ODbL); pasan a ${esc(fmtUmbral(CONFIG.viaje.caminarM))} o menos a pie de tu punto y del destino, con tu punto antes que el destino en el recorrido. Si no hay ninguna directa se ofrecen las de un trasbordo (las dos rutas a ${esc(fmtUmbral(CONFIG.viaje.trasbordoM))} o menos una de otra: ${esc(CONFIG.viaje.fuenteTrasbordo)}). Distancias en línea recta; los minutos son estimaciones. No sé dónde se sube ni se baja ni si la ruta opera hoy.</p>`);
+    if (d) calcularViaje();
+  }
+
+  $('entorno').addEventListener('submit', async (e) => {
+    if (!e.target.closest('#viaje-form')) return;
+    e.preventDefault();
+    const err = $('viaje-error');
+    err.hidden = true;
+    const texto = $('viaje-destino').value.trim();
+    if (!texto) { err.textContent = 'Escribe adónde vas.'; err.hidden = false; return; }
+    try {
+      const d = await resolverDestinoEscrito(texto);
+      if (!d) { err.textContent = `No encontré «${texto}» en Arequipa. Prueba con otra dirección o con «Parque Industrial».`; err.hidden = false; return; }
+      fijarDestino(d);
+      renderViaje();
+      const det = $('card-viaje').querySelector('details');
+      if (det) det.open = true;
+    } catch (ex) {
+      err.textContent = `No pude buscar ese lugar: ${ex.message}`;
+      err.hidden = false;
+    }
+  });
+  $('entorno').addEventListener('click', (e) => {
+    if (e.target.closest('#viaje-mapa')) {
+      state.eligiendoDestino = true;
+      document.body.classList.add('eligiendo-destino');
+      const err = $('viaje-error');
+      err.textContent = 'Toca en el mapa el lugar adonde vas.';
+      err.hidden = false;
+      return;
+    }
+    if (!e.target.closest('#viaje-quitar')) return;
+    fijarDestino(null);
+    renderViaje();
+  });
 
   function renderQuebradas() {
     const host = $('card-quebradas');
@@ -1505,6 +1780,8 @@
     const verde = colorMapa('--map-verde');
     const filas = [
       { v: VARIABLES.salud, r: e.salud, rotulo: 'Salud' },
+      ...(e.consultorio ? [{ v: VARIABLES.consultorio, r: e.consultorio, rotulo: 'Consultorio médico' }] : []),
+      ...Object.keys(Calculos.COMERCIO).filter((id) => e[id]).map((id) => ({ v: VARIABLES[id], r: e[id], rotulo: Calculos.COMERCIO[id].etiqueta })),
       ...Equipamiento.NIVELES.map((n) => ({ v: VARIABLES.educacion, r: e.educacion[n], rotulo: `Colegio ${n}` })),
       { v: VARIABLES.transporte, r: e.transporte, rotulo: 'Paradero' },
       { v: VARIABLES.areaVerde, r: e.areaVerde, rotulo: 'Área verde' },
@@ -1523,8 +1800,10 @@
       else L.polyline([[lat, lon], [r.lat, r.lon]], { color: c, weight: 2, dashArray: '4 6', interactive: false }).addTo(grupo);
       const enlace = r.osm ? `<br><small><a href="https://www.openstreetmap.org/${esc(r.osm)}" target="_blank" rel="noopener">${esc(r.osm)} en openstreetmap.org</a></small>` : '';
       const dist = r.distanciaM === 0 ? 'el punto está dentro del área' : `${fmtDist(r.distanciaM)} en línea recta`;
+      const fuenteTxt = Calculos.textoFuenteElemento(r);
+      const fuente = fuenteTxt ? `<br><small>Fuente: ${esc(fuenteTxt)}</small>` : '';
       L.marker([r.lat, r.lon], { icon: poiIcon(v), title: r.nombre || v.titulo })
-        .bindPopup(`<strong>${esc(r.nombre)}</strong><br>${rotulos.map(esc).join('<br>')}<br>${dist}${enlace}`)
+        .bindPopup(`<strong>${esc(r.nombre)}</strong><br>${rotulos.map(esc).join('<br>')}<br>${dist}${fuente}${enlace}`)
         .addTo(grupo);
       if (r.distanciaM <= 1500) cercanos.push([r.lat, r.lon]);
     });
@@ -1546,7 +1825,8 @@
     $('entorno').setAttribute('aria-busy', 'true');
     $('entorno-toggle').hidden = true;
     $('entorno').innerHTML = '<p class="zon-msg loading"><span class="spinner"></span>Buscando los servicios más cercanos…</p>';
-    const e = await Equipamiento.evaluar(lat, lon); // nunca rechaza: cada variable devuelve SIN DATO con su causa si falla
+    const [e, dis] = await Promise.all([Equipamiento.evaluar(lat, lon), Distritos.lookup(lat, lon).catch(() => null)]); // evaluar nunca rechaza: cada variable devuelve SIN DATO con su causa si falla
+    e.interrupciones = await Equipamiento.interrupcionesDe(dis ? dis.distrito : null); // SUNASS: interrupciones del servicio de agua en el distrito (informativo)
     if (seq !== state.entornoSeq) return; // el usuario ya eligió otro punto
     state.entorno = e;
     state.entornoStatus = 'ok';
@@ -1569,6 +1849,12 @@
     const linea = (x) => (x ? `${x.estado}${x.distanciaM !== null ? ` · ${fmtDist(x.distanciaM)}` : ''}${x.nombre ? ` · ${x.nombre}` : ''}` : 'No disponible');
     if (e) {
       resumen.push(['Salud', linea(e.salud)]);
+      if (e.consultorio) resumen.push(['Consultorio médico (informativo)', linea(e.consultorio)]);
+      if (e.censo) resumen.push([`Servicios de la manzana (censo ${e.censo.anio}, informativo)`, e.censo.tieneCifras && !e.censo.pocas ? `Alumbrado ${e.censo.luz.pct} % · agua ${e.censo.agua.pct} % · desagüe ${e.censo.desague.pct} % de ${e.censo.ocupadas} viviendas ocupadas (manzana, no predio)` : 'Sin porcentaje para esta manzana']);
+      if (e.acopio) resumen.push(['Agua (informativo)', `${e.acopio.estado === 'SIN DATO' ? 'Sin dato del punto de acopio' : `Punto de acopio más cercano a ${fmtDist(e.acopio.distanciaM)} (directorio de SEDAPAR, datos de 2017; no es una conexión)`}${e.interrupciones && e.interrupciones.registros && e.interrupciones.promedioN !== null ? ` · ≈ ${e.interrupciones.promedioN} interrupciones del servicio al año en el distrito (SUNASS, ${e.interrupciones.aniosCompletos[0]} a ${e.interrupciones.aniosCompletos.at(-1)})` : ''}`]);
+      if (e.mineria) resumen.push(['Concesión minera (informativo)', e.mineria.dentro === null ? 'Sin dato' : e.mineria.dentro ? `Dentro de ${e.mineria.concesiones.length} ${e.mineria.concesiones.length === 1 ? 'concesión' : 'concesiones'} del Catastro Minero · derecho sobre los minerales, no dice que haya minería en el predio` : `Fuera de toda concesión${e.mineria.cercana ? `; la más cercana a ${fmtDist(e.mineria.distanciaM)} del borde` : ''} · catastro referencial`]);
+      if (e.electricidad) resumen.push(['Electricidad (informativo)', e.electricidad.dentro === null ? 'Sin dato' : `${e.electricidad.dentro ? `Dentro del área de concesión de ${e.electricidad.concesionarias.join(' y ')}` : `Fuera de las áreas de concesión; ${fmtDist(e.electricidad.distanciaM)} hasta el borde de la de ${e.electricidad.concesionaria || 'una empresa'}`} · no es una conexión`]);
+      Object.keys(Calculos.COMERCIO).forEach((id) => { if (e[id]) resumen.push([`${Calculos.COMERCIO[id].etiqueta} (informativo)`, linea(e[id])]); });
       Equipamiento.NIVELES.forEach((n) => resumen.push([`Educación ${n}`, linea(e.educacion[n])]));
       resumen.push(['Transporte', linea(e.transporte)]);
       if (e.transporte.rutas && !e.transporte.rutas.error) resumen.push(['Líneas de transporte', Rutas.resumen(e.transporte.rutas, 12)]);
@@ -1606,6 +1892,7 @@
       potencial: zonaOk && lote > 0 ? Zonificacion.potencial(r, lote) : null,
       avisoPDM,
       variables: e,
+      departamento2025: CONFIG.censo.departamento2025, // único dato del censo 2025 que se usa (departamento)
       cauce: state.cauce,                 // quebradas: INFORMATIVO, o cumple / no cumple según el umbral de la persona
       contextoRiesgo: state.contextoRiesgo, // peligros geológicos y sismos (informativo)
       precio: state.precio,               // precio de oferta por m² del distrito (informativo, Aptología CC BY 4.0)
@@ -1634,6 +1921,16 @@
         : null,
       zonificacion_proyectada: avisoPDM,
       salud: state.entorno && state.entorno.salud,
+      consultorio: state.entorno && state.entorno.consultorio, // informativo, sin umbral
+      censo_manzana: state.entorno && state.entorno.censo, // informativo, sin umbral: cifras de la manzana en el año del censo (2017), no del predio
+      acopio: state.entorno && state.entorno.acopio, // informativo, sin umbral: lugares de reparto con camiones cisterna (datos de 2017), no una conexión
+      interrupciones: state.entorno && state.entorno.interrupciones, // informativo, sin umbral: interrupciones que SEDAPAR reportó a la SUNASS en el distrito
+      mineria: state.entorno && state.entorno.mineria, // informativo, sin umbral: una concesión es un derecho sobre los minerales
+      electricidad: state.entorno && state.entorno.electricidad, // informativo, sin umbral: un área de concesión no es una conexión
+      abastecimiento: state.entorno && state.entorno.abastecimiento && { ...state.entorno.abastecimiento, forma: undefined, porTipo: state.entorno.abastecimiento.porTipo && Object.fromEntries(Object.entries(state.entorno.abastecimiento.porTipo).map(([k, x]) => [k, { ...x, forma: undefined }])) }, // mercados + supermercados; informativo, sin umbral
+      compras_ocio: state.entorno && state.entorno.compras_ocio && { ...state.entorno.compras_ocio, forma: undefined }, // solo malls confirmados con su fuente; informativo, sin umbral
+      ...Object.fromEntries(['finanzas', 'comida_fuera', 'recreacion'].map((k) => [k, state.entorno && state.entorno[k] && { ...state.entorno[k], forma: undefined, porTipo: state.entorno[k].porTipo && Object.fromEntries(Object.entries(state.entorno[k].porTipo).map(([t, x]) => [t, { ...x, forma: undefined }])) }])), // servicios de la vida diaria: informativos, sin umbral
+      comercio_barrio: state.entorno && state.entorno.comercio_barrio && { ...state.entorno.comercio_barrio, forma: undefined }, // galerías (shop=mall sin fuente); informativo, sin umbral
       educacion: state.entorno && state.entorno.educacion,
       transporte: state.entorno && state.entorno.transporte,
       area_verde: state.entorno && state.entorno.areaVerde && { ...state.entorno.areaVerde, forma: undefined },
@@ -1716,6 +2013,7 @@
     obtenerPunto: () => state.point,
     consultarPunto,
     umbrales: () => state.umbrales,
+    obtenerDestino: () => leerDestino(), // el destino fijado con «Ir al trabajo»: el asistente lo usa en «¿qué combi me lleva a mi trabajo?»
     mostrarMapa: () => EspacioUI.mostrarMapa(),
     mapaVisible: () => EspacioUI.mapaVisible(),
     alBuscar: (que) => CapasUI.mostrar(que),

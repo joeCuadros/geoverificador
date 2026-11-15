@@ -144,12 +144,13 @@ const AsistenteUI = (() => {
       Distritos.lookup(p.lat, p.lon).catch(() => null),
       Contexto.evaluar(p.lat, p.lon, umbral), // quebradas, peligros y sismos: contexto informativo
     ]);
-    const ctx = { ...base, punto: { lat: p.lat, lon: p.lon }, distrito: dis ? dis.distrito : null, zona, entorno, cauce: riesgo.quebradas, sismos: riesgo.sismos, peligros: riesgo.peligros, volcan: riesgo.volcan, cenepred: riesgo.cenepred };
+    const interrupciones = await Equipamiento.interrupcionesDe(dis ? dis.distrito : null); // SUNASS: interrupciones del servicio de agua del distrito (informativo)
+    const ctx = { ...base, punto: { lat: p.lat, lon: p.lon }, distrito: dis ? dis.distrito : null, zona, entorno, interrupciones, cauce: riesgo.quebradas, sismos: riesgo.sismos, peligros: riesgo.peligros, volcan: riesgo.volcan, cenepred: riesgo.cenepred, departamento2025: CONFIG.censo.departamento2025 };
     cacheContexto = { clave, ctx };
     return ctx;
   }
 
-  /** Líneas de SmartBus que cruzan un distrito ya reconocido (nombre exacto de Distritos): { distrito, res } o { distrito, error }. */
+  /** Líneas de transporte (OpenStreetMap) que cruzan un distrito ya reconocido (nombre exacto de Distritos): { distrito, res } o { distrito, error }. */
   async function rutasDeDistrito(distrito) {
     try {
       const [indice] = await Promise.all([Equipamiento.indiceRutas(), Distritos.load()]);
@@ -187,33 +188,109 @@ const AsistenteUI = (() => {
   function preparar() {
     if (!preparado) {
       preparado = (async () => {
-        const [zonas, congelados, , cauces] = await Promise.all([Zonificacion.zonas(), Equipamiento.datosCongelados(), Distritos.load().catch(() => null), Contexto.cauces().catch(() => null)]); // el tercero (distritos) solo se precarga
+        const [zonas, congelados, , cauces, consultorios, comercio] = await Promise.all([Zonificacion.zonas(), Equipamiento.datosCongelados(), Distritos.load().catch(() => null), Contexto.cauces().catch(() => null), Equipamiento.consultorios(), Equipamiento.comercio()]); // el tercero (distritos) solo se precarga; los consultorios y el comercio son informativos y opcionales
         if (!congelados) throw new Error('Faltan los archivos de equipamiento de OpenStreetMap (public/data/equipamiento); sin ellos no puedo buscar zonas.');
         const datos = Asistente.prepararDatos({
-          salud: congelados.salud.features, educacion: congelados.educacion.features, transporte: congelados.transporte.features, areasVerdes: congelados.areasVerdes.features,
+          salud: congelados.salud.features, consultorios: consultorios ? consultorios.features : [],
+          mercados: comercio.mercados ? comercio.mercados.features : [], supermercados: comercio.supermercados ? comercio.supermercados.features : [], malls: comercio.malls ? comercio.malls.features : [],
+          finanzas: comercio.finanzas ? comercio.finanzas.features : [], comida_fuera: comercio.comida_fuera ? comercio.comida_fuera.features : [], recreacion: comercio.recreacion ? comercio.recreacion.features : [],
+          educacion: congelados.educacion.features, transporte: congelados.transporte.features, areasVerdes: congelados.areasVerdes.features,
           cauces: cauces ? cauces.lista : [],
         }, zonas, umbrales());
-        return { zonas, datos, fecha: congelados.salud.fecha, hayCauces: Boolean(cauces), cauces: cauces ? cauces.lista : null };
+        const fechas = Object.values(comercio).filter(Boolean).map((d) => d.fecha).filter(Boolean).sort();
+        return { zonas, datos, fecha: congelados.salud.fecha, fechaComercio: fechas.length ? fechas[fechas.length - 1] : null, hayCauces: Boolean(cauces), cauces: cauces ? cauces.lista : null };
       })().catch((err) => { preparado = null; throw err; });
     }
     return preparado;
   }
 
   /** Los datos ya ordenados para dibujar entidades en el mapa (capas-ui.js). Los sismos son opcionales: sin archivo, la capa lo dice. */
-  async function datosParaMapa({ rutas = false, volcan = false, cenepred = false } = {}) {
+  /**
+   * Las manzanas del censo (INEI, 2017) de lo que se ve: lee el índice y SOLO las piezas de los distritos cuya caja toca `vista` ([oeste, sur, este, norte]). Si tocan más de
+   * `MAX_PIEZAS_CENSO` (el mapa abarca media ciudad) no baja nada y la capa lo dice: son varios MB y miles de polígonos. Devuelve la lista de Features o null.
+   */
+  const MAX_PIEZAS_CENSO = 4;
+  async function manzanasDelCenso(vista) {
+    const c = CONFIG.censo;
+    const indice = await fetch(c.indiceUrl).then((r) => (r.ok ? r.json() : null));
+    if (!indice || !Array.isArray(indice.distritos)) return null;
+    const toca = (d) => !vista || !(d.caja[2] < vista[0] || d.caja[0] > vista[2] || d.caja[3] < vista[1] || d.caja[1] > vista[3]);
+    const piezas = indice.distritos.filter(toca);
+    if (piezas.length === 0 || piezas.length > MAX_PIEZAS_CENSO) return null;
+    const cargadas = await Promise.all(piezas.map((d) => fetch(`${c.carpetaUrl}${d.archivo}`).then((r) => (r.ok ? r.json() : null))));
+    return cargadas.some((x) => !x) ? null : cargadas.flatMap((x) => x.features);
+  }
+
+  async function datosParaMapa({ rutas = false, volcan = false, cenepred = false, electricidad = false, mineria = false, acopio = false, censo = null } = {}) {
     const { zonas, datos, fecha, cauces } = await preparar();
     let sismos = null;
     try { sismos = Capas.sismosDeFeatures(await Contexto.sismosCrudos()); } catch (_) { sismos = null; }
-    // Los recorridos de SmartBus pesan casi 5 MB: solo se bajan cuando hay líneas que dibujar. Si fallan, la capa lo dice.
+    // Los recorridos de OpenStreetMap pesan unos 3 MB: solo se bajan cuando hay líneas que dibujar. Si fallan, la capa lo dice.
     let indiceRutas = null;
     if (rutas) { try { indiceRutas = await Equipamiento.indiceRutas(); } catch (_) { indiceRutas = null; } }
     // Las zonas de peligro volcánico (~0,5 MB) solo se bajan cuando se van a dibujar. Si fallan, la capa lo dice.
+    let concesiones = null; // áreas de concesión de distribución eléctrica (MINEM-DGE): solo con la capa «electricidad»
+    if (electricidad) { try { const f = await fetch(CONFIG.equipamiento.archivos.electricidad).then((r) => (r.ok ? r.json() : null)); concesiones = f && Array.isArray(f.features) ? f.features : null; } catch (_) { concesiones = null; } }
+    let mineras = null; // concesiones mineras (INGEMMET): solo con la capa «mineria»
+    if (mineria) { try { const f = await fetch(CONFIG.equipamiento.archivos.mineria).then((r) => (r.ok ? r.json() : null)); mineras = f && Array.isArray(f.features) ? f.features : null; } catch (_) { mineras = null; } }
+    let puntosAcopio = null; // puntos de acopio de agua (SEDAPAR): solo con la capa «acopio_agua»
+    if (acopio) { try { const f = await fetch(CONFIG.equipamiento.archivos.acopio).then((r) => (r.ok ? r.json() : null)); puntosAcopio = f && Array.isArray(f.features) ? f.features : null; } catch (_) { puntosAcopio = null; } }
+    let manzanas = null; // manzanas del censo (INEI, 2017): solo con una capa censo_*; `censo` es la vista [oeste, sur, este, norte] o true
+    if (censo) { try { manzanas = await manzanasDelCenso(Array.isArray(censo) ? censo : null); } catch (_) { manzanas = null; } }
     let zonasVolcan = null;
     if (volcan) { try { zonasVolcan = (await Contexto.volcanCrudo()).zonas; } catch (_) { zonasVolcan = null; } }
     // El escenario del CENEPRED es un archivo pequeño (25 distritos) y sus límites; solo se leen cuando se va a colorear. Si fallan, la capa lo dice.
     let datosCenepred = null;
     if (cenepred) { try { const [cen] = await Promise.all([Cenepred.load(), Distritos.load()]); datosCenepred = cen; } catch (_) { datosCenepred = null; } }
-    return { datos, zonas, cauces, sismos, volcan: zonasVolcan, cenepred: datosCenepred, rutas: indiceRutas, umbrales: umbrales(), fecha };
+    return { datos, zonas, cauces, sismos, volcan: zonasVolcan, electricidad: concesiones, mineria: mineras, acopio: puntosAcopio, censo: manzanas, cenepred: datosCenepred, rutas: indiceRutas, umbrales: umbrales(), fecha };
+  }
+
+  // ------------------------------------------------------------ Viaje en combi o bus
+
+  let cacheViaje = null; // promesa con { rutas, paradas } de OpenStreetMap ya adaptadas (Viaje.desdeOsm y Viaje.paradasDeOsm)
+  /** Las rutas para «¿qué combi me lleva…?»: ~3 MB de OpenStreetMap (el mismo archivo que usa la ficha). Si falla, null. */
+  function datosParaViaje() {
+    if (!cacheViaje) {
+      cacheViaje = (async () => {
+        const fc = await fetch(CONFIG.viaje.osmUrl).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+        const rutas = fc ? Viaje.desdeOsm(fc) : [];
+        return rutas.length ? { rutas, paradas: Viaje.paradasDeOsm(fc) } : null;
+      })();
+      cacheViaje.then((r) => { if (!r) cacheViaje = null; });
+    }
+    return cacheViaje;
+  }
+  async function rutasParaViaje() { const d = await datosParaViaje(); return d ? d.rutas : null; }
+  async function paradasParaViaje() { const d = await datosParaViaje(); return d ? d.paradas : []; }
+
+  /**
+   * Un punto de partida o de llegada para un distrito: el promedio de las celdas de 250 m de sus zonas construibles del plano (donde hay o puede haber viviendas), no el centro
+   * geométrico del polígono, que en Cerro Colorado o Yura cae en el desierto. Es aproximado y se dice. null si el distrito no tiene zonas construibles en el plano.
+   */
+  async function centroUrbanoDistrito(distrito) {
+    await Distritos.load().catch(() => null);
+    const { zonas } = await preparar();
+    const propias = celdasDe(zonas, true).filter((c) => Distritos.nombreDe(c.lat, c.lon) === distrito);
+    if (!propias.length) return null;
+    return { lat: propias.reduce((t, c) => t + c.lat, 0) / propias.length, lon: propias.reduce((t, c) => t + c.lon, 0) / propias.length, celdas: propias.length };
+  }
+
+  /** Lo que el chat necesita para viajar: las rutas, la distancia a pie y el destino fijado; para la búsqueda de zonas, además las celdas desde las que se llega. */
+  async function contextoViaje(intencion) {
+    const base = await contexto();
+    const viajeRutas = await rutasParaViaje();
+    const destino = intencion.destino || (api.obtenerDestino ? api.obtenerDestino() : null);
+    const c = { ...base, viajeRutas, viajeParadas: await paradasParaViaje(), caminarM: CONFIG.viaje.caminarM, trasbordoM: CONFIG.viaje.trasbordoM, maxTrasbordos: CONFIG.viaje.maxTrasbordos, tiempo: CONFIG.viaje.tiempo, destino };
+    if (intencion.origen && intencion.origen.tipo === 'distrito') c.origenPunto = await centroUrbanoDistrito(intencion.origen.distrito);
+    if (intencion.tipo === 'ruta_zonas' && viajeRutas && destino) {
+      const { zonas } = await preparar();
+      const celdas = celdasDe(zonas, false);
+      const v = intencion.viaje || {};
+      const hits = Viaje.zonasConRutaDirecta(destino, viajeRutas, celdas, { caminarM: CONFIG.viaje.caminarM, trasbordoM: CONFIG.viaje.trasbordoM, trasbordo: Boolean(intencion.trasbordo), linea: v.linea || null, texto: v.texto || null });
+      await Distritos.load().catch(() => null);
+      c.zonasRuta = { ...Asistente.resumirRutaZonas(hits, celdas, (la, lo) => Distritos.nombreDe(la, lo), { separacionM: CONFIG.asistente.separacionPuntosM }), caminarM: CONFIG.viaje.caminarM, trasbordo: Boolean(intencion.trasbordo), trasbordoM: CONFIG.viaje.trasbordoM, celdasConRuta: hits.map((h) => ({ lat: h.celda.lat, lon: h.celda.lon })) };
+    }
+    return c;
   }
 
   /** Lo que el chat necesita para hablar de un distrito: sus polígonos, el conteo o el perfil y la fecha de los datos. */
@@ -224,11 +301,13 @@ const AsistenteUI = (() => {
     if (intencion.tipo === 'rutas') return { ...base, rutasDistrito: await rutasDeDistrito(intencion.distrito) };
     if (intencion.tipo === 'volcan') return { ...base, volcanDistrito: await volcanDeDistrito(intencion.distrito) };
     if (intencion.tipo === 'cenepred') return { ...base, cenepredDatos: await Cenepred.load().catch(() => null) }; // sin archivo, el asistente lo dice
-    const { zonas, datos, fecha, cauces } = await preparar();
+    const { zonas, datos, fecha, fechaComercio, cauces } = await preparar();
     const polys = Distritos.poligonos(intencion.distrito);
     const opciones = { areaMinM2: CONFIG.umbrales.areaVerde.areaMinM2 };
-    if (intencion.tipo === 'contar') return { ...base, fecha, conteo: Entidades.contar(datos, polys, opciones) };
-    // El perfil suma lo que ya existe en el resto de las fuentes: líneas de SmartBus que lo cruzan y precio de oferta (solo 3 distritos).
+    if (intencion.tipo === 'consultorio') return { ...base, fecha, consultorios: Entidades.contarConsultorios(datos, polys) };
+    if (intencion.tipo === 'comercio') return { ...base, fecha: fechaComercio || fecha, comercio: Object.fromEntries(intencion.comercio.map((id) => [id, Entidades.contarComercio(datos, polys, id)])) };
+    if (intencion.tipo === 'contar') return { ...base, fecha, conteo: Entidades.contar(datos, polys, opciones), ...(intencion.consultorio ? { consultorios: Entidades.contarConsultorios(datos, polys) } : {}) };
+    // El perfil suma lo que ya existe en el resto de las fuentes: líneas de transporte (OpenStreetMap) que lo cruzan y precio de oferta (solo 3 distritos).
     const [rutasDistrito, precios, cenepredDatos] = await Promise.all([rutasDeDistrito(intencion.distrito), Precios.load().catch(() => null), Cenepred.load().catch(() => null)]);
     return { ...base, fecha, perfil: Entidades.perfil(datos, zonas, cauces, polys, { ...opciones, pasoM: 300 }), rutasDistrito, precios, cenepredDatos };
   }
@@ -328,9 +407,11 @@ const AsistenteUI = (() => {
     try {
       await verificarModo(); // antes de enviar nada, la persona ya ve si el texto llega a un modelo
       const hayPunto = Boolean(api.obtenerPunto());
-      const reglas = () => Asistente.interpretar(limpio, { hayPunto, ultimaBusqueda });
+      const destino = api.obtenerDestino ? api.obtenerDestino() : null; // el que la persona fijó con «Ir al trabajo»
+      const reglas = () => Asistente.interpretar(limpio, { hayPunto, ultimaBusqueda, destino });
       let eleccion = { origen: 'reglas', intencion: null };
-      if (hayLLM() && llmDisponible !== false) {
+      // El modelo no conoce las categorías «consultorio» (distinta de la salud) ni mercado, supermercado y mall (informativas): esas frases las responden las reglas, sin salir del navegador.
+      if (hayLLM() && llmDisponible !== false && !Asistente.mencionaConsultorio(limpio) && !Asistente.mencionaComercio(limpio) && !Asistente.mencionaElectricidad(limpio) && !Asistente.mencionaMineria(limpio) && !Asistente.mencionaAgua(limpio) && !Asistente.mencionaViaje(limpio, { hayPunto, destino })) {
         const espera = mensaje('asistente', { texto: 'Pensando…', espera: true });
         const r = await AsistenteLLM.interpretar({
           mensaje: limpio, historial,
@@ -346,16 +427,20 @@ const AsistenteUI = (() => {
       mostrarModo(eleccion.origen);
       recordar('usuario', limpio);
       const intencion = eleccion.intencion;
-      if (intencion.tipo === 'buscar') await ejecutarBusqueda(intencion);
+      if (intencion.tipo === 'buscar') {
+        if (intencion.consultorio) mensaje('asistente', { texto: Asistente.notaConsultorio() }); // la búsqueda sigue sin el consultorio
+        if ((intencion.comercio || []).length) mensaje('asistente', { texto: Asistente.notaComercio() }); // ni mercados, supermercados o malls
+        await ejecutarBusqueda(intencion);
+      }
       else {
-        const esDistrito = ['contar', 'perfil', 'rutas', 'volcan', 'cenepred'].includes(intencion.tipo) && intencion.distrito;
-        const conPunto = ['ficha', 'servicio', 'zona', 'construir', 'quebrada', 'sismos', 'peligros', 'rutas', 'volcan', 'cenepred'].includes(intencion.tipo);
-        const ctx = intencion.tipo === 'precio' ? await contextoPrecio() : esDistrito ? await contextoDistrito(intencion) : intencion.tipo === 'cenepred' ? { ...(await contexto()), cenepredDatos: await Cenepred.load().catch(() => null) } : conPunto ? await contexto() : { estadoPDM: CONFIG.estadoPDM, potencial: Zonificacion.potencial, punto: api.obtenerPunto() };
+        const esDistrito = ['contar', 'consultorio', 'comercio', 'perfil', 'rutas', 'volcan', 'cenepred'].includes(intencion.tipo) && intencion.distrito;
+        const conPunto = ['ficha', 'servicio', 'consultorio', 'comercio', 'electricidad', 'mineria', 'agua', 'zona', 'construir', 'quebrada', 'sismos', 'peligros', 'rutas', 'volcan', 'cenepred'].includes(intencion.tipo);
+        const ctx = intencion.tipo === 'viaje' || intencion.tipo === 'ruta_zonas' ? await contextoViaje(intencion) : intencion.tipo === 'precio' ? await contextoPrecio() : esDistrito ? await contextoDistrito(intencion) : intencion.tipo === 'cenepred' ? { ...(await contexto()), cenepredDatos: await Cenepred.load().catch(() => null) } : conPunto ? await contexto() : { estadoPDM: CONFIG.estadoPDM, potencial: Zonificacion.potencial, punto: api.obtenerPunto() };
         const resp = Asistente.responder(intencion, ctx);
         let texto = resp.texto;
         // Gemini only rewords the deterministic answer; the text is verified (numbers, names, caveat) or discarded.
         // The profile and the «what matters to you?» question keep their exact structure (buttons and closing question), so they are not reworded.
-        if (eleccion.origen === 'gemini' && texto && !['perfil', 'mejor_zona'].includes(intencion.tipo)) {
+        if (eleccion.origen === 'gemini' && texto && !['perfil', 'mejor_zona', 'electricidad', 'mineria', 'agua', 'viaje', 'ruta_zonas'].includes(intencion.tipo)) {
           const espera = mensaje('asistente', { texto: 'Redactando…', espera: true });
           const red = await AsistenteLLM.redactar({ pregunta: limpio, tipo: intencion.tipo, hechos: { texto } });
           espera.remove();
@@ -369,6 +454,7 @@ const AsistenteUI = (() => {
           const capas = Capas.deCriterios(resp.mapa.capas.map((id) => ({ id }))).map((c) => (c.id === 'colegios' && !nivelPedido ? { id: 'colegios' } : c)); // «colegios» a secas son todos los niveles
           if (resp.mapa.lineas) capas.push({ id: 'lineas', ...resp.mapa.lineas }); // líneas de bus: nombres de las líneas y, si hay, el punto
           if (resp.mapa.volcan) capas.push({ id: 'volcan', ...resp.mapa.volcan }); // peligro volcánico: los fenómenos que se dibujan
+          if (resp.mapa.viaje) capas.push({ id: 'viaje', ...resp.mapa.viaje }); // ruta al trabajo: tramos, origen, destino y, en zonas, las celdas
           if (resp.mapa.cenepred) capas.push({ id: resp.mapa.cenepred.fenomeno === 'movimientos_masa' ? 'cenepred_mm' : 'cenepred_inundacion' }); // riesgo de los distritos ante El Niño (CENEPRED)
           api.alBuscar({ capas, distrito: resp.mapa.distrito, sectores: [] });
         }
@@ -599,5 +685,5 @@ const AsistenteUI = (() => {
     });
   }
 
-  return { iniciar, activar, datosParaMapa, distanciaQuebradaM, publicarPunto };
+  return { iniciar, activar, rutasParaViaje, paradasParaViaje, centroUrbanoDistrito, datosParaMapa, distanciaQuebradaM, publicarPunto };
 })();

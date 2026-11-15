@@ -167,19 +167,45 @@ const Calculos = (() => {
    *   valores  → la etiqueta debe valer alguno de ellos; sin `valores` basta con que exista.
    *   excluir  → valores que no son un establecimiento (p. ej. una farmacia no es un centro de atención).
    */
+  // Nombres que hacen de un terreno o edificio comercial con nombre un mall (expresión regular sobre el nombre sin tildes): las palabras genéricas y los centros
+  // comerciales conocidos de Arequipa, cuyo nombre no las trae (Real Plaza, OutletArauco que fue Parque Lambramani, Arequipa Center, Mall Aventura).
+  const NOMBRE_MALL = 'mall|centro comercial|shopping|outlet|real plaza|open plaza|lambramani|arequipa center|aventura';
+
   const FILTROS = {
+    // Establecimientos de salud (hospitales, clínicas, centros y puestos de salud, policlínicos…). El consultorio médico
+    // (amenity=doctors, healthcare=doctor) es otra categoría: ver `consultorios`.
     salud: [
-      { clave: 'amenity', valores: ['hospital', 'clinic', 'doctors'] },
+      { clave: 'amenity', valores: ['hospital', 'clinic'] },
       // healthcare=* salvo lo que no es un centro de atención general: farmacia, óptica, medicina alternativa, banco de
-      // sangre, laboratorio y consultas de una sola especialidad paramédica u odontológica.
+      // sangre, laboratorio, consultas de una sola especialidad paramédica u odontológica y el consultorio médico (doctor).
       {
         clave: 'healthcare',
         excluir: [
           'pharmacy', 'optometrist', 'alternative', 'blood_donation', 'laboratory', 'sample_collection', 'dentist',
-          'physiotherapist', 'occupational_therapist', 'psychotherapist', 'speech_therapist', 'audiologist', 'podiatrist',
+          'physiotherapist', 'occupational_therapist', 'psychotherapist', 'speech_therapist', 'audiologist', 'podiatrist', 'doctor',
         ],
       },
     ],
+    // Consultorios médicos: categoría APARTE de la salud. Son informativos (no tienen umbral; ver CONFIG.umbrales.consultorio).
+    // Si un elemento es además hospital, clinic u otro healthcare=*, manda el establecimiento (ver categoriasDe).
+    consultorios: [
+      { clave: 'amenity', valores: ['doctors'] },
+      { clave: 'healthcare', valores: ['doctor'] },
+    ],
+    // Comercio (mercados, supermercados y malls): categorías INFORMATIVAS, sin umbral (ver CONFIG.umbrales.mercado / supermercado / mall).
+    // `nombre` (solo en landuse=retail y building=retail|commercial) es una expresión regular que debe cumplir el nombre: un terreno o edificio comercial sin nombre, o con otro nombre, no es un mall.
+    mercados: [{ clave: 'amenity', valores: ['marketplace'] }],
+    supermercados: [{ clave: 'shop', valores: ['supermarket'] }],
+    malls: [
+      { clave: 'shop', valores: ['mall'] },
+      { clave: 'landuse', valores: ['retail'], nombre: NOMBRE_MALL },
+      { clave: 'building', valores: ['retail', 'commercial'], nombre: NOMBRE_MALL },
+    ],
+    // Servicios de la vida diaria (OpenStreetMap), también INFORMATIVOS y sin umbral; entran en el comercio por necesidad (ver COMERCIO).
+    // Los parques y jardines (leisure=park, garden) NO están aquí: ya son areasVerdes, el criterio «área verde».
+    finanzas: [{ clave: 'amenity', valores: ['bank', 'atm'] }],
+    comida_fuera: [{ clave: 'amenity', valores: ['restaurant', 'cafe'] }],
+    recreacion: [{ clave: 'leisure', valores: ['playground'] }],
     educacion: [{ clave: 'amenity', valores: ['school', 'kindergarten'] }],
     transporte: [
       { clave: 'highway', valores: ['bus_stop'] },
@@ -193,20 +219,52 @@ const Calculos = (() => {
 
   // Etiquetas que se conservan en los archivos congelados (el resto no hace falta y los haría pesar más).
   const ETIQUETAS_GUARDADAS = [
-    'amenity', 'healthcare', 'isced:level', 'school', 'leisure', 'landuse', 'highway', 'public_transport',
+    'amenity', 'healthcare', 'healthcare:speciality', 'isced:level', 'school', 'leisure', 'landuse', 'highway', 'public_transport', 'shop', 'building',
   ];
 
-  function coincide(tags, filtro) {
+  const sinTildes = (t) => String(t).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+  function coincide(tags, filtro, nombre) {
     const v = tags[filtro.clave];
     if (v === undefined) return false;
+    if (filtro.nombre && !(nombre && new RegExp(filtro.nombre, 'i').test(sinTildes(nombre)))) return false;
     if (filtro.valores) return filtro.valores.includes(v);
     return !(filtro.excluir || []).includes(v);
   }
 
-  /** Variables a las que pertenece un elemento según sus etiquetas ([] si a ninguna). */
-  function categoriasDe(tags) {
+  /**
+   * ¿Es un servicio odontológico? RENIPRESS ya deja fuera el centro odontológico; en OpenStreetMap un consultorio dental suele venir
+   * como amenity=doctors, así que se reconoce por cualquiera de estas señales: amenity=dentist, healthcare=dentist, healthcare:speciality
+   * con «dentistry» (o «dental…», p. ej. dental_oral_maxillo_facial_surgery) o un nombre con dental, odontolog… o dentist…
+   * (sin distinguir mayúsculas ni tildes). Lo dental no es salud ni consultorio médico.
+   */
+  function esDental(tags, nombre) {
     const t = tags || {};
-    return Object.keys(FILTROS).filter((cat) => FILTROS[cat].some((f) => coincide(t, f)));
+    if (t.amenity === 'dentist' || t.healthcare === 'dentist') return true;
+    if (/dentistry|dental/.test(sinTildes(t['healthcare:speciality'] ?? ''))) return true;
+    return nombre ? /dental|odontolog|dentist/.test(sinTildes(nombre)) : false;
+  }
+
+  /**
+   * Variables a las que pertenece un elemento según sus etiquetas ([] si a ninguna). `nombre` (opcional) es el nombre en OSM:
+   * sirve para reconocer lo dental (esDental), que se deja fuera de la salud y de los consultorios.
+   */
+  function categoriasDe(tags, nombre) {
+    const t = tags || {};
+    let cats = Object.keys(FILTROS).filter((cat) => FILTROS[cat].some((f) => coincide(t, f, nombre)));
+    if (esDental(t, nombre)) cats = cats.filter((c) => c !== 'salud' && c !== 'consultorios');
+    // Un elemento que es hospital, clinic u otro healthcare=* Y TAMBIÉN doctor es un establecimiento: no se cuenta dos veces.
+    return cats.includes('salud') ? cats.filter((c) => c !== 'consultorios') : cats;
+  }
+
+  /**
+   * Reparte la salud de OpenStreetMap en las dos categorías: 'salud' (establecimiento) o 'consultorio' (amenity=doctors,
+   * healthcare=doctor); null si no es ninguna de las dos (ni lo dental). Es la misma regla de categoriasDe.
+   */
+  function categoriaSalud(tags, nombre) {
+    const cats = categoriasDe(tags, nombre);
+    if (cats.includes('salud')) return 'salud';
+    return cats.includes('consultorios') ? 'consultorio' : null;
   }
 
   /** Etiqueta «clave=valor» con la que un elemento entra en la variable (la primera regla que coincide), o null. */
@@ -219,7 +277,10 @@ const Calculos = (() => {
   /** Selectores de Overpass QL de una variable, p. ej. ["amenity"~"^(hospital|clinic)$"]. */
   function selectoresOverpass(categoria) {
     return FILTROS[categoria].map((f) => {
-      if (f.valores) return f.valores.length === 1 ? `["${f.clave}"="${f.valores[0]}"]` : `["${f.clave}"~"^(${f.valores.join('|')})$"]`;
+      if (f.valores) {
+        const valores = f.valores.length === 1 ? `["${f.clave}"="${f.valores[0]}"]` : `["${f.clave}"~"^(${f.valores.join('|')})$"]`;
+        return f.nombre ? `${valores}["name"~"${f.nombre}",i]` : valores;
+      }
       const excl = f.excluir && f.excluir.length ? `["${f.clave}"!~"^(${f.excluir.join('|')})$"]` : '';
       return `["${f.clave}"]${excl}`;
     });
@@ -259,22 +320,97 @@ const Calculos = (() => {
     return ['inicial', 'primaria', 'secundaria'].filter((n) => niveles.has(n));
   }
 
+  // --------------------------------- Fuente de cada establecimiento (salud y educación)
+
+  /**
+   * Los archivos de salud y de educación (scripts/descargar-equipamiento-oficial.mjs) juntan tres fuentes y cada elemento dice
+   * la suya en `properties.fuente`: RENIPRESS (SUSALUD) y ESCALE (MINEDU) son la fuente primaria; OSM es el respaldo, solo donde
+   * no hay un punto oficial cerca. Un archivo anterior, o la consulta en vivo a Overpass, no trae `fuente`: es OpenStreetMap.
+   */
+  const FUENTES_ELEMENTO = ['RENIPRESS', 'ESCALE', 'OSM'];
+  const NOMBRE_FUENTE_ELEMENTO = { RENIPRESS: 'RENIPRESS (SUSALUD)', ESCALE: 'ESCALE (MINEDU)' };
+
+  function fuenteDe(props) {
+    const f = props && props.fuente;
+    return FUENTES_ELEMENTO.includes(f) ? f : 'OSM';
+  }
+
+  /**
+   * Niveles que atiende un colegio. Un local de ESCALE los trae (`niveles`); lo de OpenStreetMap que se conserva como respaldo
+   * trae solo los que el registro oficial no cubre ahí; si no hay `niveles`, se infieren de las etiquetas de OSM (nivelesEducativos).
+   */
+  function nivelesDe(props) {
+    const p = props || {};
+    if (Array.isArray(p.niveles)) return ['inicial', 'primaria', 'secundaria'].filter((n) => p.niveles.includes(n));
+    return nivelesEducativos(p.tags);
+  }
+
+  /**
+   * De dónde sale un elemento y su código oficial: { fuente, codigo, categoria, gestion, nombre }. Para un local de ESCALE con
+   * `nivel`, el código modular, el nombre y la gestión son los de la institución de ese nivel (un local puede tener varias).
+   */
+  function origenDe(props, nivel) {
+    const p = props || {};
+    const fuente = fuenteDe(p);
+    const base = { fuente, codigo: null, categoria: null, gestion: null, nombre: p.nombre ?? null };
+    if (fuente === 'RENIPRESS') return { ...base, codigo: p.codigo_renipress ?? null, categoria: p.categoria ?? null };
+    if (fuente === 'ESCALE') {
+      const ie = nivel ? (p.instituciones || []).find((i) => i.nivel === nivel) : null;
+      return { ...base, codigo: (ie && ie.codigo_modular) || p.codigo_modular || null, gestion: (ie && ie.gestion) || null, nombre: (ie && ie.nombre) || base.nombre };
+    }
+    return base;
+  }
+
+  /** «amenity=clinic» para lo de OpenStreetMap; null para un punto oficial (no tiene etiquetas de OSM). */
+  function etiquetaElemento(props, categoria) {
+    return fuenteDe(props) === 'OSM' ? etiquetaDe(props && props.tags, categoria) : null;
+  }
+
+  /**
+   * Una línea que dice de dónde sale el establecimiento más cercano de un resultado de evaluarMasCercano, con su código oficial:
+   * «RENIPRESS (SUSALUD) · código 00001231 · categoría I-3». Vacía si el resultado no trae fuente (p. ej. un paradero).
+   */
+  function textoFuenteElemento(r) {
+    const f = r && r.fuenteElemento;
+    if (!f) return '';
+    if (r.osmPrimaria) return textoFuenteComercio(r); // mercado, supermercado y mall: OpenStreetMap es la fuente, no un respaldo
+    if (f === 'OSM') return `OpenStreetMap (respaldo: no hay un punto oficial cerca)${r.osm ? ` · ${r.osm}` : ''}`;
+    const partes = [NOMBRE_FUENTE_ELEMENTO[f] || f];
+    if (r.codigo) partes.push(f === 'ESCALE' ? `código modular ${r.codigo}` : `código ${r.codigo}`);
+    if (r.categoria) partes.push(`categoría ${r.categoria}`);
+    if (r.gestion) partes.push(String(r.gestion).toLowerCase());
+    return partes.join(' · ');
+  }
+
+  // ---------------------------------------------------------- Consultorio médico
+
+  /**
+   * Una sola redacción de por qué el consultorio es informativo, para la ficha, el chat y el informe. No hay un umbral (decisión
+   * pendiente): no se dice si el consultorio está cerca o lejos, no suma al puntaje y no cuenta como «salud cerca».
+   */
+  const NOTA_CONSULTORIO = 'Es informativo: el consultorio médico es una categoría aparte de los establecimientos de salud, no tiene una distancia de referencia (es una decisión pendiente), así que no se dice si está cerca o lejos, no suma al puntaje ni a la búsqueda de zonas y no cuenta como «salud cerca».';
+
   // ------------------------------------------------- Resultado de cada variable
 
   const SIN_NOMBRE = 'Sin nombre en OSM';
 
   /**
    * Establecimiento más cercano y veredicto contra el umbral (V2, V3 por nivel y V4).
-   *   candidatos: [{ nombre, lat, lon, osm?, etiqueta? }]
+   *   candidatos: [{ nombre, lat, lon, osm?, etiqueta?, fuente?, codigo?, categoria?, gestion? }]  (fuente = RENIPRESS | ESCALE | OSM, ver origenDe)
    *   opciones:   { umbralM, fuente, fecha, metodo, alcanceM? }
-   * Devuelve { estado, nombre, distanciaM, umbralM, fuente, fecha, metodo, lat, lon, osm, etiqueta }.
+   * Devuelve { estado, nombre, distanciaM, umbralM, fuente, fecha, metodo, lat, lon, osm, etiqueta, fuenteElemento, codigo, categoria, gestion }
+   * (`fuente` es la del archivo; `fuenteElemento` y `codigo`, la del establecimiento más cercano).
    *   CUMPLE      distancia ≤ umbral (inclusivo).
    *   NO CUMPLE   más lejos que el umbral; o, si la búsqueda cubrió un `alcanceM` mayor que el umbral y no halló nada,
    *               sin distancia (hay algo más allá del alcance, o nada).
    *   SIN DATO    no hay candidatos y no se sabe qué tanto se buscó.
+   *   INFORMATIVO sin umbral (`umbralM` null): da el más cercano y su distancia, sin cumple / no cumple (p. ej. el consultorio médico).
    */
   function evaluarMasCercano(punto, candidatos, opciones) {
-    const { umbralM, fuente, fecha, metodo, alcanceM } = opciones;
+    const { fuente, fecha, metodo, alcanceM } = opciones;
+    // Sin umbral (null) la variable es INFORMATIVA: se da el más cercano y su distancia, sin cumple / no cumple.
+    const informativo = !esNumero(opciones.umbralM);
+    const umbralM = informativo ? null : opciones.umbralM;
     const base = { umbralM, fuente, fecha, metodo };
     let mejor = null;
     let mejorD = Infinity;
@@ -284,11 +420,11 @@ const Calculos = (() => {
       if (d < mejorD) { mejor = c; mejorD = d; }
     }
     if (!mejor) {
-      const cubierto = esNumero(alcanceM) && alcanceM >= umbralM;
-      return { estado: cubierto ? 'NO CUMPLE' : 'SIN DATO', nombre: null, distanciaM: null, ...base, lat: null, lon: null, osm: null, etiqueta: null };
+      const cubierto = !informativo && esNumero(alcanceM) && alcanceM >= umbralM;
+      return { estado: cubierto ? 'NO CUMPLE' : 'SIN DATO', nombre: null, distanciaM: null, ...base, lat: null, lon: null, osm: null, etiqueta: null, fuenteElemento: null, codigo: null, categoria: null, gestion: null };
     }
     return {
-      estado: mejorD <= umbralM ? 'CUMPLE' : 'NO CUMPLE',
+      estado: informativo ? 'INFORMATIVO' : mejorD <= umbralM ? 'CUMPLE' : 'NO CUMPLE',
       nombre: mejor.nombre || SIN_NOMBRE,
       distanciaM: mejorD,
       ...base,
@@ -296,7 +432,533 @@ const Calculos = (() => {
       lon: mejor.lon,
       osm: mejor.osm ?? null,
       etiqueta: mejor.etiqueta ?? null,
+      fuenteElemento: mejor.fuente ?? null,
+      codigo: mejor.codigo ?? null,
+      categoria: mejor.categoria ?? null,
+      gestion: mejor.gestion ?? null,
     };
+  }
+
+  // ----------------------------------------------- Comercio por NECESIDAD (mercados, supermercados y malls)
+
+  /**
+   * El comercio se organiza por lo que la persona necesita, no por la etiqueta de OpenStreetMap. Las seis necesidades son INFORMATIVAS (sin
+   * umbral: ninguna norma peruana fija metros para un mercado o un mall) y no suman al puntaje ni a la búsqueda de zonas.
+   *   abastecimiento   comida, a escala de barrio: mercados (amenity=marketplace) + supermercados (shop=supermarket). Un supermercado dentro del polígono
+   *                    de un mall es el punto de abastecimiento; el mall, no.
+   *   compras_ocio     compras y ocio, a escala metropolitana: SOLO los malls confirmados con su fuente (lista curada, propiedad `verificado`).
+   *   comercio_barrio  el resto de lo que OSM etiqueta shop=mall (galerías y centros comerciales pequeños).
+   *   finanzas         bancos (amenity=bank) y cajeros automáticos (amenity=atm).
+   *   comida_fuera     restaurantes (amenity=restaurant) y cafés (amenity=cafe).
+   *   recreacion       áreas de juegos infantiles (leisure=playground). Los parques ya son el criterio «área verde» y no se repiten aquí.
+   * `tipos` son los tipos de elemento de la necesidad (ver COMERCIO_TIPO); con más de uno, la ficha y el chat dan además el más cercano de cada tipo.
+   * `capa` es el id de la capa del mapa; `capas`, los archivos de datos de donde sale.
+   */
+  const COMERCIO = {
+    abastecimiento: {
+      capa: 'abastecimiento', capas: ['mercados', 'supermercados'], tipos: ['mercado', 'supermercado'], escala: 'barrio', etiqueta: 'Abastecimiento (comida)',
+      singular: 'punto de abastecimiento', plural: 'puntos de abastecimiento', corto: 'punto de abastecimiento', cortos: 'puntos de abastecimiento',
+      alcance: 'Cuenta los mercados (amenity=marketplace) y los supermercados (shop=supermarket) de OpenStreetMap. Un supermercado dentro del polígono de un mall es el punto de abastecimiento: el mall no lo es.',
+    },
+    compras_ocio: {
+      capa: 'compras_ocio', capas: ['malls'], tipos: ['mall'], escala: 'metropolitana', etiqueta: 'Compras y ocio',
+      singular: 'mall confirmado', plural: 'malls confirmados', corto: 'mall', cortos: 'malls',
+      alcance: 'Cuenta solo los malls confirmados con la fuente de cada uno (lista curada) y ubicados en OpenStreetMap; la distancia es al borde de su polígono. Un mall confirmado que OpenStreetMap no tiene no se mide.',
+    },
+    comercio_barrio: {
+      capa: 'comercio_barrio', capas: ['malls'], tipos: ['mall'], escala: 'barrio', etiqueta: 'Comercio de barrio',
+      singular: 'galería o centro comercial pequeño', plural: 'galerías y centros comerciales pequeños', corto: 'galería', cortos: 'galerías',
+      alcance: 'Cuenta lo que OpenStreetMap etiqueta shop=mall (o terreno comercial con nombre de mall) y no está en la lista de malls confirmados: galerías y centros comerciales pequeños, que son comercio de barrio.',
+    },
+    finanzas: {
+      capa: 'finanzas', capas: ['finanzas'], tipos: ['banco', 'cajero'], escala: 'barrio', etiqueta: 'Finanzas (bancos y cajeros)',
+      singular: 'banco o cajero automático', plural: 'bancos y cajeros automáticos', corto: 'banco o cajero', cortos: 'bancos y cajeros',
+      alcance: 'Cuenta los bancos (amenity=bank) y los cajeros automáticos (amenity=atm) de OpenStreetMap; no distingue entre agencias, cajeros corresponsales ni cajeros dentro de una tienda, y puede faltar alguno.',
+    },
+    comida_fuera: {
+      capa: 'comida_fuera', capas: ['comida_fuera'], tipos: ['restaurante', 'cafe'], escala: 'barrio', etiqueta: 'Comida fuera de casa',
+      singular: 'restaurante o café', plural: 'restaurantes y cafés', corto: 'restaurante o café', cortos: 'restaurantes y cafés',
+      alcance: 'Cuenta los restaurantes (amenity=restaurant) y los cafés (amenity=cafe) de OpenStreetMap, sin la comida al paso (fast_food) ni los bares; no dice la calidad, el precio ni el horario, y puede faltar alguno.',
+    },
+    recreacion: {
+      capa: 'recreacion', capas: ['recreacion'], tipos: ['juego_infantil'], escala: 'barrio', etiqueta: 'Recreación (juegos infantiles)',
+      singular: 'área de juegos infantiles', plural: 'áreas de juegos infantiles', corto: 'área de juegos infantiles', cortos: 'áreas de juegos infantiles',
+      alcance: 'Cuenta las áreas de juegos infantiles (leisure=playground) de OpenStreetMap. Los parques y jardines (leisure=park, garden) no se cuentan aquí: ya son el criterio «área verde», con su distancia de referencia.',
+    },
+  };
+
+  /** Las categorías de OSM de las que sale el comercio: nombre de cada una (el abastecimiento muestra el más cercano de mercado y de supermercado). */
+  const COMERCIO_TIPO = {
+    mercado: { capa: 'mercados', singular: 'mercado de abastos', plural: 'mercados de abastos', etiqueta: 'Mercado' },
+    supermercado: { capa: 'supermercados', singular: 'supermercado', plural: 'supermercados', etiqueta: 'Supermercado' },
+    mall: { capa: 'malls', singular: 'mall (centro comercial)', plural: 'malls (centros comerciales)', etiqueta: 'Mall' },
+    banco: { capa: 'finanzas', singular: 'banco', plural: 'bancos', etiqueta: 'Banco' },
+    cajero: { capa: 'finanzas', singular: 'cajero automático', plural: 'cajeros automáticos', etiqueta: 'Cajero automático' },
+    restaurante: { capa: 'comida_fuera', singular: 'restaurante', plural: 'restaurantes', etiqueta: 'Restaurante' },
+    cafe: { capa: 'comida_fuera', singular: 'café', plural: 'cafés', etiqueta: 'Café' },
+    juego_infantil: { capa: 'recreacion', singular: 'área de juegos infantiles', plural: 'áreas de juegos infantiles', etiqueta: 'Juegos infantiles' },
+  };
+  const TIPO_DE_CAPA = { mercados: 'mercado', supermercados: 'supermercado', malls: 'mall' };
+  const CAPA_DE_TIPO = Object.fromEntries(Object.entries(COMERCIO_TIPO).map(([tipo, d]) => [tipo, d.capa])); // el archivo de donde sale cada tipo
+
+  const NOTA_COMERCIO = 'Es informativo: el abastecimiento (mercados y supermercados), las compras y el ocio (malls), el comercio de barrio (galerías), las finanzas (bancos y cajeros), la comida fuera de casa (restaurantes y cafés) y la recreación (juegos infantiles) no tienen una distancia de referencia (es una decisión pendiente), así que no se dice si están cerca o lejos, no suman al puntaje ni a la búsqueda de zonas y no se elige un lugar por ellos.';
+
+  /**
+   * A qué necesidad pertenece un elemento de una capa de OSM (`capa`: mercados | supermercados | malls; `props`: sus propiedades): mercados y
+   * supermercados son abastecimiento; un mall con `verificado` (lista curada, con su fuente) es compras_ocio y cualquier otro shop=mall, comercio_barrio.
+   */
+  function necesidadComercio(capa, props) {
+    if (capa === 'mercados' || capa === 'supermercados') return 'abastecimiento';
+    if (capa === 'malls') return props && props.verificado ? 'compras_ocio' : 'comercio_barrio';
+    if (capa === 'finanzas' || capa === 'comida_fuera' || capa === 'recreacion') return capa; // el archivo es la necesidad; el tipo lo trae cada elemento
+    return null;
+  }
+
+  /**
+   * Lo que OpenStreetMap etiqueta como mercado, supermercado o mall pero no es comercio de ninguna de las tres necesidades, y por eso no aparece en
+   * NINGÚN grupo (tampoco en comercio de barrio). Regla estrecha y a propósito: una lista de nombres, no de ids, para que valga aunque se vuelva a
+   * extraer. `nombre` es un texto que debe estar en el nombre del elemento, sin tildes ni mayúsculas; `capa`, la capa de OSM donde se aplica.
+   *   Santa Natura: tienda de productos naturales etiquetada shop=supermarket; no es un punto de abastecimiento de comida.
+   */
+  const COMERCIO_EXCLUIDOS = [
+    { capa: 'supermercados', nombre: 'santa natura', motivo: 'tienda de productos naturales etiquetada shop=supermarket en OpenStreetMap; no es un punto de abastecimiento de comida' },
+  ];
+
+  /** ¿La regla COMERCIO_EXCLUIDOS deja fuera este elemento de la capa `capa` (mercados | supermercados | malls)? */
+  function esComercioExcluido(capa, props) {
+    const nombre = props && props.nombre ? sinTildes(props.nombre) : '';
+    return nombre !== '' && COMERCIO_EXCLUIDOS.some((x) => x.capa === capa && nombre.includes(x.nombre));
+  }
+
+  const posicionDe = (g) => (g.type === 'Point' ? { lat: g.coordinates[1], lon: g.coordinates[0] } : centroDe(g));
+
+  /**
+   * El mall (Feature con polígono) que contiene al punto { lat, lon }, o null. Un mall que es solo un punto no contiene nada. Si dos polígonos lo
+   * contienen, gana el confirmado con su fuente.
+   */
+  function mallQueContiene(punto, malls) {
+    let hallado = null;
+    for (const m of malls || []) {
+      const g = m && m.geometry;
+      if (!g || g.type === 'Point' || !poligonosDe(g).some((anillos) => puntoEnPoligono(punto.lat, punto.lon, anillos))) continue;
+      if (!hallado || (m.properties && m.properties.verificado && !(hallado.properties && hallado.properties.verificado))) hallado = m;
+    }
+    return hallado;
+  }
+
+  /**
+   * Reparte los mercados, supermercados y malls (listas de Feature, como los archivos congelados) por necesidad: { abastecimiento, compras_ocio, comercio_barrio }.
+   * Cada Feature conserva su geometría y sus propiedades (no se recorta ni se mueve nada) y suma `tipo` (mercado | supermercado | mall) y `necesidad`;
+   * un supermercado suma además `dentro_de_mall`: { osm, nombre, verificado } del mall en cuyo polígono está su punto (el centro de la caja si es un
+   * polígono), o null. Lo de COMERCIO_EXCLUIDOS (Santa Natura) no entra en ningún grupo. Es la única definición del reparto: la usan la ficha, el mapa, el conteo por distrito, el chat y el informe.
+   */
+  function agruparComercio(entrada) {
+    const e = entrada || {};
+    const validos = (lista) => (lista || []).filter((f) => f && f.geometry);
+    const malls = validos(e.malls);
+    const grupos = { abastecimiento: [], compras_ocio: [], comercio_barrio: [], finanzas: [], comida_fuera: [], recreacion: [] };
+    for (const capa of ['mercados', 'supermercados', 'malls', 'finanzas', 'comida_fuera', 'recreacion']) {
+      for (const f of validos(e[capa])) {
+        if (esComercioExcluido(capa, f.properties)) continue;
+        const necesidad = necesidadComercio(capa, f.properties);
+        const extra = { tipo: TIPO_DE_CAPA[capa] || (f.properties && f.properties.tipo) || null, necesidad };
+        if (capa === 'supermercados') {
+          const c = posicionDe(f.geometry);
+          const m = c ? mallQueContiene(c, malls) : null;
+          const mp = m && m.properties;
+          extra.dentro_de_mall = m ? { osm: mp.osm ?? null, nombre: mp.nombre ?? null, verificado: Boolean(mp.verificado) } : null;
+        }
+        grupos[necesidad].push({ ...f, properties: { ...f.properties, ...extra } });
+      }
+    }
+    return grupos;
+  }
+
+  /**
+   * De dónde sale un mercado, supermercado o mall: OpenStreetMap es su fuente (no un respaldo) y, si el mall está en la lista curada,
+   * la fuente que lo confirma. Acepta un resultado de evaluarMasCercanoForma o un elemento de las capas ({ osm, verificado }).
+   */
+  function textoFuenteComercio(r) {
+    const partes = ['OpenStreetMap (ODbL)'];
+    if (r && r.verificado) partes.push(`confirmado con ${r.verificado.nombre}: ${r.verificado.url}`);
+    return partes.join(' · ');
+  }
+
+  /**
+   * Como evaluarMasCercano, pero los candidatos son Features GeoJSON de punto o de polígono (Polygon / MultiPolygon): de un polígono
+   * se mide la distancia al BORDE (0 si el punto está dentro), no al centro, para no «cortar» un mall o un mercado grande.
+   *   features: [Feature { properties { nombre, osm?, fuente?, codigo?, verificado?, tags? }, geometry }]
+   *   opciones: { umbralM, fuente, fecha, metodo, categoria? }   (sin umbral numérico → INFORMATIVO)
+   * Devuelve { estado, nombre, distanciaM, umbralM, fuente, fecha, metodo, lat, lon, osm, etiqueta, fuenteElemento, codigo, forma, verificado, tipo, dentroDeMall }
+   * (`lat` y `lon` ubican el marcador: el punto, o el centro de la caja del polígono; `forma` es el polígono, o null si es un punto;
+   * `tipo` y `dentroDeMall` salen de agruparComercio: mercado | supermercado | mall, y el mall que contiene al supermercado).
+   */
+  function evaluarMasCercanoForma(punto, features, opciones) {
+    const { fuente, fecha, metodo, categoria } = opciones;
+    const informativo = !esNumero(opciones.umbralM);
+    const umbralM = informativo ? null : opciones.umbralM;
+    const base = { umbralM, fuente, fecha, metodo };
+    let mejor = null;
+    let mejorD = Infinity;
+    for (const f of features || []) {
+      const g = f && f.geometry;
+      if (!g) continue;
+      let d = Infinity;
+      if (g.type === 'Point' && Array.isArray(g.coordinates) && esNumero(g.coordinates[0]) && esNumero(g.coordinates[1])) d = haversine(punto.lat, punto.lon, g.coordinates[1], g.coordinates[0]);
+      else d = distanciaAGeometriaM(punto.lat, punto.lon, g);
+      if (d < mejorD) { mejor = f; mejorD = d; }
+    }
+    if (!mejor) {
+      return { estado: 'SIN DATO', nombre: null, distanciaM: null, ...base, lat: null, lon: null, osm: null, etiqueta: null, fuenteElemento: null, codigo: null, forma: null, verificado: null, tipo: null, dentroDeMall: null };
+    }
+    const p = mejor.properties || {};
+    const g = mejor.geometry;
+    const esPunto = g.type === 'Point';
+    const c = esPunto ? { lat: g.coordinates[1], lon: g.coordinates[0] } : centroDe(g);
+    return {
+      estado: informativo ? 'INFORMATIVO' : mejorD <= umbralM ? 'CUMPLE' : 'NO CUMPLE',
+      nombre: p.nombre || SIN_NOMBRE,
+      distanciaM: mejorD,
+      ...base,
+      lat: c ? c.lat : null,
+      lon: c ? c.lon : null,
+      osm: p.osm ?? null,
+      etiqueta: categoria || CAPA_DE_TIPO[p.tipo] ? etiquetaDe(p.tags, categoria || CAPA_DE_TIPO[p.tipo]) : null,
+      fuenteElemento: p.fuente ?? null,
+      osmPrimaria: p.fuente === 'OSM' || p.fuente === undefined,
+      codigo: p.codigo ?? null,
+      forma: esPunto ? null : g,
+      verificado: p.verificado ?? null,
+      tipo: p.tipo ?? null,
+      dentroDeMall: p.dentro_de_mall ?? null,
+    };
+  }
+
+  // ---------------------------------------------------------------- Electricidad: área de concesión de distribución
+
+  /**
+   * Una sola redacción de qué dice y qué NO dice la concesión eléctrica, para la ficha, el chat y el informe. Estar dentro del área de concesión de
+   * una empresa de distribución (p. ej. SEAL en Arequipa) dice a quién le corresponde dar el servicio ahí; NO dice que un predio esté conectado.
+   * El artículo 34, literal a, de la Ley de Concesiones Eléctricas (D. Ley 25844) en su texto del D. Leg. 1221 (El Peruano, 24-09-2015) obliga al
+   * distribuidor a «suministrar electricidad a quien lo solicite dentro de su zona de concesión [...] en un plazo no mayor de un (1) año y que tengan
+   * carácter de Servicio Público de Electricidad»; no se revisó si una norma posterior lo cambió.
+   */
+  const NOTA_ELECTRICIDAD = 'Es informativo: el área de concesión dice a qué empresa le corresponde dar el servicio de distribución en esa zona; no dice que un predio esté conectado ni que haya red en su calle. El artículo 34, literal a, de la Ley de Concesiones Eléctricas (texto del D. Leg. 1221, de 2015) obliga al distribuidor a suministrar electricidad a quien lo solicite dentro de su zona de concesión, en un plazo no mayor de un año y si es Servicio Público de Electricidad. La cobertura real de conexión vendría de un censo (el Censo de Población y Vivienda del INEI), que este proyecto aún no tiene. No suma al puntaje ni a la búsqueda de zonas.';
+
+  const CAMPOS_CONCESION = ['nombre_zona', 'concesionaria', 'empresa', 'expediente', 'situacion', 'concesion', 'tipo_concesion'];
+
+  /**
+   * ¿Está el punto dentro del área de concesión de distribución eléctrica de alguna empresa? Puro y sin umbral: INFORMATIVO (o SIN DATO).
+   *   features: [Feature Polygon / MultiPolygon { properties { nombre_zona, concesionaria, empresa, expediente, situacion, concesion, … } }]
+   *   opciones: { fuente, fecha, metodo }
+   * Dentro (distancia 0, los huecos quedan fuera) lista TODAS las concesiones que lo contienen; fuera, da la más cercana y la distancia en línea
+   * recta hasta su BORDE. Devuelve { estado, dentro, nombre, concesionaria, concesionarias, concesiones, distanciaM, umbralM, fuente, fecha, metodo }.
+   * Esto NO dice que el predio tenga conexión (ver NOTA_ELECTRICIDAD).
+   */
+  function evaluarConcesion(punto, features, opciones = {}) {
+    const base = { umbralM: null, fuente: opciones.fuente ?? null, fecha: opciones.fecha ?? null, metodo: opciones.metodo ?? null };
+    const validos = (features || []).filter((f) => f && f.geometry && /^(Multi)?Polygon$/.test(f.geometry.type));
+    if (validos.length === 0) {
+      return { estado: 'SIN DATO', dentro: null, nombre: null, concesionaria: null, concesionarias: [], concesiones: [], distanciaM: null, ...base, lat: null, lon: null, osm: null, forma: null };
+    }
+    const medidos = validos.map((f) => ({ f, d: distanciaAGeometriaM(punto.lat, punto.lon, f.geometry) }));
+    const dentro = medidos.filter((m) => m.d === 0);
+    const elegidos = dentro.length ? dentro : [medidos.reduce((a, b) => (b.d < a.d ? b : a))];
+    const resumen = (f) => Object.fromEntries(CAMPOS_CONCESION.map((c) => [c, (f.properties && f.properties[c]) ?? null]));
+    const concesiones = elegidos.map((m) => resumen(m.f));
+    const concesionarias = [...new Set(concesiones.map((c) => c.concesionaria || c.empresa).filter(Boolean))];
+    return {
+      estado: 'INFORMATIVO',
+      dentro: dentro.length > 0,
+      nombre: concesiones[0].nombre_zona || null,
+      concesionaria: concesionarias[0] || null,
+      concesionarias,
+      concesiones: dentro.length ? concesiones : [],
+      cercana: dentro.length ? null : concesiones[0],
+      distanciaM: dentro.length ? 0 : elegidos[0].d,
+      ...base,
+      lat: null,
+      lon: null,
+      osm: null,
+      forma: null,
+    };
+  }
+
+  const distTxt = (m) => (m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(1).replace('.', ',')} km`);
+  const unir = (lista) => (lista.length <= 1 ? lista.join('') : `${lista.slice(0, -1).join(', ')} y ${lista[lista.length - 1]}`);
+
+  /** La frase sobre un resultado de evaluarConcesion. Nunca afirma que haya luz: dice de quién es el área de concesión y que eso no es una conexión. */
+  function textoElectricidad(r) {
+    if (!r || r.estado === 'SIN DATO' || r.dentro === null) return 'Electricidad (informativo): sin dato; no pude leer el archivo de áreas de concesión.';
+    if (r.dentro) {
+      const zonas = [...new Set(r.concesiones.map((c) => c.nombre_zona).filter(Boolean))];
+      return `Tu punto está dentro del área de concesión de distribución eléctrica de ${unir(r.concesionarias)}${zonas.length ? ` (${unir(zonas.map((z) => `«${z}»`))})` : ''}. Eso solo dice a qué empresa le corresponde dar el servicio ahí; no significa que tu predio ya tenga una conexión ni que haya red en tu calle.`;
+    }
+    return `Tu punto está fuera de las áreas de concesión de distribución eléctrica de los datos; la más cercana es la de ${r.concesionaria || 'una empresa'}, a ${distTxt(r.distanciaM)} de su borde. Eso no significa que no haya servicio: el registro puede tener los bordes poco precisos o no incluir alguna zona, y tampoco dice si un predio está conectado.`;
+  }
+
+  // ---------------------------------------------------------------- Agua: puntos de acopio de SEDAPAR e interrupciones del servicio (SUNASS)
+
+  const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+  /** «2024-02-16» → «16 de febrero de 2024»; null si no es una fecha ISO. */
+  function fechaLarga(iso) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ''));
+    return m ? `${Number(m[3])} de ${MESES[Number(m[2]) - 1]} de ${m[1]}` : null;
+  }
+  /** «2019-10-03» → «octubre de 2019». */
+  const mesAnio = (iso) => {
+    const m = /^(\d{4})-(\d{2})/.exec(String(iso || ''));
+    return m ? `${MESES[Number(m[2]) - 1]} de ${m[1]}` : null;
+  };
+  const enteroTxt = (n) => (Math.abs(n) >= 10000 ? String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ') : String(Math.round(n)));
+  const capital = (t) => String(t || '').toLowerCase().replace(/(^|\s)(\S)/g, (_, a, b) => a + b.toUpperCase()).replace(/ (De|Y|Del|La)( |$)/g, (x) => x.toLowerCase());
+
+  /**
+   * Una sola redacción de qué dice y qué NO dice un punto de acopio de agua, para la ficha, el chat y el informe. El directorio es de SEDAPAR y la Municipalidad
+   * Provincial de Arequipa (plan de abastecimiento por tanques cisterna en caso de emergencia): lo publicó gob.pe el 2024-02-16 pero sus fichas son de abril de 2017.
+   */
+  const NOTA_ACOPIO = 'Es informativo: los puntos de acopio son los lugares donde SEDAPAR y la Municipalidad Provincial de Arequipa previeron repartir agua con camiones cisterna ante un desabastecimiento (plan de emergencia). El directorio se publicó en gob.pe el 16 de febrero de 2024, pero sus datos son de abril a junio de 2017: los puntos pueden haber cambiado. No dice que haya agua en ese lugar hoy, que el reparto sea permanente ni si tu zona tiene conexión a la red; la distancia es en línea recta. No suma al puntaje ni a la búsqueda de zonas.';
+
+  /**
+   * El punto de acopio de agua más cercano. Puro y sin umbral: INFORMATIVO (o SIN DATO).
+   *   features: [Feature Point { properties { direccion, distrito, pagina_pdf… } }] (public/data/agua/puntos_acopio.geojson)
+   *   opciones: { fuente, fecha (publicación), fechaDatos (a qué época corresponden los datos), metodo }
+   * Devuelve { estado, direccion, distrito, distanciaM, lat, lon, a500m, a1000m, total, umbralM, fuente, fecha, fechaDatos, metodo }.
+   */
+  function evaluarAcopio(punto, features, opciones = {}) {
+    const base = { umbralM: null, fuente: opciones.fuente ?? null, fecha: opciones.fecha ?? null, fechaDatos: opciones.fechaDatos ?? null, metodo: opciones.metodo ?? null };
+    const validos = (features || []).filter((f) => f && f.geometry && f.geometry.type === 'Point' && esNumero(f.geometry.coordinates[0]) && esNumero(f.geometry.coordinates[1]));
+    if (validos.length === 0) return { estado: 'SIN DATO', direccion: null, distrito: null, distanciaM: null, lat: null, lon: null, a500m: 0, a1000m: 0, total: 0, ...base };
+    const medidos = validos.map((f) => ({ f, d: haversine(punto.lat, punto.lon, f.geometry.coordinates[1], f.geometry.coordinates[0]) }));
+    const cerca = medidos.reduce((a, b) => (b.d < a.d ? b : a));
+    const p = cerca.f.properties || {};
+    return {
+      estado: 'INFORMATIVO', direccion: p.direccion || null, distrito: p.distrito || null, distanciaM: cerca.d, lat: cerca.f.geometry.coordinates[1], lon: cerca.f.geometry.coordinates[0],
+      a500m: medidos.filter((m) => m.d <= 500).length, a1000m: medidos.filter((m) => m.d <= 1000).length, total: validos.length, ...base,
+    };
+  }
+
+  /** La frase sobre un resultado de evaluarAcopio: un lugar de reparto con camiones cisterna, con la edad de los datos; nunca «tienes agua». */
+  function textoAcopio(r) {
+    if (!r || r.estado === 'SIN DATO') return 'Punto de acopio de agua (informativo): sin dato; no pude leer el directorio de SEDAPAR.';
+    const cerca = r.a1000m > 1 ? ` (hay ${r.a1000m} a 1 km o menos)` : '';
+    const publicado = fechaLarga(r.fecha);
+    return `El punto de acopio de agua potable más cercano del directorio de SEDAPAR es «${r.direccion || 'sin dirección'}»${r.distrito ? ` (${capital(r.distrito)})` : ''}, a ${distTxt(r.distanciaM)} en línea recta${cerca}. Es un lugar donde se previó repartir agua con camiones cisterna ante un desabastecimiento. ${publicado ? `El directorio se publicó el ${publicado}, pero sus datos` : 'Sus datos'} son de ${r.fechaDatos || '2017'}: los puntos pueden haber cambiado. No dice que haya agua ahí hoy ni si tu zona tiene conexión a la red.`;
+  }
+
+  const NOTA_INTERRUPCIONES = 'Es informativo: son las interrupciones del servicio de agua potable que SEDAPAR reportó a la SUNASS (registro abierto, ODC-By), contadas una vez por distrito. Las horas son de cada interrupción, de su inicio a su fin, sumadas; no se multiplican por las viviendas afectadas, así que una que dejó sin agua a unas pocas calles pesa igual que una de todo un distrito. Un distrito más grande tiene más conexiones y suele tener más registros: no se compara un distrito con otro. El archivo llega hasta abril de 2024 y no dice nada de un predio en particular. No suma al puntaje ni a la búsqueda de zonas.';
+
+  const claveDistrito = (t) => sinTildes(String(t == null ? '' : t)).trim().replace(/\s+/g, ' ').toUpperCase();
+
+  /**
+   * Las interrupciones del servicio de agua de SEDAPAR en un distrito. Puro y sin umbral: INFORMATIVO (o SIN DATO).
+   *   datos: el contenido de public/data/agua/interrupciones_sedapar.json ({ metadata, distritos })
+   * Devuelve { estado, distrito, registros (true | false | null), promedioN, promedioHoras (por año completo), aniosCompletos, parciales [{ anio, n, horas }], total, periodo,
+   * umbralM, fuente, fecha }. Un distrito que no figura en el archivo NO es «cero interrupciones»: es registros = false.
+   */
+  function resumirInterrupciones(distrito, datos, opciones = {}) {
+    const meta = (datos && datos.metadata) || {};
+    const base = { umbralM: null, fuente: meta.fuente ?? opciones.fuente ?? null, fecha: meta.fecha_descarga ?? opciones.fecha ?? null, licencia: meta.licencia ?? null };
+    const vacio = { estado: 'SIN DATO', distrito: distrito ? claveDistrito(distrito) : null, registros: null, promedioN: null, promedioHoras: null, aniosCompletos: [], porAnio: {}, parciales: [], total: null, periodo: null, ...base };
+    if (!datos || !datos.distritos || !distrito) return vacio;
+    const clave = Object.keys(datos.distritos).find((k) => claveDistrito(k) === claveDistrito(distrito));
+    const comunes = { estado: 'INFORMATIVO', distrito: clave || claveDistrito(distrito), periodo: meta.periodo || null, aniosCompletos: meta.anios_completos || [], ...base };
+    if (!clave) return { ...comunes, registros: false, promedioN: null, promedioHoras: null, porAnio: {}, parciales: [], total: null };
+    const d = datos.distritos[clave];
+    const por = d.por_anio || {};
+    const suma = (k) => comunes.aniosCompletos.reduce((t, a) => t + ((por[a] && por[a][k]) || 0), 0);
+    const k = comunes.aniosCompletos.length;
+    return {
+      ...comunes, registros: true,
+      promedioN: k ? Math.round(suma('n') / k) : null, promedioHoras: k ? Math.round(suma('horas') / k) : null,
+      porAnio: por,
+      parciales: (meta.anios_parciales || []).map((anio) => ({ anio, n: (por[anio] && por[anio].n) || 0, horas: (por[anio] && por[anio].horas) || 0 })),
+      total: d.total || null,
+    };
+  }
+
+  /** La frase sobre un resultado de resumirInterrupciones: reportado por la empresa, por año completo y en el periodo; nunca «tu predio tuvo cortes». */
+  function textoInterrupciones(r) {
+    if (!r || r.estado === 'SIN DATO' || r.registros === null) return 'Interrupciones del servicio de agua (informativo): sin dato; no pude leer el archivo de la SUNASS o no sé el distrito de tu punto.';
+    const donde = capital(r.distrito);
+    if (!r.registros) return `En el archivo de la SUNASS no hay interrupciones del servicio de agua potable registradas para ${donde} (SEDAPAR no reportó ninguna o el distrito no figura): eso no garantiza que no haya habido cortes.`;
+    const k = r.aniosCompletos;
+    const anual = k.length && r.promedioN !== null
+      ? `un promedio de ${enteroTxt(r.promedioN)} interrupciones del servicio de agua potable al año (años completos ${k[0]} a ${k.at(-1)}), que sumaron en promedio ${enteroTxt(r.promedioHoras)} horas al año`
+      : 'interrupciones del servicio de agua potable';
+    const periodo = r.periodo && r.total ? ` En todo el periodo registrado, de ${mesAnio(r.periodo.desde)} a ${mesAnio(r.periodo.hasta)}, fueron ${enteroTxt(r.total.n)} interrupciones (${enteroTxt(r.total.horas)} horas).` : '';
+    return `En ${donde}, SEDAPAR reportó a la SUNASS ${anual}.${periodo} Son interrupciones reportadas por la empresa y contadas una vez cada una: no dice cuántas viviendas afectó cada una ni que tu predio haya tenido cortes.`;
+  }
+
+  const URL_FACTIBILIDAD_SEDAPAR = 'https://www.gob.pe/institucion/sedapar/pages/65539-servicio-de-agua-potable-y-alcantarillado-de-arequipa-solicitar-certificado-de-factibilidad-para-servicio-de-agua-potable-y-alcantarillado';
+
+  /**
+   * Lo que conviene pedir y preguntar al comprar un predio, en cuanto a agua y luz. Cada punto se verificó en la fuente (el trámite de factibilidad en gob.pe/sedapar,
+   * la ley en el Congreso). No afirma nada del predio: dice qué pedir y por qué esta herramienta no lo sabe.
+   */
+  const LISTA_COMPRADOR = [
+    {
+      id: 'recibos',
+      texto: 'Pide al vendedor el último recibo de agua de SEDAPAR y el de luz de SEAL, con el número de suministro de cada uno, y pregunta a cada empresa si el predio tiene el servicio activo y si hay deudas pendientes.',
+    },
+    {
+      id: 'factibilidad',
+      texto: `Si es un terreno sin conexión, pregunta a SEDAPAR si el lote tiene factibilidad de servicio: el trámite se llama «Solicitar certificado de factibilidad para servicio de agua potable y alcantarillado» y sus requisitos vigentes están en gob.pe (${URL_FACTIBILIDAD_SEDAPAR}). Ese trámite no otorga ni modifica la propiedad, el saneamiento físico-legal ni la zonificación del predio. Para la luz, consulta a SEAL cómo pedir el servicio.`,
+    },
+    {
+      id: 'datos',
+      texto: 'Los datos de conexión de un predio en particular no están publicados (no hay una lista ni un mapa de predios con agua o luz) y suelen estar asociados a la persona titular del suministro, cuyos datos personales protege la Ley N.° 29733, Ley de Protección de Datos Personales: por eso esta herramienta no puede decirte si un predio está conectado; hay que pedirlo y confirmarlo con la empresa.',
+    },
+  ];
+
+  // ---------------------------------------------------------------- Concesiones mineras (Catastro Minero de INGEMMET)
+
+  /**
+   * Una sola redacción de qué dice y qué NO dice una concesión minera, para la ficha, el chat y el informe. Texto Único Ordenado de la Ley General de Minería (D. S. 014-92-EM,
+   * texto consolidado consultado en FAOLEX; no se revisó si una norma posterior lo cambió): artículo 9, la concesión minera otorga a su titular «el derecho a la exploración y
+   * explotación de los recursos minerales concedidos» dentro de un sólido de profundidad indefinida, y «es un inmueble distinto y separado del predio donde se encuentre ubicada»;
+   * artículo 37, inciso 3, el titular puede «solicitar a la autoridad minera autorización para establecer servidumbres en terrenos de terceros» necesarios para la concesión, «previa
+   * indemnización justipreciada si fuere el caso». Es un derecho que puede pedir, no una servidumbre que ya exista.
+   */
+  const NOTA_MINERA = 'Es informativo: una concesión minera da a su titular el derecho a explorar y explotar los minerales concedidos dentro de su perímetro (artículo 9 de la Ley General de Minería, D. S. 014-92-EM) y es un inmueble distinto y separado del predio donde se ubica. El titular puede solicitar a la autoridad minera una servidumbre sobre terrenos de terceros que necesite para la concesión, previa indemnización (artículo 37, inciso 3): es algo que puede pedir, no algo que ya exista. El catastro es referencial: no dice si hay minería en el lugar, de quién es el predio ni qué se puede hacer en él; para eso consulta el GEOCATMIN de INGEMMET y la partida registral. No suma al puntaje ni a la búsqueda de zonas.';
+
+  const ESTADO_MINERA_TXT = { TITULADO: 'titulada', 'EN TRÁMITE': 'en trámite', OTRO: 'de otro tipo (cantera, planta de beneficio…)', EXTINGUIDO: 'extinguida' };
+  const ORDEN_MINERA = { TITULADO: 0, 'EN TRÁMITE': 1, OTRO: 2, EXTINGUIDO: 3 };
+  const CAMPOS_MINERA = ['codigo', 'nombre', 'estado', 'estado_detalle', 'sustancia', 'hectareas', 'explotacion_o_exploracion', 'distritos', 'fecha_denuncio'];
+
+  /**
+   * ¿Cae el punto dentro de alguna concesión minera? Puro y sin umbral: INFORMATIVO (o SIN DATO). Las extinguidas no cuentan.
+   *   features: [Feature Polygon / MultiPolygon { properties { codigo, nombre, estado, sustancia, hectareas… } }] (public/data/mineria/concesiones_mineras.geojson)
+   * Dentro (distancia 0; los huecos quedan fuera) lista TODAS las que lo contienen, las tituladas primero; fuera, da la más cercana (titulada, en trámite u otra) y la distancia en línea
+   * recta a su BORDE. Devuelve { estado, dentro, concesiones, tituladas, enTramite, cercana, distanciaM, umbralM, fuente, fecha, metodo }.
+   */
+  function evaluarMinera(punto, features, opciones = {}) {
+    const base = { umbralM: null, fuente: opciones.fuente ?? null, fecha: opciones.fecha ?? null, metodo: opciones.metodo ?? null };
+    const validos = (features || []).filter((f) => f && f.geometry && /^(Multi)?Polygon$/.test(f.geometry.type) && f.properties && f.properties.estado !== 'EXTINGUIDO');
+    const vacio = { estado: 'SIN DATO', dentro: null, concesiones: [], tituladas: 0, enTramite: 0, cercana: null, distanciaM: null, ...base };
+    if (!(features || []).some((f) => f && f.geometry && /^(Multi)?Polygon$/.test(f.geometry.type))) return vacio;
+    const resumen = (f) => Object.fromEntries(CAMPOS_MINERA.map((c) => [c, (f.properties && f.properties[c]) ?? null]));
+    const medidos = validos.map((f) => ({ f, d: distanciaAGeometriaM(punto.lat, punto.lon, f.geometry) }));
+    const dentro = medidos.filter((m) => m.d === 0).map((m) => resumen(m.f)).sort((a, b) => (ORDEN_MINERA[a.estado] ?? 9) - (ORDEN_MINERA[b.estado] ?? 9));
+    if (dentro.length) {
+      return { estado: 'INFORMATIVO', dentro: true, concesiones: dentro, tituladas: dentro.filter((c) => c.estado === 'TITULADO').length, enTramite: dentro.filter((c) => c.estado === 'EN TRÁMITE').length, cercana: null, distanciaM: 0, ...base };
+    }
+    const cerca = medidos.length ? medidos.reduce((a, b) => (b.d < a.d ? b : a)) : null;
+    return { estado: 'INFORMATIVO', dentro: false, concesiones: [], tituladas: 0, enTramite: 0, cercana: cerca ? resumen(cerca.f) : null, distanciaM: cerca ? cerca.d : null, ...base };
+  }
+
+  /** La frase sobre un resultado de evaluarMinera. Dice que es un derecho sobre los minerales; nunca que haya minería en el predio ni de quién es. */
+  function textoMinera(r) {
+    if (!r || r.estado === 'SIN DATO' || r.dentro === null) return 'Concesión minera (informativo): sin dato; no pude leer el archivo del Catastro Minero.';
+    if (r.dentro) {
+      const n = r.concesiones.length;
+      const lista = r.concesiones.slice(0, 4).map((c) => `«${c.nombre || c.codigo}» (${ESTADO_MINERA_TXT[c.estado] || c.estado}${c.sustancia ? `, ${c.sustancia}` : ''}${c.hectareas ? `, ${Math.round(c.hectareas)} ha` : ''})`).join('; ');
+      return `Tu punto está dentro de ${n} ${n === 1 ? 'concesión minera' : 'concesiones mineras'} del Catastro Minero de INGEMMET: ${lista}${n > 4 ? ` y ${n - 4} más` : ''}. Una concesión minera es un derecho a explorar y explotar los minerales, separado del predio: no dice que haya minería en tu predio, de quién es el predio ni qué se puede hacer en él; el catastro es referencial.`;
+    }
+    const c = r.cercana;
+    return `Tu punto no cae dentro de ninguna concesión minera del Catastro Minero de INGEMMET${c ? `; la más cercana es «${c.nombre || c.codigo}» (${ESTADO_MINERA_TXT[c.estado] || c.estado}), a ${distTxt(r.distanciaM)} de su borde` : ''}. El catastro es referencial y se actualiza a diario: no garantiza que no haya otros derechos.`;
+  }
+
+  // ------------------------------------------- Servicios de la manzana según el censo (alumbrado, agua, desagüe)
+
+  /**
+   * Una sola redacción de qué dicen y qué NO dicen las cifras del censo por manzana, para la ficha, el chat y el informe. Son cifras de una manzana en el
+   * año del censo (hoy 2017: el censo 2025 todavía no está abierto por manzana), no de un predio ni de hoy: nunca «tu predio tiene…».
+   */
+  const NOTA_CENSO = 'Es informativo: son cifras del Censo Nacional de 2017 (INEI) para toda la manzana, calculadas sobre las viviendas ocupadas con personas presentes que se censaron; no dicen si un predio en particular está conectado, ni cómo está hoy (han pasado años y la ciudad creció). El censo de 2025 ya se levantó, pero el INEI todavía no abre sus resultados por manzana. No suman al puntaje ni a la búsqueda de zonas.';
+
+  const bboxCache = new WeakMap();
+  function cajaGeometria(g) {
+    let b = bboxCache.get(g);
+    if (!b) {
+      b = [Infinity, Infinity, -Infinity, -Infinity];
+      for (const anillos of poligonosDe(g)) {
+        for (const [x, y] of anillos[0] || []) {
+          if (x < b[0]) b[0] = x;
+          if (y < b[1]) b[1] = y;
+          if (x > b[2]) b[2] = x;
+          if (y > b[3]) b[3] = y;
+        }
+      }
+      bboxCache.set(g, b);
+    }
+    return b;
+  }
+
+  const pctDe = (n, de, min) => (de >= min && de > 0 ? Math.round((1000 * n) / de) / 10 : null);
+
+  /** Las clases del mapa coroplético del censo (% de viviendas ocupadas con el servicio): el índice de una clase es su posición. */
+  const CLASES_CENSO = ['Menos de 50 %', '50 a 79 %', '80 a 94 %', '95 % o más'];
+  const claseCenso = (pct) => (pct === null || pct === undefined ? null : pct < 50 ? 0 : pct < 80 ? 1 : pct < 95 ? 2 : 3);
+
+  /**
+   * Los tres servicios de una manzana a partir de sus conteos (`o` ocupadas con personas presentes; `l` alumbrado; `ad` / `af` agua por red pública dentro / fuera de
+   * la vivienda pero dentro de la edificación; `sd` / `sf` ídem desagüe): { pocas, luz: { n, pct }, agua: { dentro, fuera, n, pct, pctDentro }, desague: { … } }.
+   * Con menos de `minViviendas` ocupadas no se da el porcentaje (null).
+   */
+  function serviciosDeManzana(p, minViviendas = 5) {
+    const serv = (dentro, fuera) => ({ dentro, fuera, n: dentro + fuera, pct: pctDe(dentro + fuera, p.o, minViviendas), pctDentro: pctDe(dentro, p.o, minViviendas) });
+    return { pocas: p.o < minViviendas, luz: { n: p.l, pct: pctDe(p.l, p.o, minViviendas) }, agua: serv(p.ad, p.af), desague: serv(p.sd, p.sf) };
+  }
+
+  /**
+   * ¿En qué manzana del censo cae el punto y qué dicen sus cifras? Puro y sin umbral: INFORMATIVO (o SIN DATO).
+   *   features: [Feature Polygon / MultiPolygon { properties { id, v, h, p, o, l, ad, af, sd, sf } }]  (los campos de scripts/descargar-censo-servicios.mjs)
+   *   opciones: { anio, fuente, fecha, metodo, cercanaM = 30, minViviendas = 5, motivoVacio }
+   * Si el punto está dentro de un polígono, esa manzana (`modo: 'dentro'`). Si cae en la calle, la manzana más cercana a `cercanaM` m o menos
+   * (`modo: 'cercana'`, con la distancia al borde); más lejos, SIN DATO (fuera del área urbana censada).
+   * Porcentajes sobre `o` (viviendas ocupadas con personas presentes); con menos de `minViviendas` no se da el porcentaje (`pocas`): con 1 o 2 viviendas
+   * un porcentaje señalaría a una vivienda. Devuelve { estado, modo, distanciaM, manzana, anio, motivo, viviendas, hogares, personas, ocupadas, pocas,
+   * luz: { n, pct }, agua: { dentro, fuera, n, pct, pctDentro }, desague: { … }, umbralM, fuente, fecha, metodo }.
+   */
+  function evaluarManzana(punto, features, opciones = {}) {
+    const { anio = null, fuente = null, fecha = null, metodo = null, cercanaM = 30, minViviendas = 5, motivoVacio = 'sin_archivo' } = opciones;
+    const base = { umbralM: null, anio, fuente, fecha, metodo, modo: null, distanciaM: null, manzana: null, motivo: null, tieneCifras: false, viviendas: null, hogares: null, personas: null, ocupadas: null, pocas: false, luz: null, agua: null, desague: null };
+    const validos = (features || []).filter((f) => f && f.geometry && /^(Multi)?Polygon$/.test(f.geometry.type) && f.properties);
+    if (validos.length === 0) return { ...base, estado: 'SIN DATO', motivo: motivoVacio };
+    // La caja del punto agrandada `cercanaM` metros: lo que queda fuera no puede estar tan cerca.
+    const mLat = cercanaM / ((Math.PI / 180) * R);
+    const mLon = mLat / Math.max(0.2, Math.cos((punto.lat * Math.PI) / 180));
+    let mejor = null;
+    let mejorD = Infinity;
+    for (const f of validos) {
+      const b = cajaGeometria(f.geometry);
+      if (punto.lon < b[0] - mLon || punto.lon > b[2] + mLon || punto.lat < b[1] - mLat || punto.lat > b[3] + mLat) continue;
+      const d = distanciaAGeometriaM(punto.lat, punto.lon, f.geometry);
+      if (d < mejorD) { mejor = f; mejorD = d; if (d === 0) break; }
+    }
+    if (!mejor || mejorD > cercanaM) return { ...base, estado: 'SIN DATO', motivo: 'fuera_de_manzanas' };
+    const p = mejor.properties;
+    const r = { ...base, modo: mejorD === 0 ? 'dentro' : 'cercana', distanciaM: mejorD, manzana: p.id ?? null };
+    if (typeof p.o !== 'number') return { ...r, estado: 'SIN DATO', motivo: 'manzana_sin_cifras' };
+    return { ...r, estado: 'INFORMATIVO', tieneCifras: true, viviendas: p.v ?? null, hogares: p.h ?? null, personas: p.p ?? null, ocupadas: p.o, ...serviciosDeManzana(p, minViviendas) };
+  }
+
+  const pctTxt = (x) => `${String(x).replace('.', ',')} %`;
+
+  /** La frase sobre un resultado de evaluarManzana: de la manzana y del año del censo, nunca «tu predio tiene…». */
+  function textoCenso(r) {
+    if (!r || r.estado === 'SIN DATO' || !r.tieneCifras) {
+      const motivo = r && r.motivo;
+      if (motivo === 'fuera_de_manzanas') return 'Censo de población y vivienda: tu punto no cae en una manzana del censo (el INEI solo publica el área urbana).';
+      if (motivo === 'manzana_sin_cifras') return `Censo de población y vivienda: la manzana existe en el mapa del INEI pero el censo${r.anio ? ` ${r.anio}` : ''} no contó viviendas en ella, así que no hay cifras.`;
+      return 'Censo de población y vivienda: sin dato; no pude leer los archivos del censo por manzana.';
+    }
+    const donde = r.modo === 'cercana' ? `La manzana más cercana a tu punto (a ${Math.round(r.distanciaM)} m de su borde)` : 'En la manzana de tu punto';
+    if (r.pocas) return `${donde}, el censo ${r.anio} contó solo ${r.ocupadas} ${r.ocupadas === 1 ? 'vivienda ocupada' : 'viviendas ocupadas'}: son pocas para dar un porcentaje sin señalar a una vivienda, así que no lo muestro.`;
+    const aguaTxt = r.agua.pctDentro !== null && r.agua.pctDentro !== r.agua.pct ? `${pctTxt(r.agua.pct)} con agua por red pública (${pctTxt(r.agua.pctDentro)} dentro de la vivienda)` : `${pctTxt(r.agua.pct)} con agua por red pública`;
+    return `${donde}, el ${pctTxt(r.luz.pct)} de las ${r.ocupadas} viviendas ocupadas censadas en ${r.anio} tenía alumbrado eléctrico por red pública, el ${aguaTxt} y el ${pctTxt(r.desague.pct)} desagüe por red pública. Son cifras de ${r.anio} de la manzana, no de tu predio ni de hoy.`;
+  }
+
+  /**
+   * La frase del censo 2025 del DEPARTAMENTO (único dato de 2025 que usa el proyecto; `dep` es CONFIG.censo.departamento2025). Dice que es del departamento, no de la manzana.
+   * `cual`: 'luz' (alumbrado) o 'agua' (agua y servicio higiénico).
+   */
+  function textoCenso2025(dep, cual) {
+    if (!dep) return '';
+    const n = (x) => String(x).replace('.', ',');
+    const que = cual === 'luz' ? `el ${n(dep.alumbrado)} % tiene alumbrado eléctrico por red pública` : `el ${n(dep.aguaDentro)} % tiene agua conectada a la red pública dentro de la vivienda y el ${n(dep.higienicoDentro)} % servicio higiénico conectado a la red pública dentro de la vivienda`;
+    return `Para ubicarte: según el censo ${dep.anio}, en el departamento de ${dep.departamento} (${dep.universo}) ${que}. Es un dato del departamento (${dep.fuente}), no de tu manzana.`;
   }
 
   /**
@@ -674,6 +1336,7 @@ const Calculos = (() => {
     areaGeometriaM2,
     centroDe,
     categoriasDe,
+    categoriaSalud,
     etiquetaDe,
     selectoresOverpass,
     nivelesEducativos,
@@ -683,6 +1346,44 @@ const Calculos = (() => {
     avisoPDMProyectado,
     modulosEfectivos,
     osmAFeatures,
+    esDental,
+    FUENTES_ELEMENTO,
+    fuenteDe,
+    nivelesDe,
+    origenDe,
+    etiquetaElemento,
+    textoFuenteElemento,
+    NOTA_CONSULTORIO,
+    NOTA_COMERCIO,
+    COMERCIO,
+    COMERCIO_TIPO,
+    COMERCIO_EXCLUIDOS,
+    esComercioExcluido,
+    necesidadComercio,
+    mallQueContiene,
+    agruparComercio,
+    textoFuenteComercio,
+    evaluarMasCercanoForma,
+    evaluarConcesion,
+    textoElectricidad,
+    NOTA_ELECTRICIDAD,
+    NOTA_CENSO,
+    NOTA_MINERA,
+    NOTA_ACOPIO,
+    NOTA_INTERRUPCIONES,
+    LISTA_COMPRADOR,
+    evaluarAcopio,
+    textoAcopio,
+    resumirInterrupciones,
+    textoInterrupciones,
+    evaluarMinera,
+    textoMinera,
+    evaluarManzana,
+    serviciosDeManzana,
+    claseCenso,
+    CLASES_CENSO,
+    textoCenso,
+    textoCenso2025,
   };
 })();
 

@@ -51,13 +51,16 @@ const Entidades = (() => {
    * Un colegio con varios niveles suma en cada uno (por eso inicial + primaria + secundaria puede superar al total).
    * Los parques se cuentan todos; `grandes` son los de al menos el área mínima de los criterios (0,5 ha, OMS).
    */
+  // Cuántos elementos hay de cada fuente (RENIPRESS, ESCALE u OSM); lo que no dice fuente es de OSM.
+  const porFuente = (lista) => lista.reduce((o, p) => { const f = p.fuente || 'OSM'; o[f] = (o[f] || 0) + 1; return o; }, {});
+
   function contar(datos, polys, { areaMinM2 = 5000 } = {}) {
     const e = enDistrito(datos, polys);
     const porNivel = Object.fromEntries(NIVELES.map((n) => [n, e.colegios.filter((c) => c.niveles.includes(n)).length]));
     const parques = [...e.parques].sort((a, b) => b.areaM2 - a.areaM2);
     return {
-      colegios: { total: e.colegios.length, ...porNivel, sinNivel: e.colegios.filter(sinNivelDeclarado).length, lista: e.colegios },
-      salud: { total: e.salud.length, lista: e.salud },
+      colegios: { total: e.colegios.length, ...porNivel, sinNivel: e.colegios.filter(sinNivelDeclarado).length, fuentes: porFuente(e.colegios), lista: e.colegios },
+      salud: { total: e.salud.length, fuentes: porFuente(e.salud), lista: e.salud },
       paraderos: { total: e.paraderos.length, lista: e.paraderos },
       parques: {
         total: parques.length,
@@ -66,6 +69,20 @@ const Entidades = (() => {
         lista: parques,
       },
     };
+  }
+
+  /** Los consultorios médicos del distrito (categoría aparte de la salud, informativa): { total, fuentes, lista }. */
+  function contarConsultorios(datos, polys) {
+    const dentro = contenedor(polys);
+    const lista = (datos.consultorios || []).filter((p) => dentro(p.lat, p.lon));
+    return { total: lista.length, fuentes: porFuente(lista), lista };
+  }
+
+  /** Lo del distrito de una necesidad de comercio (`id`: abastecimiento | compras_ocio | comercio_barrio; informativas): { total, fuentes, lista }. Un polígono cuenta por su centro. */
+  function contarComercio(datos, polys, id) {
+    const dentro = contenedor(polys);
+    const lista = (datos[C.COMERCIO[id].capa] || []).filter((p) => dentro(p.lat, p.lon));
+    return { total: lista.length, fuentes: porFuente(lista), lista };
   }
 
   const ordenados = (lista) => lista.sort((a, b) => a.distanciaM - b.distanciaM);
@@ -186,7 +203,7 @@ const Entidades = (() => {
     return { conteo: contar(datos, polys, opciones), zonas: mezclaZonas(zonas, polys, opciones), cauces: caucesEnDistrito(cauces, polys) };
   }
 
-  return { enDistrito, contar, cercaDe, fraseColegios, contenedor, mezclaZonas, caucesEnDistrito, perfil, tipoDeZona, NIVELES };
+  return { enDistrito, contar, contarConsultorios, contarComercio, cercaDe, fraseColegios, contenedor, mezclaZonas, caucesEnDistrito, perfil, tipoDeZona, NIVELES };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = Entidades;

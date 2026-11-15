@@ -1,5 +1,5 @@
 /**
- * Integración de las tres líneas de trabajo sobre los distritos: contar/perfil/mejor zona (distritos), líneas de SmartBus (rutas)
+ * Integración de las tres líneas de trabajo sobre los distritos: contar/perfil/mejor zona (distritos), líneas de OpenStreetMap (rutas)
  * y precio de oferta por m² (Aptología). Se comprueba que todas usan UN buscador de distritos y UN campo «distrito», que las reglas
  * y el modelo (Gemini) llegan a la misma intención y que el perfil del distrito junta lo que hay de cada fuente sin inventar nada.
  */
@@ -85,7 +85,7 @@ describe('Un solo buscador y un solo campo «distrito»', () => {
   });
 });
 
-describe('Perfil del distrito: líneas de SmartBus y precio de oferta', () => {
+describe('Perfil del distrito: líneas de transporte (OpenStreetMap) y precio de oferta', () => {
   const perfil = {
     conteo: {
       colegios: { total: 235, inicial: 134, primaria: 90, secundaria: 55, sinNivel: 0, lista: [] },
@@ -98,10 +98,10 @@ describe('Perfil del distrito: líneas de SmartBus y precio de oferta', () => {
   };
   const FC = {
     type: 'FeatureCollection',
-    metadata: { fuente: 'SmartBus (smartbus.app)', fecha_descarga: '2026-11-03', permiso: 'autorización verbal de SmartBus; confirmación escrita pendiente' },
+    metadata: { fuente: 'OpenStreetMap (ODbL), relaciones route=bus de la red SIT y paradas de bus', fecha_extraccion: '2026-11-10' },
     features: [
-      { type: 'Feature', geometry: { type: 'LineString', coordinates: [[-71.54, -16.4], [-71.53, -16.4]] }, properties: { tipo: 'ruta', linea: 'C2', empresa: 'Cono Norte', ramal: 'Cettar', nombre: 'Cettar : A → B', sentido: 'A → B', id_ruta: '1' } },
-      { type: 'Feature', geometry: { type: 'LineString', coordinates: [[-71.52, -16.39], [-71.52, -16.41]] }, properties: { tipo: 'ruta', linea: 'C5', empresa: 'EtraBus', ramal: 'Norte', nombre: 'Norte : A → B', sentido: 'A → B', id_ruta: '3' } },
+      { type: 'Feature', geometry: { type: 'LineString', coordinates: [[-71.54, -16.4], [-71.53, -16.4]] }, properties: { tipo: 'ruta', fuente: 'OSM', osm: 'relation/1', linea: 'C2', ramal: 'Cettar', nombre: 'Cettar: A → B', desde: 'A', hasta: 'B', operador: 'C2 - Cono Norte' } },
+      { type: 'Feature', geometry: { type: 'LineString', coordinates: [[-71.52, -16.39], [-71.52, -16.41]] }, properties: { tipo: 'ruta', fuente: 'OSM', osm: 'relation/3', linea: 'C5', ramal: 'Norte', nombre: 'Norte: A → B', desde: 'A', hasta: 'B', operador: 'C5 - EtraBus' } },
     ],
   };
   const idx = RT.indexar(FC);
@@ -113,22 +113,22 @@ describe('Perfil del distrito: líneas de SmartBus y precio de oferta', () => {
     const { texto } = perfilDe('quiero vivir en Cayma', { distritoTitulo: 'Cayma', rutasDistrito: rutasDistrito('CAYMA'), precios: PRECIOS });
     expect(texto).toContain('235 colegios');
     expect(texto).toContain('Río Chili');
-    expect(texto).toContain('• Líneas de transporte (SmartBus): 2 líneas cruzan el distrito: C2 (Cono Norte), C5 (EtraBus).');
+    expect(texto).toContain('• Líneas de transporte (OpenStreetMap): 2 líneas cruzan el distrito: C2 (Cono Norte), C5 (EtraBus).');
     expect(texto).toMatch(/• Precio de oferta \(Aptología, [^)]+\): S\/ 4,905 por m² \(mediana de 118 avisos de departamentos en venta; es lo que piden, no lo que se paga\)\./);
     expect(texto).toMatch(/¿Qué es lo primero para ti/);
   });
 
   it('en un distrito sin cifra de precio (Paucarpata) omite el precio: no inventa ni estima', () => {
     const { texto } = perfilDe('quiero vivir en Paucarpata', { distritoTitulo: 'Paucarpata', rutasDistrito: rutasDistrito('PAUCARPATA'), precios: PRECIOS });
-    expect(texto).toContain('• Líneas de transporte (SmartBus)');
+    expect(texto).toContain('• Líneas de transporte (OpenStreetMap)');
     expect(texto).not.toMatch(/Precio de oferta|S\/|Aptología/);
   });
 
   it('si ninguna línea cruza el distrito, lo dice; si no se pudieron leer, no dice nada de líneas', () => {
     const vacio = { distrito: 'SOCABAYA', res: RT.cruzan(idx, { type: 'Polygon', coordinates: [[[-71.5, -16.45], [-71.49, -16.45], [-71.49, -16.44], [-71.5, -16.44], [-71.5, -16.45]]] }) };
-    expect(perfilDe('quiero vivir en Socabaya', { rutasDistrito: vacio }).texto).toContain('ninguna de las líneas publicadas cruza el distrito');
-    expect(perfilDe('quiero vivir en Socabaya', { rutasDistrito: { distrito: 'SOCABAYA', error: 'sin red' } }).texto).not.toMatch(/SmartBus/);
-    expect(perfilDe('quiero vivir en Socabaya', {}).texto).not.toMatch(/SmartBus|Precio de oferta/);
+    expect(perfilDe('quiero vivir en Socabaya', { rutasDistrito: vacio }).texto).toContain('ninguna de las líneas mapeadas cruza el distrito');
+    expect(perfilDe('quiero vivir en Socabaya', { rutasDistrito: { distrito: 'SOCABAYA', error: 'sin red' } }).texto).not.toMatch(/Líneas de transporte/);
+    expect(perfilDe('quiero vivir en Socabaya', {}).texto).not.toMatch(/Líneas de transporte|Precio de oferta/);
   });
 
   it('con una sola línea concuerda en singular', () => {

@@ -1,0 +1,121 @@
+{
+  "generado": "2026-11-10",
+  "fuentes": {
+    "cenama": {
+      "pagina": "https://www.datosabiertos.gob.pe/dataset/censo-nacional-de-mercado-de-abastos-cenama-2016-ministerio-de-la-producci%C3%B3n-produce",
+      "csv": "https://www.datosabiertos.gob.pe/sites/default/files/dat_cenamav3.csv",
+      "entidad": "Ministerio de la Producción (PRODUCE); levantado por el INEI entre el 2016-11-24 y el 2017-01-16",
+      "licencia": "Open Data Commons Attribution License (ODC-By)",
+      "libro": "https://www.inei.gob.pe/media/MenuRecursivo/publicaciones_digitales/Est/Lib1448/libro.pdf",
+      "limites": "Tabla anonimizada (id_anonimo_cenama): sin nombre, dirección ni coordenadas; solo departamento, provincia, distrito, tipo de mercado, puestos y servicios. No permite ubicar un mercado: sirve para medir cuántos mercados había en cada distrito en 2016 y compararlo con OpenStreetMap.",
+      "origen": "https://www.datosabiertos.gob.pe/sites/default/files/dat_cenamav3.csv",
+      "registros_provincia_arequipa": 89,
+      "por_tipo": {
+        "MINORISTA": 64,
+        "MIXTO": 24,
+        "MAYORISTA": 1
+      }
+    },
+    "osm": {
+      "fecha": "2026-11-10",
+      "osm_base": "2026-09-26T21:14:35Z",
+      "etiqueta": "amenity=marketplace",
+      "radio_dedup_m": 150
+    }
+  },
+  "advertencia": "El CENAMA no trae coordenadas: solo se comparan CONTEOS por distrito. Un conteo parecido no demuestra que sean los mismos mercados, ni uno distinto que falte alguno.",
+  "distritos_del_censo_fuera_de_los_25_distritos_del_proyecto": [
+    "SANTA RITA DE SIGUAS"
+  ],
+  "filas": [
+    {
+      "distrito": "ALTO SELVA ALEGRE",
+      "cenama": 4,
+      "osm": 2
+    },
+    {
+      "distrito": "AREQUIPA",
+      "cenama": 8,
+      "osm": 20
+    },
+    {
+      "distrito": "CAYMA",
+      "cenama": 6,
+      "osm": 6
+    },
+    {
+      "distrito": "CERRO COLORADO",
+      "cenama": 13,
+      "osm": 8
+    },
+    {
+      "distrito": "CHARACATO",
+      "cenama": 0,
+      "osm": 1
+    },
+    {
+      "distrito": "JACOBO HUNTER",
+      "cenama": 4,
+      "osm": 3
+    },
+    {
+      "distrito": "JOSE LUIS BUSTAMANTE Y RIVERO",
+      "cenama": 19,
+      "osm": 26
+    },
+    {
+      "distrito": "LA JOYA",
+      "cenama": 2,
+      "osm": 0
+    },
+    {
+      "distrito": "MARIANO MELGAR",
+      "cenama": 5,
+      "osm": 3
+    },
+    {
+      "distrito": "MIRAFLORES",
+      "cenama": 7,
+      "osm": 5
+    },
+    {
+      "distrito": "PAUCARPATA",
+      "cenama": 14,
+      "osm": 7
+    },
+    {
+      "distrito": "SABANDIA",
+      "cenama": 0,
+      "osm": 1
+    },
+    {
+      "distrito": "SANTA RITA DE SIGUAS",
+      "cenama": 1,
+      "osm": 0
+    },
+    {
+      "distrito": "SOCABAYA",
+      "cenama": 1,
+      "osm": 0
+    },
+    {
+      "distrito": "TIABAYA",
+      "cenama": 1,
+      "osm": 1
+    },
+    {
+      "distrito": "YANAHUARA",
+      "cenama": 2,
+      "osm": 4
+    },
+    {
+      "distrito": "YURA",
+      "cenama": 2,
+      "osm": 2
+    }
+  ],
+  "totales": {
+    "cenama": 89,
+    "osm": 89
+  }
+}

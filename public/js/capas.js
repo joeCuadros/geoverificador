@@ -4,6 +4,9 @@
  * Cada cosa que la persona pide tiene su propia forma en el mapa:
  *   colegios    → los colegios mismos, con un icono por nivel (y un círculo tenue con la distancia de referencia si son pocos)
  *   salud       → los establecimientos de salud (círculo de 1000 m si son pocos)
+ *   consultorios → los consultorios médicos, aparte de la salud y solo informativos: sin círculo (no hay distancia de referencia)
+ *   abastecimiento (mercados + supermercados), compras_ocio (malls confirmados), comercio_barrio (galerías), finanzas (bancos + cajeros), comida_fuera (restaurantes + cafés), recreacion (juegos infantiles) → comercio por necesidad, solo informativo: sin círculo
+ *                 (no hay distancia de referencia); el mall o la galería se dibuja como polígono si OSM lo tiene
  *   paraderos   → los paraderos (círculo de 400 m si son pocos)
  *   parques     → los parques, como polígonos rellenos
  *   residencial, tranquilo, campina, comercial, historico → solo los polígonos de esas zonas del plano
@@ -13,7 +16,17 @@
  *                 (alto, moderado, bajo) con una línea de leyenda por nivel. La ceniza cubre toda la ciudad y no se dibuja.
  *   cenepred_inundacion, cenepred_mm → los distritos coloreados por su nivel de riesgo ante inundaciones o ante movimientos en masa en un escenario
  *                 El Niño (CENEPRED), con una línea de leyenda por nivel. Es una estimación por distrito, no del predio. Se dibuja un fenómeno a la vez.
- *   lineas      → recorridos de bus de SmartBus (un color por línea) y, con un punto, la parada más cercana de cada una
+ *   electricidad → áreas de concesión de distribución eléctrica (MINEM-DGE): polígonos enteros, una línea de leyenda por concesionaria. Solo informativas:
+ *                 una concesión dice a qué empresa le corresponde el servicio, no que un predio esté conectado.
+ *   acopio_agua → puntos de acopio de agua del directorio de SEDAPAR (publicado en 2024, datos de 2017): puntos, sin círculo. Informativos: son lugares de reparto con camiones
+ *                 cisterna ante un desabastecimiento, no una conexión ni agua garantizada.
+ *   mineria     → concesiones mineras del Catastro Minero (INGEMMET): polígonos enteros coloreados por estado (titulada, en trámite, otra; las extinguidas no se dibujan),
+ *                 una línea de leyenda por estado. Solo informativas: una concesión es un derecho sobre los minerales, no dice que haya minería ni de quién es el predio.
+ *   censo_luz, censo_agua, censo_desague → manzanas del censo coloreadas por el % de viviendas ocupadas con alumbrado, agua o desagüe por red pública (INEI, 2017):
+ *                 informativas; el año va en la etiqueta, el popup y la leyenda. Las manzanas con pocas viviendas no dan porcentaje y las que el censo no contó no se dibujan.
+ *   viaje       → «¿qué combi me lleva al trabajo?»: los tramos de cada ruta directa entre donde subes y donde bajas, el origen, el destino, con un trasbordo el punto de trasbordo de cada opción y, en la búsqueda de zonas, las celdas desde
+ *                 las que se llega (Viaje.rutasDirectas). Los datos vienen en la propia capa; informativa, sin puntaje.
+ *   lineas      → recorridos de bus de OpenStreetMap (un color por línea) y, con un punto, la parada mapeada más cercana de cada una
  * Con una búsqueda se dibujan las entidades que hacen que cada sector cumpla, y UNA región resaltada: los sectores donde se
  * cumple todo lo que pidió. No se pinta lo que no cumple y no se ve la cuadrícula.
  *
@@ -34,6 +47,13 @@ const Capas = (() => {
   const CAPAS = [
     { id: 'colegios', etiqueta: 'Colegios', grupo: 'servicio' },
     { id: 'salud', etiqueta: 'Salud', grupo: 'servicio' },
+    { id: 'consultorios', etiqueta: 'Consultorios médicos', grupo: 'servicio' }, // aparte de la salud, informativa: sin círculo de distancia
+    { id: 'abastecimiento', etiqueta: 'Abastecimiento (mercados y supermercados)', grupo: 'servicio' }, // comercio por necesidad: informativo, sin círculo de distancia
+    { id: 'compras_ocio', etiqueta: 'Compras y ocio (malls)', grupo: 'servicio' },
+    { id: 'comercio_barrio', etiqueta: 'Comercio de barrio (galerías)', grupo: 'servicio' },
+    { id: 'finanzas', etiqueta: 'Finanzas (bancos y cajeros)', grupo: 'servicio' }, // servicios de la vida diaria (OSM): informativos, sin círculo de distancia
+    { id: 'comida_fuera', etiqueta: 'Comida fuera de casa (restaurantes y cafés)', grupo: 'servicio' },
+    { id: 'recreacion', etiqueta: 'Recreación (juegos infantiles)', grupo: 'servicio' }, // los parques son la capa «parques» (área verde)
     { id: 'paraderos', etiqueta: 'Paraderos', grupo: 'servicio' },
     { id: 'parques', etiqueta: 'Parques', grupo: 'servicio' },
     { id: 'residencial', etiqueta: 'Zona residencial', grupo: 'zona' },
@@ -43,6 +63,13 @@ const Capas = (() => {
     { id: 'historico', etiqueta: 'Centro histórico', grupo: 'zona' },
     { id: 'quebradas', etiqueta: 'Quebradas y ríos', grupo: 'riesgo' },
     { id: 'sismos', etiqueta: 'Sismos', grupo: 'riesgo' },
+    { id: 'electricidad', etiqueta: 'Concesión eléctrica (SEAL y otras)', grupo: 'servicio' }, // informativa: no es una conexión
+    { id: 'acopio_agua', etiqueta: 'Puntos de acopio de agua (SEDAPAR, datos de 2017)', grupo: 'servicio' }, // informativa: lugares de reparto con camiones cisterna, no una conexión
+    { id: 'mineria', etiqueta: 'Concesiones mineras (INGEMMET)', grupo: 'riesgo' }, // informativa: un derecho sobre los minerales, no minería en el predio
+    { id: 'censo_luz', etiqueta: 'Alumbrado eléctrico por red pública (censo 2017)', grupo: 'servicio' }, // censo por manzana: informativas, cifras de 2017
+    { id: 'censo_agua', etiqueta: 'Agua por red pública (censo 2017)', grupo: 'servicio' },
+    { id: 'censo_desague', etiqueta: 'Desagüe por red pública (censo 2017)', grupo: 'servicio' },
+    { id: 'viaje', etiqueta: 'Ruta al trabajo (combi o bus)', grupo: 'servicio' }, // sus datos vienen del asistente (origen, destino, tramos), no se arman con un botón
     { id: 'volcan', etiqueta: 'Peligro volcánico (Misti)', grupo: 'riesgo' },
     { id: 'cenepred_inundacion', etiqueta: 'Riesgo de inundación por distrito (CENEPRED)', grupo: 'riesgo' },
     { id: 'cenepred_mm', etiqueta: 'Riesgo de movimientos en masa por distrito (CENEPRED)', grupo: 'riesgo' },
@@ -69,7 +96,9 @@ const Capas = (() => {
         k.niveles = NIVELES.filter((n) => (k.niveles || []).includes(n) || niveles.includes(n));
         k.umbralPorNivel = { ...(k.umbralPorNivel || {}), ...(c.umbralPorNivel || {}) };
         if (!c.umbralPorNivel && typeof c.umbralEfectivoM === 'number') niveles.forEach((n) => { k.umbralPorNivel[n] = c.umbralEfectivoM; });
-      } else if (c.id === 'salud') capa('salud').umbralM = c.umbralEfectivoM;
+      } else if (c.id in C.COMERCIO || c.id === 'electricidad' || c.id === 'mineria' || c.id === 'acopio_agua' || /^censo_(luz|agua|desague)$/.test(c.id)) capa(c.id); // solo del mapa del chat (no son un criterio de búsqueda)
+      else if (c.id === 'consultorios') capa('consultorios'); // solo del mapa del chat (no es un criterio de búsqueda)
+      else if (c.id === 'salud') capa('salud').umbralM = c.umbralEfectivoM;
       else if (c.id === 'transporte') capa('paraderos').umbralM = c.umbralEfectivoM;
       else if (c.id === 'areaVerde') capa('parques').umbralM = c.umbralEfectivoM;
       else if (ZONAS.includes(c.id)) capa(c.id).umbralM = c.umbralEfectivoM;
@@ -119,6 +148,8 @@ const Capas = (() => {
   };
 
   const tituloColegio = (c) => c.nombre || 'Colegio sin nombre en OpenStreetMap';
+  // De qué fuente es el punto (RENIPRESS, ESCALE u OSM de respaldo) y su código oficial, para el popup del mapa.
+  const fuenteDe = (p) => ({ fuente: p.fuente || 'OSM', fuenteTexto: C.textoFuenteElemento({ fuenteElemento: p.fuente || 'OSM', codigo: p.codigo, categoria: p.categoria, gestion: p.gestion, osm: p.osm }) });
   const NOMBRE_NIVEL = { inicial: 'inicial', primaria: 'primaria', secundaria: 'secundaria' };
 
   // -------------------------------------------------------------------- Construir
@@ -129,12 +160,16 @@ const Capas = (() => {
    *   datos:    Asistente.prepararDatos; zonas: Zonificacion.zonas(); cauces: [{ nombre, tipo, geometry }] o null; sismos: [{ lat, lon, magnitud, … }] o null
    *   area:     { polys } (un distrito), { bbox } o null (todo el mapa)
    cenepred: el contenido de data/riesgo_cenepred_fen2027.json (y Distritos cargado para los límites); solo hace falta con una capa cenepred_inundacion o cenepred_mm
+   censo:    las Features de las manzanas del censo (data/censo/manzanas/*.json) de lo que se ve; solo hacen falta con una capa censo_luz, censo_agua o censo_desague (censoAnio: el año, 2017)
+   electricidad: las Features del archivo de concesiones eléctricas (Polygon / MultiPolygon); solo hacen falta con una capa { id: 'electricidad' }
+   acopio:   las Features Point del archivo de puntos de acopio de agua de SEDAPAR; solo hacen falta con una capa { id: 'acopio_agua' }
+   mineria:  las Features del archivo de concesiones mineras (Polygon / MultiPolygon); solo hacen falta con una capa { id: 'mineria' }
    volcan:   las zonas de Volcan.indexar; solo hacen falta (y solo se cargan) con una capa { id: 'volcan', tipos?: ['lahar', …] }
    rutas:    el índice de Rutas.indexar; solo hace falta (y solo se carga) si hay una capa { id: 'lineas', nombres:[…], punto?}
    *   sectores: los de Asistente.formatearBusqueda (con `centros`); si hay, solo se dibujan las entidades que los hacen cumplir
    * Devuelve { puntos, circulos, poligonos, lineas, sismos, peligroVolcan, riesgoDistritos, sectores, lineasBus, paradasBus, leyenda, vacias, sinDatos, resumen, limites }.
    */
-  function construir({ capas, datos, zonas, cauces, sismos, volcan = null, cenepred = null, area = null, umbrales, sectores = null, rutas = null, maxCirculos = 12 }) {
+  function construir({ capas, datos, zonas, cauces, sismos, volcan = null, electricidad = null, mineria = null, acopio = null, censo = null, censoAnio = 2017, minViviendasCenso = 5, cenepred = null, area = null, umbrales, sectores = null, rutas = null, maxCirculos = 12 }) {
     const polys = area && area.polys ? area.polys : null;
     const cajaArea = polys ? bboxDePolys(polys) : area && area.bbox ? area.bbox : null;
     const dentroPoligonos = polys ? E().contenedor(polys) : null;
@@ -155,6 +190,7 @@ const Capas = (() => {
     const peligroVolcan = [];
     const riesgoDistritos = [];
     let lineasBus = [];
+    let viajeOut = null;
     let paradasBus = [];
     let cajaLineas = null;
     const leyenda = [];
@@ -164,10 +200,10 @@ const Capas = (() => {
 
     // Cómo se nombra cada capa en el resumen: [singular, plural].
     const NOMBRES = {
-      colegios: ['colegio', 'colegios'], salud: ['establecimiento de salud', 'establecimientos de salud'], paraderos: ['paradero', 'paraderos'], parques: ['parque', 'parques'],
+      colegios: ['colegio', 'colegios'], salud: ['establecimiento de salud', 'establecimientos de salud'], consultorios: ['consultorio médico', 'consultorios médicos'], abastecimiento: ['punto de abastecimiento', 'puntos de abastecimiento'], compras_ocio: ['mall confirmado', 'malls confirmados'], comercio_barrio: ['galería o comercio de barrio', 'galerías y comercios de barrio'], finanzas: ['banco o cajero', 'bancos y cajeros'], comida_fuera: ['restaurante o café', 'restaurantes y cafés'], recreacion: ['área de juegos infantiles', 'áreas de juegos infantiles'], paraderos: ['paradero', 'paraderos'], parques: ['parque', 'parques'],
       residencial: ['zona residencial', 'zonas residenciales'], tranquilo: ['zona tranquila', 'zonas tranquilas'], campina: ['zona de campiña', 'zonas de campiña'],
       comercial: ['zona comercial', 'zonas comerciales'], historico: ['zona del centro histórico', 'zonas del centro histórico'],
-      quebradas: ['tramo de quebrada o río', 'tramos de quebradas y ríos'], sismos: ['sismo', 'sismos'], volcan: ['zona de peligro volcánico', 'zonas de peligro volcánico'], cenepred_inundacion: ['distrito coloreado por su riesgo ante inundaciones', 'distritos coloreados por su riesgo ante inundaciones'], cenepred_mm: ['distrito coloreado por su riesgo ante movimientos en masa', 'distritos coloreados por su riesgo ante movimientos en masa'], lineas: ['línea de bus', 'líneas de bus'], sectores: ['sector', 'sectores'],
+      quebradas: ['tramo de quebrada o río', 'tramos de quebradas y ríos'], sismos: ['sismo', 'sismos'], volcan: ['zona de peligro volcánico', 'zonas de peligro volcánico'], cenepred_inundacion: ['distrito coloreado por su riesgo ante inundaciones', 'distritos coloreados por su riesgo ante inundaciones'], cenepred_mm: ['distrito coloreado por su riesgo ante movimientos en masa', 'distritos coloreados por su riesgo ante movimientos en masa'], lineas: ['línea de bus', 'líneas de bus'], electricidad: ['área de concesión eléctrica', 'áreas de concesión eléctrica'], mineria: ['concesión minera', 'concesiones mineras'], acopio_agua: ['punto de acopio de agua', 'puntos de acopio de agua'], viaje: ['ruta al trabajo', 'rutas al trabajo'], censo_luz: ['manzana con cifras de alumbrado', 'manzanas con cifras de alumbrado'], censo_agua: ['manzana con cifras de agua', 'manzanas con cifras de agua'], censo_desague: ['manzana con cifras de desagüe', 'manzanas con cifras de desagüe'], sectores: ['sector', 'sectores'],
     };
     const nombreDe = (capa, n) => NOMBRES[capa][n === 1 ? 0 : 1];
     const cuenta = (capa, n, texto) => {
@@ -189,7 +225,7 @@ const Capas = (() => {
           const propios = c.niveles.filter((n) => niveles.includes(n));
           const subtipo = propios.length === 1 ? propios[0] : propios[0];
           puntos.push({
-            capa: 'colegios', tipo: 'colegio', subtipo, niveles: propios, lat: c.lat, lon: c.lon, nombre: c.nombre, osm: c.osm,
+            capa: 'colegios', tipo: 'colegio', subtipo, niveles: propios, lat: c.lat, lon: c.lon, nombre: c.nombre, osm: c.osm, ...fuenteDe(c),
             titulo: tituloColegio(c), detalle: `Colegio de ${propios.map((n) => NOMBRE_NIVEL[n]).join(' y ')}`, radioM: umbralDe(subtipo),
           });
         });
@@ -199,10 +235,33 @@ const Capas = (() => {
         const umbral = typeof capa.umbralM === 'number' ? capa.umbralM : id === 'salud' ? u.salud : u.transporte;
         const elegidos = (lista || []).filter((p) => enArea(p.lat, p.lon) && (!centros || cercaDe(centros, p.lat, p.lon, umbral)));
         elegidos.forEach((p) => puntos.push({
-          capa: id, tipo: id === 'salud' ? 'salud' : 'paradero', subtipo: id, lat: p.lat, lon: p.lon, nombre: p.nombre, osm: p.osm,
-          titulo: p.nombre || (id === 'salud' ? 'Establecimiento de salud sin nombre en OpenStreetMap' : 'Paradero'), detalle: id === 'salud' ? 'Establecimiento de salud' : 'Paradero de transporte público', radioM: umbral,
+          capa: id, tipo: id === 'salud' ? 'salud' : 'paradero', subtipo: id, lat: p.lat, lon: p.lon, nombre: p.nombre, osm: p.osm, ...(id === 'salud' ? fuenteDe(p) : {}),
+          titulo: p.nombre || (id === 'salud' ? 'Establecimiento de salud sin nombre' : 'Paradero'), detalle: id === 'salud' ? 'Establecimiento de salud' : 'Paradero de transporte público', radioM: umbral,
         }));
         cuenta(id, elegidos.length, `${id === 'salud' ? 'Establecimientos de salud' : 'Paraderos'}: ${elegidos.length}`);
+      } else if (id === 'consultorios') {
+        const elegidos = (datos.consultorios || []).filter((p) => enArea(p.lat, p.lon));
+        elegidos.forEach((p) => puntos.push({
+          capa: 'consultorios', tipo: 'consultorio', subtipo: 'consultorios', lat: p.lat, lon: p.lon, nombre: p.nombre, osm: p.osm, ...fuenteDe(p),
+          titulo: p.nombre || 'Consultorio médico sin nombre', detalle: 'Consultorio médico',
+        })); // sin radioM: no hay distancia de referencia, así que tampoco se dibuja un círculo
+        cuenta('consultorios', elegidos.length, `Consultorios médicos: ${elegidos.length}`);
+      } else if (id in C.COMERCIO) {
+        // Comercio: informativo (sin umbral). Un punto, o el centro de un polígono (que además se dibuja): sin radioM, así que tampoco hay círculo.
+        const def = C.COMERCIO[id];
+        const elegidos = (datos[id] || []).filter((p) => enArea(p.lat, p.lon));
+        elegidos.forEach((p) => {
+          // El icono dice qué es (mercado, supermercado, mall o galería); el detalle, para qué necesidad cuenta y, de un supermercado, en qué mall está.
+          const tipo = id === 'compras_ocio' ? 'mall' : id === 'comercio_barrio' ? 'galeria' : p.tipo; // abastecimiento y los servicios de la vida diaria traen su propio tipo
+          const detalle = `${def.etiqueta}${def.tipos.length > 1 && C.COMERCIO_TIPO[p.tipo] ? `: ${C.COMERCIO_TIPO[p.tipo].singular}` : ''}${p.dentroDeMall ? ` · dentro de ${p.dentroDeMall.nombre || 'un mall'}` : ''}`;
+          const titulo = p.nombre || `${def.etiqueta} sin nombre en OpenStreetMap`;
+          puntos.push({
+            capa: id, tipo, subtipo: id, lat: p.lat, lon: p.lon, nombre: p.nombre, osm: p.osm, fuente: 'OSM', fuenteTexto: C.textoFuenteComercio(p), verificado: p.verificado || null,
+            titulo, detalle,
+          });
+          if (p.forma) poligonos.push({ capa: id, geometry: p.forma, nombre: p.nombre, osm: p.osm, titulo, detalle });
+        });
+        cuenta(id, elegidos.length, `${def.etiqueta}: ${elegidos.length}`);
       } else if (id === 'parques') {
         const umbral = typeof capa.umbralM === 'number' ? capa.umbralM : u.areaVerde.distanciaM;
         const elegidos = (datos.verdes || []).filter((v) => {
@@ -254,7 +313,102 @@ const Capas = (() => {
         if (capa.punto) cajaLineas = bboxDe([[capa.punto.lon, capa.punto.lat], ...m.paradas.map((p) => [p.lon, p.lat])]);
         else cajaLineas = m.bbox;
         const etiquetas = m.trazos.map((t) => R().etiquetaLinea(t));
-        cuenta('lineas', m.trazos.length, `Líneas de bus de SmartBus: ${etiquetas.join(', ')}${m.paradas.length ? `; con la parada más cercana de cada una (${m.paradas.length})` : ''}`);
+        cuenta('lineas', m.trazos.length, `Líneas de bus de OpenStreetMap: ${etiquetas.join(', ')}${m.paradas.length ? `; con la parada mapeada más cercana de cada una (${m.paradas.length})` : ''}`);
+      } else if (id === 'censo_luz' || id === 'censo_agua' || id === 'censo_desague') {
+        // Censo por manzana: coroplético por el % de viviendas ocupadas con el servicio. Informativo; con pocas viviendas no hay porcentaje y sin cifras no se dibuja.
+        if (!Array.isArray(censo) || censo.length === 0) { sinDatos.push('censo'); return; }
+        const clave = id === 'censo_luz' ? 'luz' : id === 'censo_agua' ? 'agua' : 'desague';
+        const rotulo = { luz: 'alumbrado eléctrico por red pública', agua: 'agua por red pública', desague: 'desagüe por red pública' }[clave];
+        const conCifras = censo.filter((f) => f && f.geometry && f.properties && typeof f.properties.o === 'number' && (!cajaArea || (() => {
+          const b = bboxDe(coordsDe(f.geometry));
+          return !(b[2] < cajaArea[0] || b[0] > cajaArea[2] || b[3] < cajaArea[1] || b[1] > cajaArea[3]);
+        })()));
+        const porClase = new Array(C.CLASES_CENSO.length).fill(0);
+        let pocas = 0;
+        conCifras.forEach((f) => {
+          const p = f.properties;
+          const s = C.serviciosDeManzana(p, minViviendasCenso);
+          const pct = s[clave].pct;
+          const clase = C.claseCenso(pct);
+          if (clase === null) pocas++; else porClase[clase]++;
+          poligonos.push({
+            capa: id, geometry: f.geometry, nombre: p.id || null, osm: null, valor: pct, clase,
+            titulo: `Manzana ${p.id || ''}`.trim(),
+            detalle: pct === null
+              ? `Censo ${censoAnio}: solo ${p.o} ${p.o === 1 ? 'vivienda ocupada' : 'viviendas ocupadas'} en la manzana; son pocas para dar un porcentaje de ${rotulo}`
+              : `Censo ${censoAnio}: ${String(pct).replace('.', ',')} % de las ${p.o} viviendas ocupadas de la manzana tenía ${rotulo}`,
+          });
+        });
+        if (conCifras.length === 0) vacias.push(id);
+        porClase.forEach((n, i) => { if (n > 0) leyenda.push({ capa: id, clase: i, texto: `${C.CLASES_CENSO[i]}: ${n}`, n }); });
+        if (pocas > 0) leyenda.push({ capa: id, clase: null, texto: `Pocas viviendas (sin porcentaje): ${pocas}`, n: pocas });
+      } else if (id === 'viaje') {
+        // Ruta al trabajo: los datos los trae la capa (los armó el asistente con Viaje.rutasDirectas). Tramo = de donde subes a donde bajas.
+        const tramos = (capa.tramos || []).filter((t) => t && Array.isArray(t.segmento) && t.segmento.length >= 2);
+        const celdasViaje = (capa.celdas || []).filter((p) => p && Number.isFinite(p.lat) && Number.isFinite(p.lon));
+        if (!capa.destino && tramos.length === 0) { vacias.push('viaje'); return; }
+        const trasbordos = (capa.trasbordos || []).filter((p) => p && Number.isFinite(p.lat) && Number.isFinite(p.lon));
+        viajeOut = { origen: capa.origen || null, destino: capa.destino || null, tramos, trasbordos, celdas: celdasViaje };
+        const destinoTxt = capa.destino && capa.destino.nombre ? ` a ${capa.destino.nombre}` : '';
+        const opciones = new Set(tramos.map((t) => t.opcion).filter((o) => o !== undefined)).size;
+        leyenda.push({ capa: 'viaje', texto: opciones ? `Ruta al trabajo${destinoTxt}: ${opciones} ${opciones === 1 ? 'opción con un trasbordo' : 'opciones con un trasbordo'} (dos rutas, de donde subes a donde bajas)` : tramos.length ? `Ruta al trabajo${destinoTxt}: ${tramos.length} ${tramos.length === 1 ? 'ruta directa' : 'rutas directas'} (de donde subes a donde bajas)` : `Ruta al trabajo${destinoTxt}${celdasViaje.length ? `: ${celdasViaje.length} celdas desde las que se llega sin transbordo` : ''}`, n: Math.max(tramos.length, celdasViaje.length, 1) });
+      } else if (id === 'electricidad') {
+        // Áreas de concesión de distribución eléctrica: polígonos ENTEROS del registro (no se recortan al distrito). Informativas, sin círculo.
+        if (!Array.isArray(electricidad) || electricidad.length === 0) { sinDatos.push('electricidad'); return; }
+        const delArea = electricidad.filter((f) => {
+          if (!f || !f.geometry) return false;
+          if (!cajaArea) return true;
+          const b = bboxDe(coordsDe(f.geometry));
+          return !(b[2] < cajaArea[0] || b[0] > cajaArea[2] || b[3] < cajaArea[1] || b[1] > cajaArea[3]);
+        });
+        delArea.forEach((f) => {
+          const p = f.properties || {};
+          poligonos.push({
+            capa: 'electricidad', geometry: f.geometry, nombre: p.nombre_zona || null, osm: null, concesionaria: p.concesionaria || null,
+            titulo: p.nombre_zona || 'Área de concesión eléctrica',
+            detalle: `Concesión de distribución de ${p.concesionaria || p.empresa || 'una empresa'}${p.expediente ? ` · expediente ${p.expediente}` : ''}${p.situacion ? ` · ${String(p.situacion).toLowerCase()}` : ''}`,
+          });
+        });
+        if (delArea.length === 0) vacias.push('electricidad');
+        const porEmpresa = new Map();
+        delArea.forEach((f) => { const k = (f.properties && (f.properties.concesionaria || f.properties.empresa)) || 'una empresa'; porEmpresa.set(k, (porEmpresa.get(k) || 0) + 1); });
+        porEmpresa.forEach((n, k) => leyenda.push({ capa: 'electricidad', texto: `Concesión de ${k}: ${n}`, n }));
+      } else if (id === 'acopio_agua') {
+        // Puntos de acopio de agua (SEDAPAR): informativos, un punto cada uno, sin círculo.
+        if (!Array.isArray(acopio) || acopio.length === 0) { sinDatos.push('acopio_agua'); return; }
+        const elegidos = acopio.filter((f) => f && f.geometry && f.geometry.type === 'Point' && enArea(f.geometry.coordinates[1], f.geometry.coordinates[0]));
+        elegidos.forEach((f) => {
+          const p = f.properties || {};
+          puntos.push({
+            capa: 'acopio_agua', tipo: 'acopio', subtipo: 'acopio', lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0], nombre: p.direccion || null, osm: null, fuente: 'SEDAPAR',
+            fuenteTexto: 'Directorio de Puntos de Acopio de Agua Potable de SEDAPAR (gob.pe, publicado el 16 de febrero de 2024; datos de 2017)', verificado: null,
+            titulo: p.direccion || 'Punto de acopio de agua',
+            detalle: `Punto de acopio de agua${p.distrito ? ` · ${p.distrito}` : ''} · datos de 2017 · lugar de reparto con camiones cisterna, no una conexión`,
+          });
+        });
+        cuenta('acopio_agua', elegidos.length, `Puntos de acopio de agua (SEDAPAR, datos de 2017): ${elegidos.length}`);
+      } else if (id === 'mineria') {
+        // Concesiones mineras (Catastro Minero): polígonos ENTEROS (no se recortan al distrito), sin las extinguidas. Informativas, sin círculo.
+        if (!Array.isArray(mineria) || mineria.length === 0) { sinDatos.push('mineria'); return; }
+        const delArea = mineria.filter((f) => {
+          if (!f || !f.geometry || !f.properties || f.properties.estado === 'EXTINGUIDO') return false;
+          if (!cajaArea) return true;
+          const b = bboxDe(coordsDe(f.geometry));
+          return !(b[2] < cajaArea[0] || b[0] > cajaArea[2] || b[3] < cajaArea[1] || b[1] > cajaArea[3]);
+        });
+        const TXT_ESTADO = { TITULADO: 'titulada', 'EN TRÁMITE': 'en trámite', OTRO: 'de otro tipo' };
+        delArea.forEach((f) => {
+          const p = f.properties;
+          poligonos.push({
+            capa: 'mineria', geometry: f.geometry, nombre: p.nombre || p.codigo || null, osm: null, estado: p.estado, codigo: p.codigo || null,
+            titulo: p.nombre || p.codigo || 'Concesión minera',
+            detalle: `Concesión ${TXT_ESTADO[p.estado] || p.estado}${p.sustancia ? ` · ${p.sustancia}` : ''}${p.hectareas ? ` · ${Math.round(p.hectareas)} ha` : ''}${p.codigo ? ` · código ${p.codigo}` : ''}`,
+          });
+        });
+        if (delArea.length === 0) vacias.push('mineria');
+        const porEstado = new Map();
+        delArea.forEach((f) => porEstado.set(f.properties.estado, (porEstado.get(f.properties.estado) || 0) + 1));
+        porEstado.forEach((n, k) => leyenda.push({ capa: 'mineria', texto: `Concesión ${TXT_ESTADO[k] || k}: ${n}`, n }));
       } else if (id === 'volcan') {
         if (!Array.isArray(volcan) || volcan.length === 0) { sinDatos.push('volcan'); return; }
         const pedidos = (capa.tipos && capa.tipos.length ? capa.tipos : V().dibujables()).filter((t) => V().TIPOS[t] && V().TIPOS[t].mapa);
@@ -308,7 +462,8 @@ const Capas = (() => {
     } else if (cajaArea) limites = cajaArea;
     else if (cajaLineas && valido(cajaLineas) && puntos.length === 0 && poligonos.length === 0) limites = cajaLineas;
     else {
-      const todos = [...puntos.map((p) => [p.lon, p.lat]), ...poligonos.flatMap((p) => coordsDe(p.geometry)), ...peligroVolcan.flatMap((p) => coordsDe(p.geometry)), ...riesgoDistritos.flatMap((p) => coordsDe(p.geometry))];
+      const todos = [...puntos.map((p) => [p.lon, p.lat]), ...poligonos.flatMap((p) => coordsDe(p.geometry)), ...peligroVolcan.flatMap((p) => coordsDe(p.geometry)), ...riesgoDistritos.flatMap((p) => coordsDe(p.geometry)),
+        ...(viajeOut ? [...(viajeOut.origen ? [[viajeOut.origen.lon, viajeOut.origen.lat]] : []), ...(viajeOut.destino ? [[viajeOut.destino.lon, viajeOut.destino.lat]] : []), ...viajeOut.tramos.flatMap((t) => t.segmento), ...(viajeOut.trasbordos || []).map((p) => [p.lon, p.lat]), ...viajeOut.celdas.map((p) => [p.lon, p.lat])] : [])];
       limites = todos.length ? bboxDe(todos) : null;
     }
     if (limites && !valido(limites)) limites = null;
@@ -319,9 +474,9 @@ const Capas = (() => {
     const resumen = !leyenda.length && !vacias.length && !sinDatos.length
       ? (cajaArea ? 'Marqué el distrito en el mapa. Elige arriba qué quieres ver dentro de él.' : '')
       : vacias.length && !leyenda.length
-      ? `En esta zona no hay ${vacias.map((v) => ({ colegios: 'colegios', salud: 'establecimientos de salud', paraderos: 'paraderos', parques: 'parques', volcan: 'zonas de peligro volcánico' }[v] || v)).join(' ni ')} en los datos.`
+      ? `En esta zona no hay ${vacias.map((v) => ({ colegios: 'colegios', salud: 'establecimientos de salud', consultorios: 'consultorios médicos', abastecimiento: 'puntos de abastecimiento', compras_ocio: 'malls confirmados', comercio_barrio: 'galerías o comercio de barrio', finanzas: 'bancos o cajeros', comida_fuera: 'restaurantes o cafés', recreacion: 'áreas de juegos infantiles', acopio_agua: 'puntos de acopio de agua', electricidad: 'áreas de concesión eléctrica', censo_luz: 'manzanas con cifras del censo', censo_agua: 'manzanas con cifras del censo', censo_desague: 'manzanas con cifras del censo', paraderos: 'paraderos', parques: 'parques', volcan: 'zonas de peligro volcánico' }[v] || v)).join(' ni ')} en los datos.`
       : `Muestro ${listaEs(porCapa.map((l) => `${l.n} ${nombreDe(l.capa, l.n)}`))}.${vacias.length ? ` No hay ${listaEs(vacias.map((v) => nombreDe(v, 2)))} en esta zona.` : ''}`;
-    return { puntos, circulos, poligonos, lineas, sismos: sism, peligroVolcan, riesgoDistritos, sectores: regiones, lineasBus, paradasBus, leyenda, vacias, sinDatos, resumen, limites };
+    return { puntos, circulos, poligonos, lineas, viaje: viajeOut, sismos: sism, peligroVolcan, riesgoDistritos, sectores: regiones, lineasBus, paradasBus, leyenda, vacias, sinDatos, resumen, limites };
   }
 
   /** Los sismos del archivo GeoJSON del IGP como lista simple { lat, lon, magnitud, fecha, profundidadKm, ref }; ignora lo que no es un punto con magnitud. */

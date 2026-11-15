@@ -161,14 +161,85 @@ Los cementerios se excluyeron: el Reglamento no les asigna una zona, y suponerla
 
 ### 3.4 OpenStreetMap frente a RENIPRESS y ESCALE (K2)
 
-**Resultado:** _pendiente de correr con los archivos oficiales_. El script y su lógica están hechos y probados con archivos CSV pequeños de muestra (`test/fixtures/`, datos inventados que no dicen nada de la realidad); **no se descargó ningún dato oficial**: los dos archivos los baja la persona a mano. Sigue el protocolo de `docs/INVESTIGACION-VARIABLES.md` §5.1.
+**Resultado de la primera corrida (2026-11-09, resultado completo en `docs/validacion/k2-resultado.json`; las cifras de lo oficial tenían tres errores de filtro que se corrigieron el mismo día, ver «Decisión tomada y corrida corregida» más abajo, y la conclusión no cambia):** con los archivos oficiales **OpenStreetMap no alcanza el criterio de aceptación fijado antes de medir (85 % de exhaustividad y de precisión), ni en salud ni en educación**. Es una corrida real; los números salen del script sin ajustes.
 
-**Dónde descargar cada archivo** (las descargas automáticas reciben HTTP 418 o piden sesión: hay que usar un navegador):
+**Archivos usados.** RENIPRESS: `RENIPRESS_30-10-2026.csv` (edición del 2026-10-30, `datosabiertos.gob.pe`; 36 249 filas). ESCALE: `Padron_web_20261030.zip` (padrón al 2026-10-30; `Padron_web.dbf` con 180 943 registros). OpenStreetMap: la copia congelada del 2026-10-28. Comando: `--min-exhaustividad=0.85 --min-precision=0.85 --fecha-escale=2026-10-30 --fecha-renipress=2026-10-30`.
+
+**Preparación de los archivos en la primera corrida (ya no hace falta: el script lee el CSV y el DBF tal cual).** Las descargas directas con `curl` funcionaron esta vez (el CSV de RENIPRESS y el ZIP de ESCALE; no hizo falta el navegador). (1) El CSV de RENIPRESS no trae columnas `LATITUD` y `LONGITUD`: trae `NORTE` y `ESTE`, que en las 967 filas de Arequipa con valor son grados decimales (por ejemplo -16,4 y -71,5; ninguna es UTM ni está invertida), y se renombraron en el encabezado para que el script las acepte; se dejaron solo las filas del departamento de Arequipa. (2) El padrón de ESCALE viene en `.dbf` con codificación CP850; se convirtió a CSV UTF-8 con un conversor propio fuera del repositorio y se dejaron solo las filas del departamento de Arequipa (8 463).
+
+**Qué quedó en la comparación.** RENIPRESS: de 1 688 filas del departamento, se descartaron 710 sin coordenadas (**el 42 %**), 194 de otra provincia, 30 fuera de la zona, 72 inactivas, 243 consultorios y 33 repetidas, y quedaron **406 establecimientos**. ESCALE: de 8 463 filas se descartaron 41 sin coordenadas, 2 357 de otra provincia, 313 fuera de la zona y 1 998 de otro nivel, y quedaron 3 754 instituciones en **2 227 locales** (una fila por código de local).
+
+| Categoría | Oficiales | En OSM | Exhaustividad (50 / 100 / 200 m) | Precisión (50 / 100 / 200 m) | Desfase (mediana; p90, a 200 m) | Puntos de la malla (1 536) donde cambia CUMPLE / NO CUMPLE |
+|---|---|---|---|---|---|---|
+| Salud (1000 m) | 406 | 164 | 19,2 / 19,7 / 20,2 % | 49,7 / 51,0 / 52,2 % | 10 m; 31 m | 97 (6,3 %): OSM cumple y el oficial no, 20; el oficial cumple y OSM no, 77 |
+| Educación (todos los niveles) | 2 227 | 2 151 | 42,7 / 45,6 / 46,7 % | 44,9 / 48,0 / 49,2 % | 6 m; 45 m | no se calcula por total |
+| Inicial (500 m) | 1 666 | 1 191 | 41,3 / 43,8 / 45,1 % | 58,1 / 61,6 / 63,4 % | 6 m; 44 m | 103 (6,7 %): 27 y 76 |
+| Primaria (1500 m) | 1 273 | 892 | 42,9 / 47,3 / 48,5 % | 63,3 / 69,8 / 71,6 % | 10 m; 53 m | 65 (4,2 %): 6 y 59 |
+| Secundaria (3000 m) | 717 | 556 | 41,1 / 47,1 / 48,5 % | 56,1 / 64,3 / 66,2 % | 15 m; 60 m | 73 (4,8 %): 3 y 70 |
+
+La diferencia mediana de la distancia al establecimiento más cercano es de 14 m en salud, 20 m en inicial, 17 m en primaria y 34 m en secundaria (percentil 90: 436, 406, 306 y 757 m). Por distrito (radio de 200 m), la exhaustividad más baja en salud es la del Cercado (6 de 111, 5,4 %), Yanahuara (2 de 51, 3,9 %) y Paucarpata (12 de 78, 15,4 %); en educación, la del Cercado (124 de 400, 31,0 %), Miraflores (34,8 %) y José Luis Bustamante y Rivero (36,5 %).
+
+**Cómo leerlo.** (1) Lo que OSM sí tiene está bien ubicado (desfase mediano de 6 a 15 m). (2) Le falta más de la mitad de lo oficial, sobre todo en salud, y esa ausencia mueve el resultado de CUMPLE / NO CUMPLE solo en el 4 % al 7 % de los puntos de la malla, casi siempre en el sentido de que OSM dice «no cumple» donde el registro oficial dice «cumple». (3) La precisión es una cota baja: un colegio o un puesto de OSM con otro nombre que el del registro no se empareja (el parecido mínimo es 0,9) y cuenta como sin correspondencia; no se revisó a mano ninguna muestra de los no emparejados. (4) La exhaustividad de salud está medida sobre los 406 establecimientos con coordenadas: el 42 % de las filas de RENIPRESS en Arequipa no las trae y no se pueden contrastar. (5) Las coordenadas de ESCALE son las del local, reportadas por la UGEL. **Decisión:** el equipo eligió usar RENIPRESS y ESCALE como fuente primaria, con OpenStreetMap solo de respaldo y con la fuente de cada dato a la vista (la alternativa que ya figuraba en este documento). Está implementada: ver «Decisión tomada y corrida corregida» más abajo y `docs/METODOLOGIA.md` §6. El script, la lógica y el protocolo siguen siendo los de `docs/INVESTIGACION-VARIABLES.md` §5.1.
+
+### Decisión tomada y corrida corregida (2026-11-09)
+
+**Decisión.** Salud y educación pasan a salir de los registros oficiales: **RENIPRESS** para salud y el **padrón de ESCALE** para colegios, con **OpenStreetMap como respaldo** solo donde ningún punto oficial de la misma categoría está a 200 m (el radio con que se midió la exhaustividad). Cada establecimiento muestra su fuente y su código oficial en la ficha, el mapa, el chat y el informe. `pnpm datos:oficial` arma los archivos (descarga con caché, pausa entre solicitudes y procedencia); las reglas están en `docs/METODOLOGIA.md` §6.1 a §6.4.
+
+**Tres errores de la corrida anterior, corregidos.** Al armar la fusión se leyeron los archivos oficiales con más cuidado y se encontraron tres fallas en cómo K2 filtraba lo oficial (no en OpenStreetMap):
+
+1. **Estado.** El filtro solo descartaba lo que decía «inactivo», «baja» o «cerrado». En ESCALE el estado viene en dos columnas (`ESTADO` = 1 o 2 y `D_ESTADO` = Activo o Inactivo) y el `2` no se reconocía: **las 2 458 instituciones inactivas de la provincia entraron como si estuvieran activas**. En RENIPRESS el «cierre temporal» (160 registros de Arequipa) tampoco se descartaba. Ahora solo cuenta lo claramente activo.
+2. **Niveles.** `A3` es «Inicial - Cuna-jardín», no «programa no escolarizado» (ese es `A5`): se perdían las cuna-jardín. Y la primaria y secundaria de adultos y la educación básica especial se contaban como colegio. Ahora solo cuenta la educación básica regular (`docs/METODOLOGIA.md` §6.2).
+3. **Categorías de salud.** K2 dejaba pasar el servicio médico de apoyo (laboratorios, imágenes, hemodiálisis, ópticas…) y los centros odontológicos. Ahora solo cuentan los establecimientos con o sin internamiento de categoría I-1 a III-E, y el consultorio médico se incluía (K2 lo había excluido); desde el 2026-11-10 es una categoría aparte (ver «Consultorios como categoría aparte»). Además, el CSV de RENIPRESS ya se lee tal cual: `NORTE` y `ESTE` son latitud y longitud y se aceptan solo si son grados decimales (antes había que renombrar las columnas a mano), y el padrón se lee directo del `Padron_web.dbf` en CP850 (antes se convertía a CSV con un conversor propio).
+
+**Resultado de la corrida corregida** (mismos archivos de RENIPRESS y ESCALE del 2026-10-30, misma copia de OpenStreetMap del 2026-10-28, mismos criterios fijados antes de medir; resultado completo en `docs/validacion/k2-resultado-v2.json`, el anterior se conserva en `k2-resultado.json`):
+
+| Categoría | Oficiales | En OSM | Exhaustividad (50 / 100 / 200 m) | Precisión (50 / 100 / 200 m) | Desfase (mediana; p90, a 200 m) | Puntos de la malla (1 536) donde cambia CUMPLE / NO CUMPLE |
+|---|---|---|---|---|---|---|
+| Salud (1000 m) | 494 | 164 | 15,8 / 16,2 / 16,6 % | 49,7 / 51,0 / 52,2 % | 10 m; 31 m | 98 (6,4 %): OSM cumple y el oficial no, 16; el oficial cumple y OSM no, 82 |
+| Educación (todos los niveles) | 1 508 | 2 151 | 63,9 / 68,2 / 69,5 % | 45,5 / 48,6 / 49,6 % | 6 m; 44 m | no se calcula por total |
+| Inicial (500 m) | 1 221 | 1 191 | 61,8 / 65,1 / 66,5 % | 63,6 / 67,1 / 68,5 % | 6 m; 36 m | 100 (6,5 %): 27 y 73 |
+| Primaria (1500 m) | 823 | 892 | 60,5 / 67,1 / 68,4 % | 57,8 / 64,0 / 65,3 % | 11 m; 53 m | 85 (5,5 %): 30 y 55 |
+| Secundaria (3000 m) | 523 | 556 | 53,7 / 61,8 / 63,1 % | 53,4 / 61,4 / 62,7 % | 15 m; 59 m | 73 (4,8 %): 3 y 70 |
+
+La conclusión no cambia: **OpenStreetMap sigue sin alcanzar el 85 % de exhaustividad ni de precisión, ni en salud ni en educación**. En educación la exhaustividad sube (del 46,7 % al 69,5 % a 200 m) porque ya no se cuentan las 2 458 instituciones inactivas; en salud baja (del 20,2 % al 16,6 %) porque ahora hay más establecimientos oficiales válidos (494 frente a 406: entran los consultorios y los que antes se descartaban mal, y salen los de apoyo). La precisión sigue siendo una cota baja por la razón de siempre: un nombre distinto del oficial no se empareja y no se revisó a mano ninguna muestra de los no emparejados.
+
+**Composición de los archivos que lee la aplicación** (`pnpm datos:oficial`, 2026-11-09; el conteo vive en `metadata.conteo_por_fuente` de cada archivo):
+
+| Archivo | Fuente primaria | Respaldo de OpenStreetMap | Total |
+|---|---|---|---|
+| `salud.geojson` | RENIPRESS: 494 | 14 (de 164; 150 descartados a 200 m, 83 de ellos también por nombre) | 508 |
+| `educacion.geojson` | ESCALE: 1 508 locales (2 569 instituciones). Por nivel: inicial 1 221, primaria 823, secundaria 523 | 205 elementos (de 2 174; 1 946 descartados y 23 sin nivel básico). Por nivel: inicial 74, primaria 94, secundaria 77 | 1 713 |
+
+**Lo que sigue sin resolverse.** (1) Cerca del 42 % de los registros de salud de Arequipa en RENIPRESS no trae coordenadas: 13 181 filas del país no se pueden ubicar y ahí el respaldo de OpenStreetMap es lo único que puede aparecer. (2) ESCALE da la ubicación del local que reportó la UGEL; no se verificó contra el terreno. (3) No se revisó a mano una muestra de los no emparejados. (4) Los archivos de RENIPRESS y de ESCALE se congelan: la fecha de cada fuente queda en `metadata.fuentes` y se muestra en el método de cada resultado.
+
+### Consultorios como categoría aparte (2026-11-10)
+
+**Decisión.** Los consultorios médicos se conservan pero como categoría separada de los establecimientos de salud (regla en `docs/METODOLOGIA.md` §6.1). K2 se alineó: la **salud** se valida solo con los 256 establecimientos de RENIPRESS frente a los 128 elementos de OpenStreetMap que son salud (127 desde que se excluye lo odontológico, ver más abajo), y los **consultorios** se miden aparte (237 de RENIPRESS frente a 36 de OpenStreetMap con `amenity=doctors` o `healthcare=doctor`) en una sección informativa del informe, sin impacto en cumple / no cumple porque no tienen umbral. Se repitió con los mismos archivos del 2026-10-30 (RENIPRESS y ESCALE) y la misma copia de OpenStreetMap del 2026-10-28; resultado completo en `docs/validacion/k2-resultado-v3.json` (los anteriores se conservan). Educación no cambia: mismas cifras que en la corrida corregida.
+
+| Categoría | Oficiales | En OSM | Exhaustividad (50 / 100 / 200 m) | Precisión (50 / 100 / 200 m) | Desfase (mediana; p90, a 200 m) | Puntos de la malla (1 536) donde cambia CUMPLE / NO CUMPLE |
+|---|---|---|---|---|---|---|
+| Salud, solo establecimientos (1000 m) | 256 | 127 | 21,1 / 21,9 / 22,7 % | 44,6 / 46,3 / 47,9 % | 16 m; 44 m | 172 (11,2 %): OSM cumple y el oficial no, 22; el oficial cumple y OSM no, 150 |
+| Consultorios (informativo, sin umbral) | 237 | 36 | 0,0 / 0,0 / 0,0 % | 0,0 / 0,0 / 0,0 % | sin dato | no aplica: no hay umbral |
+
+**Cómo leerlo.** (1) La conclusión de salud no cambia: **OpenStreetMap sigue sin llegar al 85 %** (22,7 % de exhaustividad y 47,5 % de precisión a 200 m). La exhaustividad sube respecto de la corrida con consultorios incluidos (16,6 %) porque el denominador baja de 494 a 256, aunque los emparejamientos también bajan (de 82 a 58 a 200 m). Una explicación probable, que **no se revisó caso por caso**, es que algunos elementos de OSM con `amenity=clinic` se emparejaban por nombre con consultorios oficiales y ahora, al ser categorías distintas, ya no. (2) De los consultorios, **ninguno de los 237 oficiales tiene un par** entre los 36 elementos de OpenStreetMap con `amenity=doctors` o `healthcare=doctor` a 50, 100 ni 200 m con un nombre parecido (≥ 0,9); a 200 m, 5 de esos 36 están cerca de un consultorio oficial pero con otro nombre. OpenStreetMap casi no mapea consultorios en Arequipa, así que ahí RENIPRESS es prácticamente la única fuente y el respaldo de OSM aporta 31 puntos (ver la composición abajo). Como el consultorio es informativo, esto no mueve ningún cumple / no cumple. (3) En salud cambia CUMPLE / NO CUMPLE en más puntos de la malla (172, el 11,2 %, frente a 98, el 6,4 %): con solo establecimientos hay menos puntos oficiales (256 frente a 494) y la distancia al más cercano del lado oficial es mayor; tampoco se analizó punto por punto.
+
+**Composición de los archivos que lee la aplicación** (`pnpm datos:oficial`, 2026-11-10, con la edición de RENIPRESS del 2026-10-30; el conteo vive en `metadata.conteo_por_fuente` de cada archivo):
+
+| Archivo | Fuente primaria | Respaldo de OpenStreetMap | Total |
+|---|---|---|---|
+| `salud.geojson` | RENIPRESS: 256 | 24 (de 127 de OSM que son salud; 103 descartados a 200 m de un establecimiento oficial, 59 de ellos también por nombre) | 280 |
+| `consultorios.geojson` | RENIPRESS: 162 (75 de los 237 con nombre dental quedaron fuera, ver abajo) | 32 (de 36 de OSM que son consultorio; 4 descartados a 200 m de un consultorio oficial, ninguno por nombre) | 194 |
+
+**Lo odontológico de OpenStreetMap queda fuera (2026-11-10).** `Calculos.esDental` excluye de la salud y de los consultorios los elementos de OSM con `amenity=dentist`, `healthcare=dentist`, `healthcare:speciality` con dentistry o un nombre con «dental», «odontolog…» o «dentist…» (sin distinguir mayúsculas ni tildes). En la copia del 2026-10-28 es **1 elemento** (`node/4313458191`, «Policlínico odontológico del sur», `amenity=clinic`, que contaba como establecimiento): la salud de OSM pasa de 128 a 127 elementos y el archivo de 281 a 280. K2 se repitió con los mismos archivos del 2026-10-30 (`docs/validacion/k2-resultado-v4.json`): la precisión de la salud sube de 47,5 % a 47,9 % a 200 m y la exhaustividad no cambia (22,7 %); sigue sin llegar al 85 %. Los consultorios no cambian (36 de OSM, ninguno dental en esa copia).
+
+**Los dentales de RENIPRESS por el nombre también quedan fuera (2026-11-10).** Decisión de la persona responsable del proyecto: la regla de OpenStreetMap se aplica también a RENIPRESS. además del tipo, un registro de RENIPRESS no cuenta ni como salud ni como consultorio si su **nombre** es dental, con la misma regla de OpenStreetMap (`Calculos.esDental`: «dental», «odontolog…» o «dentist…», sin distinguir mayúsculas ni tildes; función `esNombreDental` de `scripts/lib/equipamiento-oficial.js`, que usan también `pnpm datos:oficial` y K2), **salvo** que el nombre diga además medicina, médico/a, hospital, centro/puesto/posta de salud, especialidades o multiespecialidad («Policlínico X - Medicina y Odontología» se queda). «Clínica», «policlínico» y «salud» solas no bastan para quedarse («Clínica Odontológica del Sur», «Consultorio Dental Characato Salud» salen). Con la edición del 2026-10-30 salen 75 consultorios (237 pasan a 162) y ningún establecimiento de salud; ningún nombre dental era multiespecialidad, así que la excepción no quitó ninguno. Quedan sin cubrir 16 nombres con raíz dental que el patrón no reconoce («ODONTO MEDICC», «ODONTO MONTESINOS», «FACE DENT», «Belldent», «DENTASIA», «DENTAMIA», «NOVA DENT», «Kova Dent», «PLUS DENT IMPLANT», «ROCA DENT¨S», «FIMAHO DENT´S», «ChimuDent», «DENTRICS», «DENTA VITALIS E.I.R.L.», «SMILE DESIGN AQP», «mil sonrisas» y similares); ampliar el patrón cambiaría también la regla de OpenStreetMap y queda como decisión pendiente. Efecto: **consultorios 268 → 194** (RENIPRESS 237 → 162, OpenStreetMap 31 → 32, porque un consultorio de OSM que estaba a 200 m de uno dental oficial ya no se descarta) y salud sin cambios (280). K2 se repitió con los mismos archivos del 2026-10-30 (`docs/validacion/k2-resultado-v5.json`): la salud no cambia (22,7 % de exhaustividad y 47,9 % de precisión a 200 m, sigue sin llegar al 85 %), educación tampoco, y los consultorios oficiales medidos bajan de 237 a 162 con el mismo resultado (ningún par con OSM a 50, 100 ni 200 m). El consultorio más cercano a la Plaza de Armas deja de ser uno dental: ahora es «Consultorio Médico Cardiológico», a 149 m.
+
+**Dónde descargar cada archivo** (con `pnpm datos:oficial` el script los descarga solo —el CSV de RENIPRESS y el ZIP de ESCALE respondieron sin navegador el 2026-11-09— y los deja en `.cache-equipamiento-oficial/`; si una descarga automática falla, estas son las páginas para hacerlo a mano):
 
 | Archivo | Dónde | Qué guardar |
 |---|---|---|
 | RENIPRESS (salud) | `https://www.datosabiertos.gob.pe/dataset/registro-nacional-de-entidades-prestadoras-de-servicios-de-salud-renipress` (SUSALUD/MINSA, licencia Open Data Commons Attribution) | El CSV de la edición más reciente que traiga las columnas de **latitud y longitud** (el catálogo lista ediciones mensuales). Anota la edición (por ejemplo «2026-09») |
-| Padrón de ESCALE (educación) | `https://escale.minedu.gob.pe/web/inicio/padron-de-iiee` (MINEDU) | La base del padrón de instituciones educativas (en la biblioteca de documentos de ESCALE viene como `.dbf` dentro de un `.zip`: ábrelo con una hoja de cálculo y guárdalo como **CSV**). Debe traer código de local, nombre, nivel, estado, distrito y las coordenadas del local. Anota la fecha |
+| Padrón de ESCALE (educación) | `https://escale.minedu.gob.pe/web/inicio/padron-de-iiee` (MINEDU); el ZIP está en la biblioteca de documentos (`https://escale.minedu.gob.pe/uee/-/document_library_display/GMv7/view/958881`, archivo `Padron_web_AAAAMMDD.zip`) | El `Padron_web.dbf` del ZIP (CP850; `--escale=` lo acepta tal cual, o un CSV con código de local, nombre, nivel, estado, distrito y las coordenadas del local). Anota la fecha |
 
 Si tu archivo de RENIPRESS solo trae coordenadas UTM (Norte y Este), el script lo rechaza y dice qué columnas faltan: busca otra edición con latitud y longitud.
 
@@ -178,17 +249,60 @@ Si tu archivo de RENIPRESS solo trae coordenadas UTM (Norte y Este), el script l
 pnpm datos:validar-oficial -- --escale=ruta/padron_escale.csv --renipress=ruta/renipress.csv   --fecha-escale=2026-10 --fecha-renipress=2026-09 --salida=docs/validacion/k2-resultado.json
 ```
 
-Opciones: `--radios=50,100,200` (m), `--umbral-nombre=0.9`, `--paso=500` (separación, en m, de la malla de puntos), `--incluir-consultorios` y, para fijar los criterios de aceptación **antes de mirar los números**, `--min-exhaustividad=0.85 --min-precision=0.85` (el informe dice si se cumplen; el 85 % es la referencia de caminabilidad del estudio de Santiago de Chile citado en el protocolo, no una norma).
+Opciones: `--radios=50,100,200` (m), `--umbral-nombre=0.9`, `--paso=500` (separación, en m, de la malla de puntos), (`--sin-consultorios` ya no existe: los consultorios son una categoría aparte, la salud se valida solo con establecimientos y los consultorios se miden por separado), `--escale=` acepta el `Padron_web.dbf` y, para fijar los criterios de aceptación **antes de mirar los números**, `--min-exhaustividad=0.85 --min-precision=0.85` (el informe dice si se cumplen; el 85 % es la referencia de caminabilidad del estudio de Santiago de Chile citado en el protocolo, no una norma).
 
 **Qué hace, paso a paso:**
 
-1. Filtra Arequipa metropolitana: provincia y departamento AREQUIPA (si el archivo los trae), coordenadas dentro de la caja de la herramienta, estado activo y, en RENIPRESS, sin consultorios (salvo `--incluir-consultorios`). Las filas descartadas se cuentan y se muestran por causa.
-2. ESCALE: solo inicial, primaria y secundaria (no el programa no escolarizado ni la básica alternativa) y **una fila por código de local** (un local alberga varias instituciones; sus niveles se juntan y se guardan todos sus nombres).
+1. Filtra Arequipa metropolitana: provincia y departamento AREQUIPA (si el archivo los trae), coordenadas dentro de la caja de la herramienta, estado claramente activo y, en RENIPRESS, solo establecimientos con o sin internamiento de categoría I-1 a III-E, sin servicio médico de apoyo ni centros odontológicos (`docs/METODOLOGIA.md` §6.1; los consultorios médicos se separan de la salud y se miden aparte, ver «Consultorios como categoría aparte»). La OSM que se compara es la copia cruda de `public/data/equipamiento/osm`, no la fusión. Las filas descartadas se cuentan y se muestran por causa.
+2. ESCALE: solo educación básica regular, `NIV_MOD` A1, A2, A3, B0 y F0 (no el programa no escolarizado, la educación de adultos, la básica alternativa ni la especial; `docs/METODOLOGIA.md` §6.2), solo instituciones activas, y **una fila por código de local** (un local alberga varias instituciones; sus niveles se juntan y se guardan todos sus nombres).
 3. Empareja con OpenStreetMap de forma **uno a uno** por parecido de nombre ≥ 0,9 (sin tildes, signos ni palabras como «colegio», «puesto» o «centro de salud»; distancia de edición normalizada, sin importar el orden de las palabras) y distancia, barriendo **50, 100 y 200 m**. Los elementos de OSM sin nombre no se pueden emparejar por nombre: se cuentan aparte.
 4. Reporta, por radio y por categoría (salud, educación y cada nivel): **exhaustividad** (qué parte de lo oficial aparece en OSM), **precisión** (qué parte de lo de OSM con nombre corresponde a un registro oficial), **desfase posicional** (mediana y percentil 90) y la exhaustividad **por distrito**.
 5. **Impacto en la variable:** en una malla de puntos dentro del plano de zonificación calcula la distancia al establecimiento más cercano con OSM y con el registro oficial, y cuenta en cuántos puntos cambia CUMPLE / NO CUMPLE con los umbrales de la ficha (salud 1000 m; educación 500, 1500 y 3000 m), en qué dirección, y la diferencia mediana de la distancia.
 
 **Límites del método:** la precisión es una cota baja (un establecimiento real de OSM que el registro no incluye, o que se llama distinto, cuenta como no emparejado) y conviene revisar a mano una muestra de los no emparejados. Las coordenadas de ESCALE son las del local, reportadas por la UGEL, y pueden estar desplazadas. OSM etiqueta poco el nivel de los colegios: la ficha supone primaria y secundaria cuando no hay etiqueta, y este informe usa la misma regla. Si OSM no basta, la decisión posterior (a fijar por el equipo) es usar RENIPRESS y ESCALE como fuente primaria y mostrar la fuente y la fecha de cada dato.
+
+### 3.5 Mercados de OpenStreetMap frente al CENAMA 2016 (cobertura, 2026-11-10)
+
+**Qué se midió.** El Censo Nacional de Mercados de Abastos 2016 (INEI/PRODUCE) es una tabla anonimizada sin nombres ni coordenadas (`docs/METODOLOGIA.md` §6.5.5), así que **no se puede emparejar mercado con mercado ni medir exactitud de posición**. Solo se compara el conteo por distrito del censo (provincia de Arequipa: 89 mercados) con los elementos `amenity=marketplace` de OSM dentro de los distritos (89 tras unir repetidos), con el mismo recorte de la caja metropolitana. Resultado completo: `docs/validacion/cenama-cobertura.json` (`pnpm datos:comercio`).
+
+| Distrito | CENAMA 2016 | OSM |
+|---|---|---|
+| Alto Selva Alegre | 4 | 2 |
+| Arequipa | 8 | 20 |
+| Cayma | 6 | 6 |
+| Cerro Colorado | 13 | 8 |
+| Characato | 0 | 1 |
+| Jacobo Hunter | 4 | 3 |
+| José Luis Bustamante y Rivero | 19 | 26 |
+| La Joya | 2 | 0 |
+| Mariano Melgar | 5 | 3 |
+| Miraflores | 7 | 5 |
+| Paucarpata | 14 | 7 |
+| Sabandía | 0 | 1 |
+| Santa Rita de Siguas (fuera de los 25 distritos del proyecto) | 1 | 0 |
+| Socabaya | 1 | 0 |
+| Tiabaya | 1 | 1 |
+| Yanahuara | 2 | 4 |
+| Yura | 2 | 2 |
+| **Total** | **89** | **89** |
+
+**Cómo leerlo.** Los dos totales coinciden por casualidad, no por cobertura: **solo 3 de los 17 distritos de la tabla coinciden** (Cayma, Tiabaya y Yura). En 9 hay menos mercados en OSM que en el censo (Paucarpata 7 frente a 14, Cerro Colorado 8 frente a 13, Alto Selva Alegre, Mariano Melgar, Miraflores, Jacobo Hunter, Socabaya, La Joya y Santa Rita de Siguas) y en 5 hay más (Arequipa 20 frente a 8, José Luis Bustamante y Rivero 26 frente a 19, Yanahuara, y Characato y Sabandía, que el censo no registra). Una parte de lo que sobra son galerías, ferias y comercios que OSM etiqueta como mercado (hay cuatro «Botica Dermia»), pero no se revisó caso por caso. Tampoco son los mismos mercados: el censo es de 2016 y OSM de 2026. **Límites:** (1) el conteo no demuestra que sean los mismos mercados, ni que falte o sobre alguno; (2) el CENAMA solo cuenta mercados de abastos formales censados en 2016; (3) OSM etiqueta distinto (ferias, galerías); (4) no hay umbral de aceptación fijado antes de medir, así que no se declara «aprobado» ni «rechazado»: es una descripción. La conclusión que sí se sostiene es que **OSM no reproduce el censo por distrito**, de modo que el conteo de mercados por distrito del chat es el de OSM y lo dice.
+
+### 3.6 Concesiones eléctricas frente al plano de zonificación (cobertura, 2026-11-10)
+
+**Qué se midió.** Cuánto de la zona urbana del plano (`zonas_aqp.geojson`) cae dentro de algún polígono de concesión de distribución eléctrica del MINEM-DGE (`public/data/electricidad/concesiones_distribucion.geojson`, `docs/METODOLOGIA.md` §6.6). Muestreo en una malla de 0,002° (~220 m) sobre las zonas del plano y punto en polígono con el mismo código que usa la aplicación.
+
+**Resultado.** El **85 %** de la superficie zonificada (6 813 de 8 058 puntos) queda dentro de alguna concesión. Fuera quedan sobre todo las periferias: Yura 57 %, Alto Selva Alegre 56 %, Sabandía 29 %, Uchumayo y Mariano Melgar 21 %, Characato 19 %, Miraflores 15 %, Cayma 13 %, Mollebaya 8 %, y entre 1 % y 4 % Cerro Colorado, Tiabaya, Paucarpata y Quequeña. Los distritos centrales (Arequipa, Yanahuara, Sachaca, José Luis Bustamante y Rivero, Jacobo Hunter y Socabaya) no tienen puntos fuera.
+
+**Cómo leerlo.** (1) Es por **superficie del plano**, no por población ni por viviendas. (2) Dice dónde el registro **no marca** una concesión, no dónde no hay luz: los polígonos son poco detallados (15 a 71 vértices) y el registro puede no incluir ampliaciones recientes; esa parte no se pudo contrastar porque falta una fuente de conexión real. (3) Lo que **no** se validó: que los bordes coincidan con el terreno ni que estar dentro signifique estar conectado; la herramienta no afirma ninguna de las dos cosas. Contrastarlo pediría el Censo Nacional de Población y Vivienda del INEI (alumbrado de la vivienda) o datos de SEAL. Reproducible con `pnpm datos:electricidad` y el muestreo descrito.
+
+### 3.7 Censo 2017 por manzana: unión de cifras y polígonos (2026-11-10)
+
+**Qué se midió.** Que las cifras de REDATAM (una fila por manzana) se unan bien con los polígonos de manzana del INEI y que lo unido reproduzca los totales que REDATAM da para cada distrito (`docs/METODOLOGIA.md` §6.7).
+
+**Resultado.** (1) En los **25 distritos** las manzanas con polígono, más las manzanas de REDATAM que el WFS no dibuja (138, 3 497 viviendas), más lo contado «fuera de manzana» (128 534 viviendas), **suman exactamente** el total de viviendas y personas de REDATAM de cada distrito. (2) La llave (ubigeo + zona + manzana + letra) une el 99 % de las manzanas con cifras: lo que no une son 138 manzanas de REDATAM sin polígono en el WFS. (3) Las categorías de agua suman las viviendas ocupadas en todas las manzanas; alumbrado, agua y desagüe nunca superan a las ocupadas. (4) El punto de la Plaza de Armas cae en una manzana del Cercado, que el censo no contó (sin viviendas) y por eso sale «sin cifras». (5) En 300 puntos al azar del Cercado, la manzana que da el módulo del navegador coincide con el método del número de vueltas.
+
+**Cómo leerlo.** (1) Valida la **unión**, no el censo: las cifras son las del INEI. (2) El 33 % de las viviendas contadas no tiene manzana y no se puede mapear; la herramienta lo dice, no lo reparte. (3) Son cifras de 2017: no se pudo contrastar con 2025 por manzana porque el INEI no la ha abierto (REDATAM 2025 pide iniciar sesión); a escala del departamento, el alumbrado pasó a 92,6 % en 2025 (viviendas con ocupantes presentes), una cifra que no es comparable punto a punto con las de manzana. (4) Una cifra de manzana describe a las viviendas censadas en esa manzana en 2017; un predio concreto puede ser distinto.
 
 ## 4. Riesgos para la validez (amenazas conocidas)
 
@@ -209,5 +323,9 @@ Opciones: `--radios=50,100,200` (m), `--umbral-nombre=0.9`, `--paso=500` (separa
 - [ ] Obtener los certificados u otra referencia oficial para la muestra (§3.1).
 - [ ] Reclutar participantes y fijar las tareas con su respuesta correcta (§3.2).
 - [ ] Revisión del mapa de calor con conocedores (§3.3).
-- [ ] Descargar a mano RENIPRESS y el padrón de ESCALE, fijar los criterios de aceptación y correr `pnpm datos:validar-oficial` (§3.4).
+- [x] Descargar RENIPRESS y el padrón de ESCALE, fijar los criterios de aceptación y correr `pnpm datos:validar-oficial` (§3.4; hecho el 2026-11-09, y repetido el mismo día con los filtros oficiales corregidos). Fuente primaria decidida e implementada: RENIPRESS y ESCALE, con OpenStreetMap de respaldo. Falta revisar a mano una muestra de los no emparejados.
 - [ ] Registrar resultados en las plantillas y completar este documento.
+
+## Agua: puntos de acopio de SEDAPAR y conversión de coordenadas
+
+**Qué se midió.** Que las coordenadas de los puntos de acopio (UTM zona 19 sur, EPSG:32719, del directorio de SEDAPAR) llegan bien a longitud y latitud WGS84 y coinciden con lo que dicen los PDF. (1) `scripts/lib/utm.js` frente a PROJ (proyección independiente): menos de 1 cm en cinco puntos. (2) Cada uno de los 575 puntos, proyectado de vuelta a UTM con otra fórmula (Snyder) en `pnpm datos:verificar`: diferencia máxima 0,006 m. (3) `pnpm datos:acopio --verificar-pdf`: las coordenadas de las 575 fichas del CSV están, exactas, en el texto de su PDF (16 PDF, 2026-11-11); los PDF traen 582 fichas y las 7 que no se usan son las que traen una coordenada imposible. **Cómo leerlo.** Valida la conversión y la transcripción; no valida que los puntos sigan vigentes (los datos son de 2017) ni que haya agua en ellos.

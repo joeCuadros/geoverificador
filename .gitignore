@@ -66,8 +66,22 @@ qwen-image-ui/
 .env*
 !.env.example
 
-# Respuestas crudas de SmartBus (scripts/descargar-rutas-smartbus.mjs)
+# Respuestas crudas de SmartBus (caché local de una versión anterior): no se suben
 /.cache-smartbus/
 
 # Avisos de venta de terceros y perfil de navegador de Marketplace (scripts/recolectar-avisos.mjs): datos crudos, no se suben ni se publican
 /datos-crudos/
+
+# Descargas y extracciones de RENIPRESS y ESCALE (scripts/descargar-equipamiento-oficial.mjs): no se suben
+/.cache-equipamiento-oficial/
+
+# Respuesta de Overpass y CSV del CENAMA (scripts/descargar-comercio.mjs): no se suben
+/.cache-comercio/
+/.cache-servicios/
+/.cache-electricidad/
+/.cache-censo/
+/.cache-rutas-osm/
+/.cache-mineria/
+/.cache-acopio/
+/.cache-sunass/
+/.cache-sit/

@@ -1,7 +1,8 @@
 /**
  * zonificacion.js — Zonificación urbana del punto elegido.
  *
- * Fuente: Plano de Zonificación del PDM Arequipa 2016-2025 (Ordenanza 975), convertido a GeoJSON.
+ * Fuente: Plano de Zonificación del PDM Arequipa 2016-2025 (el PDM se aprobó por la Ordenanza 961-MPA; el plano que se usa se publicó con la
+ * Ordenanza 975-MPA, que restituye zonificación), convertido a GeoJSON.
  *   - data/zonas_aqp.geojson  → polígonos con `codigo` (RDM-2, CZ, ZA…) y `color` (el del plano).
  *   - data/reglas_zonas.json  → reglas por código (pisos, coeficiente, área libre, lote mínimo…).
  *

@@ -128,7 +128,7 @@ describe('Resumen.punto', () => {
   });
 });
 
-describe('Resumen.punto: líneas de SmartBus', () => {
+describe('Resumen.punto: líneas de transporte (OpenStreetMap)', () => {
   const conRutas = (rutas: unknown) => Resumen.punto({ ...base, entorno: { ...entorno, transporte: { ...entorno.transporte, rutas } } });
   const lineas = [{ linea: 'C2', empresas: ['Cono Norte'] }, { linea: 'C5', empresas: ['EtraBus'] }];
 
@@ -143,10 +143,10 @@ describe('Resumen.punto: líneas de SmartBus', () => {
   });
 
   it('si ninguna pasa, lo dice; si no se calcularon o fallaron, no dice nada', () => {
-    expect(conRutas({ distanciaM: 400, lineas: [] }).texto).toContain('Ninguna línea de SmartBus pasa a menos de 400 m.');
+    expect(conRutas({ distanciaM: 400, lineas: [] }).texto).toContain('Ninguna línea mapeada en OpenStreetMap pasa a menos de 400 m.');
     expect(conRutas(null).texto).not.toMatch(/línea/i);
     expect(conRutas({ error: 'sin archivo', lineas: [], distanciaM: 400 }).texto).not.toMatch(/línea/i);
-    expect(Resumen.punto(base).texto).not.toMatch(/SmartBus/);
+    expect(Resumen.punto(base).texto).not.toMatch(/Ninguna línea|Pasan \d+ líneas|Pasa 1 línea/);
   });
 
   it('con muchas líneas recorta la lista y dice cuántas más hay', () => {

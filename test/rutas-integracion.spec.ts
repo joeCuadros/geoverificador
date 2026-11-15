@@ -1,5 +1,5 @@
 /**
- * Las líneas de SmartBus en la comparación de puntos (comparar.js) y en el informe imprimible (reporte.js). Los cálculos de las
+ * Las líneas de transporte (OpenStreetMap) en la comparación de puntos (comparar.js) y en el informe imprimible (reporte.js). Los cálculos de las
  * líneas están en test/rutas.spec.ts; aquí solo se comprueba cómo se muestran, con su fuente y sus límites.
  */
 /* eslint-disable @typescript-eslint/no-require-imports */
@@ -12,13 +12,13 @@ const serv = (estado: Estado, distanciaM: number | null, umbralM: number, nombre
   estado, distanciaM, umbralM, nombre, fecha: '2026-05-01', fuente: 'OpenStreetMap (ODbL)', metodo: 'Distancia en línea recta.',
 });
 const rutas = (lineas: any[], extra = {}) => ({
-  distanciaM: 400, lineas, rutas: lineas.length, fuente: 'SmartBus (smartbus.app)', fecha: '2026-11-03',
-  permiso: 'autorización verbal de SmartBus; confirmación escrita pendiente', atribucion: 'Rutas: SmartBus (smartbus.app)', ...extra,
+  distanciaM: 400, lineas, rutas: lineas.length, fuente: 'OpenStreetMap (ODbL), relaciones route=bus de la red SIT y paradas de bus', fecha: '2026-11-10',
+  atribucion: '© colaboradores de OpenStreetMap (ODbL)', ...extra,
 });
 const L2 = { linea: 'C2', empresas: ['Cono Norte'], distanciaM: 85, ramales: [{ ramal: 'Cettar' }, { ramal: 'Cettar' }], parada: { nombre: 'Cettar - 12', distanciaM: 120 } };
 const L5 = { linea: 'C5', empresas: ['EtraBus'], distanciaM: 300, ramales: [{ ramal: 'Norte' }], parada: null };
 
-describe('Comparar: líneas de SmartBus en la fila de transporte', () => {
+describe('Comparar: líneas de transporte (OpenStreetMap) en la fila de transporte', () => {
   let n = 0;
   const entorno = (transporte: any) => ({
     salud: serv('CUMPLE', 300, 1000),
@@ -34,7 +34,7 @@ describe('Comparar: líneas de SmartBus en la fila de transporte', () => {
 
   it('guarda solo la línea y su empresa, sin trazados ni ramales', () => {
     const c = conRutas(rutas([L2]));
-    expect(c.variables.transporte.rutas).toEqual({ distanciaM: 400, lineas: [{ linea: 'C2', empresas: ['Cono Norte'] }], fecha: '2026-11-03' });
+    expect(c.variables.transporte.rutas).toEqual({ distanciaM: 400, lineas: [{ linea: 'C2', empresas: ['Cono Norte'] }], fecha: '2026-11-10' });
   });
 
   it('agrega a la celda una segunda línea con las líneas a la distancia de referencia', () => {
@@ -45,7 +45,7 @@ describe('Comparar: líneas de SmartBus en la fila de transporte', () => {
   });
 
   it('dice cuando ninguna línea publicada pasa tan cerca', () => {
-    expect(Comparar.celda(conRutas(rutas([])), 'transporte').partes[1].texto).toBe('Ninguna línea de SmartBus a 400 m o menos');
+    expect(Comparar.celda(conRutas(rutas([])), 'transporte').partes[1].texto).toBe('Ninguna línea mapeada en OpenStreetMap a 400 m o menos');
   });
 
   it('sin líneas calculadas (o con error) la celda queda como antes: nunca se inventan', () => {
@@ -66,7 +66,7 @@ describe('Comparar: líneas de SmartBus en la fila de transporte', () => {
   });
 });
 
-describe('Reporte: líneas de transporte de SmartBus', () => {
+describe('Reporte: líneas de transporte de OpenStreetMap', () => {
   const base = (r: any) => ({
     fecha: '3 de noviembre de 2026', punto: { lat: -16.4, lon: -71.53 }, distritoTitulo: 'Distrito de Arequipa', distritoNombre: 'Arequipa',
     resumen: [['Zonificación vigente', 'RDM-2']], zonaStatus: 'outside', zona: null, badgeZona: null, lote: null, potencial: null, avisoPDM: null,
@@ -84,34 +84,35 @@ describe('Reporte: líneas de transporte de SmartBus', () => {
     expect(h).toContain('Paradero X');
     expect(h).toContain('C2 (Cono Norte), C5 (EtraBus)');
     expect(h).toContain('trazado a 85 m');
-    expect(h).toContain('parada más cercana «Cettar - 12» a 120 m');
+    expect(h).toContain('parada mapeada más cercana «Cettar - 12» a 120 m');
     expect((h.match(/Cettar(?! - )/g) || []).length).toBe(1); // el ramal de ida y vuelta se nombra una sola vez
   });
 
-  it('cita la fuente, el permiso verbal con confirmación pendiente y que la distancia es una convención', () => {
+  it('cita la fuente y la licencia (ODbL) y que la distancia es una convención', () => {
     const s = seccion(base(rutas([L2])));
-    expect(s.cuerpo).toContain('SmartBus (smartbus.app)');
-    expect(s.cuerpo).toContain('autorización verbal de SmartBus; confirmación escrita pendiente');
+    expect(s.cuerpo).toContain('OpenStreetMap (ODbL)');
+    expect(s.cuerpo).toContain('© colaboradores de OpenStreetMap (ODbL)');
+    expect(s.cuerpo).not.toMatch(/SmartBus|autorización verbal/);
     expect(s.cuerpo).toContain('Convención del proyecto');
     expect(s.cuerpo).toMatch(/sin frecuencias ni horarios/);
-    expect(s.fuente).toContain('Rutas: SmartBus (smartbus.app)');
+    expect(s.fuente).toContain('© colaboradores de OpenStreetMap (ODbL)');
   });
 
   it('si ninguna línea pasa tan cerca lo dice, y si el archivo falló muestra el error sin romper el paradero', () => {
-    expect(seccion(base(rutas([]))).cuerpo).toMatch(/Ninguna línea publicada por SmartBus pasa a 400 m o menos/);
+    expect(seccion(base(rutas([]))).cuerpo).toMatch(/Ninguna línea mapeada en OpenStreetMap pasa a 400 m o menos/);
     const err = seccion(base(rutas([], { error: 'sin archivo' })));
     expect(err.cuerpo).toContain('No se pudieron cargar las líneas de transporte: sin archivo');
     expect(err.cuerpo).toContain('Paradero X');
-    expect(err.fuente).not.toContain('SmartBus');
+    expect(err.fuente).not.toContain('colaboradores');
   });
 
   it('sin líneas calculadas el informe de transporte es el de antes', () => {
     const h = seccion(base(undefined)).cuerpo;
     expect(h).toContain('Paradero X');
-    expect(h).not.toContain('SmartBus');
+    expect(h).not.toContain('colaboradores');
   });
 
-  it('los límites del informe mencionan las líneas de SmartBus y su permiso', () => {
-    expect(Reporte.limites(base(undefined)).join(' ')).toMatch(/SmartBus.*autorización verbal.*confirmación escrita pendiente/);
+  it('los límites del informe mencionan las líneas de OpenStreetMap, sin frecuencias y con paradas parciales', () => {
+    expect(Reporte.limites(base(undefined)).join(' ')).toMatch(/OpenStreetMap.*no traen frecuencias ni horarios.*paradas de OpenStreetMap son parciales/);
   });
 });

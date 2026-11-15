@@ -404,6 +404,10 @@ input[type="search"]:focus-visible, input[type="number"]:focus-visible, select:f
 .var-vacio { margin: 0; color: var(--ink-2); font-size: .9375rem; }
 .var-meta { margin: 0; font-size: .8125rem; line-height: 1.45; color: var(--muted); }
 .var-meta b { font-weight: 650; color: var(--ink-2); }
+.var-sub { margin: .75rem 0 .25rem; font-size: .8125rem; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; color: var(--muted); }
+.var-tabla { width: 100%; border-collapse: collapse; font-size: .9375rem; }
+.var-tabla th, .var-tabla td { padding: .3rem .25rem; text-align: left; border-bottom: 1px solid var(--line, rgba(127, 127, 127, .25)); }
+.var-tabla td { font-weight: 650; white-space: nowrap; text-align: right; }
 .var-rutas { display: grid; gap: 6px; padding-top: 10px; border-top: 1px solid var(--line); }
 .var-rutas-t { margin: 0; font-size: .9375rem; color: var(--ink-2); }
 .var-rutas-lista { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
@@ -1343,7 +1347,22 @@ summary { -webkit-tap-highlight-color: transparent; }
 .ent-colegio-primaria span { background: #1c3a6b; border-radius: 6px; }
 .ent-colegio-secundaria span { background: #6b2d7a; border: 0; width: 26px; height: 26px; box-shadow: none; clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); }
 .ent-salud span { background: #b0272b; border-radius: 4px; }
+.ent-consultorio span { background: #0f6b6b; border-radius: 50% 50% 4px 50%; }
 .ent-paradero span { background: #3b4a5a; border-radius: 12px 12px 4px 4px; }
+.ent-mercado span { background: #9a3412; border-radius: 4px 12px 4px 12px; }
+.ent-supermercado span { background: #065f46; border-radius: 4px; transform: rotate(45deg); }
+.ent-supermercado span::first-line { transform: rotate(-45deg); }
+.ent-mall span { background: #9d174d; border-radius: 4px; width: 28px; font-size: .625rem; }
+.ent-galeria span { background: #a16207; border-radius: 50% 4px 50% 4px; }
+.var-mejor { margin: .25rem 0 .5rem; padding: .5rem .75rem; border-left: 4px solid var(--accent, #1d4ed8); background: color-mix(in srgb, var(--accent, #1d4ed8) 8%, transparent); border-radius: 0 6px 6px 0; }
+.var-detalle-viaje > summary { cursor: pointer; font-size: .875rem; margin: .25rem 0; }
+body.eligiendo-destino #map { cursor: crosshair; }
+.ent-acopio span { background: #0369a1; border-radius: 12px 12px 4px 12px; }
+.ent-banco span { background: #1e40af; border-radius: 4px; }
+.ent-cajero span { background: #0e7490; border-radius: 4px 12px 4px 12px; }
+.ent-restaurante span { background: #b91c1c; border-radius: 50%; }
+.ent-cafe span { background: #78350f; border-radius: 4px 4px 12px 12px; }
+.ent-juego_infantil span { background: #15803d; border-radius: 12px 12px 4px 4px; }
 .leyenda-estados li.ley-item { display: flex; align-items: center; gap: 10px; }
 .muestra-ent { display: inline-flex; align-items: center; gap: 3px; min-width: 30px; flex: none; }
 .mu-ico { display: grid; place-items: center; width: 17px; height: 17px; border-radius: 50%; color: #fff; font: 800 .625rem/1 var(--font-body, system-ui, sans-serif); }
@@ -1351,7 +1370,18 @@ summary { -webkit-tap-highlight-color: transparent; }
 .mu-p { background: #1c3a6b; border-radius: 4px; }
 .mu-s { background: #6b2d7a; border-radius: 40%; }
 .mu-salud { background: #b0272b; border-radius: 3px; }
+.mu-consultorio { background: #0f6b6b; border-radius: 50% 50% 3px 50%; }
 .mu-paradero { background: #3b4a5a; border-radius: 8px 8px 3px 3px; }
+.mu-mercado { background: #9a3412; border-radius: 3px 8px 3px 8px; }
+.mu-supermercado { background: #065f46; border-radius: 3px; }
+.mu-mall { background: #9d174d; border-radius: 3px; width: 22px; font-size: .5rem; }
+.mu-galeria { background: #a16207; border-radius: 50% 3px 50% 3px; }
+.mu-acopio { background: #0369a1; border-radius: 8px 8px 3px 8px; }
+.mu-banco { background: #1e40af; border-radius: 3px; }
+.mu-cajero { background: #0e7490; border-radius: 3px 8px 3px 8px; }
+.mu-restaurante { background: #b91c1c; }
+.mu-cafe { background: #78350f; border-radius: 3px 3px 8px 8px; }
+.mu-juego { background: #15803d; border-radius: 8px 8px 3px 3px; }
 .mu-bloque { display: inline-block; width: 20px; height: 12px; border-radius: 2px; opacity: .55; }
 .mu-linea { display: inline-block; width: 24px; height: 3px; background: #1f6fb2; border-radius: 2px; }
 .mu-linea-bus { display: inline-block; width: 24px; height: 4px; border-radius: 2px; }
@@ -1370,3 +1400,6 @@ summary { -webkit-tap-highlight-color: transparent; }
 .ficha-resumen p { margin: 0 0 6px; font-size: 1rem; line-height: 1.45; }
 .ficha-resumen p:last-child { margin-bottom: 0; }
 .ficha-fuentes { margin-top: 8px; }
+
+.var-lista { margin: .25rem 0 .5rem 1.1rem; padding: 0; }
+.var-lista li { margin: .25rem 0; font-size: .875rem; }

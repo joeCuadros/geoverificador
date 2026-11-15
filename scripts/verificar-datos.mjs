@@ -14,7 +14,7 @@
  *  NO comprueba que la zonificación coincida con el plano oficial ni que las denuncias reflejen la realidad:
  *  eso se valida contra fuentes externas (ver docs/VALIDACION.md).
  */
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
@@ -51,7 +51,7 @@ const volcan = json('data/peligro_volcanico_misti.geojson');
 const e030 = json('data/zonas_sismicas_e030.json');
 const precios = json('data/precios_m2_distrito.json');
 const riesgoCenepred = json('data/riesgo_cenepred_fen2027.json');
-const equipamiento = Object.fromEntries(['salud', 'educacion', 'transporte', 'areas_verdes'].map((n) => [n, json(`data/equipamiento/${n}.geojson`)]));
+const equipamiento = Object.fromEntries(['salud', 'consultorios', 'educacion', 'transporte', 'areas_verdes'].map((n) => [n, json(`data/equipamiento/${n}.geojson`)]));
 
 // ------------------------------------------------------------------ A. Integridad
 console.log('\n== A. Integridad de los archivos ==');
@@ -220,16 +220,80 @@ console.log('\n== A. Integridad de los archivos ==');
   console.log(`INFO  Sismos: ventana de la capa ${m.fechaDesde} a ${m.fechaHasta} (no es el catálogo histórico); extraído ${m.descargado.slice(0, 10)}`);
 }
 
-// Equipamiento de OpenStreetMap (salud, educación, transporte y áreas verdes)
+// Comercio: mercados, supermercados y malls de OpenStreetMap (scripts/descargar-comercio.mjs); informativos, sin umbral
+{
+  const CalcC = createRequire(import.meta.url)('../public/js/calculos.js');
+  const caja = [-71.75, -16.6, -71.35, -16.2];
+  const enCaja = ([x, y]) => x >= caja[0] && x <= caja[2] && y >= caja[1] && y <= caja[3];
+  const anillosDe = (g) => (g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : []).flat();
+  const vistos = new Map();
+  for (const nombre of ['mercados', 'supermercados', 'malls', 'finanzas', 'comida_fuera', 'recreacion']) {
+    const fc = json(`data/equipamiento/${nombre}.geojson`);
+    const f = fc.features;
+    const m = fc.metadata || {};
+    comprobar(`Comercio/${nombre}: metadata con fuente ODbL, fecha de extracción, consulta única (out geom), licencia y la nota de que es informativo`, m.fuente === 'OpenStreetMap (ODbL)' && /^\d{4}-\d{2}-\d{2}$/.test(m.fecha_extraccion) && typeof m.consulta === 'string' && m.consulta.includes('out geom tags') && (m.consulta.match(/\[out:json\]/g) || []).length === 1 && m.licencia === 'ODbL' && /informativ/i.test(m.informativo || ''));
+    comprobar(`Comercio/${nombre}: metadata.registros y conteo_por_fuente coinciden con el número de features`, m.registros === f.length && f.length > 0 && m.conteo_por_fuente && m.conteo_por_fuente.OSM === f.length, `${f.length}`);
+    comprobar(`Comercio/${nombre}: cada elemento dice su fuente (OSM), tiene id de OSM único, nombre (o null) y etiquetas, y esa etiqueta lo clasifica en ${nombre}`, new Set(f.map((x) => x.properties.osm)).size === f.length && f.every((x) => x.properties.fuente === 'OSM' && /^(node|way|relation)\/\d+$/.test(x.properties.osm) && 'nombre' in x.properties && x.properties.tags && CalcC.categoriasDe(x.properties.tags, x.properties.nombre).includes(nombre)));
+    comprobar(`Comercio/${nombre}: solo puntos y polígonos con anillos cerrados, dentro de la caja de Arequipa`, f.every((x) => (x.geometry.type === 'Point' ? enCaja(x.geometry.coordinates) : /^(Multi)?Polygon$/.test(x.geometry.type) && anillosDe(x.geometry).every((a) => a.length >= 4 && a[0][0] === a.at(-1)[0] && a[0][1] === a.at(-1)[1] && a.every(enCaja)))));
+    comprobar(`Comercio/${nombre}: el mismo lugar no aparece dos veces (ninguno repite un id asociado de otro)`, new Set(f.flatMap((x) => [x.properties.osm, ...(x.properties.osm_asociados || [])])).size === f.reduce((t, x) => t + 1 + (x.properties.osm_asociados || []).length, 0));
+    f.forEach((x) => vistos.set(x.properties.osm, (vistos.get(x.properties.osm) || 0) + 1));
+    if (nombre === 'malls') {
+      const c = m.curados || {};
+      comprobar('Comercio/malls: la lista curada trae para cada mall su entidad y el enlace https de su fuente, y dice cuáles no están en OpenStreetMap', Array.isArray(c.lista) && c.lista.length > 0 && c.lista.every((x) => x.nombre && x.entidad && /^https:\/\//.test(x.url) && /^\d{4}-\d{2}-\d{2}$/.test(x.verificado_el)) && Array.isArray(c.sin_osm) && Array.isArray(c.verificados_en_osm));
+      comprobar('Comercio/malls: todo mall verificado apunta a un elemento que existe en el archivo y cita su fuente', f.filter((x) => x.properties.verificado).every((x) => /^https:\/\//.test(x.properties.verificado.url) && x.properties.verificado.nombre) && c.verificados_en_osm.every((v) => f.some((x) => x.properties.osm === v.osm)));
+      console.log(`INFO  Malls: ${f.length} (${f.filter((x) => x.geometry.type !== 'Point').length} con polígono; ${f.filter((x) => x.properties.verificado).length} verificados con su fuente; curados sin OSM: ${(c.sin_osm || []).map((x) => x.nombre).join(', ') || 'ninguno'})`);
+    }
+    if (nombre === 'mercados') {
+      const cen = m.cenama || {};
+      const cob = json('../docs/validacion/cenama-cobertura.json');
+      comprobar('Comercio/mercados: metadata.cenama dice la fuente (PRODUCE / INEI), su licencia y que no trae coordenadas', /PRODUCE/.test(cen.entidad || '') && /ODC-By/.test(cen.licencia || '') && /sin nombre, dirección ni coordenadas/.test(cen.limites || '') && cen.registros_provincia_arequipa > 0);
+      comprobar('Comercio/mercados: la cobertura frente al CENAMA suma los mismos mercados de OpenStreetMap que el archivo y los del censo de la provincia', cob.totales.osm === f.length && cob.totales.cenama === cen.registros_provincia_arequipa && cob.filas.reduce((t, x) => t + x.cenama, 0) === cob.totales.cenama, `OSM ${cob.totales.osm} frente a CENAMA ${cob.totales.cenama}`);
+    }
+  }
+  comprobar('Comercio: ningún elemento de OpenStreetMap está en más de una de las seis categorías (mercados, supermercados, malls, finanzas, comida_fuera, recreacion)', [...vistos.values()].every((n) => n === 1));
+
+  // Servicios de la vida diaria (scripts/descargar-servicios-osm.mjs): finanzas (bancos y cajeros), comida fuera (restaurantes y cafés) y recreación (juegos infantiles); INFORMATIVOS.
+  {
+    const sv = Object.fromEntries(['finanzas', 'comida_fuera', 'recreacion'].map((n) => [n, json(`data/equipamiento/${n}.geojson`)]));
+    comprobar('Servicios: cada elemento trae un tipo permitido por su necesidad (banco/cajero, restaurante/cafe, juego_infantil) y el conteo_por_tipo de la metadata coincide', Object.entries(sv).every(([n, fc]) => fc.features.every((x) => CalcC.COMERCIO[n].tipos.includes(x.properties.tipo)) && Object.entries(fc.metadata.conteo_por_tipo || {}).every(([t, c]) => fc.features.filter((x) => x.properties.tipo === t).length === c) && Object.values(fc.metadata.conteo_por_tipo || {}).reduce((s, c) => s + c, 0) === fc.features.length));
+    comprobar('Servicios: los parques y jardines no se repiten (ningún elemento es leisure=park, garden ni landuse=recreation_ground: ya son el criterio «área verde»)', Object.values(sv).every((fc) => fc.features.every((x) => !['park', 'garden'].includes(x.properties.tags.leisure) && x.properties.tags.landuse !== 'recreation_ground')));
+    const plazaS = { lat: -16.3989, lon: -71.5369 };
+    const gS = CalcC.agruparComercio({ finanzas: sv.finanzas.features, comida_fuera: sv.comida_fuera.features, recreacion: sv.recreacion.features });
+    const cercanoS = (id) => CalcC.evaluarMasCercanoForma(plazaS, gS[id], { umbralM: null, fuente: 'OSM', fecha: 'x', metodo: 'm' });
+    comprobar('Servicios: desde la Plaza de Armas hay un banco o cajero y un restaurante o café a menos de 300 m (módulo del navegador) y la distancia nunca supera la del cálculo independiente (haversine al más cercano; los polígonos se miden al borde)', ['finanzas', 'comida_fuera'].every((id) => {
+      const r = cercanoS(id);
+      const ind = Math.min(...gS[id].map((x) => { const c = x.geometry.type === 'Point' ? { lat: x.geometry.coordinates[1], lon: x.geometry.coordinates[0] } : CalcC.centroDe(x.geometry); const dLa = ((c.lat - plazaS.lat) * Math.PI) / 180; const dLo = ((c.lon - plazaS.lon) * Math.PI) / 180; const a = Math.sin(dLa / 2) ** 2 + Math.cos((plazaS.lat * Math.PI) / 180) * Math.cos((c.lat * Math.PI) / 180) * Math.sin(dLo / 2) ** 2; return 2 * 6371008.8 * Math.asin(Math.sqrt(a)); }));
+      return r.estado === 'INFORMATIVO' && r.distanciaM < 300 && r.distanciaM <= ind + 0.5; // los polígonos miden al borde: puede ser menor que al centro, nunca mayor
+    }));
+    console.log(`INFO  Servicios de la vida diaria (OpenStreetMap, ${sv.finanzas.metadata.fecha_extraccion}): finanzas ${sv.finanzas.features.length} (${JSON.stringify(sv.finanzas.metadata.conteo_por_tipo)}), comida fuera ${sv.comida_fuera.features.length} (${JSON.stringify(sv.comida_fuera.metadata.conteo_por_tipo)}), recreación ${sv.recreacion.features.length}`);
+  }
+
+  // Reparto por NECESIDAD (Calculos.agruparComercio): abastecimiento (mercados + supermercados), compras y ocio (malls con fuente) y comercio de barrio (el resto de shop=mall).
+  const crudo = (nombre) => json(`data/equipamiento/${nombre}.geojson`).features;
+  const [mer, sup, mal] = [crudo('mercados'), crudo('supermercados'), crudo('malls')];
+  const g = CalcC.agruparComercio({ mercados: mer, supermercados: sup, malls: mal });
+  const centro = (x) => (x.geometry.type === 'Point' ? { lat: x.geometry.coordinates[1], lon: x.geometry.coordinates[0] } : CalcC.centroDe(x.geometry));
+  const dentro = g.abastecimiento.filter((x) => x.properties.dentro_de_mall);
+  const excluidos = [['mercados', mer], ['supermercados', sup], ['malls', mal]].flatMap(([capa, lista]) => lista.filter((x) => CalcC.esComercioExcluido(capa, x.properties)));
+  comprobar('Comercio/necesidades: cada elemento cae en exactamente una necesidad, salvo lo excluido a propósito (COMERCIO_EXCLUIDOS), y no se pierde ni se inventa ninguno', g.abastecimiento.length === mer.length + sup.length - excluidos.length && g.compras_ocio.length + g.comercio_barrio.length === mal.length, `abastecimiento ${g.abastecimiento.length}, compras y ocio ${g.compras_ocio.length}, comercio de barrio ${g.comercio_barrio.length}`);
+  comprobar('Comercio/necesidades: la exclusión es estrecha (solo Santa Natura, tienda de productos naturales) y lo excluido no está en ningún grupo', excluidos.length === 1 && /santa natura/i.test(excluidos[0].properties.nombre) && ![...g.abastecimiento, ...g.compras_ocio, ...g.comercio_barrio].some((x) => x.properties.osm === excluidos[0].properties.osm));
+  comprobar('Comercio/necesidades: compras y ocio son exactamente los malls con su fuente (verificado) y comercio de barrio, ninguno de ellos', g.compras_ocio.every((x) => x.properties.verificado) && !g.comercio_barrio.some((x) => x.properties.verificado) && g.compras_ocio.length === mal.filter((x) => x.properties.verificado).length);
+  comprobar('Comercio/necesidades: la geometría y la fuente de cada elemento quedan intactas (no se recorta ni se mueve nada)', [...g.abastecimiento, ...g.compras_ocio, ...g.comercio_barrio].every((x) => x.properties.fuente === 'OSM' && [...mer, ...sup, ...mal].some((o) => o.properties.osm === x.properties.osm && JSON.stringify(o.geometry) === JSON.stringify(x.geometry))));
+  comprobar('Comercio/necesidades: todo supermercado que dice estar dentro de un mall lo está de verdad (su punto cae en el polígono de ese mall) y ningún mall cuenta como abastecimiento', dentro.every((x) => { const m = mal.find((y) => y.properties.osm === x.properties.dentro_de_mall.osm); const c = centro(x); return m && m.geometry.type !== 'Point' && CalcC.distanciaAGeometriaM(c.lat, c.lon, m.geometry) === 0; }) && !g.abastecimiento.some((x) => x.properties.tipo === 'mall'));
+  console.log(`INFO  Necesidades: abastecimiento ${g.abastecimiento.length} (${mer.length} mercados, ${sup.length - excluidos.length} supermercados tras excluir ${excluidos.map((x) => x.properties.nombre).join(', ') || 'nada'}, ${dentro.length} de ellos dentro de un mall: ${[...new Set(dentro.map((x) => x.properties.dentro_de_mall.nombre || 'mall sin nombre'))].join(', ')}); compras y ocio ${g.compras_ocio.length}; comercio de barrio ${g.comercio_barrio.length}`);
+}
+
+// Equipamiento: salud (RENIPRESS) y educación (ESCALE) con OpenStreetMap de respaldo; transporte y áreas verdes de OpenStreetMap
 {
   const caja = [-71.75, -16.6, -71.35, -16.2];
   const enCaja = ([x, y]) => x >= caja[0] && x <= caja[2] && y >= caja[1] && y <= caja[3];
   for (const [nombre, fc] of Object.entries(equipamiento)) {
     const f = fc.features;
     const m = fc.metadata || {};
-    comprobar(`Equipamiento/${nombre}: metadata con fuente ODbL, fecha de extracción y consulta`, m.fuente === 'OpenStreetMap (ODbL)' && /^\d{4}-\d{2}-\d{2}$/.test(m.fecha_extraccion) && typeof m.consulta === 'string' && m.consulta.includes('[out:json]'), m.fecha_extraccion);
+    const oficial = nombre === 'salud' || nombre === 'consultorios' || nombre === 'educacion';
+    if (!oficial) comprobar(`Equipamiento/${nombre}: metadata con fuente ODbL, fecha de extracción y consulta`, m.fuente === 'OpenStreetMap (ODbL)' && /^\d{4}-\d{2}-\d{2}$/.test(m.fecha_extraccion) && typeof m.consulta === 'string' && m.consulta.includes('[out:json]'), m.fecha_extraccion);
     comprobar(`Equipamiento/${nombre}: metadata.registros coincide con el número de features`, m.registros === f.length && f.length > 0, `${f.length}`);
-    comprobar(`Equipamiento/${nombre}: id de OSM único, con nombre y etiquetas`, new Set(f.map((x) => x.properties.osm)).size === f.length && f.every((x) => /^(node|way|relation)\/\d+$/.test(x.properties.osm) && 'nombre' in x.properties && x.properties.tags));
+    if (!oficial) comprobar(`Equipamiento/${nombre}: id de OSM único, con nombre y etiquetas`, new Set(f.map((x) => x.properties.osm)).size === f.length && f.every((x) => /^(node|way|relation)\/\d+$/.test(x.properties.osm) && 'nombre' in x.properties && x.properties.tags));
     if (nombre === 'areas_verdes') {
       const anillos = f.flatMap((x) => (x.geometry.type === 'Polygon' ? [x.geometry.coordinates] : x.geometry.coordinates).flat());
       comprobar('Equipamiento/areas_verdes: solo Polygon/MultiPolygon, con anillos cerrados dentro de la caja de Arequipa', f.every((x) => /^(Multi)?Polygon$/.test(x.geometry.type)) && anillos.every((a) => a.length >= 4 && a[0][0] === a.at(-1)[0] && a[0][1] === a.at(-1)[1] && a.every(enCaja)), `${anillos.length} anillos`);
@@ -237,8 +301,54 @@ console.log('\n== A. Integridad de los archivos ==');
       comprobar(`Equipamiento/${nombre}: solo puntos dentro de la caja de Arequipa`, f.every((x) => x.geometry.type === 'Point' && enCaja(x.geometry.coordinates)));
     }
   }
-  const sinSalud = equipamiento.salud.features.filter((x) => !(['hospital', 'clinic', 'doctors'].includes(x.properties.tags.amenity) || x.properties.tags.healthcare));
-  comprobar('Equipamiento/salud: todo elemento tiene amenity=hospital|clinic|doctors o healthcare', sinSalud.length === 0);
+  const esOsm = (x) => x.properties.fuente === 'OSM';
+  // Salud y consultorios son dos categorías: el consultorio (amenity=doctors, healthcare=doctor) no es un establecimiento de salud.
+  const CalcOsm = createRequire(import.meta.url)('../public/js/calculos.js');
+  const sinSalud = equipamiento.salud.features.filter((x) => esOsm(x) && !(['hospital', 'clinic'].includes(x.properties.tags.amenity) || (x.properties.tags.healthcare && x.properties.tags.healthcare !== 'doctor')));
+  comprobar('Equipamiento/salud: todo elemento de OpenStreetMap tiene amenity=hospital|clinic o healthcare distinto de doctor', sinSalud.length === 0);
+  comprobar('Equipamiento/salud: ningún elemento de OpenStreetMap es un consultorio (categoriaSalud = salud)', equipamiento.salud.features.filter(esOsm).every((x) => CalcOsm.categoriaSalud(x.properties.tags, x.properties.nombre) === 'salud'));
+  comprobar('Equipamiento/consultorios: todo elemento de OpenStreetMap es amenity=doctors o healthcare=doctor (categoriaSalud = consultorio)', equipamiento.consultorios.features.filter(esOsm).every((x) => CalcOsm.categoriaSalud(x.properties.tags, x.properties.nombre) === 'consultorio'));
+  comprobar('Equipamiento/salud y consultorios: ningún elemento de OpenStreetMap es dental (amenity=dentist, healthcare=dentist, healthcare:speciality=dentistry o nombre dental / odontológico)', [...equipamiento.salud.features, ...equipamiento.consultorios.features].filter(esOsm).every((x) => !CalcOsm.esDental(x.properties.tags, x.properties.nombre)));
+  const OficialSalud = createRequire(import.meta.url)('./lib/equipamiento-oficial.js');
+  comprobar('Equipamiento/salud y consultorios: ningún punto de RENIPRESS tiene un nombre solo dental (dental / odontológico / dentist, salvo que el nombre diga también medicina, médico, hospital, centro de salud o especialidades)', [...equipamiento.salud.features, ...equipamiento.consultorios.features].filter((x) => x.properties.fuente === 'RENIPRESS').every((x) => !OficialSalud.esNombreDental(x.properties.nombre)));
+  const claseConsultorio = (x) => /CONSULTORIO/i.test((x.properties.clasificacion || x.properties.nombre || '').normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
+  const ofiSalud = equipamiento.salud.features.filter((x) => x.properties.fuente === 'RENIPRESS');
+  const ofiConsultorios = equipamiento.consultorios.features.filter((x) => x.properties.fuente === 'RENIPRESS');
+  comprobar('Equipamiento/consultorios: todo punto de RENIPRESS dice CONSULTORIO en su clasificación (o en su nombre si no la trae) y ninguno de salud.geojson lo dice', ofiConsultorios.length > 0 && ofiConsultorios.every(claseConsultorio) && !ofiSalud.some(claseConsultorio), `${ofiConsultorios.length} consultorios, ${ofiSalud.length} establecimientos`);
+  const codigosSalud = new Set(ofiSalud.map((x) => x.properties.codigo_renipress));
+  comprobar('Equipamiento/consultorios: ningún código de RENIPRESS está a la vez en salud.geojson y en consultorios.geojson', !ofiConsultorios.some((x) => codigosSalud.has(x.properties.codigo_renipress)));
+  comprobar('Equipamiento/consultorios: ningún elemento de OpenStreetMap está a la vez en salud.geojson y en consultorios.geojson', !equipamiento.consultorios.features.filter(esOsm).some((x) => equipamiento.salud.features.some((y) => esOsm(y) && y.properties.osm === x.properties.osm)));
+
+  // Salud y educación: RENIPRESS y ESCALE como fuente primaria, OpenStreetMap solo de respaldo (scripts/descargar-equipamiento-oficial.mjs).
+  const NIVELES_V = ['inicial', 'primaria', 'secundaria'];
+  const REGLAS = {
+    salud: { oficial: 'RENIPRESS', codigo: 'codigo_renipress', licencia: /ODC-By/ },
+    consultorios: { oficial: 'RENIPRESS', codigo: 'codigo_renipress', licencia: /ODC-By/ },
+    educacion: { oficial: 'ESCALE', codigo: 'codigo_local', licencia: /Acuerdo de uso de datos/ },
+  };
+  for (const [nombre, r] of Object.entries(REGLAS)) {
+    const fc = equipamiento[nombre];
+    const m = fc.metadata || {};
+    const f = fc.features;
+    const porFuente = { [r.oficial]: f.filter((x) => x.properties.fuente === r.oficial).length, OSM: f.filter(esOsm).length };
+    const fuentes = Array.isArray(m.fuentes) ? m.fuentes : [];
+    const prim = fuentes.find((x) => x.rol === 'primaria');
+    const resp = fuentes.find((x) => x.rol === 'respaldo');
+    comprobar(`Equipamiento/${nombre}: procedencia (fuente primaria ${r.oficial} con dirección, fecha y licencia; OpenStreetMap ODbL de respaldo)`, !!prim && prim.id === r.oficial && /^\d{4}-\d{2}-\d{2}$/.test(prim.fecha) && /^https:\/\//.test(prim.url || '') && r.licencia.test(prim.licencia || '') && !!resp && resp.licencia === 'ODbL' && /^\d{4}-\d{2}-\d{2}$/.test(resp.fecha) && m.fecha_extraccion === prim.fecha, prim && prim.fecha);
+    comprobar(`Equipamiento/${nombre}: conteo_por_fuente coincide con las features, y la regla de deduplicación y de selección están escritas`, JSON.stringify(m.conteo_por_fuente) === JSON.stringify(porFuente) && porFuente[r.oficial] > 0 && m.deduplicacion?.radio_m === 200 && typeof m.deduplicacion.regla === 'string' && typeof m.regla_seleccion === 'string', JSON.stringify(porFuente));
+    comprobar(`Equipamiento/${nombre}: toda feature dice su fuente (${r.oficial} u OSM) y tiene nombre`, f.every((x) => [r.oficial, 'OSM'].includes(x.properties.fuente) && 'nombre' in x.properties));
+    const ofi = f.filter((x) => x.properties.fuente === r.oficial);
+    comprobar(`Equipamiento/${nombre}: los puntos de ${r.oficial} traen su código oficial, sin repetir`, ofi.every((x) => typeof x.properties[r.codigo] === 'string' && x.properties[r.codigo] !== '') && new Set(ofi.map((x) => x.properties[r.codigo])).size === ofi.length);
+    const osmIds = f.filter(esOsm).map((x) => x.properties.osm);
+    comprobar(`Equipamiento/${nombre}: los de OpenStreetMap traen su id único y sus etiquetas`, new Set(osmIds).size === osmIds.length && f.filter(esOsm).every((x) => /^(node|way|relation)\/\d+$/.test(x.properties.osm) && x.properties.tags));
+    // Ningún elemento de OSM debe tener un punto oficial de la misma categoría a 200 m o menos (es la regla de deduplicación).
+    const hav = (la1, lo1, la2, lo2) => { const r = (d) => (d * Math.PI) / 180; const a = Math.sin(r(la2 - la1) / 2) ** 2 + Math.cos(r(la1)) * Math.cos(r(la2)) * Math.sin(r(lo2 - lo1) / 2) ** 2; return 2 * 6371008.8 * Math.asin(Math.min(1, Math.sqrt(a))); };
+    const dentroDeRadio = (x, o) => hav(x.geometry.coordinates[1], x.geometry.coordinates[0], o.geometry.coordinates[1], o.geometry.coordinates[0]) <= 200;
+    const repetidos = f.filter(esOsm).filter((x) => ofi.some((o) => (nombre !== 'educacion' || x.properties.niveles.some((n) => o.properties.niveles.includes(n))) && dentroDeRadio(x, o)));
+    comprobar(`Equipamiento/${nombre}: ningún elemento de OpenStreetMap tiene un punto oficial de la misma categoría a 200 m o menos`, repetidos.length === 0, `${repetidos.length}`);
+  }
+  comprobar('Equipamiento/educacion: los niveles de cada local (ESCALE y respaldo) son inicial, primaria o secundaria, y no vacíos', equipamiento.educacion.features.every((x) => Array.isArray(x.properties.niveles) && x.properties.niveles.length > 0 && x.properties.niveles.every((n) => NIVELES_V.includes(n))));
+  comprobar('Equipamiento/educacion: cada local de ESCALE lista sus instituciones con código modular, y su nivel está entre los del local', equipamiento.educacion.features.filter((x) => x.properties.fuente === 'ESCALE').every((x) => x.properties.instituciones.length > 0 && x.properties.instituciones.every((i) => /^\d{7}$/.test(i.codigo_modular) && x.properties.niveles.includes(i.nivel))));
 }
 
 // Precio de oferta por m² del distrito (Aptología, CC BY 4.0): congelado con scripts/descargar-precios.mjs
@@ -576,6 +686,144 @@ const dentro = (x, y, anillos) => vueltas(x, y, anillos[0]) && !anillos.slice(1)
   const sachaca = await Ctx.cenepred(-16.4436, -71.5744);
   comprobar('CENEPRED (módulo): un punto de Sachaca da INFORMATIVO, con la frase del distrito, la fuente y sin cumple ni puntaje', sachaca.estado === 'INFORMATIVO' && sachaca.distrito === 'SACHACA' && /^Según el CENEPRED, el distrito de Sachaca tiene riesgo muy alto ante inundaciones/.test(sachaca.frase) && /CENEPRED/.test(sachaca.fuente) && !/cumple|puntaje/i.test(JSON.stringify(sachaca)), sachaca.frase);
 }
+// B7. Concesiones de distribución eléctrica (MINEM, DGE; scripts/descargar-concesiones-electricas.mjs): el archivo y el módulo del navegador frente al
+// número de vueltas. Es INFORMATIVO: dentro de una concesión no es tener una conexión.
+{
+  const CalcE = createRequire(import.meta.url)('../public/js/calculos.js');
+  const fc = json('data/electricidad/concesiones_distribucion.geojson');
+  const f = fc.features;
+  const m = fc.metadata || {};
+  const polis = (g) => (g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : []);
+  const CAMPOS_E = ['objectid', 'nombre_zona', 'situacion', 'concesion', 'empresa', 'concesionaria', 'expediente', 'tipo_concesion', 'sistema_electrico'];
+  comprobar('Electricidad: metadata con la fuente (MINEM, DGE), el enlace del servicio y de datosabiertos.gob.pe, la fecha de descarga, la licencia ODC-By, los expedientes y lo que NO dice',
+    /MINEM/.test(m.fuente || '') && /^https:\/\/geoportal\.minem\.gob\.pe\/.*MapServer\/0$/.test(m.url_servicio || '') && /datosabiertos\.gob\.pe/.test(m.url_datos_abiertos || '') && /^\d{4}-\d{2}-\d{2}$/.test(m.fecha_descarga || '') && /ODC-By/.test(m.licencia || '') && Array.isArray(m.expedientes) && m.expedientes.length > 0 && /NO dice que un predio esté conectado/.test(m.no_dice || '') && /sin umbral/i.test(m.informativo || ''));
+  comprobar('Electricidad: metadata.registros y conteo_por_concesionaria coinciden con el número de features y cada expediente de la metadata está en algún feature', m.registros === f.length && f.length > 0 && Object.values(m.conteo_por_concesionaria || {}).reduce((t, n) => t + n, 0) === f.length && m.expedientes.every((e) => f.some((x) => x.properties.expediente === e)));
+  comprobar('Electricidad: cada concesión trae todos sus campos (empresa, concesionaria, expediente, situación…), con OBJECTID único', f.every((x) => CAMPOS_E.every((c) => x.properties[c] !== undefined && x.properties[c] !== null && x.properties[c] !== '')) && new Set(f.map((x) => x.properties.objectid)).size === f.length);
+  comprobar('Electricidad: solo polígonos con anillos cerrados de 4 o más puntos, en coordenadas WGS84 dentro de Arequipa y alrededores', f.every((x) => polis(x.geometry).length > 0 && polis(x.geometry).every((p) => p.every((a) => a.length >= 4 && a[0][0] === a.at(-1)[0] && a[0][1] === a.at(-1)[1] && a.every(([lon, lat]) => lon > -73 && lon < -70 && lat > -17.5 && lat < -15.5)))));
+  comprobar('Electricidad: hay una concesión de SEAL (Sociedad Eléctrica del Sur Oeste) con el expediente 15008293-00-00', f.some((x) => x.properties.concesionaria === 'SEAL' && x.properties.expediente === '15008293-00-00'));
+  const enSeal = (lat, lon) => f.some((x) => x.properties.concesionaria === 'SEAL' && polis(x.geometry).some((p) => dentro(lon, lat, p)));
+  const plaza = CalcE.evaluarConcesion({ lat: -16.3989, lon: -71.5369 }, f, {});
+  comprobar('Electricidad: la Plaza de Armas de Arequipa está dentro de una concesión de SEAL (módulo del navegador y número de vueltas coinciden)', plaza.dentro === true && plaza.concesionarias.includes('SEAL') && enSeal(-16.3989, -71.5369));
+  comprobar('Electricidad: un punto en Lima y otro en el mar quedan fuera, con una distancia grande al borde', [[-12.05, -77.04], [-17.5, -73.5]].every(([la, lo]) => { const r = CalcE.evaluarConcesion({ lat: la, lon: lo }, f, {}); return r.dentro === false && r.distanciaM > 100000; }));
+  // Dentro / fuera frente al número de vueltas en puntos al azar de la caja de Arequipa metropolitana (los mismos criterios, otro método).
+  let discrepan = 0;
+  let dentroN = 0;
+  const N_E = 400;
+  for (let i = 0; i < N_E; i++) {
+    const lon = -71.75 + azar() * 0.4;
+    const lat = -16.6 + azar() * 0.4;
+    const nav = CalcE.evaluarConcesion({ lat, lon }, f, {}).dentro;
+    const ref = f.some((x) => polis(x.geometry).some((p) => dentro(lon, lat, p)));
+    if (ref) dentroN++;
+    if (nav !== ref) discrepan++;
+  }
+  comprobar(`Electricidad: dentro / fuera de una concesión en ${N_E} puntos al azar de la caja de Arequipa coincide con el número de vueltas`, discrepan === 0 && dentroN > 0 && dentroN < N_E, `${dentroN} dentro, ${discrepan} discrepancias`);
+  console.log(`INFO  Electricidad: ${f.length} concesiones (${Object.entries(m.conteo_por_concesionaria).map(([k, v]) => `${k} ${v}`).join(', ')}); descargado el ${m.fecha_descarga}; dentro de una concesión: ${dentroN} de ${N_E} puntos al azar de la caja`);
+}
+
+// B7d. Concesiones mineras (INGEMMET, Catastro Minero; scripts/descargar-concesiones-mineras.mjs): el archivo y el módulo del navegador frente al número de vueltas.
+// Es INFORMATIVO: una concesión es un derecho sobre los minerales, no minería en el predio. No se guarda el nombre del titular.
+{
+  const CalcM = createRequire(import.meta.url)('../public/js/calculos.js');
+  const fc = json('data/mineria/concesiones_mineras.geojson');
+  const f = fc.features;
+  const m = fc.metadata || {};
+  const polis = (g) => (g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : []);
+  const CAMPOS_M = ['codigo', 'nombre', 'hectareas', 'estado', 'estado_detalle', 'sustancia', 'explotacion_o_exploracion', 'distritos', 'fecha_denuncio', 'actualizado'];
+  comprobar('Minería: metadata con la fuente (INGEMMET), el enlace del servicio, la fecha de descarga, el aviso de que es referencial y lo que NO dice',
+    /INGEMMET/.test(m.fuente || '') && /^https:\/\/geocatmin\.ingemmet\.gob\.pe\/.*MapServer\/0$/.test(m.url_servicio || '') && /^\d{4}-\d{2}-\d{2}$/.test(m.fecha_descarga || '') && /referencial/.test(m.aviso_del_servicio || '') && /NO dice que haya minería/.test(m.no_dice || '') && /sin umbral/i.test(m.informativo || ''));
+  comprobar('Minería: metadata.registros y conteo_por_estado coinciden con el número de features', m.registros === f.length && f.length > 0 && Object.values(m.conteo_por_estado || {}).reduce((t, n) => t + n, 0) === f.length);
+  comprobar('Minería: cada concesión trae todos sus campos, con código único y estado conocido, y NINGUNA trae el nombre del titular', f.every((x) => CAMPOS_M.every((c) => c in x.properties) && ['TITULADO', 'EN TRÁMITE', 'EXTINGUIDO', 'OTRO'].includes(x.properties.estado) && !('TIT_CONCES' in x.properties) && !('titular' in x.properties)) && new Set(f.map((x) => x.properties.codigo)).size === f.length);
+  comprobar('Minería: solo polígonos con anillos cerrados de 4 o más puntos, en coordenadas WGS84 cerca de Arequipa', f.every((x) => polis(x.geometry).length > 0 && polis(x.geometry).every((p) => p.every((a) => a.length >= 4 && a[0][0] === a.at(-1)[0] && a[0][1] === a.at(-1)[1] && a.every(([lon, lat]) => lon > -73 && lon < -70 && lat > -17.5 && lat < -15.5)))));
+  const plaza = CalcM.evaluarMinera({ lat: -16.3989, lon: -71.5369 }, f, {});
+  comprobar('Minería: la Plaza de Armas de Arequipa no cae en una concesión minera y hay una a distancia finita (módulo del navegador y número de vueltas coinciden)', plaza.dentro === false && Number.isFinite(plaza.distanciaM) && !f.some((x) => x.properties.estado !== 'EXTINGUIDO' && polis(x.geometry).some((p) => dentro(-71.5369, -16.3989, p))));
+  let discrepan = 0;
+  let dentroN = 0;
+  const N_M = 400;
+  for (let i = 0; i < N_M; i++) {
+    const lon = -71.75 + azar() * 0.4;
+    const lat = -16.6 + azar() * 0.4;
+    const nav = CalcM.evaluarMinera({ lat, lon }, f, {}).dentro;
+    const ref = f.some((x) => x.properties.estado !== 'EXTINGUIDO' && polis(x.geometry).some((p) => dentro(lon, lat, p)));
+    if (ref) dentroN++;
+    if (nav !== ref) discrepan++;
+  }
+  comprobar(`Minería: dentro / fuera de una concesión (sin las extinguidas) en ${N_M} puntos al azar de la caja de Arequipa coincide con el número de vueltas`, discrepan === 0 && dentroN > 0 && dentroN < N_M, `${dentroN} dentro, ${discrepan} discrepancias`);
+  console.log(`INFO  Minería: ${f.length} concesiones (${Object.entries(m.conteo_por_estado).map(([k, v]) => `${k} ${v}`).join(', ')}); descargado el ${m.fecha_descarga}; dentro de una concesión viva: ${dentroN} de ${N_M} puntos al azar de la caja`);
+}
+
+// B7c. Censo por manzana (INEI, REDATAM 2017; scripts/descargar-censo-servicios.mjs): los archivos y el módulo del navegador frente al número de vueltas.
+// Es INFORMATIVO: son cifras de la manzana en 2017, no de un predio.
+{
+  const CalcM = createRequire(import.meta.url)('../public/js/calculos.js');
+  const idx = json('data/censo/index.json');
+  const polisM = (g) => (g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : []);
+  comprobar('Censo: el índice trae el año (2017), la fuente INEI, los enlaces de REDATAM y del WFS, la fecha de descarga, el universo, los campos y lo que NO dice (el 2025)',
+    idx.anio_censo === 2017 && /INEI/.test(idx.fuente || '') && /^https:\/\/censos2017\.inei\.gob\.pe\//.test(idx.url_redatam || '') && /geoespacial\.inei\.gob\.pe/.test(idx.url_poligonos || '') && /^\d{4}-\d{2}-\d{2}$/.test(idx.fecha_descarga || '') && /ocupadas con personas presentes/.test(idx.universo || '') && /2025/.test(idx.no_dice || '') && ['id', 'v', 'h', 'p', 'o', 'l', 'ad', 'af', 'sd', 'sf'].every((k) => idx.campos[k]));
+  let manzanasN = 0;
+  let conDatosN = 0;
+  let incoherentesN = 0;
+  let idsRepetidos = 0;
+  let fueraDeCaja = 0;
+  let anillosMalos = 0;
+  let sumaPers = 0;
+  let sumaViv = 0;
+  const todas = new Map();
+  const vistos = new Set();
+  const tilesOk = idx.distritos.every((d) => {
+    const crudo = leer(`data/censo/${d.archivo}`);
+    const fc = JSON.parse(crudo);
+    const [w, s, e, n] = d.caja;
+    let pers = 0;
+    let viv = 0;
+    let con = 0;
+    for (const f of fc.features) {
+      const p = f.properties;
+      if (vistos.has(p.id)) idsRepetidos++;
+      vistos.add(p.id);
+      const ps = polisM(f.geometry);
+      if (!ps.length || !ps.every((q) => q.every((a) => a.length >= 4 && a[0][0] === a.at(-1)[0] && a[0][1] === a.at(-1)[1]))) anillosMalos++;
+      if (!ps.every((q) => q.every((a) => a.every(([x, y]) => x >= w && x <= e && y >= s && y <= n && x > -73 && x < -70 && y > -17.5 && y < -15.5)))) fueraDeCaja++;
+      if (typeof p.o === 'number') {
+        con++;
+        pers += p.p;
+        viv += p.v;
+        if (!(p.l <= p.o && p.ad + p.af <= p.o && p.sd + p.sf <= p.o && p.o <= p.v && p.l >= 0 && p.ad >= 0 && p.af >= 0 && p.sd >= 0 && p.sf >= 0)) incoherentesN++;
+      }
+      todas.set(p.id, f);
+    }
+    manzanasN += fc.features.length;
+    conDatosN += con;
+    sumaPers += pers;
+    sumaViv += viv;
+    return fc.features.length === d.manzanas && con === d.con_datos && pers === d.personas && viv === d.viviendas && fc.metadata.ubigeo === d.ubigeo && fc.metadata.anio === 2017;
+  });
+  comprobar('Censo: cada pieza por distrito coincide con el índice (manzanas, con cifras, viviendas, personas, ubigeo y año)', tilesOk && manzanasN === idx.totales.manzanas && conDatosN === idx.totales.con_datos && sumaPers === idx.totales.personas && sumaViv === idx.totales.viviendas, `${manzanasN} manzanas, ${conDatosN} con cifras`);
+  comprobar('Censo: las manzanas son polígonos con anillos cerrados dentro de la caja de su distrito, con idmanzana único', anillosMalos === 0 && fueraDeCaja === 0 && idsRepetidos === 0);
+  comprobar('Censo: en toda manzana con cifras, con alumbrado ≤ ocupadas, agua de red ≤ ocupadas, desagüe de red ≤ ocupadas y ocupadas ≤ viviendas contadas (nada negativo)', incoherentesN === 0);
+  comprobar('Censo: los distritos del índice son de la provincia de Arequipa y están en los límites del proyecto', idx.distritos.every((d) => /^0401\d\d$/.test(d.ubigeo)));
+  // La manzana de un punto: el módulo del navegador frente al número de vueltas, en 300 puntos al azar de la caja del Cercado.
+  const cercado = idx.distritos.find((d) => d.ubigeo === '040101');
+  const feats = JSON.parse(leer(`data/censo/${cercado.archivo}`)).features;
+  let discrepan = 0;
+  let dentroN = 0;
+  const N_C = 300;
+  for (let i = 0; i < N_C; i++) {
+    const lon = cercado.caja[0] + azar() * (cercado.caja[2] - cercado.caja[0]);
+    const lat = cercado.caja[1] + azar() * (cercado.caja[3] - cercado.caja[1]);
+    const ref = feats.find((f) => polisM(f.geometry).some((p) => dentro(lon, lat, p)));
+    const nav = CalcM.evaluarManzana({ lat, lon }, feats, { anio: 2017, cercanaM: 0.0001, minViviendas: 5 }); // cercanaM casi 0: solo «dentro»
+    const idNav = nav.modo === 'dentro' ? nav.manzana : null;
+    if (ref) dentroN++;
+    if ((ref ? ref.properties.id : null) !== idNav) discrepan++;
+  }
+  comprobar(`Censo: la manzana que contiene a ${N_C} puntos al azar del Cercado coincide con el número de vueltas`, discrepan === 0 && dentroN > 0, `${dentroN} dentro de alguna manzana, ${discrepan} discrepancias`);
+  const plaza = CalcM.evaluarManzana({ lat: -16.3989, lon: -71.5369 }, feats, { anio: 2017, cercanaM: 30, minViviendas: 5 });
+  comprobar('Censo: la Plaza de Armas de Arequipa cae en (o junto a) una manzana del Cercado', plaza.modo === 'dentro' || plaza.modo === 'cercana', `modo ${plaza.modo}, manzana ${plaza.manzana}`);
+  const fuera = idx.distritos.reduce((t, d) => ({ viv: t.viv + d.fuera_de_manzana.viviendas, per: t.per + d.fuera_de_manzana.personas }), { viv: 0, per: 0 });
+  console.log(`INFO  Censo 2017: ${idx.totales.distritos} distritos, ${idx.totales.manzanas} manzanas (${idx.totales.con_datos} con cifras), ${idx.totales.viviendas} viviendas y ${idx.totales.personas} personas en manzanas; fuera de manzana (sin polígono): ${fuera.viv} viviendas, ${fuera.per} personas; ${(idx.totales.bytes / 1048576).toFixed(1)} MB`);
+}
+
 // B7a. Peligro volcánico: el módulo del navegador frente a un recuento independiente (número de vueltas, sin índice de cajas).
 {
   const Vol = app('Volcan');
@@ -744,6 +992,8 @@ console.log('\n== C. Asistente: búsqueda de zonas frente a un método independi
     transporte: brutoMin(equipamiento.transporte.features, () => true),
     // Definición escrita aquí, aparte de Calculos.nivelesEducativos: jardín, o colegio etiquetado con nivel 0 / school=kindergarten.
     inicial: brutoMin(equipamiento.educacion.features, (f) => {
+      if (f.properties.fuente === 'ESCALE') return f.properties.niveles.includes('inicial');
+      if (f.properties.niveles && !f.properties.niveles.includes('inicial')) return false; // respaldo de OSM: solo los niveles que ESCALE no cubre ahí
       const t = f.properties.tags;
       return t.amenity === 'kindergarten' || (t.amenity === 'school' && (/(^|[;,\s])0($|[;,\s])/.test(t['isced:level'] ?? '') || /kindergarten/.test(t.school ?? '')));
     }),
@@ -811,44 +1061,47 @@ console.log('\n== C. Asistente: búsqueda de zonas frente a un método independi
   console.log(`INFO  Parte de las celdas que cumple cada criterio con su umbral: ${['colegio', 'inicial', 'primaria', 'secundaria', 'salud', 'transporte', 'areaVerde', 'campina'].map(cubre).join(' · ')}`);
 }
 
-// ------------------------------------------------- D. Rutas de transporte (SmartBus)
-console.log('\n== D. Rutas de SmartBus: integridad y cálculos frente a métodos independientes ==');
+// ------------------------------------------------- D. Rutas y paradas de transporte (OpenStreetMap)
+console.log('\n== D. Rutas y paradas de OpenStreetMap: integridad y cálculos frente a métodos independientes ==');
 {
-  const rutasFc = json('data/rutas_smartbus.geojson');
+  const rutasFc = json('data/rutas_osm.geojson');
   const meta = rutasFc.metadata || {};
   const feats = rutasFc.features;
   const lineasF = feats.filter((f) => f.properties?.tipo === 'ruta');
   const paradasF = feats.filter((f) => f.properties?.tipo === 'parada');
-  const CAJA = { oeste: -71.8, sur: -16.7, este: -71.2, norte: -16.1 }; // la misma de scripts/descargar-rutas-smartbus.mjs
+  const CAJA = { oeste: -71.8, sur: -16.7, este: -71.2, norte: -16.1 }; // un poco mayor que la de scripts/descargar-rutas-osm.mjs: una relación trae las vías enteras
   const enCaja = ([x, y]) => Number.isFinite(x) && Number.isFinite(y) && x >= CAJA.oeste && x <= CAJA.este && y >= CAJA.sur && y <= CAJA.norte;
   const partesDe = (f) => (f.geometry.type === 'LineString' ? [f.geometry.coordinates] : f.geometry.coordinates);
 
   // D1. Integridad
   comprobar('Rutas: es una FeatureCollection solo de rutas (LineString o MultiLineString) y paradas (Point)', rutasFc.type === 'FeatureCollection' && feats.length === lineasF.length + paradasF.length && lineasF.every((f) => /^(Multi)?LineString$/.test(f.geometry?.type)) && paradasF.every((f) => f.geometry?.type === 'Point'), `${lineasF.length} rutas, ${paradasF.length} paradas`);
-  comprobar('Rutas: metadatos con fuente, permiso (verbal, confirmación escrita pendiente), atribución y fecha de descarga', meta.fuente === 'SmartBus (smartbus.app)' && /verbal/.test(meta.permiso) && /confirmaci[oó]n escrita pendiente/.test(meta.permiso) && meta.atribucion === 'Rutas: SmartBus (smartbus.app)' && /^\d{4}-\d{2}-\d{2}$/.test(meta.fecha_descarga), `${meta.fecha_descarga}`);
+  comprobar('Rutas: metadatos con fuente (OpenStreetMap), licencia ODbL, atribución, fecha de extracción y las consultas de rutas y de paradas', /OpenStreetMap/.test(meta.fuente || '') && meta.licencia === 'ODbL' && /OpenStreetMap/.test(meta.atribucion || '') && /^\d{4}-\d{2}-\d{2}$/.test(meta.fecha_extraccion || '') && /relation\["type"="route"\]/.test(meta.consulta || '') && /bus_stop/.test(meta.paradas_consulta?.consulta || '') && /^\d{4}-\d{2}-\d{2}$/.test(meta.paradas_consulta?.fecha_extraccion || ''), `${meta.fecha_extraccion}`);
   const lineasUnicas = new Set(lineasF.map((f) => f.properties.linea));
   const vertices = lineasF.reduce((n, f) => n + partesDe(f).reduce((m, p) => m + p.length, 0), 0);
-  const ramales = new Set(lineasF.map((f) => `${f.properties.linea}|${f.properties.ramal}`));
-  comprobar('Rutas: los conteos de los metadatos cuadran con el contenido', meta.conteos?.rutas === lineasF.length && meta.conteos?.paradas === paradasF.length && meta.conteos?.lineas === lineasUnicas.size && meta.conteos?.ramales === ramales.size && meta.conteos?.vertices === vertices, JSON.stringify(meta.conteos));
-  comprobar('Rutas: cada ruta tiene línea, empresa, ramal, nombre, sentido, id, fuente y enlace https a smartbus.app', lineasF.every((f) => ['linea', 'empresa', 'ramal', 'nombre', 'sentido', 'id_ruta'].every((k) => typeof f.properties[k] === 'string' && f.properties[k]) && f.properties.fuente === 'SmartBus (smartbus.app)' && /^https:\/\/smartbus\.app\/pe\/arequipa\//.test(f.properties.url)));
-  comprobar('Rutas: ids de ruta únicos', new Set(lineasF.map((f) => f.properties.id_ruta)).size === lineasF.length);
+  comprobar('Rutas: los conteos de los metadatos cuadran con el contenido', meta.conteos?.rutas === lineasF.length && meta.conteos?.paradas === paradasF.length && Object.keys(meta.conteos?.lineas || {}).length === lineasUnicas.size && meta.conteos?.vertices === vertices, JSON.stringify({ rutas: meta.conteos?.rutas, paradas: meta.conteos?.paradas, vertices: meta.conteos?.vertices }));
+  comprobar('Rutas: cada ruta tiene id de OSM, línea, ramal, de y hasta, y los ids son únicos', new Set(lineasF.map((f) => f.properties.osm)).size === lineasF.length && lineasF.every((f) => /^relation\/\d+$/.test(f.properties.osm) && ['linea', 'ramal', 'desde', 'hasta'].every((k) => typeof f.properties[k] === 'string' && f.properties[k])));
   comprobar('Rutas: todos los vértices y paradas son números dentro de Arequipa', lineasF.every((f) => partesDe(f).every((p) => p.length >= 2 && p.every(enCaja))) && paradasF.every((f) => enCaja(f.geometry.coordinates)));
   const deAB = (a, b) => { const x = (rad(b[0] - a[0])) * Math.cos(rad((a[1] + b[1]) / 2)); const y = rad(b[1] - a[1]); return R * Math.hypot(x, y); };
-  const saltos = lineasF.flatMap((f) => partesDe(f).flatMap((p) => p.slice(1).map((c, i) => deAB(p[i], c)))).filter((d) => d > meta.salto_maximo_m + 1);
-  comprobar(`Rutas: ningún segmento mide más de ${meta.salto_maximo_m} m (los saltos entre tramos se partieron en el archivo)`, saltos.length === 0, `${saltos.length} segmentos`);
-  const paradasPorRuta = new Map();
-  paradasF.forEach((f) => { if (!paradasPorRuta.has(f.properties.id_ruta)) paradasPorRuta.set(f.properties.id_ruta, []); paradasPorRuta.get(f.properties.id_ruta).push(f.properties.orden); });
-  const ids = new Set(lineasF.map((f) => f.properties.id_ruta));
-  comprobar('Rutas: toda parada pertenece a una ruta existente, el campo «paradas» de la ruta coincide con las que tiene y el orden es 1…n sin saltos', paradasF.every((f) => ids.has(f.properties.id_ruta) && Number.isInteger(f.properties.orden) && f.properties.nombre)
-    && lineasF.every((f) => { const o = (paradasPorRuta.get(f.properties.id_ruta) || []).sort((a, b) => a - b); return o.length === f.properties.paradas && o.every((v, i) => v === i + 1); }));
 
-  // Las paradas son vértices del recorrido o están sobre él: medida con el mismo módulo del navegador.
+  // Paradas: objetos sueltos de OSM, ligados a las rutas por cercanía (≤ 25 m) y empresa; el resumen de los metadatos sale de recontarlas.
+  const idsRuta = new Map(lineasF.map((f) => [f.properties.osm, f]));
+  const CLASES = new Set(['platform', 'stop_position', 'bus_stop']);
+  comprobar('Paradas: id de OSM único (node o way), clase conocida, y toda ruta a la que sirven existe y es de una de sus líneas', new Set(paradasF.map((f) => f.properties.osm)).size === paradasF.length && paradasF.every((f) => /^(node|way)\/\d+$/.test(f.properties.osm) && CLASES.has(f.properties.clase) && Array.isArray(f.properties.rutas) && f.properties.rutas.every((id) => idsRuta.has(id) && f.properties.lineas.includes(idsRuta.get(id).properties.linea))), `${paradasF.length} paradas`);
+  const Calc0 = app('Calculos');
+  let lejos = 0;
+  paradasF.forEach((f) => f.properties.rutas.forEach((id) => { if (Calc0.distanciaAGeometriaLineaM(f.geometry.coordinates[1], f.geometry.coordinates[0], idsRuta.get(id).geometry) > 25.5) lejos++; }));
+  comprobar('Paradas: toda parada queda a 25 m o menos del trazado de cada ruta a la que se liga', lejos === 0, `${lejos} ligas a más de 25,5 m`);
+  const conParadas = new Set(paradasF.flatMap((f) => f.properties.rutas));
+  const sinRuta = paradasF.filter((f) => f.properties.rutas.length === 0).length;
+  comprobar('Paradas: el resumen de los metadatos (rutas con paradas mapeadas, sin paradas, paradas sin ruta) coincide con recontar las paradas', meta.conteos?.rutas_con_paradas === conParadas.size && meta.conteos?.rutas_sin_paradas === lineasF.length - conParadas.size && meta.conteos?.paradas_sin_ruta === sinRuta && meta.conteos?.paradas_ligadas_a_alguna_ruta === paradasF.length - sinRuta, `${conParadas.size} rutas con paradas, ${lineasF.length - conParadas.size} sin, ${sinRuta} paradas sin ruta`);
+  // Una parada de la misma clase y casi en el mismo punto que otra distinta es la misma esquina (plataforma y posición de parada): se informa, no se descarta.
+  const porRuta = new Map();
+  paradasF.forEach((f) => f.properties.rutas.forEach((id) => porRuta.set(id, (porRuta.get(id) || 0) + 1)));
+  const nParadas = lineasF.map((f) => porRuta.get(f.properties.osm) || 0).sort((x, y) => x - y);
+  console.log(`INFO  Paradas mapeadas por ruta: mínimo ${nParadas[0]}, mediana ${nParadas[Math.floor(nParadas.length / 2)]}, máximo ${nParadas.at(-1)}; ${nParadas.filter((n) => n < 5).length} rutas con menos de 5 (las paradas de OSM son parciales)`);
+
   const RutasMod = app('Rutas');
   const indice = RutasMod.indexar(rutasFc);
-  const rutaPorId = new Map(indice.rutas.map((r) => [r.props.id_ruta, r]));
-  const distParada = indice.paradas.map((s) => Math.min(...rutaPorId.get(s.props.id_ruta).partes.map((p) => Calc.distanciaALineaM(s.lat, s.lon, p))));
-  const lejosDeSuRuta = distParada.filter((d) => d > 50).length;
-  comprobar('Rutas: al menos el 99,9 % de las paradas queda a 50 m o menos del trazado de su propia ruta', lejosDeSuRuta <= Math.floor(indice.paradas.length * 0.001), `${lejosDeSuRuta} de ${indice.paradas.length} a más de 50 m`);
 
   // D2. Líneas cerca de un punto frente a la distancia sobre la esfera punto-segmento (cross-track), por fuerza bruta.
   const aRad = (c) => [rad(c[1]), rad(c[0])]; // [lat, lon] en radianes
@@ -926,6 +1179,138 @@ console.log('\n== D. Rutas de SmartBus: integridad y cálculos frente a métodos
   const plazaRutas = RutasMod.cerca(indice, CONFIG.center[0], CONFIG.center[1], D);
   console.log(`INFO  Plaza de Armas: ${RutasMod.resumen(plazaRutas, 20)}`);
   comprobar('Rutas: lejos de toda ruta (Pampa de Majes, 120 km al oeste) no se inventa ninguna línea', RutasMod.cerca(indice, -16.35, -72.65, D).lineas.length === 0);
+}
+
+// Y. Agua (scripts/convertir-acopio-sedapar.mjs y scripts/descargar-interrupciones-sunass.mjs): los puntos de acopio de SEDAPAR (datos de 2017) y las interrupciones del servicio de
+// agua (SUNASS, 2019-2024). INFORMATIVOS. La conversión de UTM se comprueba con otra proyección escrita aparte (Snyder, de latitud y longitud a UTM).
+{
+  const CalcW = createRequire(import.meta.url)('../public/js/calculos.js');
+  const fc = json('data/agua/puntos_acopio.geojson');
+  const f = fc.features;
+  const m = fc.metadata || {};
+  comprobar('Agua/acopio: metadata con la fuente (SEDAPAR), el enlace de gob.pe, la fecha de publicación (2024-02-16), el periodo de los datos (2017), que es informativo y lo que NO dice', /SEDAPAR/.test(m.fuente || '') && /gob\.pe\/institucion\/sedapar\/informes-publicaciones\/5198948/.test(m.url_pagina || '') && m.fecha_publicacion === '2024-02-16' && /2017/.test(m.periodo_de_los_datos || '') && /sin umbral/i.test(m.informativo || '') && /NO dice que haya agua/.test(m.no_dice || ''));
+  comprobar('Agua/acopio: las 582 fichas son los puntos más los 7 descartados con su motivo, y el conteo por distrito suma los puntos', m.fichas_en_la_fuente === 582 && f.length === m.registros && m.registros + m.descartados.length === 582 && m.descartados.length === 7 && m.descartados.every((d) => d.distrito && d.pagina_pdf && d.motivo) && Object.values(m.conteo_por_distrito).reduce((t, n) => t + n, 0) === f.length);
+  comprobar('Agua/acopio: la verificación contra los 16 PDF coincidió en todas las fichas y lo que el CSV no recoge son exactamente las 7 descartadas', m.verificacion_contra_pdf && m.verificacion_contra_pdf.pdf_comprobados === 16 && m.verificacion_contra_pdf.sin_coincidencia === 0 && m.verificacion_contra_pdf.fichas_del_csv_comparadas === f.length && m.verificacion_contra_pdf.fichas_del_pdf_que_el_csv_no_recoge.length === 7);
+  // Proyección de latitud y longitud a UTM 19 sur (Snyder, 1987): otro método que el de la conversión; debe devolver el norte y el este de la ficha.
+  const aUtm = (latG, lonG) => {
+    const a = 6378137; const e2 = 0.00669437999014; const ep2 = e2 / (1 - e2); const k0 = 0.9996;
+    const fi = (latG * Math.PI) / 180; const l = ((lonG + 69) * Math.PI) / 180;
+    const N = a / Math.sqrt(1 - e2 * Math.sin(fi) ** 2); const T = Math.tan(fi) ** 2; const C = ep2 * Math.cos(fi) ** 2; const A = l * Math.cos(fi);
+    const M = a * ((1 - e2 / 4 - (3 * e2 ** 2) / 64 - (5 * e2 ** 3) / 256) * fi - ((3 * e2) / 8 + (3 * e2 ** 2) / 32 + (45 * e2 ** 3) / 1024) * Math.sin(2 * fi) + ((15 * e2 ** 2) / 256 + (45 * e2 ** 3) / 1024) * Math.sin(4 * fi) - ((35 * e2 ** 3) / 3072) * Math.sin(6 * fi));
+    const x = k0 * N * (A + ((1 - T + C) * A ** 3) / 6 + ((5 - 18 * T + T ** 2 + 72 * C - 58 * ep2) * A ** 5) / 120);
+    const y = k0 * (M + N * Math.tan(fi) * (A ** 2 / 2 + ((5 - T + 9 * C + 4 * C ** 2) * A ** 4) / 24 + ((61 - 58 * T + T ** 2 + 600 * C - 330 * ep2) * A ** 6) / 720));
+    return { este: 500000 + x, norte: 10000000 + y };
+  };
+  const peor = f.reduce((mx, x) => { const u = aUtm(x.geometry.coordinates[1], x.geometry.coordinates[0]); return Math.max(mx, Math.abs(u.norte - x.properties.utm_norte), Math.abs(u.este - x.properties.utm_este)); }, 0);
+  comprobar('Agua/acopio: la coordenada de cada punto, proyectada de vuelta a UTM con otro método, da el norte y el este de su ficha a menos de 0,5 m', peor < 0.5, `diferencia máxima ${peor.toFixed(3)} m`);
+  comprobar('Agua/acopio: solo puntos dentro de la caja de Arequipa metropolitana, con distrito y dirección', f.every((x) => x.geometry.type === 'Point' && x.geometry.coordinates[0] > -71.75 && x.geometry.coordinates[0] < -71.35 && x.geometry.coordinates[1] > -16.6 && x.geometry.coordinates[1] < -16.2 && x.properties.distrito && typeof x.properties.direccion === 'string'));
+  const plaza = CalcW.evaluarAcopio({ lat: -16.3989, lon: -71.5369 }, f, { fuente: m.fuente, fecha: m.fecha_publicacion, fechaDatos: m.periodo_de_los_datos });
+  const indep = Math.min(...f.map((x) => { const dLa = ((x.geometry.coordinates[1] + 16.3989) * Math.PI) / 180; const dLo = ((x.geometry.coordinates[0] + 71.5369) * Math.PI) / 180; const h = Math.sin(dLa / 2) ** 2 + Math.cos((16.3989 * Math.PI) / 180) * Math.cos((x.geometry.coordinates[1] * Math.PI) / 180) * Math.sin(dLo / 2) ** 2; return 2 * 6371008.8 * Math.asin(Math.sqrt(h)); }));
+  comprobar('Agua/acopio: desde la Plaza de Armas el más cercano (módulo del navegador) coincide con un cálculo independiente y está a menos de 500 m', plaza.estado === 'INFORMATIVO' && Math.abs(plaza.distanciaM - indep) < 0.01 && plaza.distanciaM < 500, `${plaza.distanciaM.toFixed(1)} m`);
+
+  const it = json('data/agua/interrupciones_sedapar.json');
+  const mi = it.metadata || {};
+  comprobar('Agua/interrupciones: metadata con la fuente (SUNASS), los enlaces, la licencia ODC-By, la fecha de descarga, la huella del CSV, el periodo (2019-10-03 a 2024-04-26), los años completos y parciales, que es informativo y lo que NO dice', /SUNASS/.test(mi.fuente || '') && /datosabiertos\.gob\.pe\/dataset\/registro-de-interrupciones/.test(mi.url_pagina || '') && /Interrupciones_Dataset\.csv$/.test(mi.url_csv || '') && /ODC-By/.test(mi.licencia || '') && /^\d{4}-\d{2}-\d{2}$/.test(mi.fecha_descarga || '') && /^[0-9a-f]{64}$/.test(mi.sha256_csv || '') && mi.periodo.desde === '2019-10-03' && mi.periodo.hasta === '2024-04-26' && mi.anios_completos.join() === '2020,2021,2022,2023' && mi.anios_parciales.join() === '2019,2024' && /sin umbral/i.test(mi.informativo || '') && /reportad/i.test(mi.no_dice || ''));
+  const ds = Object.entries(it.distritos);
+  comprobar('Agua/interrupciones: en cada distrito los años suman el total, las imprevistas y programadas suman el total y las horas del total son las de los años', ds.length > 10 && ds.every(([, d]) => Object.values(d.por_anio).reduce((t, v) => t + v.n, 0) === d.total.n && d.total.imprevistas + d.total.programadas === d.total.n && Math.abs(Object.values(d.por_anio).reduce((t, v) => t + v.horas, 0) - d.total.horas) < 0.1));
+  comprobar('Agua/interrupciones: el total de interrupciones contadas de la metadata es la suma de los distritos y ningún distrito del archivo está fuera de los de distritos_aqp.geojson', mi.interrupciones_contadas === ds.reduce((t, [, d]) => t + d.total.n, 0) && ds.every(([k]) => json('data/distritos_aqp.geojson').features.some((x) => x.properties.distrito === k)));
+  // Recuento independiente contra el CSV de la SUNASS, si está en la caché (.cache-sunass/, lo deja pnpm datos:interrupciones): sin la biblioteca del script, con un bucle simple.
+  const rutaCsv = join(RAIZ, '..', '.cache-sunass', 'Interrupciones_Dataset.csv');
+  if (existsSync(rutaCsv)) {
+    const texto = readFileSync(rutaCsv, 'utf8').replace(/^\uFEFF/, '').split(/\r?\n/);
+    const cab = texto[0].split(',');
+    const ix = Object.fromEntries(cab.map((c, i) => [c, i]));
+    const sin = (s) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase();
+    const horas = (r) => { const t = (fe, ho) => Date.UTC(+fe.slice(0, 4), +fe.slice(4, 6) - 1, +fe.slice(6, 8), +ho.split(':')[0], +ho.split(':')[1]); return (t(r[ix.FECHAFIN], r[ix.HORAFIN]) - t(r[ix.FECHAINICIO], r[ix.HORAINICIO])) / 3600000; };
+    const quiero = ['CERRO COLORADO', 'AREQUIPA', 'CAYMA'];
+    const vistos = new Set();
+    const cuenta = Object.fromEntries(quiero.map((q) => [q, { n: 0, h: 0 }]));
+    for (const linea of texto.slice(1)) {
+      if (!linea) continue;
+      const r = linea.split(','); // los registros de SEDAPAR no traen comas dentro de comillas en estas columnas
+      if (r.length !== cab.length || sin(r[ix.EPS]) !== 'SEDAPAR' || sin(r[ix.TIPOSERVICIO]) !== 'AGUA POTABLE') continue;
+      const d = sin(r[ix.DISTRITO]);
+      if (!quiero.includes(d) || vistos.has(r[ix.IDINTERRUPCION] + '|' + d)) continue;
+      vistos.add(r[ix.IDINTERRUPCION] + '|' + d);
+      cuenta[d].n++;
+      cuenta[d].h += horas(r);
+    }
+    comprobar('Agua/interrupciones: un recuento independiente del CSV de la SUNASS (bucle simple, sin la biblioteca) da el mismo número de interrupciones y de horas en Cerro Colorado, Arequipa y Cayma', quiero.every((q) => cuenta[q].n === it.distritos[q].total.n && Math.abs(cuenta[q].h - it.distritos[q].total.horas) < 0.5), quiero.map((q) => `${q} ${cuenta[q].n}/${it.distritos[q].total.n}`).join(', '));
+  } else console.log('INFO  Agua/interrupciones: no está .cache-sunass/ (corre pnpm datos:interrupciones): se omitió el recuento independiente contra el CSV');
+  const rc = CalcW.resumirInterrupciones('Cerro Colorado', it);
+  comprobar('Agua/interrupciones: el resumen del módulo del navegador para Cerro Colorado sale del archivo: promedio por año completo y años parciales aparte', rc.estado === 'INFORMATIVO' && rc.promedioN === Math.round([2020, 2021, 2022, 2023].reduce((t, a) => t + it.distritos['CERRO COLORADO'].por_anio[a].n, 0) / 4) && rc.parciales.length === 2);
+  console.log(`INFO  Agua: ${f.length} puntos de acopio (de 582 fichas; datos de 2017, publicado ${m.fecha_publicacion}); ${mi.interrupciones_contadas} interrupciones de SEDAPAR en ${ds.length} distritos (${mi.periodo.desde} a ${mi.periodo.hasta}); diferencia máxima de la proyección UTM ${peor.toFixed(3)} m`);
+}
+
+// Z. Rutas de bus de OpenStreetMap (scripts/descargar-rutas-osm.mjs) y el viaje en combi (public/js/viaje.js); va al final porque guarda en memoria los trazados densificados y eso ralentiza las pruebas de tiempo: el archivo y un viaje conocido.
+{
+  const CalcR = createRequire(import.meta.url)('../public/js/calculos.js');
+  globalThis.Calculos = globalThis.Calculos || CalcR;
+  const V = createRequire(import.meta.url)('../public/js/viaje.js');
+  const RutasM = createRequire(import.meta.url)('../public/js/rutas.js');
+  const fcO = json('data/rutas_osm.geojson');
+  const mO = fcO.metadata || {};
+  const rO = fcO.features.filter((f) => f.properties.tipo === 'ruta');
+  comprobar('Rutas OSM: metadata con la fuente, la consulta, la fecha, la base de OSM, la licencia ODbL, la atribución y los conteos', /OpenStreetMap/.test(mO.fuente || '') && typeof mO.consulta === 'string' && /relation\["type"="route"\]/.test(mO.consulta) && /^\d{4}-\d{2}-\d{2}$/.test(mO.fecha_extraccion || '') && mO.licencia === 'ODbL' && /OpenStreetMap/.test(mO.atribucion || '') && mO.conteos && mO.conteos.rutas === rO.length && rO.length > 0, `${rO.length} rutas`);
+  comprobar('Rutas OSM: cada ruta es un sentido de un ramal con id de OSM único, línea, ramal, de y hasta, y un trazado (LineString o MultiLineString) dentro de Arequipa', new Set(rO.map((f) => f.properties.osm)).size === rO.length && rO.every((f) => /^relation\/\d+$/.test(f.properties.osm) && f.properties.linea && f.properties.ramal && f.properties.desde && f.properties.hasta && /^(Multi)?LineString$/.test(f.geometry.type) && (f.geometry.type === 'LineString' ? [f.geometry.coordinates] : f.geometry.coordinates).every((p) => p.length >= 2 && p.every(([x, y]) => x > -72 && x < -71 && y > -17 && y < -16))));
+  const saltoMax = Math.max(0, ...rO.flatMap((f) => (f.geometry.type === 'LineString' ? [f.geometry.coordinates] : f.geometry.coordinates).flatMap((p) => p.slice(1).map((c, i) => CalcR.haversine(p[i][1], p[i][0], c[1], c[0])))));
+  comprobar('Rutas OSM: ninguna relación tuvo un salto entre vías de más de 300 m (se habría partido en partes) y ningún tramo recto del trazado pasa de 1 km', mO.conteos.con_saltos === 0 && saltoMax <= 1000, `mayor tramo recto entre vértices ${Math.round(saltoMax)} m (dentro de una misma vía de OSM)`);
+  comprobar('Rutas OSM: duración e intervalo, cuando están, son minutos enteros positivos', rO.every((f) => [f.properties.duracion_min, f.properties.intervalo_min].every((x) => x === null || (Number.isInteger(x) && x > 0))));
+  const osmR = V.desdeOsm(fcO);
+  const unidas = V.unir(osmR.map((ruta) => ({ ruta, caminarTotalM: 0, viajeM: 0 })));
+  comprobar('Rutas OSM: la unión por línea + ramal + de + hasta deja pocas relaciones repetidas (la misma ruta dibujada dos veces)', osmR.length - unidas.length <= Math.ceil(osmR.length * 0.05), `${osmR.length} relaciones, ${unidas.length} rutas distintas`);
+  // Un viaje conocido: desde Paucarpata (cerca de la C6) hasta el Parque Industrial de la configuración hay rutas directas y todas ponen el origen antes que el destino.
+  const PI = { lat: -16.4179, lon: -71.5497 };
+  const rutasT = osmR;
+  const dir = V.rutasDirectas({ lat: -16.4240, lon: -71.5000 }, PI, rutasT, { caminarM: 400 });
+  comprobar('Viaje: de Paucarpata al Parque Industrial hay rutas directas, a ≤ 400 m de las dos puntas y con viaje mayor que cero', dir.directas.length > 0 && dir.directas.every((d) => d.caminarOrigenM <= 400 && d.caminarDestinoM <= 400 && d.viajeM > 0), `${dir.directas.length} directas, ${V.unir(dir.directas).length} distintas`);
+  const inv = V.rutasDirectas(PI, { lat: -16.4240, lon: -71.5000 }, rutasT, { caminarM: 400 });
+  comprobar('Viaje: el sentido importa: las rutas directas de ida no son las mismas que las del regreso', V.unir(dir.directas).map((d) => d.ruta.ramal + d.ruta.hasta).sort().join() !== V.unir(inv.directas).map((d) => d.ruta.ramal + d.ruta.hasta).sort().join() || dir.directas.length !== inv.directas.length);
+  console.log(`INFO  Rutas OSM: ${rO.length} rutas, ${mO.conteos.vertices} vértices, líneas ${JSON.stringify(mO.conteos.lineas)}; con duración ${mO.conteos.con_duracion}, con intervalo ${mO.conteos.con_intervalo}`);
+}
+
+// Y2. Registro OFICIAL del SIT (scripts/extraer-registro-sit.mjs, scripts/lib/registro-sit.js) y su comparación con las rutas de OpenStreetMap.
+console.log('\n== Registro oficial del SIT frente a las rutas de OpenStreetMap ==');
+{
+  const Reg = createRequire(import.meta.url)('./lib/registro-sit.js');
+  const reg = json('data/sit_registro_oficial.json');
+  const m = reg.metadata || {};
+  const us = reg.unidades || [];
+  comprobar('Registro SIT: metadata con la fuente (MPA), la página y el anexo, el SHA-256, que es de 2017 (no vigente) y la ordenanza que lo reemplazó', /Municipalidad Provincial de Arequipa/.test(m.fuente || '') && m.url_pagina === 'https://www.muniarequipa.gob.pe/sistema_transporte/' && /anexos_08_06_2017\.pdf$/.test(m.url_anexos || '') && /^[0-9a-f]{64}$/.test(m.sha256_anexos || '') && m.vigente === false && /1355-MPA/.test(m.plan_vigente?.norma || '') && /elperuano\.pe/.test(m.plan_vigente?.url || '') && /no están publicados/.test(m.plan_vigente?.nota || ''));
+  const codigos = us.map((u) => u.codigo);
+  comprobar('Registro SIT: las 12 unidades de negocio (C1A, C1B y C2 a C11) con nombre y al menos una ruta; códigos de ruta A#, T# o BT# sin repetir; longitudes entre 3 y 60 km', codigos.join() === 'C1A,C1B,C2,C3,C4,C5,C6,C7,C8,C9,C10,C11' && us.every((u) => u.nombre && u.rutas.length > 0 && u.rutas.every((r) => /^(A|T|BT)\d+$/.test(r.codigo) && (r.longitud_km === null || (r.longitud_km >= 3 && r.longitud_km <= 60)))) && new Set(us.flatMap((u) => u.rutas.map((r) => r.codigo))).size === us.reduce((t, u) => t + u.rutas.length, 0), `${us.reduce((t, u) => t + u.rutas.length, 0)} rutas`);
+  comprobar('Registro SIT: los conteos de la metadata cuadran con las unidades', m.conteos?.unidades === us.length && m.conteos?.rutas === us.reduce((t, u) => t + u.rutas.length, 0) && m.conteos?.rutas_con_longitud === us.reduce((t, u) => t + u.rutas.filter((r) => r.longitud_km !== null).length, 0));
+  const osm = json('data/rutas_osm.geojson').features.filter((f) => f.properties.tipo === 'ruta');
+  const c = Reg.comparar(us, osm);
+  comprobar('Registro SIT: toda línea de OSM con forma de unidad (C2, C3…) es una unidad del registro; las que no lo son (Albotran, Chiguata) no figuran en el registro de 2017', osm.every((f) => !/^C\d+$/.test(f.properties.linea) || codigos.includes(f.properties.linea)) && c.lineasOsmFueraDelRegistro.join() === 'Albotran,Chiguata', c.lineasOsmFueraDelRegistro.join());
+  comprobar('Registro SIT: OSM tiene la línea de las 10 unidades C2 a C11 (faltan solo los troncales C1A y C1B) y en cada una la empresa que etiqueta OSM es el concesionario del contrato en el 95 % de las rutas o más', c.unidades.enOsm === 10 && c.unidades.faltanEnOsm.join() === 'C1A,C1B' && c.empresa.total.coincide / c.empresa.total.rutasOsm >= 0.95, `${c.empresa.total.coincide} de ${c.empresa.total.rutasOsm} rutas`);
+  const menos = Object.entries(c.rutas).filter(([, r]) => r.ramalesOsm < r.oficiales).map(([k, r]) => `${k} (${r.ramalesOsm} de OSM frente a ${r.oficiales} oficiales)`);
+  console.log(`INFO  Registro SIT (2017): unidades en OSM ${c.unidades.enOsm} de ${c.unidades.oficiales} (${Math.round((100 * c.unidades.enOsm) / c.unidades.oficiales)} %); rutas de OSM cuya empresa coincide con el concesionario ${c.empresa.total.coincide} de ${c.empresa.total.rutasOsm}; ramales distintos de OSM ${Object.values(c.rutas).reduce((t, r) => t + r.ramalesOsm, 0)} frente a ${Object.values(c.rutas).reduce((t, r) => t + r.oficiales, 0)} rutas oficiales de las mismas unidades; unidades con menos ramales en OSM que rutas oficiales: ${menos.join(', ') || 'ninguna'}`);
+}
+
+// Y3. Cobertura del viaje en combi o bus sobre toda la ciudad (scripts/cobertura-viaje.mjs, scripts/lib/cobertura-viaje.js): no debe empeorar, y la búsqueda debe caber en 2 s.
+console.log('\n== Viaje en combi o bus: cobertura de la ciudad y tiempo de búsqueda ==');
+{
+  const CobR = createRequire(import.meta.url)('./lib/cobertura-viaje.js');
+  const VR = createRequire(import.meta.url)('../public/js/viaje.js');
+  const base = json('../docs/validacion/cobertura-viaje.json');
+  const rutasV = VR.desdeOsm(json('data/rutas_osm.geojson'));
+  const celdas = CobR.celdasUrbanas({ zonas: json('data/zonas_aqp.geojson'), reglas: json('data/reglas_zonas.json'), distritos: json('data/distritos_aqp.geojson'), pasoM: base.pasoM });
+  comprobar('Cobertura viaje: la rejilla de orígenes (cada 500 m, zonas edificables o condicionadas del plano dentro de un distrito) es la de la línea base', celdas.length === base.origenes && base.caminarM === CONFIG.viaje.caminarM && base.trasbordoM === CONFIG.viaje.trasbordoM, `${celdas.length} orígenes`);
+  const d = CONFIG.destinos.find((x) => x.id === 'parque-industrial');
+  const destino = { lat: d.lat, lon: d.lon };
+  const op = { caminarM: CONFIG.viaje.caminarM, trasbordoM: CONFIG.viaje.trasbordoM, tiempo: CONFIG.viaje.tiempo };
+  const prep = VR.prepararDestinoTrasbordo(destino, rutasV, op);
+  const ms = [];
+  const filas = celdas.map((c) => { const t0 = performance.now(); const r = CobR.clasificar({ lat: c.lat, lon: c.lon }, destino, rutasV, { ...op, preparado: prep }); ms.push(performance.now() - t0); return { ...c, ...r }; });
+  const r = CobR.resumir(filas);
+  const b = base.destinos['parque-industrial'];
+  comprobar('Cobertura viaje: al Parque Industrial el porcentaje de orígenes con solución (directa o con un trasbordo) no baja de la línea base (2 puntos de tolerancia)', r.pctConSolucion >= b.pctConSolucion - 2 && r.directa >= b.directa - 10, `${r.pctConSolucion} % con solución (base ${b.pctConSolucion} %); directa ${r.directa} (base ${b.directa}), con un trasbordo ${r.trasbordo} (base ${b.trasbordo}), ninguna ${r.ninguna}`);
+  comprobar('Cobertura viaje: los orígenes «sin_trasbordo» (hay rutas cerca de los dos extremos pero ninguna combinación respeta el sentido) no aumentan respecto de la línea base', (r.motivos.sin_trasbordo || 0) <= (b.motivos.sin_trasbordo || 0) + 2, `${r.motivos.sin_trasbordo || 0} (base ${b.motivos.sin_trasbordo || 0})`);
+  const max = Math.max(...ms);
+  const completos = filas.filter((f) => f.estado !== 'directa').slice(0, 150).map((f) => { const t0 = performance.now(); VR.rutasConTrasbordo({ lat: f.lat, lon: f.lon }, destino, rutasV, { ...op, max: 5 }); return performance.now() - t0; });
+  comprobar('Viaje: la búsqueda de viajes con un trasbordo desde cualquier origen de la rejilla cabe en el presupuesto de 2 s (peor caso, con el destino sin preparar)', max < 2000 && Math.max(...completos) < 2000, `peor caso ${max.toFixed(0)} ms con el destino preparado y ${Math.max(...completos).toFixed(0)} ms sin prepararlo`);
+  console.log(`INFO  Cobertura al Parque Industrial: directa ${r.directa}, con un trasbordo ${r.trasbordo}, ninguna ${r.ninguna} de ${r.total} orígenes; motivos ${JSON.stringify(r.motivos)}`);
 }
 
 console.log(`\n${pruebas - fallos} de ${pruebas} comprobaciones correctas.`);
