@@ -6,5 +6,14 @@
   },
   "env": {
     "node": true
-  }
+  },
+  "ignorePatterns": ["web/.next/**", "web/next-env.d.ts", "packages/dominio/src/**", "packages/dominio/tipos/**", "packages/dominio/cjs/**"],
+  "overrides": [
+    {
+      "files": ["public/js/app.js", "public/js/*-ui.js", "public/js/login.js"],
+      "rules": {
+        "typescript/no-floating-promises": "warn"
+      }
+    }
+  ]
 }

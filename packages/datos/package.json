@@ -1,0 +1,19 @@
+{
+  "name": "@geoverificador/datos",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Base de datos única de GeoVerificador: migraciones, cargadores y consultas espaciales (PostgreSQL + PostGIS).",
+  "exports": {
+    "./*": "./src/*.ts"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.5.16",
+    "@electric-sql/pglite-postgis": "^0.2.16",
+    "@geoverificador/dominio": "workspace:*",
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.10"
+  }
+}

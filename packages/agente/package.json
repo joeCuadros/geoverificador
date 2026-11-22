@@ -1,0 +1,15 @@
+{
+  "name": "@geoverificador/agente",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Agente de búsqueda de vivienda: herramientas tipadas, ciclo de varios pasos, verificación de la respuesta y evaluación.",
+  "exports": {
+    "./*": "./src/*.ts"
+  },
+  "dependencies": {
+    "@geoverificador/datos": "workspace:*",
+    "@geoverificador/dominio": "workspace:*",
+    "zod": "^4.6.7"
+  }
+}

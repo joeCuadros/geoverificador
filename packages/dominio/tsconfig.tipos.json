@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "target": "ES2023",
+    "lib": ["ES2023", "DOM"],
+    "skipLibCheck": true,
+    "rootDir": "src/nucleo",
+    "outDir": "tipos",
+    "types": []
+  },
+  "include": ["src/nucleo/*.js"]
+}

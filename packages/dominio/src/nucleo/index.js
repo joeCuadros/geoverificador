@@ -1,0 +1,26 @@
+// GENERADO por scripts/generar-dominio.mjs. No editar.
+export { default as AsistenteLLM } from './asistente-llm.js';
+export { default as Asistente } from './asistente.js';
+export { default as Calculos } from './calculos.js';
+export { default as Capas } from './capas.js';
+export { default as Cenepred } from './cenepred.js';
+export { default as Comparar } from './comparar.js';
+export { default as Cuenta } from './cuenta.js';
+export { default as Disposicion } from './disposicion.js';
+export { default as Distritos } from './distritos.js';
+export { default as Entidades } from './entidades.js';
+export { default as Equipamiento } from './equipamiento.js';
+export { default as Onboarding } from './onboarding.js';
+export { default as Precios } from './precios.js';
+export { default as Recorrido } from './recorrido.js';
+export { default as Reporte } from './reporte.js';
+export { default as Resumen } from './resumen.js';
+export { default as Rutas } from './rutas.js';
+export { default as Sectores } from './sectores.js';
+export { default as Tour } from './tour.js';
+export { default as Umbrales } from './umbrales.js';
+export { default as Verificaciones } from './verificaciones.js';
+export { default as Viaje } from './viaje.js';
+export { default as Volcan } from './volcan.js';
+export { default as CONFIG } from './config.js';
+export { configurar } from './entorno.js';

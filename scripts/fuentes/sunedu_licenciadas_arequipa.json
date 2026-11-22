@@ -1,0 +1,12 @@
+{
+  "fuente": "SUNEDU, Lista de universidades licenciadas",
+  "url": "https://www.sunedu.gob.pe/lista-de-universidades-licenciadas/",
+  "fecha_consulta": "2026-11-16",
+  "alcance": "Universidades licenciadas cuya sede (departamento/provincia) en la lista es Arequipa. La lista de SUNEDU no detalla sedes ni filiales: una universidad licenciada con sede en otra región y una filial en Arequipa no figura aquí.",
+  "universidades": [
+    { "nombre": "Universidad Nacional de San Agustín", "gestion": "pública", "fecha_licencia": "2018-08-27", "claves": ["universidad nacional de san agustin", "universidad nacional san agustin", "unsa"] },
+    { "nombre": "Universidad Católica de Santa María", "gestion": "privada", "fecha_licencia": "2017-12-31", "claves": ["universidad catolica de santa maria", "ucsm"] },
+    { "nombre": "Universidad Católica San Pablo", "gestion": "privada", "fecha_licencia": "2017-10-22", "claves": ["universidad catolica san pablo", "ucsp"] },
+    { "nombre": "Universidad La Salle", "gestion": "privada", "fecha_licencia": "2018-01-19", "claves": ["universidad la salle", "ulasalle"] }
+  ]
+}
