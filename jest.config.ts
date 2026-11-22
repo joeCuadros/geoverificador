@@ -14,13 +14,16 @@ const config: Config = {
   moduleFileExtensions: ['js', 'json', 'ts'],
   rootDir: '.',
   testRegex: '.*\\.spec\\.ts$',
-  testPathIgnorePatterns: ['/node_modules/', '/\\.claude/'], // copias de trabajo de otros agentes no son parte de este proyecto
+  testPathIgnorePatterns: ['/node_modules/', '/\\.claude/', '<rootDir>/packages/', '<rootDir>/web/'], // copias de trabajo de otros agentes no son parte de este proyecto
   transform: {
     '^.+\\.(t|j)s$': 'ts-jest',
   },
   moduleNameMapper: pathsToModuleNameMapper(paths, { prefix: '<rootDir>/' }),
   collectCoverageFrom: [
     'src/**/*.(t|j)s',
+    'public/js/**/*.js',
+    'api/**/*.js',
+    'scripts/lib/**/*.js',
     'libs/**/*.(t|j)s',
     'apps/**/*.(t|j)s',
   ],

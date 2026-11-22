@@ -1,6 +1,6 @@
 # compiled output
 /dist
-/node_modules
+node_modules/
 /build
 
 # TypeScript build cache
@@ -85,3 +85,12 @@ qwen-image-ui/
 /.cache-acopio/
 /.cache-sunass/
 /.cache-sit/
+
+# Base local embebida (PGlite) y tipos generados del paquete de dominio
+/.pglite/
+/packages/dominio/tipos/
+
+/.cache-educacion-superior/
+.next/
+web/next-env.d.ts
+.bd-local/
