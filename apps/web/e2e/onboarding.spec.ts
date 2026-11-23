@@ -169,7 +169,7 @@ test.describe('foco', () => {
       expect(await dentro()).toBe(true);
     }
     // Aunque algo enfoque un control de la página, el foco regresa al cuadro.
-    await page.evaluate(() => (document.getElementById('buscar-lugar') as HTMLElement).focus());
+    await page.evaluate(() => (document.querySelector('form[role="search"] input[name="q"]') as HTMLElement).focus());
     await expect(siguiente(page)).toBeFocused();
     // Un clic en el velo no la cierra por accidente.
     await page.mouse.click(5, 400);
