@@ -1,5 +1,5 @@
 /**
- * verificar.ts — Compara la base contra los archivos de public/data (tarea 2.5). Lo usa `pnpm datos:verificar` cuando hay DATABASE_URL.
+ * verificar.ts — Compara la base contra los archivos de apps/estatica/public/data (tarea 2.5). Lo usa `pnpm datos:verificar` cuando hay DATABASE_URL.
  *
  * Por cada archivo: que esté cargado, que su SHA-256 sea el del archivo y que la tabla tenga tantas filas como elementos trae. Además, que no
  * quede en la base un archivo que ya no existe, y que cada fuente tenga fecha y su frase de límite.

@@ -1,34 +1,8 @@
 import type { Config } from 'jest';
-import { pathsToModuleNameMapper } from 'ts-jest';
-import ts from 'typescript';
 
-// Path aliases (e.g. the ones added by `nest g library`) live in tsconfig.json,
-// so they are read from there instead of being duplicated here.
-const { config: tsconfig } = ts.readConfigFile(
-  './tsconfig.json',
-  ts.sys.readFile,
-);
-const paths = tsconfig?.compilerOptions?.paths ?? {};
-
+/** Una sola corrida de Jest para las tres piezas con pruebas de siempre; cada una tiene su configuración. `pnpm test`. */
 const config: Config = {
-  moduleFileExtensions: ['js', 'json', 'ts'],
-  rootDir: '.',
-  testRegex: '.*\\.spec\\.ts$',
-  testPathIgnorePatterns: ['/node_modules/', '/\\.claude/', '<rootDir>/packages/', '<rootDir>/web/'], // copias de trabajo de otros agentes no son parte de este proyecto
-  transform: {
-    '^.+\\.(t|j)s$': 'ts-jest',
-  },
-  moduleNameMapper: pathsToModuleNameMapper(paths, { prefix: '<rootDir>/' }),
-  collectCoverageFrom: [
-    'src/**/*.(t|j)s',
-    'public/js/**/*.js',
-    'api/**/*.js',
-    'scripts/lib/**/*.js',
-    'libs/**/*.(t|j)s',
-    'apps/**/*.(t|j)s',
-  ],
-  coverageDirectory: './coverage',
-  testEnvironment: 'node',
+  projects: ['<rootDir>/apps/api', '<rootDir>/apps/estatica', '<rootDir>/tools'],
 };
 
 export default config;

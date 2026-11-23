@@ -1,5 +1,5 @@
 /**
- * catalogo.ts — Qué es cada archivo de public/data: a qué tabla va, con qué categoría y de qué fuente sale.
+ * catalogo.ts — Qué es cada archivo de apps/estatica/public/data: a qué tabla va, con qué categoría y de qué fuente sale.
  *
  * La licencia y la fecha de cada fuente se leen de los metadatos del propio archivo al cargarlo; aquí solo va lo que el archivo no dice.
  * `licenciaVerificada` es true únicamente donde el archivo declara una licencia abierta conocida (ODbL, ODC-By, CC BY). El resto queda en false
@@ -21,7 +21,7 @@ export interface DefFuente {
 }
 
 export interface DefArchivo {
-  /** Expresión que reconoce la ruta relativa a public/data (con «/»). */
+  /** Expresión que reconoce la ruta relativa a apps/estatica/public/data (con «/»). */
   patron: RegExp;
   tabla: Tabla;
   fuente: string;

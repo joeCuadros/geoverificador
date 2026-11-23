@@ -14,6 +14,7 @@ Estados: `propuesta` (falta que decida el dueño del producto), `aceptada`, `rec
 | [0005](0005-recolector-smartbus.md) | Recolector de SmartBus | propuesta | Tarea 1.2 |
 | [0006](0006-base-de-datos.md) | PostgreSQL + PostGIS y la rama `feature/base-de-datos` (MySQL) | propuesta | Fase 2 |
 | [0007](0007-paquete-de-dominio.md) | Paquete de dominio generado mientras dure la migración | aceptada (técnica) | Fase 5.2 |
+| [0008](0008-monorepo-por-capas.md) | Monorepo por capas: aplicaciones arriba, paquetes debajo | aceptada (técnica) | — |
 
 Mientras D1 a D4 estén en `propuesta`, el código nuevo se comporta así:
 

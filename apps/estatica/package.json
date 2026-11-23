@@ -1,0 +1,11 @@
+{
+  "name": "@geoverificador/estatica",
+  "version": "0.0.1",
+  "description": "Front estático de siempre (HTML + JS sin compilar) y sus funciones serverless de Vercel (api/). Se despliega con Root Directory = apps/estatica.",
+  "private": true,
+  "license": "UNLICENSED",
+  "scripts": {
+    "dev": "pnpm --filter @geoverificador/api start:dev",
+    "test": "node --experimental-vm-modules ../../node_modules/jest/bin/jest.js --config jest.config.ts"
+  }
+}

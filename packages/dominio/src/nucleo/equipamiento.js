@@ -1,10 +1,10 @@
-// GENERADO por scripts/generar-dominio.mjs a partir de public/js/equipamiento.js. No editar: cambie el original y corra `pnpm dominio:generar`.
+// GENERADO por tools/generar-dominio.mjs a partir de apps/estatica/public/js/equipamiento.js. No editar: cambie el original y corra `pnpm dominio:generar`.
 
 import { CONFIG, Services, Calculos, Rutas } from './entorno.js';
 /**
  * equipamiento.js — Variables V2 a V5: salud, educación por nivel, transporte y área verde.
  *
- * Lee los archivos congelados de public/data/equipamiento (scripts/extraer-equipamiento.mjs) y calcula, para el punto
+ * Lee los archivos congelados de apps/estatica/public/data/equipamiento (tools/extraer-equipamiento.mjs) y calcula, para el punto
  * elegido, el elemento más cercano de cada variable y su veredicto con los umbrales de CONFIG.umbrales. Solo si falta
  * un archivo consulta Overpass en vivo (respaldo), alrededor del punto. Los cálculos están en calculos.js.
  *

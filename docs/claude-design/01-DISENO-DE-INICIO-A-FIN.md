@@ -158,8 +158,8 @@ Persona ──▶ Interfaz (chat + pantallas) ──▶ Orquestador (función de
 ## 6. Qué ya existe (para no rehacerlo)
 
 - Ficha de variables, mapa, flujo de 3 pasos, tema claro y oscuro, informe PDF. Sitio publicado: <https://geoverificador-nine.vercel.app> (**ojo:** esa versión se desplegó antes del PR #7; `main` tiene más).
-- Asistente de **reglas** (`public/js/asistente.js`): entiende frases, busca zonas y ajusta («agrega…», «quita…», «prioriza…»). Sigue siendo el **plan B** cuando no hay modelo.
-- Capa con **LLM** opcional (`public/js/asistente-llm.js`, `api/chat.js`, `api/_lib/gemini.js`, `src/chat.controller.ts`): ver 4.1.
+- Asistente de **reglas** (`apps/estatica/public/js/asistente.js`): entiende frases, busca zonas y ajusta («agrega…», «quita…», «prioriza…»). Sigue siendo el **plan B** cuando no hay modelo.
+- Capa con **LLM** opcional (`apps/estatica/public/js/asistente-llm.js`, `api/chat.js`, `apps/estatica/api/_lib/gemini.js`, `apps/api/src/chat.controller.ts`): ver 4.1.
 - **Comparador** (`comparar.js`, `comparar-ui.js`): hasta 3 puntos, prioridades que marca la persona, sin puntaje global.
 - **Contexto de riesgo** (`contexto.js`): peligros, sismos y quebradas; **Verificaciones** (`verificaciones.js`); **Tour** (`tour.js`).
 - Datos y cálculos verificados (ver `02-DATOS.md`).

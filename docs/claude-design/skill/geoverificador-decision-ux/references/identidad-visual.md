@@ -1,6 +1,6 @@
 # Identidad visual de GeoVerificador
 
-Fuente: `public/css/styles.css` del repositorio (tokens en `:root`). El sitio publicado es <https://geoverificador-nine.vercel.app>.
+Fuente: `apps/estatica/public/css/styles.css` del repositorio (tokens en `:root`). El sitio publicado es <https://geoverificador-nine.vercel.app>.
 
 **Idea:** la piedra blanca de Arequipa (sillar) y la tinta azul de los planos. Fondo de sillar claro con juntas de bloques apenas visibles; tinta azul para la acción y la barra superior; ámbar solo para el aviso de que la consulta es referencial.
 

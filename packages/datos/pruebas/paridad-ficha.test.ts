@@ -17,7 +17,7 @@ afterAll(() => base?.cerrar());
 
 const dentro = (lat: number, lon: number, g: any) => (g.type === 'Polygon' ? [g.coordinates] : g.coordinates).some((anillos: any) => Calculos.puntoEnPoligono(lat, lon, anillos));
 
-/** Zona como la resuelve public/js/zonificacion.js: el último polígono del archivo que contiene el punto. */
+/** Zona como la resuelve apps/estatica/public/js/zonificacion.js: el último polígono del archivo que contiene el punto. */
 const zonaDeArchivo = (() => {
   let zonas: any;
   return (lat: number, lon: number): string | null => {
@@ -28,7 +28,7 @@ const zonaDeArchivo = (() => {
   };
 })();
 
-/** Distrito como lo resuelve public/js/distritos.js: el primero del archivo que contiene el punto. */
+/** Distrito como lo resuelve apps/estatica/public/js/distritos.js: el primero del archivo que contiene el punto. */
 const distritoDeArchivo = (() => {
   let distritos: any;
   return (lat: number, lon: number): string | null => {

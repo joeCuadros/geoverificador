@@ -1,4 +1,4 @@
-// GENERADO por scripts/generar-dominio.mjs a partir de public/js/resumen.js. No editar: cambie el original y corra `pnpm dominio:generar`.
+// GENERADO por tools/generar-dominio.mjs a partir de apps/estatica/public/js/resumen.js. No editar: cambie el original y corra `pnpm dominio:generar`.
 
 import Rutas from './rutas.js';
 import Distritos from './distritos.js';

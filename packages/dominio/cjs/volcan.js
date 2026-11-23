@@ -1,2 +1,2 @@
-// GENERADO por scripts/generar-dominio.mjs. No editar.
+// GENERADO por tools/generar-dominio.mjs. No editar.
 module.exports = require('../src/nucleo/volcan.js').default;

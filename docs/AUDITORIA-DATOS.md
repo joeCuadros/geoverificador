@@ -1,6 +1,6 @@
 # Auditoría de datos (2026-11-11)
 
-Revisión de todos los archivos de `public/data/` en la rama `feat/agua-sedapar` (commit 79f9b3b). Es una revisión de lectura: no se cambió ningún dato, umbral ni diseño. Qué se hizo: (1) inventario de cada archivo; (2) comprobaciones con números reales (cajas, duplicados, nombres vacíos, geometrías, coordenadas repetidas, cruce de nombres de distrito); (3) revisión en el navegador de cuatro puntos y de las 28 capas del mapa; (4) este informe. `pnpm datos:verificar` da 252 de 252 comprobaciones correctas y `pnpm test` 1 624 pruebas correctas en el mismo commit.
+Revisión de todos los archivos de `apps/estatica/public/data/` en la rama `feat/agua-sedapar` (commit 79f9b3b). Es una revisión de lectura: no se cambió ningún dato, umbral ni diseño. Qué se hizo: (1) inventario de cada archivo; (2) comprobaciones con números reales (cajas, duplicados, nombres vacíos, geometrías, coordenadas repetidas, cruce de nombres de distrito); (3) revisión en el navegador de cuatro puntos y de las 28 capas del mapa; (4) este informe. `pnpm datos:verificar` da 252 de 252 comprobaciones correctas y `pnpm test` 1 624 pruebas correctas en el mismo commit.
 
 Fecha de referencia para «antigüedad»: 2026-11-11. «Antiguo» = datos de hace más de 3 años.
 
@@ -34,10 +34,10 @@ Fecha de referencia para «antigüedad»: 2026-11-11. «Antiguo» = datos de hac
 | `mineria/concesiones_mineras.geojson` | INGEMMET, Catastro Minero (GEOCATMIN) | actualizado 2026-11-10 | No localizada; se atribuye a INGEMMET | 425 | Polygon (1 Multi) | 256 | `descargar-concesiones-mineras.mjs` | sí |
 | `rutas_osm.geojson` | OpenStreetMap: relaciones `route=bus` de la red SIT y paradas de bus (única fuente de rutas y paradas) | 2026-11-10 (rutas) y 2026-11-11 (paradas) | ODbL | 241 rutas + 411 paradas | LineString y Point | 3 383 | `descargar-rutas-osm.mjs` | sí |
 | `sit_registro_oficial.json` | Municipalidad Provincial de Arequipa: anexo de las bases de la tercera licitación de operación de rutas del SIT y contratos de concesión | **2017** (bases integradas del 2017-06-08) · 2026-11-11 | Sin licencia declarada (información pública) | 12 unidades, 79 rutas | sin geometría | 14 | `extraer-registro-sit.mjs` | sí |
-| `agua/puntos_acopio.geojson` | SEDAPAR y Municipalidad Provincial de Arequipa (directorio publicado en gob.pe el 2024-02-16) | **abril a junio de 2017** · 2026-11-11 | Sin licencia declarada (información pública) | 575 de 582 fichas | Point | 160 | `convertir-acopio-sedapar.mjs` (+ CSV fuente en `scripts/fuentes/`) | sí |
+| `agua/puntos_acopio.geojson` | SEDAPAR y Municipalidad Provincial de Arequipa (directorio publicado en gob.pe el 2024-02-16) | **abril a junio de 2017** · 2026-11-11 | Sin licencia declarada (información pública) | 575 de 582 fichas | Point | 160 | `convertir-acopio-sedapar.mjs` (+ CSV fuente en `tools/fuentes/`) | sí |
 | `agua/interrupciones_sedapar.json` | SUNASS, registro de interrupciones | 2019-10-03 a 2024-04-26 · 2026-11-11 | ODC-By | 4 549 interrupciones, 18 distritos | sin geometría | 7 | `descargar-interrupciones-sunass.mjs` | sí |
 
-Total de `public/data/`: 28 MB (11 MB del censo, que se lee por distrito).
+Total de `apps/estatica/public/data/`: 28 MB (11 MB del censo, que se lee por distrito).
 
 ### Marcas del inventario
 

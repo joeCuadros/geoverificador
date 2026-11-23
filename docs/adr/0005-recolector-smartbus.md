@@ -5,19 +5,19 @@
 
 ## Contexto
 
-`pnpm datos:smartbus` (`scripts/recolectar-smartbus.mjs`, `scripts/lib/smartbus/`) sigue en `main` con sus pruebas. Solo hay permiso verbal de
-SmartBus y sus datos no pueden entrar al producto. El archivo `public/data/rutas_smartbus.geojson` y su script de descarga ya no están en `main`:
+`pnpm datos:smartbus` (`tools/recolectar-smartbus.mjs`, `tools/lib/smartbus/`) sigue en `main` con sus pruebas. Solo hay permiso verbal de
+SmartBus y sus datos no pueden entrar al producto. El archivo `apps/estatica/public/data/rutas_smartbus.geojson` y su script de descarga ya no están en `main`:
 el borrado prevaleció al integrar las ramas (tarea 1.1). La única fuente de rutas del producto es OpenStreetMap (`rutas_osm.geojson`).
 
 ## Opciones
 
 1. **Quitar el recolector.** Menos código que mantener y ninguna posibilidad de que sus datos lleguen al producto por error.
-2. **Conservarlo como herramienta interna.** Sirve para contrastar las rutas de OSM. Escribe solo en `.cache-smartbus/` y `datos-crudos/`, ignorados por git.
+2. **Conservarlo como herramienta interna.** Sirve para contrastar las rutas de OSM. Escribe solo en `.cache-smartbus/` y `data/`, ignorados por git.
 
 ## Propuesta
 
 Opción 2 hasta que haya permiso por escrito o se decida lo contrario, con una salvaguarda: el cargador de la base de datos **no tiene** un cargador
-de SmartBus y `datos:verificar` comprueba que no exista `rutas_smartbus.geojson` en `public/data`.
+de SmartBus y `datos:verificar` comprueba que no exista `rutas_smartbus.geojson` en `apps/estatica/public/data`.
 
 ## Pendiente de una persona
 

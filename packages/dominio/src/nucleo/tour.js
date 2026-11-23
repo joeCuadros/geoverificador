@@ -1,4 +1,4 @@
-// GENERADO por scripts/generar-dominio.mjs a partir de public/js/tour.js. No editar: cambie el original y corra `pnpm dominio:generar`.
+// GENERADO por tools/generar-dominio.mjs a partir de apps/estatica/public/js/tour.js. No editar: cambie el original y corra `pnpm dominio:generar`.
 
 /**
  * tour.js — Contenido y lógica de la guía breve que sigue al Inicio (sin DOM, sin red).
@@ -6,7 +6,7 @@
  * La guía explica qué hace y qué NO hace la herramienta, cómo usar el chat (lo principal), cómo ver en el mapa las cosas
  * reales (colegios, parques, zonas, quebradas, sismos), cómo buscar por punto (vía secundaria), cómo leer una tarjeta y cómo comparar puntos. Es el segundo momento de
  * la visita, después del Inicio (recorrido.js); se puede omitir y se vuelve a abrir con el botón «¿Cómo funciona?».
- * Todo el texto vive aquí para que se pueda revisar y probar (test/tour.spec.ts) sin abrir la página.
+ * Todo el texto vive aquí para que se pueda revisar y probar (apps/estatica/test/tour.spec.ts) sin abrir la página.
  *
  *   PASOS[i] = { id, titulo, intro, bloques: [{ titulo?, items: [texto…] }], muestra? }
  *   muestra: 'estados' dibuja los tres estados de ejemplo (CUMPLE, NO CUMPLE, SIN DATO) en la vista.

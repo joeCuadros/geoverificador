@@ -1,5 +1,5 @@
 /**
- * Fase 3: ingesta de avisos contra PostGIS. La muestra de Nexo es real (test/fixtures/avisos/nexo-arequipa-muestra.html, recortada);
+ * Fase 3: ingesta de avisos contra PostGIS. La muestra de Nexo es real (tools/test/fixtures/avisos/nexo-arequipa-muestra.html, recortada);
  * los avisos de `aviso()` son dobles escritos aquí para ejercitar duplicados, moneda y ciclo de vida.
  */
 import fs from 'node:fs';
@@ -13,7 +13,7 @@ import { geocodificarLocal, geocodificarNominatim, textoDeAviso } from '../src/g
 import { RAIZ, baseDePrueba, leerDato } from './apoyo.ts';
 
 const require = createRequire(import.meta.url);
-const Nexo = require(path.join(RAIZ, 'scripts/lib/avisos/fuentes/nexo.js'));
+const Nexo = require(path.join(RAIZ, 'tools/lib/avisos/fuentes/nexo.js'));
 const DISTRITOS: string[] = leerDato('distritos_aqp.geojson').features.map((f: any) => f.properties.distrito);
 const TC = { fecha: '2026-11-12', venta: 3.75, fuente: 'doble de prueba' };
 const DIA1 = new Date('2026-11-12T10:00:00.000Z');
@@ -36,7 +36,7 @@ afterAll(() => base?.cerrar());
 
 describe('ingesta de la muestra real de Nexo', () => {
   it('guarda los proyectos, infiere su tipo y deja el reporte de la corrida', async () => {
-    const html = fs.readFileSync(path.join(RAIZ, 'test/fixtures/avisos/nexo-arequipa-muestra.html'), 'utf8');
+    const html = fs.readFileSync(path.join(RAIZ, 'tools/test/fixtures/avisos/nexo-arequipa-muestra.html'), 'utf8');
     const avisos: AvisoRecolectado[] = Nexo.parsear(html, { distritosConocidos: DISTRITOS, ahora: DIA1 });
     const r = await ingerirCorrida(base, avisos, { ahora: DIA1, fuentes: ['nexo'], tipoCambio: TC });
     expect(r).toMatchObject({ recibidos: avisos.length, aceptados: avisos.length, descartados: 0, nuevos: avisos.length, actualizados: 0, caidos: 0 });

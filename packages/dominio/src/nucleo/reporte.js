@@ -1,4 +1,4 @@
-// GENERADO por scripts/generar-dominio.mjs a partir de public/js/reporte.js. No editar: cambie el original y corra `pnpm dominio:generar`.
+// GENERADO por tools/generar-dominio.mjs a partir de apps/estatica/public/js/reporte.js. No editar: cambie el original y corra `pnpm dominio:generar`.
 
 import Rutas from './rutas.js';
 import Precios from './precios.js';
@@ -17,7 +17,7 @@ import Calculos from './calculos.js';
  * están activos (`d.modulos`, ver CONFIG.modulos y ?modulos=todos); con los módulos ocultos el informe no los menciona.
  *
  * Recibe un objeto `d` con lo que ya calculó app.js (ver app.js, datosReporte). Las funciones que arman el HTML de cada
- * sección son puras (no tocan el DOM) y se prueban en test/reporte.spec.ts; solo `imprimir` usa document y window.
+ * sección son puras (no tocan el DOM) y se prueban en apps/estatica/test/reporte.spec.ts; solo `imprimir` usa document y window.
  */
 const Reporte = (() => {
   const RT = Rutas; // eslint-disable-line no-undef

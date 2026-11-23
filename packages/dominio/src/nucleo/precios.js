@@ -1,11 +1,11 @@
-// GENERADO por scripts/generar-dominio.mjs a partir de public/js/precios.js. No editar: cambie el original y corra `pnpm dominio:generar`.
+// GENERADO por tools/generar-dominio.mjs a partir de apps/estatica/public/js/precios.js. No editar: cambie el original y corra `pnpm dominio:generar`.
 
 import { CONFIG } from './entorno.js';
 /**
  * precios.js — Precio de OFERTA por m² del distrito (informativo, sin DOM).
  *
  * Fuente: Aptología (CC BY 4.0), estudio «Vivienda en Arequipa: precio por m², arriendo, habitaciones y rentabilidad»,
- * congelado con scripts/descargar-precios.mjs en data/precios_m2_distrito.json.
+ * congelado con tools/descargar-precios.mjs en data/precios_m2_distrito.json.
  *
  * Lo que es: la mediana del precio PEDIDO (avisos publicados) por m² de departamentos en venta, por distrito, con el
  * número de avisos y el periodo. Lo que NO es: precio de cierre, tasación ni el valor de un inmueble en particular.
@@ -16,7 +16,7 @@ import { CONFIG } from './entorno.js';
  *
  * Pura: recibe el contenido del JSON (objeto) y el nombre del distrito. `load` es la única función con red.
  * Se carga como script del navegador (define `Precios`) y también como módulo CommonJS para las pruebas y para
- * scripts/descargar-precios.mjs.
+ * tools/descargar-precios.mjs.
  */
 export function crearPrecios(dependencias = {}) {
   const fetch = dependencias.fetch || ((...a) => globalThis.fetch(...a));
@@ -142,7 +142,7 @@ const Precios = (() => {
         } catch (_) {
           throw new Error(`No se pudo leer el archivo de precios (${url}).`);
         }
-        if (!res.ok) throw new Error(`No se encontró ${url} (HTTP ${res.status}). Genera el archivo con: node scripts/descargar-precios.mjs`);
+        if (!res.ok) throw new Error(`No se encontró ${url} (HTTP ${res.status}). Genera el archivo con: node tools/descargar-precios.mjs`);
         let datos;
         try {
           datos = await res.json();

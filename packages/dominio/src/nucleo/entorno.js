@@ -1,4 +1,4 @@
-// GENERADO por scripts/generar-dominio.mjs. No editar.
+// GENERADO por tools/generar-dominio.mjs. No editar.
 /**
  * entorno.js — Lo que en el navegador eran variables globales (CONFIG, Services) y aquí se entrega una sola vez con configurar().
  * Mientras no se llame a configurar(), CONFIG y Services valen undefined, igual que cuando las bibliotecas se cargaban solas en una prueba.

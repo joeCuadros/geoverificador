@@ -1,4 +1,4 @@
-// GENERADO por scripts/generar-dominio.mjs a partir de public/js/comparar.js. No editar: cambie el original y corra `pnpm dominio:generar`.
+// GENERADO por tools/generar-dominio.mjs a partir de apps/estatica/public/js/comparar.js. No editar: cambie el original y corra `pnpm dominio:generar`.
 
 import Calculos from './calculos.js';
 import Rutas from './rutas.js';
@@ -13,10 +13,10 @@ import Precios from './precios.js';
  *
  * INFORMATIVO: estado de lo que no tiene umbral normativo (la distancia a una quebrada, los peligros registrados y los
  * sismos recientes). Solo la cercanía a quebradas puede pasar a CUMPLE / NO CUMPLE, y únicamente con el umbral que fije la
- * persona en «Mis umbrales» (public/js/umbrales.js). Los peligros y los sismos son contexto: nunca son prioridad.
+ * persona en «Mis umbrales» (apps/estatica/public/js/umbrales.js). Los peligros y los sismos son contexto: nunca son prioridad.
  *
  * Se carga como script del navegador (define `Comparar`) y también como módulo CommonJS para las pruebas
- * (test/comparar.spec.ts). app.js y comparar-ui.js son quienes tocan el DOM; aquí solo viven las decisiones.
+ * (apps/estatica/test/comparar.spec.ts). app.js y comparar-ui.js son quienes tocan el DOM; aquí solo viven las decisiones.
  */
 const Comparar = (() => {
   const C = Calculos; // eslint-disable-line no-undef

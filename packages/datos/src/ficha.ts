@@ -2,7 +2,7 @@
  * ficha.ts — La ficha de un punto armada con consultas a la base (criterio de «hecho» de la fase 2).
  *
  * El cálculo es el mismo de la aplicación: `Equipamiento.evaluar` del núcleo de dominio. Lo que cambia es de dónde lee: en el navegador baja los
- * archivos completos de public/data; aquí cada «archivo» que pide se responde con una consulta espacial que trae solo los elementos que pueden
+ * archivos completos de apps/estatica/public/data; aquí cada «archivo» que pide se responde con una consulta espacial que trae solo los elementos que pueden
  * influir en el resultado de ese punto (los que están cerca y el más cercano de cada grupo). Por eso los valores coinciden con los de la aplicación.
  */
 import CONFIG from '@geoverificador/dominio/nucleo/config';
@@ -22,7 +22,7 @@ const MAS_CERCANOS = 8;
 const ENTEROS = new Set(['agua/puntos_acopio.geojson']);
 const PT = 'ST_SetSRID(ST_MakePoint($2, $3), 4326)';
 
-/** Ruta relativa a public/data a partir de la URL que usa CONFIG («data/equipamiento/salud.geojson»). */
+/** Ruta relativa a apps/estatica/public/data a partir de la URL que usa CONFIG («data/equipamiento/salud.geojson»). */
 const rutaDe = (url: string): string => url.replace(/^.*?data\//, '');
 
 const coleccion = (meta: Record<string, any>, filas: Record<string, any>[]) => {

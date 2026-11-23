@@ -22,28 +22,28 @@ Ficha de un predio en Arequipa metropolitana, con datos públicos. Se elige un p
 | Riesgo del distrito ante El Niño | Nivel de riesgo ante inundaciones y ante movimientos en masa que el CENEPRED estima para el **distrito** del punto en un escenario de lluvias como las de El Niño (más las viviendas, locales educativos y establecimientos de salud del distrito en zonas de mayor susceptibilidad). **Siempre `INFORMATIVO`**: estimación por distrito, no del predio; nunca cumple / no cumple ni puntaje | — | CENEPRED (SIGRID), escenario ante El Niño 2026-2027 |
 | Precio de oferta del distrito | Mediana del **precio pedido** por m² de departamentos en venta en el distrito del punto, con número de avisos y periodo. **Siempre `INFORMATIVO`** (nunca cumple / no cumple ni puntaje): son precios de avisos, no de cierre, y el promedio del distrito, no el de un inmueble. Solo hay cifra en los distritos con al menos 30 avisos (hoy Cayma, Yanahuara y Cerro Colorado); en los demás es `SIN DATO` con su causa | — | Aptología, «Vivienda en Arequipa» (octubre de 2026), datos abiertos [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/): *Datos: Aptologia* |
 
-Cada resultado tiene la forma `{ estado: 'CUMPLE' | 'NO CUMPLE' | 'SIN DATO' (o 'INFORMATIVO' en quebradas, contexto y precio del distrito), nombre, distanciaM, umbralM, fuente, fecha, metodo }`. Las distancias son **en línea recta** (haversine, R = 6 371 008,8 m), no recorrido a pie. Los cálculos están en `public/js/calculos.js`, como funciones puras con pruebas en `test/calculos.spec.ts`.
+Cada resultado tiene la forma `{ estado: 'CUMPLE' | 'NO CUMPLE' | 'SIN DATO' (o 'INFORMATIVO' en quebradas, contexto y precio del distrito), nombre, distanciaM, umbralM, fuente, fecha, metodo }`. Las distancias son **en línea recta** (haversine, R = 6 371 008,8 m), no recorrido a pie. Los cálculos están en `apps/estatica/public/js/calculos.js`, como funciones puras con pruebas en `apps/estatica/test/calculos.spec.ts`.
 
 La aplicación **no recomienda** dónde comprar ni construir y **no da un puntaje global**: no hay base para decidir cuánto pesa cada variable. Cada dato indica qué no cubre.
 
 ### Módulos fuera de alcance
 
-Seguridad (denuncias), desastre (peligros geológicos), zona sísmica y registro de riesgos siguen en el código, pero están ocultos (`CONFIG.modulos` en `public/js/config.js`). Para mostrarlos se usa el parámetro `?modulos=todos`, por ejemplo `http://localhost:3000/?modulos=todos`.
+Seguridad (denuncias), desastre (peligros geológicos), zona sísmica y registro de riesgos siguen en el código, pero están ocultos (`CONFIG.modulos` en `apps/estatica/public/js/config.js`). Para mostrarlos se usa el parámetro `?modulos=todos`, por ejemplo `http://localhost:3000/?modulos=todos`.
 
 ## Asistente de chat
 
-El botón **Asistente** de la barra superior abre un chat que usa los mismos datos y umbrales de la ficha. Los números, distancias y estados los calcula siempre el motor determinista (`public/js/asistente.js`) en el navegador, con los archivos congelados. Si el servidor tiene configurado Gemini, el modelo solo **interpreta** la frase y **redacta** la respuesta; si no, el chat entiende el texto con reglas explícitas. La cabecera del chat indica «Modo: Gemini» o «Modo: reglas».
+El botón **Asistente** de la barra superior abre un chat que usa los mismos datos y umbrales de la ficha. Los números, distancias y estados los calcula siempre el motor determinista (`apps/estatica/public/js/asistente.js`) en el navegador, con los archivos congelados. Si el servidor tiene configurado Gemini, el modelo solo **interpreta** la frase y **redacta** la respuesta; si no, el chat entiende el texto con reglas explícitas. La cabecera del chat indica «Modo: Gemini» o «Modo: reglas».
 
 ### Asistente con Gemini
 
 - **Qué hace el modelo:**
-  1. Convierte la frase en una consulta estructurada. Lo hace con la única función que puede llamar (`consulta_asistente`). La salida se valida contra un esquema (`public/js/asistente-llm.js`), en el servidor y otra vez en el navegador.
+  1. Convierte la frase en una consulta estructurada. Lo hace con la única función que puede llamar (`consulta_asistente`). La salida se valida contra un esquema (`apps/estatica/public/js/asistente-llm.js`), en el servidor y otra vez en el navegador.
   2. Reescribe en pocas líneas la respuesta que ya calculó el motor. Se comprueba que cada cifra y cada nombre propio estén en ese resultado, que se conserve el aviso «referencial» y que no haya recomendaciones de compra. Si algo no pasa, se muestra el texto determinista.
 - **Qué no hace:** no calcula, no elige pesos, no da puntajes ni recomienda comprar. No recibe los datos geográficos, solo la frase, los últimos turnos y, al redactar, el texto ya calculado.
 - **Respaldo:** si no hay clave (503), si falla, si tarda más de 8 s o si el sitio no tiene la función (por ejemplo, un servidor estático), el chat usa las reglas sin interrumpirse.
 - **Clave:** se lee solo en el servidor, desde `GEMINI_API_KEY`; nunca llega al navegador. Opcionalmente, `GEMINI_MODEL` cambia el modelo (por defecto `gemini-3.5-flash-lite`).
   - **Local:** crea `.env.local` con `GEMINI_API_KEY=...`, como muestra `.env.example`. `pnpm start` lo lee y git lo ignora.
-  - **Vercel:** Project → Settings → Environment Variables → `GEMINI_API_KEY`. La función está en `api/chat.js`.
+  - **Vercel:** Project → Settings → Environment Variables → `GEMINI_API_KEY`. La función está en `apps/estatica/api/chat.js`.
 - **Límite:** 20 solicitudes por minuto por IP y mensajes de 300 caracteres como máximo.
 
 - **Sobre tu punto:** «¿qué zona es?», «¿hay un colegio cerca de mi punto?», «¿cuánto puedo construir en un lote de 200 m²?», «¿cambiará la zonificación?», «dame un resumen».
@@ -71,7 +71,7 @@ La aplicación funciona completa sin cuenta. Si el servidor tiene configurado Go
 - **Cómo funciona:** OpenID Connect con código de autorización y PKCE (S256), `state` y `nonce`. El navegador va a Google, vuelve a `/api/auth/callback`, y el servidor canjea el código con el secreto del cliente y valida los reclamos del ID token (`iss`, `aud`, `exp`, `nonce`). No añade dependencias: usa `crypto` y `fetch` de Node.
 - **Qué lee y qué guarda:** pide solo `openid profile`. Guarda `sub` (identificador opaco) y `name`; no pide el correo ni la foto, y no guarda ningún token de Google. No hay base de datos ni almacén en el servidor.
 - **Sesión:** una cookie firmada con HMAC-SHA256 (`HttpOnly`, `SameSite=Lax`, `Secure` si `AUTH_BASE_URL` es https, con prefijo `__Host-` en ese caso) que dura 7 días. «Cerrar sesión» es un `POST` que solo acepta peticiones del mismo origen.
-- **Endpoints** (mismos en Vercel y en Nest; la lógica está en `api/_lib/auth.js`):
+- **Endpoints** (mismos en Vercel y en Nest; la lógica está en `apps/estatica/api/_lib/auth.js`):
   - `GET /api/auth/google` inicia el flujo.
   - `GET /api/auth/callback` lo termina y abre la sesión.
   - `GET /api/auth/me` devuelve `{ "autenticado": boolean, "nombre"?: string }`.
@@ -86,14 +86,14 @@ La aplicación funciona completa sin cuenta. Si el servidor tiene configurado Go
   - Producción: `https://geoverificador-nine.vercel.app/api/auth/callback` (con `AUTH_BASE_URL=https://geoverificador-nine.vercel.app`).
   - La pantalla de consentimiento solo necesita los alcances `openid` y `profile`.
 - **Local:** añade las cuatro variables a `.env.local` (git lo ignora) y ejecuta `pnpm start`.
-- **Vercel:** Project → Settings → Environment Variables. Las funciones están en `api/auth/*.js`. Los despliegues de vista previa tienen otro dominio: no coincide con `AUTH_BASE_URL`, así que el inicio de sesión solo funciona en el dominio registrado.
+- **Vercel:** Project → Settings → Environment Variables. Las funciones están en `apps/estatica/api/auth/*.js`. Los despliegues de vista previa tienen otro dominio: no coincide con `AUTH_BASE_URL`, así que el inicio de sesión solo funciona en el dominio registrado.
 
 ## Ayudas para decidir
 
-- **Recorrido guiado.** La primera visita abre un recorrido de 6 pasos (qué hace y qué no hace la herramienta, cómo elegir un punto, cómo leer una tarjeta, el asistente, comparar puntos y las verificaciones antes de comprar). Se puede omitir y se vuelve a abrir con «¿Cómo funciona?». Con `?tour=no` en la URL no se abre solo. Contenido en `public/js/tour.js`.
+- **Recorrido guiado.** La primera visita abre un recorrido de 6 pasos (qué hace y qué no hace la herramienta, cómo elegir un punto, cómo leer una tarjeta, el asistente, comparar puntos y las verificaciones antes de comprar). Se puede omitir y se vuelve a abrir con «¿Cómo funciona?». Con `?tour=no` en la URL no se abre solo. Contenido en `apps/estatica/public/js/tour.js`.
 - **Tarjetas desplegables.** Cada servicio muestra su estado y su distancia frente al umbral; al abrirla trae el método, la fuente, la fecha y lo que el dato no cubre.
-- **Comparar puntos.** En el reporte, «Guardar para comparar» guarda hasta 3 puntos; «Comparar» (barra superior) los muestra lado a lado con las 5 variables (estado, distancia en línea recta y umbral). **No hay puntaje global.** La persona marca qué variables son su prioridad (se guardan solo en su navegador) y la tabla resalta qué punto las cumple y qué pares de puntos se dominan; nunca declara un ganador. Lógica pura en `public/js/comparar.js`.
-- **Verificaciones recomendadas antes de comprar.** Panel plegable del reporte que separa lo que la herramienta calculó de lo que la persona debe comprobar (certificados municipales, SUNARP, saneamiento, licencias, servicios básicos, peligros). Es contenido estático en `public/js/verificaciones.js`: para agregar una verificación se suma un objeto a `ITEMS`. Solo lleva enlaces comprobados.
+- **Comparar puntos.** En el reporte, «Guardar para comparar» guarda hasta 3 puntos; «Comparar» (barra superior) los muestra lado a lado con las 5 variables (estado, distancia en línea recta y umbral). **No hay puntaje global.** La persona marca qué variables son su prioridad (se guardan solo en su navegador) y la tabla resalta qué punto las cumple y qué pares de puntos se dominan; nunca declara un ganador. Lógica pura en `apps/estatica/public/js/comparar.js`.
+- **Verificaciones recomendadas antes de comprar.** Panel plegable del reporte que separa lo que la herramienta calculó de lo que la persona debe comprobar (certificados municipales, SUNARP, saneamiento, licencias, servicios básicos, peligros). Es contenido estático en `apps/estatica/public/js/verificaciones.js`: para agregar una verificación se suma un objeto a `ITEMS`. Solo lleva enlaces comprobados.
 
 ## Límites
 
@@ -110,6 +110,29 @@ La aplicación funciona completa sin cuenta. Si el servidor tiene configurado Go
 - [`docs/VALIDACION.md`](docs/VALIDACION.md): qué está verificado, qué falta validar y el protocolo para hacerlo.
 - [`docs/ENTREGA.md`](docs/ENTREGA.md): estado del proyecto, qué funciona y qué está pendiente.
 
+## Estructura del monorepo
+
+Un espacio de trabajo de pnpm: aplicaciones arriba, paquetes por capas debajo y las herramientas de datos al costado. La decisión y la regla están en [`docs/adr/0008-monorepo-por-capas.md`](docs/adr/0008-monorepo-por-capas.md).
+
+```
+apps/
+  api/        Backend NestJS (@geoverificador/api). Sirve el front estático y /api
+  web/        Aplicación Next.js (@geoverificador/web): chat, mapa y ficha
+  estatica/   Front estático de siempre + funciones de Vercel (@geoverificador/estatica)
+packages/     Capas, de abajo hacia arriba: dominio -> datos -> agente
+  dominio/    Reglas puras (sin base de datos ni red)
+  datos/      Infraestructura: PostgreSQL + PostGIS / PGlite, cargadores, consultas
+  agente/     Aplicación: diálogo, herramientas y criterios
+tools/        Descarga, conversión y recolección de datos (`pnpm datos:*`) y sus pruebas
+data/         Datos crudos locales de las herramientas (ignorada por git)
+docs/         Metodología, validación, ADR
+arquitectura/ La prueba que hace cumplir la regla de dependencias
+```
+
+Las dependencias solo apuntan hacia abajo: `apps/*` puede usar cualquier paquete; `agente` usa `datos` y `dominio`; `datos` solo usa `dominio`; `dominio` no usa ningún otro paquete; ningún paquete importa de `apps/*` y las aplicaciones no se importan entre sí. `pnpm test:arquitectura` lo comprueba (también corre dentro de `pnpm test:nuevo`). Cada app y cada paquete tiene un `README.md` con su capa y de qué puede depender.
+
+Desde la raíz siguen funcionando los mismos comandos (`pnpm start`, `pnpm test`, `pnpm datos:*`, `pnpm bd:*`, `pnpm web:*`…); los que son de una pieza delegan con `pnpm --filter`. Atajos nuevos: `pnpm dev:api`, `pnpm dev:web`, `pnpm dev:estatica` y `pnpm typecheck`.
+
 ## Requisitos
 
 - Node.js 22 o superior.
@@ -123,7 +146,7 @@ pnpm start             # compila y arranca en http://localhost:3000
 ```
 
 - Para desarrollo con recarga automática: `pnpm start:dev`.
-- Nest sirve el frontend estático de `public/` y expone `GET /api`.
+- Nest (`apps/api`) sirve el frontend estático de `apps/estatica/public/` y expone `GET /api`. Lee `.env.local` y `.env` de `apps/api/` o de la raíz del repositorio.
 - El puerto se cambia con la variable de entorno `PORT`.
 
 `pnpm-workspace.yaml` guarda dos ajustes de pnpm:
@@ -131,19 +154,19 @@ pnpm start             # compila y arranca en http://localhost:3000
 - `allowBuilds`: los scripts de instalación de `@parcel/watcher` y `unrs-resolver` están desactivados a propósito (traen binarios precompilados; esos scripts solo compilan desde el código fuente).
 - `overrides`: parches de seguridad para dependencias transitivas de desarrollo.
 
-El frontend es JavaScript sin dependencias de compilación (Leaflet se carga desde CDN). Las cinco variables se resuelven con archivos locales de `public/data`: la zonificación y el equipamiento ya congelado en `public/data/equipamiento` (salud de RENIPRESS y colegios de ESCALE, con OpenStreetMap de respaldo; paraderos y áreas verdes de OpenStreetMap). Solo la búsqueda de direcciones (Nominatim) consulta un servicio externo, al pulsar «Buscar». Si falta un archivo de equipamiento, la aplicación consulta Overpass en vivo como respaldo, con reintentos entre los servidores de `CONFIG.overpassEndpoints`.
+El frontend es JavaScript sin dependencias de compilación (Leaflet se carga desde CDN). Las cinco variables se resuelven con archivos locales de `apps/estatica/public/data`: la zonificación y el equipamiento ya congelado en `apps/estatica/public/data/equipamiento` (salud de RENIPRESS y colegios de ESCALE, con OpenStreetMap de respaldo; paraderos y áreas verdes de OpenStreetMap). Solo la búsqueda de direcciones (Nominatim) consulta un servicio externo, al pulsar «Buscar». Si falta un archivo de equipamiento, la aplicación consulta Overpass en vivo como respaldo, con reintentos entre los servidores de `CONFIG.overpassEndpoints`.
 
-## Aplicación web nueva (Next.js, en `web/`)
+## Aplicación web nueva (Next.js, en `apps/web/`)
 
-Chat, mapa y ficha de un punto en una sola pantalla, sobre la base PostgreSQL + PostGIS de `packages/datos` (la aplicación estática de `public/` sigue como referencia).
+Chat, mapa y ficha de un punto en una sola pantalla, sobre la base PostgreSQL + PostGIS de `packages/datos` (la aplicación estática de `apps/estatica/public/` sigue como referencia).
 
 ```bash
-# 1. Una base local sin Docker (PGlite): migra y carga public/data (unos segundos)
+# 1. Una base local sin Docker (PGlite): migra y carga apps/estatica/public/data (unos segundos)
 DATABASE_URL=pglite://.pglite node packages/datos/src/cli.ts cargar
 # 2. Opcional: avisos propios para el chat y el mapa (ver docs/adr/0002-base-legal-avisos.md)
 DATABASE_URL=pglite://.pglite node packages/datos/src/cli.ts avisos <archivo.json>
-# 3. Servidor de desarrollo (desde web/); AVISOS_PUBLICAR=todas muestra avisos en desarrollo, sin definirla no se muestra ninguno
-cd web && DATABASE_URL=pglite://$(pwd)/../.pglite AVISOS_PUBLICAR=todas pnpm dev
+# 3. Servidor de desarrollo (desde apps/web/); AVISOS_PUBLICAR=todas muestra avisos en desarrollo, sin definirla no se muestra ninguno
+cd apps/web && DATABASE_URL=pglite://$(pwd)/../../.pglite AVISOS_PUBLICAR=todas pnpm dev
 ```
 
 - Rutas: `GET /api/ficha?lat=&lon=` ficha de un punto de Arequipa (cada sección con su fuente y su fecha, y los lugares más cercanos para dibujarlos), `GET /api/buscar?q=` ubica un lugar con los datos locales, `POST /api/agente` es el chat (además de los avisos, trae `mapa`: el trabajo y los sectores que ubicó), `GET /api/capas` lista las capas del mapa con su fuente y su fecha, `GET /api/capas/<id>?bbox=oeste,sur,este,norte&zoom=Z` sirve una capa por ventana y `GET /api/viaje?origenLat=&origenLon=&destinoLat=&destinoLon=` da la combi o bus con su trazado.
@@ -151,7 +174,7 @@ cd web && DATABASE_URL=pglite://$(pwd)/../.pglite AVISOS_PUBLICAR=todas pnpm dev
 - Mapa, ficha y asistente se influyen: la ficha dibuja lo más cercano de cada sección (con una línea punteada desde el punto) y cada fila tiene «Ver en el mapa»; un lugar del mapa marca su fila; una tarjeta de aviso enfoca su marcador y un marcador resalta su tarjeta; el trabajo que el asistente ubicó, los sectores de una búsqueda de zonas y la combi o bus del aviso resaltado se dibujan. El elemento del mapa lleva `data-vista`, `data-capas` y `data-viaje` con lo que hay dibujado (para las pruebas).
 - La ficha muestra solo lo que entrega `fichaDePunto`: no incluye sismos, el escenario del CENEPRED, el precio por m² del distrito, el aviso del PDM nuevo ni las verificaciones previas a comprar de la aplicación estática.
 - PGlite admite un solo proceso por carpeta: no abras la misma carpeta desde dos procesos a la vez.
-- Pruebas: `pnpm test:nuevo` (unitarias y de integración, incluye `web/pruebas/`), `pnpm web:typecheck` y `pnpm web:e2e` (Playwright, ver abajo).
+- Pruebas: `pnpm test:nuevo` (unitarias y de integración, incluye `apps/web/pruebas/`), `pnpm web:typecheck` y `pnpm web:e2e` (Playwright, ver abajo).
 
 ## Scripts
 
@@ -159,43 +182,43 @@ cd web && DATABASE_URL=pglite://$(pwd)/../.pglite AVISOS_PUBLICAR=todas pnpm dev
 |---|---|---|
 | `pnpm start` | Compila y arranca el servidor | No |
 | `pnpm start:dev` | Arranca con recarga automática | No |
-| `pnpm build` | Compila TypeScript a `dist/` | No |
-| `pnpm test` | Pruebas unitarias (Jest) | No |
+| `pnpm build` | Compila el backend (`apps/api`) a `apps/api/dist/` | No |
+| `pnpm test` | Pruebas unitarias (Jest: `apps/api`, `apps/estatica` y `tools`) | No |
 | `pnpm test:e2e` | Pruebas extremo a extremo (`GET /` y `GET /api`) | No |
-| `pnpm lint` | Análisis estático con oxlint (`src/` y `test/`) | No |
+| `pnpm lint` | Análisis estático con oxlint (`apps/api`, `apps/estatica` y `tools`) | No |
 | `pnpm datos:verificar` | Integridad de los datos y cálculos frente a un método independiente | No |
-| `pnpm datos:avisos -- --ayuda` | Reúne avisos de **venta** de inmuebles de Arequipa (Nexo Inmobiliario, Adondevivir, Urbania; Facebook Marketplace solo si se pide por nombre) en un esquema común y los guarda en `datos-crudos/avisos/` (ignorada por git, fuera de `public/`). Lee el `robots.txt` de cada sitio antes de pedirle algo, espera ≥ 3 s entre solicitudes al mismo sitio, usa un User-Agent propio y, si un sitio responde 401/403/429 o muestra un desafío anti-bot, se detiene en ese sitio sin intentar saltarlo. No guarda vendedores, teléfonos ni perfiles. Son datos de terceros: no se publican. Opcional: `--transporte apify` corre Urbania, Adondevivir y Marketplace en Apify (plataforma **de pago**: cuesta dinero, requiere `APIFY_TOKEN`, tope por fuente con `--tope-usd`, por defecto 0,50 USD); nunca se usa solo ni como respaldo de un bloqueo. Limitación conocida: un mismo proyecto nuevo puede aparecer en dos portales con ids distintos y no se unifica (la deduplicación es solo por fuente e id) | Sí (portales; o Apify) |
-| `pnpm datos:smartbus -- --max-rutas 3` | Recolecta las rutas y paradas de SmartBus Arequipa en `datos-crudos/smartbus/` (ignorada por git) para análisis local: **sin licencia, no redistribuir**, el programa se niega a escribir en `public/`, `dist/` o `api/` y los datos no se conectan a la aplicación. Lee `robots.txt` en cada corrida, ≥ 1,1 s entre solicitudes y se detiene ante 401/403/407/429, redirecciones o verificación anti-bot | Sí (smartbus.app) |
-| `node scripts/cobertura-viaje.mjs` | Evalúa, sobre una rejilla de 500 m en las zonas urbanas, qué parte tiene viaje directo, con un trasbordo o ninguno a cinco destinos, y mide los tiempos; escribe `docs/validacion/cobertura-viaje.json` (la línea base de `datos:verificar`) | No |
-| `pnpm datos:sit` | Lee del anexo de las bases del SIT que publica la Municipalidad Provincial de Arequipa (PDF, 2017) las unidades de negocio C-1A a C-11 con su concesionario y sus rutas, y escribe `public/data/sit_registro_oficial.json` (necesita `pdftotext`; caché en `.cache-sit/`) | Sí (muniarequipa.gob.pe) |
-| `pnpm datos:rutas-osm` | Congela las 241 rutas de bus de la red SIT que OpenStreetMap tiene como relaciones `route=bus` (trazado, ramal, de/a, operador, duración e intervalo) en `public/data/rutas_osm.geojson`; una consulta a Overpass con espejo de respaldo y vías ensambladas en orden | Sí (Overpass) |
-| `pnpm datos:extraer` | Descarga el equipamiento de OpenStreetMap: paraderos y áreas verdes a `public/data/equipamiento` y, como respaldo, salud y educación a `public/data/equipamiento/osm` | Sí (Overpass) |
-| `pnpm datos:acopio` | Convierte las fichas del directorio de puntos de acopio de agua de SEDAPAR (`scripts/fuentes/puntos_acopio_sedapar_2017.csv`) de UTM zona 19 sur a WGS84 y escribe `public/data/agua/puntos_acopio.geojson` (575 puntos, 7 fichas descartadas por coordenadas imposibles); con `--verificar-pdf` baja los 16 PDF de gob.pe y comprueba cada coordenada | Solo con `--verificar-pdf` (gob.pe) |
-| `pnpm datos:interrupciones` | Descarga el registro de interrupciones de la SUNASS (datosabiertos.gob.pe, ODC-By), lo reduce a las de agua de SEDAPAR por distrito y año y escribe `public/data/agua/interrupciones_sedapar.json`; no escribe nada si el sitio no responde | Sí (datosabiertos.gob.pe) |
+| `pnpm datos:avisos -- --ayuda` | Reúne avisos de **venta** de inmuebles de Arequipa (Nexo Inmobiliario, Adondevivir, Urbania; Facebook Marketplace solo si se pide por nombre) en un esquema común y los guarda en `data/avisos/` (ignorada por git, fuera de `apps/estatica/public/`). Lee el `robots.txt` de cada sitio antes de pedirle algo, espera ≥ 3 s entre solicitudes al mismo sitio, usa un User-Agent propio y, si un sitio responde 401/403/429 o muestra un desafío anti-bot, se detiene en ese sitio sin intentar saltarlo. No guarda vendedores, teléfonos ni perfiles. Son datos de terceros: no se publican. Opcional: `--transporte apify` corre Urbania, Adondevivir y Marketplace en Apify (plataforma **de pago**: cuesta dinero, requiere `APIFY_TOKEN`, tope por fuente con `--tope-usd`, por defecto 0,50 USD); nunca se usa solo ni como respaldo de un bloqueo. Limitación conocida: un mismo proyecto nuevo puede aparecer en dos portales con ids distintos y no se unifica (la deduplicación es solo por fuente e id) | Sí (portales; o Apify) |
+| `pnpm datos:smartbus -- --max-rutas 3` | Recolecta las rutas y paradas de SmartBus Arequipa en `data/smartbus/` (ignorada por git) para análisis local: **sin licencia, no redistribuir**, el programa se niega a escribir en `apps/estatica/public/`, `dist/` o `api/` y los datos no se conectan a la aplicación. Lee `robots.txt` en cada corrida, ≥ 1,1 s entre solicitudes y se detiene ante 401/403/407/429, redirecciones o verificación anti-bot | Sí (smartbus.app) |
+| `node tools/cobertura-viaje.mjs` | Evalúa, sobre una rejilla de 500 m en las zonas urbanas, qué parte tiene viaje directo, con un trasbordo o ninguno a cinco destinos, y mide los tiempos; escribe `docs/validacion/cobertura-viaje.json` (la línea base de `datos:verificar`) | No |
+| `pnpm datos:sit` | Lee del anexo de las bases del SIT que publica la Municipalidad Provincial de Arequipa (PDF, 2017) las unidades de negocio C-1A a C-11 con su concesionario y sus rutas, y escribe `apps/estatica/public/data/sit_registro_oficial.json` (necesita `pdftotext`; caché en `.cache-sit/`) | Sí (muniarequipa.gob.pe) |
+| `pnpm datos:rutas-osm` | Congela las 241 rutas de bus de la red SIT que OpenStreetMap tiene como relaciones `route=bus` (trazado, ramal, de/a, operador, duración e intervalo) en `apps/estatica/public/data/rutas_osm.geojson`; una consulta a Overpass con espejo de respaldo y vías ensambladas en orden | Sí (Overpass) |
+| `pnpm datos:extraer` | Descarga el equipamiento de OpenStreetMap: paraderos y áreas verdes a `apps/estatica/public/data/equipamiento` y, como respaldo, salud y educación a `apps/estatica/public/data/equipamiento/osm` | Sí (Overpass) |
+| `pnpm datos:acopio` | Convierte las fichas del directorio de puntos de acopio de agua de SEDAPAR (`tools/fuentes/puntos_acopio_sedapar_2017.csv`) de UTM zona 19 sur a WGS84 y escribe `apps/estatica/public/data/agua/puntos_acopio.geojson` (575 puntos, 7 fichas descartadas por coordenadas imposibles); con `--verificar-pdf` baja los 16 PDF de gob.pe y comprueba cada coordenada | Solo con `--verificar-pdf` (gob.pe) |
+| `pnpm datos:interrupciones` | Descarga el registro de interrupciones de la SUNASS (datosabiertos.gob.pe, ODC-By), lo reduce a las de agua de SEDAPAR por distrito y año y escribe `apps/estatica/public/data/agua/interrupciones_sedapar.json`; no escribe nada si el sitio no responde | Sí (datosabiertos.gob.pe) |
 | `pnpm datos:servicios` | Arma `finanzas.geojson` (bancos y cajeros), `comida_fuera.geojson` (restaurantes y cafés) y `recreacion.geojson` (juegos infantiles) con OpenStreetMap (una sola consulta a Overpass con tiempo máximo y reintentos); informativos y sin umbral, y sin los parques, que ya son el criterio de área verde; no escribe nada si falla | Sí (Overpass) |
 | `pnpm datos:comercio` | Arma `mercados.geojson`, `supermercados.geojson` y `malls.geojson` con OpenStreetMap (una sola consulta a Overpass, con tiempo máximo, reintentos, espejo de respaldo y caché en `.cache-comercio/`), los malls curados contrastados con su fuente, y `docs/validacion/cenama-cobertura.json` con la cobertura frente al CENAMA 2016 (descarga el CSV de datosabiertos.gob.pe) | Sí (Overpass y datosabiertos.gob.pe) |
-| `pnpm datos:mineria` | Descarga las concesiones mineras del Catastro Minero de INGEMMET (servicio ArcGIS REST, una consulta con tiempo máximo y reintentos, con `--use-system-ca`) a `public/data/mineria/concesiones_mineras.geojson`, sin el nombre del titular; no escribe nada si el servicio falla | Sí (geocatmin.ingemmet.gob.pe) |
-| `pnpm datos:electricidad` | Descarga las concesiones de distribución eléctrica del MINEM (servicio ArcGIS REST, por páginas, con tiempo máximo y reintentos) a `public/data/electricidad/concesiones_distribucion.geojson`, con su procedencia, licencia y expedientes; no escribe nada si el servicio falla | Sí (geoportal.minem.gob.pe) |
-| `pnpm datos:censo` | Arma por distrito las manzanas del INEI con las cifras del Censo 2017 (alumbrado, agua y desagüe por red pública, viviendas, hogares y personas) en `public/data/censo/` (un índice de procedencia y una pieza por distrito, 10,8 MB en total); 2 consultas a REDATAM y 1 al WFS por distrito, con pausa de 3 s, tiempo máximo y reintentos; no escribe nada si algo falla o si los totales no cuadran con REDATAM | Sí (censos2017.inei.gob.pe, geoespacial.inei.gob.pe) |
+| `pnpm datos:mineria` | Descarga las concesiones mineras del Catastro Minero de INGEMMET (servicio ArcGIS REST, una consulta con tiempo máximo y reintentos, con `--use-system-ca`) a `apps/estatica/public/data/mineria/concesiones_mineras.geojson`, sin el nombre del titular; no escribe nada si el servicio falla | Sí (geocatmin.ingemmet.gob.pe) |
+| `pnpm datos:electricidad` | Descarga las concesiones de distribución eléctrica del MINEM (servicio ArcGIS REST, por páginas, con tiempo máximo y reintentos) a `apps/estatica/public/data/electricidad/concesiones_distribucion.geojson`, con su procedencia, licencia y expedientes; no escribe nada si el servicio falla | Sí (geoportal.minem.gob.pe) |
+| `pnpm datos:censo` | Arma por distrito las manzanas del INEI con las cifras del Censo 2017 (alumbrado, agua y desagüe por red pública, viviendas, hogares y personas) en `apps/estatica/public/data/censo/` (un índice de procedencia y una pieza por distrito, 10,8 MB en total); 2 consultas a REDATAM y 1 al WFS por distrito, con pausa de 3 s, tiempo máximo y reintentos; no escribe nada si algo falla o si los totales no cuadran con REDATAM | Sí (censos2017.inei.gob.pe, geoespacial.inei.gob.pe) |
 | `pnpm datos:oficial` | Descarga RENIPRESS (SUSALUD) y el padrón de ESCALE (MINEDU) y arma `salud.geojson`, `consultorios.geojson` y `educacion.geojson` con los registros oficiales como fuente primaria y la copia de OpenStreetMap como respaldo (caché en `.cache-equipamiento-oficial/`, fuera del repositorio; unos minutos la primera vez, por el DBF de 290 MB). Reglas en `docs/METODOLOGIA.md` §6 | Sí |
 | `pnpm datos:validar-osm` | Contrasta la zonificación con lugares de OpenStreetMap (usa la referencia guardada en `docs/validacion/`) | No |
 | `pnpm datos:validar-plano` | Contrasta la zonificación con el PDF oficial del plano (la ruta del PDF se pasa como argumento) | No |
-| `node --use-system-ca scripts/descargar-peligros.mjs` | Regenera `public/data/peligros_aqp.geojson` desde el servicio público de INGEMMET (solo trae los movimientos en masa: no sobrescribe el archivo congelado, que tiene más registros, sin `--forzar`) | Sí |
-| `node scripts/descargar-quebradas.mjs` | Genera `public/data/quebradas_aqp.geojson`: cauces de la ANA, el IGP (capas Quebrada y RiosArequipa) y OpenStreetMap (consulta Overpass de `waterway=river\|stream`), sin duplicados y con la fuente de cada tramo. Si una fuente falla no escribe nada (`--osm-json=ruta` reutiliza una respuesta de Overpass ya guardada) | Sí |
-| `node scripts/descargar-riesgo-cenepred.mjs` | Genera `public/data/riesgo_cenepred_fen2027.json` (nivel de riesgo ante inundaciones y movimientos en masa de los 25 distritos, con las viviendas, locales educativos y establecimientos de salud en zonas de mayor susceptibilidad; capas 4 y 5 del SIGRID del CENEPRED). Falla y conserva el archivo si falta un distrito, aparece un nivel desconocido o el significado de un campo deja de cuadrar con las tablas del estudio | Sí |
-| `node scripts/descargar-peligro-volcanico.mjs` | Genera `public/data/peligro_volcanico_misti.geojson` (zonas de peligro volcánico del Misti del IGP: lahares, flujos piroclásticos, lava, avalanchas y ceniza) | Sí |
+| `node --use-system-ca tools/descargar-peligros.mjs` | Regenera `apps/estatica/public/data/peligros_aqp.geojson` desde el servicio público de INGEMMET (solo trae los movimientos en masa: no sobrescribe el archivo congelado, que tiene más registros, sin `--forzar`) | Sí |
+| `node tools/descargar-quebradas.mjs` | Genera `apps/estatica/public/data/quebradas_aqp.geojson`: cauces de la ANA, el IGP (capas Quebrada y RiosArequipa) y OpenStreetMap (consulta Overpass de `waterway=river\|stream`), sin duplicados y con la fuente de cada tramo. Si una fuente falla no escribe nada (`--osm-json=ruta` reutiliza una respuesta de Overpass ya guardada) | Sí |
+| `node tools/descargar-riesgo-cenepred.mjs` | Genera `apps/estatica/public/data/riesgo_cenepred_fen2027.json` (nivel de riesgo ante inundaciones y movimientos en masa de los 25 distritos, con las viviendas, locales educativos y establecimientos de salud en zonas de mayor susceptibilidad; capas 4 y 5 del SIGRID del CENEPRED). Falla y conserva el archivo si falta un distrito, aparece un nivel desconocido o el significado de un campo deja de cuadrar con las tablas del estudio | Sí |
+| `node tools/descargar-peligro-volcanico.mjs` | Genera `apps/estatica/public/data/peligro_volcanico_misti.geojson` (zonas de peligro volcánico del Misti del IGP: lahares, flujos piroclásticos, lava, avalanchas y ceniza) | Sí |
 | `pnpm datos:validar-oficial -- --escale=... --renipress=...` | K2: contrasta la copia de OpenStreetMap con RENIPRESS y el padrón de ESCALE (los archivos de la caché de `pnpm datos:oficial` o descargados a mano; `--escale` acepta el `Padron_web.dbf`; ver `docs/VALIDACION.md` §3.4): exhaustividad, precisión, desfase y cuántos puntos cambian de cumple a no cumple | No |
-| `node scripts/descargar-sismos.mjs` | Genera `public/data/sismos_igp.geojson` (sismos reportados por el IGP; cubre desde 2026-01-01, no es el catálogo histórico) | Sí |
-| `node scripts/descargar-precios.mjs` | Genera `public/data/precios_m2_distrito.json` (precio de oferta por m² por distrito, Aptología CC BY 4.0). Solo escribe si la ficha del conjunto declara CC BY 4.0; si falla, conserva el archivo existente | Sí |
-| `node scripts/descargar-delitos.mjs` | Genera `public/data/delitos_aqp.geojson` | Sí |
-| `node scripts/descargar-distritos.mjs` | Genera `public/data/distritos_aqp.geojson` (zona sísmica E.030) | Sí |
+| `node tools/descargar-sismos.mjs` | Genera `apps/estatica/public/data/sismos_igp.geojson` (sismos reportados por el IGP; cubre desde 2026-01-01, no es el catálogo histórico) | Sí |
+| `node tools/descargar-precios.mjs` | Genera `apps/estatica/public/data/precios_m2_distrito.json` (precio de oferta por m² por distrito, Aptología CC BY 4.0). Solo escribe si la ficha del conjunto declara CC BY 4.0; si falla, conserva el archivo existente | Sí |
+| `node tools/descargar-delitos.mjs` | Genera `apps/estatica/public/data/delitos_aqp.geojson` | Sí |
+| `node tools/descargar-distritos.mjs` | Genera `apps/estatica/public/data/distritos_aqp.geojson` (zona sísmica E.030) | Sí |
 
 Los datos ya descargados están en el repositorio: solo es necesario regenerarlos si cambia la fuente.
 
 ## Integración continua y despliegue
 
 - `.github/workflows/ci.yml` se ejecuta en cada `push` y `pull_request`: instala con `pnpm install --frozen-lockfile`, y corre `lint`, `test`, `build` y `datos:verificar`. No usa red para las pruebas.
-- El sitio se despliega en Vercel como sitio estático (`vercel.json` publica `public/` sin instalación ni build) más las funciones de `api/` (`api/chat.js` y `api/auth/*.js`). La versión desplegada no incluye `GET /api` ni el servidor de Nest.
+- El sitio se despliega en Vercel como sitio estático (`apps/estatica/vercel.json` publica `public/` sin instalación ni build) más las funciones de `apps/estatica/api/` (`chat.js` y `auth/*.js`). **El proyecto de Vercel debe tener «Root Directory» = `apps/estatica`** (Settings → General); el repositorio ya no despliega desde la raíz. La versión desplegada no incluye `GET /api` ni el servidor de Nest.
 
 ## Datos y licencias
 
@@ -203,7 +226,7 @@ Los datos ya descargados están en el repositorio: solo es necesario regenerarlo
 - **Padrón de ESCALE.** Colegios: padrón de instituciones educativas de [ESCALE](https://escale.minedu.gob.pe/padron-de-iiee), Unidad de Estadística del Ministerio de Educación. **No declara una licencia abierta**: el archivo trae un «Acuerdo de uso de datos» (la fuente es el Padrón de Servicios Educativos; la ubicación la proporcionan las DRE/GRE y las UGEL y corresponde al local educativo). Se usa con atribución al MINEDU y sin redistribuir el padrón completo: el repositorio solo guarda los locales de la provincia de Arequipa con su código.
 - **OpenStreetMap.** Respaldo de salud y colegios, paraderos, áreas verdes y mapa base: © colaboradores de OpenStreetMap, bajo [ODbL](https://opendatacommons.org/licenses/odbl/). La atribución figura en la aplicación.
 - **Zonificación.** Plano de Zonificación y Reglamento del Plan de Desarrollo Metropolitano de Arequipa 2016-2025, aprobado por la Ordenanza Municipal N.° 961-MPA (del 3 de febrero de 2016), con la zonificación restituida por la Ordenanza N.° 975-MPA. Fuente: Municipalidad Provincial de Arequipa e IMPLA.
-- **Norma E.030 y límites distritales.** Ver `public/js/config.js` y `docs/METODOLOGIA.md`.
+- **Norma E.030 y límites distritales.** Ver `apps/estatica/public/js/config.js` y `docs/METODOLOGIA.md`.
 - **Registro oficial del SIT.** Municipalidad Provincial de Arequipa, bases de la tercera licitación de operación de rutas del SIT (2017) y contratos de concesión, en [muniarequipa.gob.pe/sistema_transporte](https://www.muniarequipa.gob.pe/sistema_transporte/); sin licencia declarada (información pública). Se usa para validar y medir la cobertura de las rutas de OSM, no para dibujar. La Ordenanza N.° 1355-MPA (2024) cambió las rutas, pero su plan no está publicado.
 - **Quebradas y ríos.** ANA (Autoridad Nacional del Agua, red hidrográfica de 2018; licencia no localizada, se atribuye a la ANA), IGP (Instituto Geofísico del Perú, servicio `monitoreocenvul/ArequipaMisti`, capas Quebrada y RiosArequipa; sin licencia ni fecha en el servicio, se atribuye al IGP) y © colaboradores de OpenStreetMap ([ODbL](https://opendatacommons.org/licenses/odbl/)) para los cauces con nombre y los ríos.
 - **Puntos de acopio de agua.** SEDAPAR y la Municipalidad Provincial de Arequipa, «Directorio de Puntos de Acopio de Agua Potable Arequipa» ([gob.pe](https://www.gob.pe/institucion/sedapar/informes-publicaciones/5198948-directorio-de-puntos-de-acopio-de-agua-potable-arequipa), publicado el 2024-02-16; las fichas son de abril a junio de 2017). Son lugares de reparto con camiones cisterna ante un desabastecimiento, no la red. Sin licencia declarada; información pública del Estado.
@@ -222,17 +245,18 @@ El código no tiene licencia de código abierto: `package.json` declara `UNLICEN
 ## Pruebas
 
 ```bash
-pnpm test              # unitarias
+pnpm test              # unitarias (Jest)
+pnpm test:arquitectura # la regla de capas del monorepo (segundos, sin base de datos)
 pnpm test:e2e          # extremo a extremo (GET / y GET /api, sin servidor externo)
 pnpm lint
 pnpm build
 pnpm datos:verificar
-pnpm test:nuevo        # vitest: paquetes y web/pruebas (necesita ~15 s para armar la base de pruebas)
-pnpm web:typecheck     # tsc de web/
+pnpm test:nuevo        # vitest: paquetes, apps/web/pruebas y la regla de capas (necesita ~15 s para armar la base de pruebas)
+pnpm web:typecheck     # tsc de apps/web/
 pnpm web:e2e           # Playwright: chat, mapa y ficha de la aplicación web (ver abajo)
 ```
 
 ### Pruebas de extremo a extremo de la aplicación web
 
-`pnpm web:e2e` (o `pnpm test:e2e` dentro de `web/`) usa Playwright con el **Chrome instalado** (`channel: 'chrome'`; no descarga navegadores). Si no hay Chrome: `E2E_NAVEGADOR=msedge pnpm web:e2e`. Es autosuficiente: `web/e2e/iniciar-servidor.mjs` arma una base nueva en `.pglite-e2e/` (migraciones, `public/data` y cuatro avisos ficticios de `web/e2e/datos/avisos.json`, guardados con la misma función de ingesta de `pnpm avisos:ingerir`; no usa `datos-crudos/`), compila en `web/.next-e2e/` y levanta tres servidores en los puertos 3210 (principal), 3211 (sin publicar avisos, ADR 0002) y 3212 (degradado: base vacía y límites bajos, para los errores internos y el 429). El mapa no consulta internet: las teselas de OpenStreetMap se sustituyen en las pruebas. Con `E2E_PUERTO` se cambia el puerto base; `E2E_REUSAR_SERVIDOR=1` reutiliza servidores ya levantados con `node web/e2e/iniciar-servidor.mjs`. El informe HTML queda en `web/playwright-report/`.
+`pnpm web:e2e` (o `pnpm test:e2e` dentro de `apps/web/`) usa Playwright con el **Chrome instalado** (`channel: 'chrome'`; no descarga navegadores). Si no hay Chrome: `E2E_NAVEGADOR=msedge pnpm web:e2e`. Es autosuficiente: `apps/web/e2e/iniciar-servidor.mjs` arma una base nueva en `.pglite-e2e/` (migraciones, `apps/estatica/public/data` y cuatro avisos ficticios de `apps/web/e2e/datos/avisos.json`, guardados con la misma función de ingesta de `pnpm avisos:ingerir`; no usa `data/`), compila en `apps/web/.next-e2e/` y levanta tres servidores en los puertos 3210 (principal), 3211 (sin publicar avisos, ADR 0002) y 3212 (degradado: base vacía y límites bajos, para los errores internos y el 429). El mapa no consulta internet: las teselas de OpenStreetMap se sustituyen en las pruebas. Con `E2E_PUERTO` se cambia el puerto base; `E2E_REUSAR_SERVIDOR=1` reutiliza servidores ya levantados con `node apps/web/e2e/iniciar-servidor.mjs`. El informe HTML queda en `apps/web/playwright-report/`.
 

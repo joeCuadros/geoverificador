@@ -1,5 +1,5 @@
 -- 0001 · Esquema base (tarea 2.2 del plan).
--- Todas las geometrías van en WGS84 (EPSG:4326), como los archivos de public/data. Las distancias se piden con ::geography (metros).
+-- Todas las geometrías van en WGS84 (EPSG:4326), como los archivos de apps/estatica/public/data. Las distancias se piden con ::geography (metros).
 CREATE EXTENSION IF NOT EXISTS postgis;
 
 -- De dónde sale cada dato: fuente, licencia, fecha y URL. `limite` es la frase que el agente cita al usar el dato.
@@ -16,7 +16,7 @@ CREATE TABLE fuente (
   metadatos           jsonb NOT NULL DEFAULT '{}'
 );
 
--- Un registro por archivo de public/data cargado. Con esto `datos:verificar --base` compara la base contra los archivos (tarea 2.5).
+-- Un registro por archivo de apps/estatica/public/data cargado. Con esto `datos:verificar --base` compara la base contra los archivos (tarea 2.5).
 CREATE TABLE archivo_dato (
   ruta       text PRIMARY KEY,
   fuente_id  text NOT NULL REFERENCES fuente (id),

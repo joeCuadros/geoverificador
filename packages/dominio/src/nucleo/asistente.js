@@ -1,4 +1,4 @@
-// GENERADO por scripts/generar-dominio.mjs a partir de public/js/asistente.js. No editar: cambie el original y corra `pnpm dominio:generar`.
+// GENERADO por tools/generar-dominio.mjs a partir de apps/estatica/public/js/asistente.js. No editar: cambie el original y corra `pnpm dominio:generar`.
 
 import Calculos from './calculos.js';
 import Rutas from './rutas.js';

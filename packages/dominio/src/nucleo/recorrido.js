@@ -1,4 +1,4 @@
-// GENERADO por scripts/generar-dominio.mjs a partir de public/js/recorrido.js. No editar: cambie el original y corra `pnpm dominio:generar`.
+// GENERADO por tools/generar-dominio.mjs a partir de apps/estatica/public/js/recorrido.js. No editar: cambie el original y corra `pnpm dominio:generar`.
 
 /**
  * recorrido.js: El primer momento de la visita: Inicio → guía → chat (sin DOM, sin red).
@@ -11,7 +11,7 @@
  *   enRecorrido: la guía se abrió desde el Inicio (al cerrarla se pasa al chat); si se abrió con «¿Cómo funciona?» no.
  *
  * Se carga como script del navegador (define `Recorrido`) y también como módulo CommonJS para las pruebas
- * (test/recorrido.spec.ts). espacio-ui.js es quien toca el DOM; aquí solo viven las decisiones.
+ * (apps/estatica/test/recorrido.spec.ts). espacio-ui.js es quien toca el DOM; aquí solo viven las decisiones.
  */
 const Recorrido = (() => {
   const CLAVE_VISTO = 'geoverificador.inicioVisto';

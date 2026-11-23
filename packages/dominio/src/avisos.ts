@@ -7,7 +7,7 @@
  *   agruparDuplicados      3.5  grupos de avisos que son el mismo inmueble
  *   resumirCorrida         3.8  reporte por corrida: recibidos, descartados, sin coordenadas, sin distrito
  *
- * El aviso es el del esquema de scripts/lib/avisos/esquema.js: solo campos del inmueble, sin vendedor ni contacto.
+ * El aviso es el del esquema de tools/lib/avisos/esquema.js: solo campos del inmueble, sin vendedor ni contacto.
  */
 
 export type Moneda = 'PEN' | 'USD';
@@ -176,7 +176,7 @@ export function agruparDuplicados(avisos: AvisoComparable[]): Map<AvisoComparabl
 }
 
 /**
- * Caja que contiene los 25 distritos de public/data/distritos_aqp.geojson (redondeada hacia afuera). Es más grande que la del mapa (CONFIG.viewbox):
+ * Caja que contiene los 25 distritos de apps/estatica/public/data/distritos_aqp.geojson (redondeada hacia afuera). Es más grande que la del mapa (CONFIG.viewbox):
  * La Joya, Yura o Polobaya se extienden más allá. Una coordenada fuera de aquí no es de un aviso de la provincia. test/…/avisos.test.ts comprueba que
  * la caja sigue conteniendo a los distritos.
  */

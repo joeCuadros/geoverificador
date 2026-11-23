@@ -1,4 +1,4 @@
-// GENERADO por scripts/generar-dominio.mjs a partir de public/js/calculos.js. No editar: cambie el original y corra `pnpm dominio:generar`.
+// GENERADO por tools/generar-dominio.mjs a partir de apps/estatica/public/js/calculos.js. No editar: cambie el original y corra `pnpm dominio:generar`.
 
 /**
  * calculos.js — Cálculos puros del alcance de 5 variables (sin DOM, sin red, sin estado).
@@ -11,7 +11,7 @@
  *   V5  Área verde                → evaluarAreaVerde (≥ 5000 m² a ≤ 300 m)
  *
  * Se carga como script del navegador (define `Calculos`) y también como módulo CommonJS: así las mismas funciones
- * se prueban con jest (test/calculos.spec.ts), se verifican en scripts/verificar-datos.mjs y las usa el script de
+ * se prueban con jest (apps/estatica/test/calculos.spec.ts), se verifican en tools/verificar-datos.mjs y las usa el script de
  * extracción de OpenStreetMap. Las coordenadas GeoJSON van como [longitud, latitud]; las funciones de punto reciben
  * (lat, lon) o { lat, lon }.
  */
@@ -164,7 +164,7 @@ const Calculos = (() => {
 
   /**
    * Qué etiquetas de OSM entran en cada variable. Es la ÚNICA definición: de aquí salen la consulta a Overpass
-   * (scripts/extraer-equipamiento.mjs y el respaldo en vivo), la clasificación de los elementos y la lista que se
+   * (tools/extraer-equipamiento.mjs y el respaldo en vivo), la clasificación de los elementos y la lista que se
    * muestra en pantalla.
    *   valores  → la etiqueta debe valer alguno de ellos; sin `valores` basta con que exista.
    *   excluir  → valores que no son un establecimiento (p. ej. una farmacia no es un centro de atención).
@@ -325,7 +325,7 @@ const Calculos = (() => {
   // --------------------------------- Fuente de cada establecimiento (salud y educación)
 
   /**
-   * Los archivos de salud y de educación (scripts/descargar-equipamiento-oficial.mjs) juntan tres fuentes y cada elemento dice
+   * Los archivos de salud y de educación (tools/descargar-equipamiento-oficial.mjs) juntan tres fuentes y cada elemento dice
    * la suya en `properties.fuente`: RENIPRESS (SUSALUD) y ESCALE (MINEDU) son la fuente primaria; OSM es el respaldo, solo donde
    * no hay un punto oficial cerca. Un archivo anterior, o la consulta en vivo a Overpass, no trae `fuente`: es OpenStreetMap.
    */
@@ -723,7 +723,7 @@ const Calculos = (() => {
 
   /**
    * El punto de acopio de agua más cercano. Puro y sin umbral: INFORMATIVO (o SIN DATO).
-   *   features: [Feature Point { properties { direccion, distrito, pagina_pdf… } }] (public/data/agua/puntos_acopio.geojson)
+   *   features: [Feature Point { properties { direccion, distrito, pagina_pdf… } }] (apps/estatica/public/data/agua/puntos_acopio.geojson)
    *   opciones: { fuente, fecha (publicación), fechaDatos (a qué época corresponden los datos), metodo }
    * Devuelve { estado, direccion, distrito, distanciaM, lat, lon, a500m, a1000m, total, umbralM, fuente, fecha, fechaDatos, metodo }.
    */
@@ -754,7 +754,7 @@ const Calculos = (() => {
 
   /**
    * Las interrupciones del servicio de agua de SEDAPAR en un distrito. Puro y sin umbral: INFORMATIVO (o SIN DATO).
-   *   datos: el contenido de public/data/agua/interrupciones_sedapar.json ({ metadata, distritos })
+   *   datos: el contenido de apps/estatica/public/data/agua/interrupciones_sedapar.json ({ metadata, distritos })
    * Devuelve { estado, distrito, registros (true | false | null), promedioN, promedioHoras (por año completo), aniosCompletos, parciales [{ anio, n, horas }], total, periodo,
    * umbralM, fuente, fecha }. Un distrito que no figura en el archivo NO es «cero interrupciones»: es registros = false.
    */
@@ -830,7 +830,7 @@ const Calculos = (() => {
 
   /**
    * ¿Cae el punto dentro de alguna concesión minera? Puro y sin umbral: INFORMATIVO (o SIN DATO). Las extinguidas no cuentan.
-   *   features: [Feature Polygon / MultiPolygon { properties { codigo, nombre, estado, sustancia, hectareas… } }] (public/data/mineria/concesiones_mineras.geojson)
+   *   features: [Feature Polygon / MultiPolygon { properties { codigo, nombre, estado, sustancia, hectareas… } }] (apps/estatica/public/data/mineria/concesiones_mineras.geojson)
    * Dentro (distancia 0; los huecos quedan fuera) lista TODAS las que lo contienen, las tituladas primero; fuera, da la más cercana (titulada, en trámite u otra) y la distancia en línea
    * recta a su BORDE. Devuelve { estado, dentro, concesiones, tituladas, enTramite, cercana, distanciaM, umbralM, fuente, fecha, metodo }.
    */
@@ -905,7 +905,7 @@ const Calculos = (() => {
 
   /**
    * ¿En qué manzana del censo cae el punto y qué dicen sus cifras? Puro y sin umbral: INFORMATIVO (o SIN DATO).
-   *   features: [Feature Polygon / MultiPolygon { properties { id, v, h, p, o, l, ad, af, sd, sf } }]  (los campos de scripts/descargar-censo-servicios.mjs)
+   *   features: [Feature Polygon / MultiPolygon { properties { id, v, h, p, o, l, ad, af, sd, sf } }]  (los campos de tools/descargar-censo-servicios.mjs)
    *   opciones: { anio, fuente, fecha, metodo, cercanaM = 30, minViviendas = 5, motivoVacio }
    * Si el punto está dentro de un polígono, esa manzana (`modo: 'dentro'`). Si cae en la calle, la manzana más cercana a `cercanaM` m o menos
    * (`modo: 'cercana'`, con la distancia al borde); más lejos, SIN DATO (fuera del área urbana censada).

@@ -6,7 +6,7 @@ import { defineConfig } from 'vitest/config';
  */
 export default defineConfig({
   test: {
-    include: ['packages/*/pruebas/**/*.test.ts', 'web/pruebas/**/*.test.ts'],
+    include: ['packages/*/pruebas/**/*.test.ts', 'apps/web/pruebas/**/*.test.ts', 'arquitectura/**/*.test.ts'],
     globalSetup: ['./packages/datos/pruebas/preparar-base.ts'],
     fileParallelism: false,
     testTimeout: 120_000,

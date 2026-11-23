@@ -1,4 +1,4 @@
-// GENERADO por scripts/generar-dominio.mjs a partir de public/js/distritos.js. No editar: cambie el original y corra `pnpm dominio:generar`.
+// GENERADO por tools/generar-dominio.mjs a partir de apps/estatica/public/js/distritos.js. No editar: cambie el original y corra `pnpm dominio:generar`.
 
 import { CONFIG } from './entorno.js';
 /**
@@ -6,7 +6,7 @@ import { CONFIG } from './entorno.js';
  *
  * Fuentes (archivos locales):
  *   - data/distritos_aqp.geojson      → límites distritales (GEOCATMIN, con límites remitidos por el INEI),
- *                                       generado con scripts/descargar-distritos.mjs.
+ *                                       generado con tools/descargar-distritos.mjs.
  *   - data/zonas_sismicas_e030.json   → Anexo II y Tabla N.° 1 de la Norma E.030 Diseño Sismorresistente 2026 (MVCS).
  *
  * La zona sísmica es regional (por distrito): no considera el suelo del predio. El efecto del suelo lo determina el

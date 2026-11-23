@@ -40,7 +40,7 @@ describe('herramientas', () => {
     expect(r.candidatos.length).toBeGreaterThan(0);
   });
   it('nombra las líneas del viaje con la etiqueta real de la ruta, no con un objeto convertido a texto', async () => {
-    const archivo = JSON.parse(fs.readFileSync(new URL('../../../public/data/rutas_osm.geojson', import.meta.url), 'utf8'));
+    const archivo = JSON.parse(fs.readFileSync(new URL('../../../apps/estatica/public/data/rutas_osm.geojson', import.meta.url), 'utf8'));
     const etiquetas = new Set<string>(archivo.features.map((f: any) => f.properties?.linea).filter((x: unknown) => typeof x === 'string'));
     const pares = [
       { origen: { lat: -16.3905, lon: -71.5435 }, destino: { lat: -16.4215, lon: -71.544 } },

@@ -1,10 +1,10 @@
-// GENERADO por scripts/generar-dominio.mjs a partir de public/js/rutas.js. No editar: cambie el original y corra `pnpm dominio:generar`.
+// GENERADO por tools/generar-dominio.mjs a partir de apps/estatica/public/js/rutas.js. No editar: cambie el original y corra `pnpm dominio:generar`.
 
 import Calculos from './calculos.js';
 /**
  * rutas.js — Líneas de transporte público que pasan cerca de un punto o por un distrito (sin DOM, sin red, sin estado).
  *
- * Fuente: public/data/rutas_osm.geojson, congelado con scripts/descargar-rutas-osm.mjs a partir de OpenStreetMap (© colaboradores, ODbL): la ÚNICA fuente de rutas y
+ * Fuente: apps/estatica/public/data/rutas_osm.geojson, congelado con tools/descargar-rutas-osm.mjs a partir de OpenStreetMap (© colaboradores, ODbL): la ÚNICA fuente de rutas y
  * paradas de la herramienta. Trae dos clases de elementos:
  *   - tipo «ruta»: LineString o MultiLineString [lon, lat] de UNA relación route=bus (un sentido de un ramal): linea, ramal, desde, hasta, operador, osm (id de la relación)…
  *   - tipo «parada»: Point de un objeto suelto de OSM (highway=bus_stop, public_transport=platform|stop_position) con `rutas` (osm de las relaciones a cuyo trazado

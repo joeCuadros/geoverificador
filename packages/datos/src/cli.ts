@@ -2,7 +2,7 @@
  * cli.ts — Órdenes de la base de datos.
  *
  *   pnpm bd:migrar                 aplica las migraciones pendientes
- *   pnpm bd:cargar [filtro]        carga public/data en la base (solo los archivos cuya ruta contenga `filtro`, si se da)
+ *   pnpm bd:cargar [filtro]        carga apps/estatica/public/data en la base (solo los archivos cuya ruta contenga `filtro`, si se da)
  *   pnpm bd:verificar              compara la base contra los archivos
  *   pnpm bd:ficha <lat> <lon>      imprime la ficha de un punto armada con consultas a la base
  *   pnpm datos:tipo-cambio         guarda el tipo de cambio de los últimos 15 días (BCRP)
@@ -24,7 +24,7 @@ import { migrar } from './migrar.ts';
 import { verificarBase } from './verificar.ts';
 
 const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-const DATOS = path.join(RAIZ, 'public', 'data');
+const DATOS = path.join(RAIZ, 'apps', 'estatica', 'public', 'data');
 
 async function principal(): Promise<number> {
   const args = process.argv.slice(2).filter((a) => a !== '--');

@@ -1,4 +1,4 @@
-// GENERADO por scripts/generar-dominio.mjs a partir de public/js/onboarding.js. No editar: cambie el original y corra `pnpm dominio:generar`.
+// GENERADO por tools/generar-dominio.mjs a partir de apps/estatica/public/js/onboarding.js. No editar: cambie el original y corra `pnpm dominio:generar`.
 
 /**
  * onboarding.js — Lógica pura de los 3 pasos de la consulta (sin DOM, sin red).
@@ -8,7 +8,7 @@
  *   Paso 3 «Lee tu reporte»    → zonificación y servicios cerca del punto
  *
  * Se carga como script del navegador (define `Onboarding`) y también como módulo CommonJS para probarlo con jest
- * (test/onboarding.spec.ts). app.js es quien toca el DOM; aquí solo viven las decisiones.
+ * (apps/estatica/test/onboarding.spec.ts). app.js es quien toca el DOM; aquí solo viven las decisiones.
  */
 const Onboarding = (() => {
   const PASOS = ['ubicar', 'confirmar', 'reporte'];

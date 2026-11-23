@@ -1,11 +1,11 @@
-// GENERADO por scripts/generar-dominio.mjs a partir de public/js/config.js. No editar: cambie el original y corra `pnpm dominio:generar`.
+// GENERADO por tools/generar-dominio.mjs a partir de apps/estatica/public/js/config.js. No editar: cambie el original y corra `pnpm dominio:generar`.
 /**
  * config.js — Configuración única de la aplicación.
  *
  * Alcance: 5 variables (zonificación vigente, zonificación proyectada, salud, educación, transporte y área verde).
  * Los umbrales, el estado del PDM y los módulos visibles están en este archivo; las etiquetas de OpenStreetMap que
  * entran en cada variable están en Calculos.FILTROS (calculos.js), que sirve a la vez para extraer los datos
- * (scripts/extraer-equipamiento.mjs), clasificarlos y documentarlos en pantalla.
+ * (tools/extraer-equipamiento.mjs), clasificarlos y documentarlos en pantalla.
  */
 const CONFIG = {
   center: [-16.39883, -71.53697], // Plaza de Armas de Arequipa (Nominatim, way 23811932)
@@ -30,14 +30,14 @@ const CONFIG = {
   // Caja aproximada de Arequipa metropolitana: oeste, norte, este, sur
   viewbox: '-71.75,-16.20,-71.35,-16.60',
 
-  // Zonificación urbana: archivos locales en public/data (no se consulta ningún servicio externo).
+  // Zonificación urbana: archivos locales en apps/estatica/public/data (no se consulta ningún servicio externo).
   zonificacion: {
     geojsonUrl: 'data/zonas_aqp.geojson', // polígonos con los campos `codigo` y `color`
     reglasUrl: 'data/reglas_zonas.json',  // reglas por código: pisos, coeficiente, área libre, lote mínimo…
     fuente: 'Plano de Zonificación del PDM Arequipa 2016-2025 (PDM aprobado por la Ordenanza 961-MPA; zonificación restituida por la Ordenanza 975-MPA)',
   },
 
-  // Quebradas y cauces: ANA, IGP y OpenStreetMap unidos y congelados con scripts/descargar-quebradas.mjs (cada tramo dice su
+  // Quebradas y cauces: ANA, IGP y OpenStreetMap unidos y congelados con tools/descargar-quebradas.mjs (cada tramo dice su
   // fuente). NO hay umbral normativo para la distancia a una quebrada: la variable es INFORMATIVA salvo que la persona fije el
   // suyo en «Mis umbrales». `citadas`: quebradas que nombran los informes de INGEMMET sobre Arequipa (docs/INVESTIGACION-VARIABLES.md);
   // «Qué no cubre» las compara con los nombres del archivo, junto con las que nombra el inventario de peligros.
@@ -48,13 +48,13 @@ const CONFIG = {
   },
 
   // Peligro volcánico del Misti: zonas del IGP (alto, moderado y bajo por lahares, flujos piroclásticos, lava, avalanchas y ceniza),
-  // congeladas con scripts/descargar-peligro-volcanico.mjs. Es INFORMATIVO: nunca cumple / no cumple ni puntaje.
+  // congeladas con tools/descargar-peligro-volcanico.mjs. Es INFORMATIVO: nunca cumple / no cumple ni puntaje.
   volcan: {
     geojsonUrl: 'data/peligro_volcanico_misti.geojson',
     fuente: 'Zonas de peligro volcánico del Misti, Instituto Geofísico del Perú (IGP)',
   },
 
-  // Sismos reportados por el IGP, congelados con scripts/descargar-sismos.mjs. `radioM` es el radio de CONTEXTO para contar
+  // Sismos reportados por el IGP, congelados con tools/descargar-sismos.mjs. `radioM` es el radio de CONTEXTO para contar
   // sismos (convención del proyecto, no un umbral de peligro).
   sismos: {
     geojsonUrl: 'data/sismos_igp.geojson',
@@ -64,33 +64,33 @@ const CONFIG = {
 
   // Distritos (límites del INEI vía GEOCATMIN) y zona sísmica de la Norma E.030: archivos locales.
   distritos: {
-    geojsonUrl: 'data/distritos_aqp.geojson', // generado con scripts/descargar-distritos.mjs
+    geojsonUrl: 'data/distritos_aqp.geojson', // generado con tools/descargar-distritos.mjs
     e030Url: 'data/zonas_sismicas_e030.json', // Anexo II y Tabla N.° 1 de la E.030 2026, transcritos
     fuente: 'Norma E.030 Diseño Sismorresistente 2026 (MVCS), Anexo II; límites distritales del INEI vía GEOCATMIN',
   },
 
-  // Precio de OFERTA por m² del distrito (Aptología, CC BY 4.0): archivo congelado con scripts/descargar-precios.mjs.
+  // Precio de OFERTA por m² del distrito (Aptología, CC BY 4.0): archivo congelado con tools/descargar-precios.mjs.
   // Es INFORMATIVO: nunca cumple / no cumple ni entra en un puntaje. La fuente, la licencia y el periodo viajan en el propio archivo.
   precios: {
     jsonUrl: 'data/precios_m2_distrito.json',
   },
 
   // Escenario de riesgo del CENEPRED ante El Niño 2026-2027 (inundaciones y movimientos en masa) por distrito: archivo congelado con
-  // scripts/descargar-riesgo-cenepred.mjs. Es INFORMATIVO: nunca cumple / no cumple ni puntaje, y es una estimación por distrito, no del predio.
+  // tools/descargar-riesgo-cenepred.mjs. Es INFORMATIVO: nunca cumple / no cumple ni puntaje, y es una estimación por distrito, no del predio.
   cenepred: {
     jsonUrl: 'data/riesgo_cenepred_fen2027.json',
     fuente: 'Escenario de riesgo ante El Niño 2026-2027, CENEPRED (SIGRID)',
     visorUrl: 'https://sigrid.cenepred.gob.pe/sigridv3/',
   },
 
-  // Peligros geológicos registrados: archivo local generado con scripts/descargar-peligros.mjs.
+  // Peligros geológicos registrados: archivo local generado con tools/descargar-peligros.mjs.
   peligros: {
     geojsonUrl: 'data/peligros_aqp.geojson',
     radio: 500, // metros alrededor del punto
     fuente: 'Inventario de peligros geológicos, GEOCATMIN (INGEMMET)',
   },
 
-  // Denuncias de robo y hurto: archivo local generado con scripts/descargar-delitos.mjs.
+  // Denuncias de robo y hurto: archivo local generado con tools/descargar-delitos.mjs.
   delitos: {
     geojsonUrl: 'data/delitos_aqp.geojson',
     radio: 500,      // metros alrededor del punto
@@ -193,7 +193,7 @@ const CONFIG = {
     sismica: false,   // zona sísmica de la Norma E.030
   },
 
-  // Asistente de chat (public/js/asistente.js). Busca zonas sobre una cuadrícula de las zonas construibles del plano y agrupa
+  // Asistente de chat (apps/estatica/public/js/asistente.js). Busca zonas sobre una cuadrícula de las zonas construibles del plano y agrupa
   // por distrito. `umbralesZona` son convenciones del proyecto (ninguna norma los fija): campiña, zona comercial y centro
   // histórico se miden como la distancia al polígono más cercano de esas zonas del plano.
   asistente: {
@@ -205,7 +205,7 @@ const CONFIG = {
     umbralesZona: { campina: 500, comercial: 600, historico: 800 },
   },
 
-  // Censo por MANZANA (INEI, REDATAM): alumbrado, agua y desagüe por red pública, viviendas y personas. Congelado por distrito con scripts/descargar-censo-servicios.mjs
+  // Censo por MANZANA (INEI, REDATAM): alumbrado, agua y desagüe por red pública, viviendas y personas. Congelado por distrito con tools/descargar-censo-servicios.mjs
   // (pnpm datos:censo): un índice con la procedencia y una pieza por distrito que se carga solo cuando el punto cae en él. Es INFORMATIVO: cifras de la manzana en el
   // año del censo, nunca «tu predio tiene». El censo de 2025 ya se levantó, pero el INEI solo ha publicado sus resultados por departamento (REDATAM 2025 y su
   // geoservidor piden iniciar sesión), así que el único dato de 2025 que se usa es el del departamento, de la nota de prensa del INEI.
@@ -228,19 +228,19 @@ const CONFIG = {
     },
   },
 
-  // Equipamiento de OpenStreetMap: archivos congelados con scripts/extraer-equipamiento.mjs (pnpm datos:extraer).
+  // Equipamiento de OpenStreetMap: archivos congelados con tools/extraer-equipamiento.mjs (pnpm datos:extraer).
   // Solo si falta un archivo se consulta Overpass en vivo, alrededor del punto y en este radio.
   equipamiento: {
     archivos: {
       salud: 'data/equipamiento/salud.geojson',
       consultorios: 'data/equipamiento/consultorios.geojson', // consultorios médicos: informativos, aparte de la salud
-      mercados: 'data/equipamiento/mercados.geojson', // mercados de abastos: informativos (scripts/descargar-comercio.mjs)
+      mercados: 'data/equipamiento/mercados.geojson', // mercados de abastos: informativos (tools/descargar-comercio.mjs)
       supermercados: 'data/equipamiento/supermercados.geojson', // supermercados: informativos, aparte de los mercados
-      acopio: 'data/agua/puntos_acopio.geojson', // puntos de acopio de agua de SEDAPAR (directorio publicado en 2024, datos de 2017): informativo (scripts/convertir-acopio-sedapar.mjs)
-      interrupciones: 'data/agua/interrupciones_sedapar.json', // interrupciones del servicio de agua por distrito (SUNASS): informativo (scripts/descargar-interrupciones-sunass.mjs)
-      mineria: 'data/mineria/concesiones_mineras.geojson', // concesiones mineras (INGEMMET): informativo (scripts/descargar-concesiones-mineras.mjs)
-      electricidad: 'data/electricidad/concesiones_distribucion.geojson', // áreas de concesión de distribución eléctrica (MINEM-DGE): informativo (scripts/descargar-concesiones-electricas.mjs)
-      finanzas: 'data/equipamiento/finanzas.geojson', // bancos y cajeros: informativos (scripts/descargar-servicios-osm.mjs)
+      acopio: 'data/agua/puntos_acopio.geojson', // puntos de acopio de agua de SEDAPAR (directorio publicado en 2024, datos de 2017): informativo (tools/convertir-acopio-sedapar.mjs)
+      interrupciones: 'data/agua/interrupciones_sedapar.json', // interrupciones del servicio de agua por distrito (SUNASS): informativo (tools/descargar-interrupciones-sunass.mjs)
+      mineria: 'data/mineria/concesiones_mineras.geojson', // concesiones mineras (INGEMMET): informativo (tools/descargar-concesiones-mineras.mjs)
+      electricidad: 'data/electricidad/concesiones_distribucion.geojson', // áreas de concesión de distribución eléctrica (MINEM-DGE): informativo (tools/descargar-concesiones-electricas.mjs)
+      finanzas: 'data/equipamiento/finanzas.geojson', // bancos y cajeros: informativos (tools/descargar-servicios-osm.mjs)
       comida_fuera: 'data/equipamiento/comida_fuera.geojson', // restaurantes y cafés: informativos
       recreacion: 'data/equipamiento/recreacion.geojson', // áreas de juegos infantiles: informativas (los parques son areasVerdes)
       malls: 'data/equipamiento/malls.geojson', // malls (centros comerciales): informativos; polígonos donde OSM los tiene
@@ -252,7 +252,7 @@ const CONFIG = {
     respaldoRadioM: 5000,
   },
 
-  // «¿Qué combi me lleva de mi punto a mi trabajo?» (public/js/viaje.js): rutas directas sobre los trazados de OpenStreetMap (rutas_osm.geojson, ODbL, con de/a, duración
+  // «¿Qué combi me lleva de mi punto a mi trabajo?» (apps/estatica/public/js/viaje.js): rutas directas sobre los trazados de OpenStreetMap (rutas_osm.geojson, ODbL, con de/a, duración
   // e intervalo). `caminarM` es la distancia a pie a la ruta en cada punta: la del paradero (umbrales.transporte, convención del proyecto).
   viaje: {
     caminarM: 400,
@@ -312,7 +312,7 @@ const CONFIG = {
     },
   ],
 
-  // Líneas de transporte público (recorridos y paradas de OpenStreetMap, ODbL), congeladas con scripts/descargar-rutas-osm.mjs: es la única fuente de rutas y paradas. La
+  // Líneas de transporte público (recorridos y paradas de OpenStreetMap, ODbL), congeladas con tools/descargar-rutas-osm.mjs: es la única fuente de rutas y paradas. La
   // distancia para decir que una línea «pasa cerca» es la misma de `umbrales.transporte` (convención del proyecto, no una norma).
   rutas: {
     geojsonUrl: 'data/rutas_osm.geojson',

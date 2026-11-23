@@ -107,9 +107,9 @@ code{font-family:var(--mono);font-size:.88em;background:var(--accent-soft);paddi
   <div class="tbl"><table>
     <tr><th>Pieza</th><th>Estado real</th><th></th></tr>
     <tr><td>Interfaz</td><td>JavaScript sin framework ni paso de compilación: 40 archivos, unas 14.700 líneas, 37 etiquetas <code>script</code> en orden fijo, Leaflet desde CDN.</td><td><span class="pill warn">A migrar</span></td></tr>
-    <tr><td>Lógica de negocio</td><td>25 bibliotecas puras en <code>public/js</code> (cálculos, viaje, sectores, asistente), sin DOM, con unas 1.600 pruebas.</td><td><span class="pill ok">Reutilizable</span></td></tr>
-    <tr><td>Servidor</td><td>En producción solo corren funciones de Vercel (<code>api/chat.js</code>, <code>api/auth/*</code>). NestJS sirve únicamente en local.</td><td><span class="pill warn">Nest sobra</span></td></tr>
-    <tr><td>Datos</td><td>56 archivos GeoJSON/JSON en <code>public/data</code> (23 a 28 MB). No hay base de datos.</td><td><span class="pill warn">Dispersos</span></td></tr>
+    <tr><td>Lógica de negocio</td><td>25 bibliotecas puras en <code>apps/estatica/public/js</code> (cálculos, viaje, sectores, asistente), sin DOM, con unas 1.600 pruebas.</td><td><span class="pill ok">Reutilizable</span></td></tr>
+    <tr><td>Servidor</td><td>En producción solo corren funciones de Vercel (<code>apps/estatica/api/chat.js</code>, <code>apps/estatica/api/auth/*</code>). NestJS sirve únicamente en local.</td><td><span class="pill warn">Nest sobra</span></td></tr>
+    <tr><td>Datos</td><td>56 archivos GeoJSON/JSON en <code>apps/estatica/public/data</code> (23 a 28 MB). No hay base de datos.</td><td><span class="pill warn">Dispersos</span></td></tr>
     <tr><td>Asistente</td><td>Motor de reglas más Gemini en dos tareas acotadas (interpretar la consulta y redactar). Busca <em>zonas</em>, no avisos. No hay ciclo de agente con herramientas.</td><td><span class="pill warn">Base útil</span></td></tr>
     <tr><td>Avisos</td><td>CLI <code>pnpm datos:avisos</code> en la rama <code>feat/cli-avisos</code>, sin confirmar. Nexo funciona directo; Urbania y Adondevivir por Apify (10 de 10 avisos reales mapeados). Nada llega a la aplicación.</td><td><span class="pill warn">Parcial</span></td></tr>
     <tr><td>Marketplace</td><td>Probado hoy con <code>apify/facebook-marketplace-scraper</code> (USD 0,06). El actor respondió, pero devolvió 10 artículos de Florida: Facebook ignoró la URL de Arequipa. Además el precio no se leyó y el CLI aceptó artículos que no son inmuebles.</td><td><span class="pill bad">No sirve aún</span></td></tr>
@@ -168,7 +168,7 @@ code{font-family:var(--mono);font-size:.88em;background:var(--accent-soft);paddi
       <li><span class="id">1.1</span><span>Integrar a <code>main</code> las ramas apiladas, en su orden. Al integrar, debe prevalecer el borrado de SmartBus (<code>rutas_smartbus.geojson</code> y su script).</span></li>
       <li><span class="id">1.2</span><span>Revisar y confirmar <code>feat/cli-avisos</code>. Decidir si el recolector de SmartBus se queda: solo hay permiso verbal y sus datos no pueden entrar al producto.</span></li>
       <li><span class="id">1.3</span><span>Fijar <code>engines</code> (Node 24) y pnpm en <code>package.json</code>; hoy solo los fija el CI.</span></li>
-      <li><span class="id">1.4</span><span>Medir cobertura de <code>public/js</code> y <code>api/</code>, y extender el lint a esas carpetas. Hoy solo se mide <code>src/</code>.</span></li>
+      <li><span class="id">1.4</span><span>Medir cobertura de <code>apps/estatica/public/js</code> y <code>api/</code>, y extender el lint a esas carpetas. Hoy solo se mide <code>src/</code>.</span></li>
       <li><span class="id">1.5</span><span>Abrir <code>docs/adr/</code> y registrar D1 a D4.</span></li>
     </ol>
     <div class="done"><b>Hecho cuando:</b> una sola rama principal con CI en verde (lint, pruebas, <code>datos:verificar</code>) y las cuatro decisiones escritas.</div>
@@ -222,12 +222,12 @@ code{font-family:var(--mono);font-size:.88em;background:var(--accent-soft);paddi
     <ol class="tasks">
       <li><span class="id">5.1</span><span>Crear la aplicación Next.js (App Router, TypeScript) en el mismo repositorio.</span></li>
       <li><span class="id">5.2</span><span>Mover las 25 bibliotecas puras a un paquete de dominio con módulos ES y tipos. Eliminar las variables globales y la carga doble <code>typeof X !== 'undefined' ? X : require()</code>. Las 1.600 pruebas deben seguir pasando sin cambiar lo que afirman.</span></li>
-      <li><span class="id">5.3</span><span>Pasar <code>api/chat.js</code> y <code>api/auth/*</code> a rutas de servidor. Sus núcleos ya son funciones <code>(req) → {status, cuerpo}</code>.</span></li>
+      <li><span class="id">5.3</span><span>Pasar <code>apps/estatica/api/chat.js</code> y <code>apps/estatica/api/auth/*</code> a rutas de servidor. Sus núcleos ya son funciones <code>(req) → {status, cuerpo}</code>.</span></li>
       <li><span class="id">5.4</span><span>Mapa como componente de cliente, con Leaflet instalado como dependencia en lugar del CDN.</span></li>
       <li><span class="id">5.5</span><span>Portar la interfaz por paneles, en este orden: ficha del punto, capas, viaje, comparación, reporte, asistente. <code>app.js</code> (2.077 líneas) se divide, no se copia.</span></li>
       <li><span class="id">5.6</span><span>Estado: lo que hoy vive en <code>localStorage</code> (destino, comparación, umbrales) pasa a un almacén de cliente tipado.</span></li>
       <li><span class="id">5.7</span><span>Lista de paridad función por función y pruebas de extremo a extremo sobre los 4 puntos de la auditoría.</span></li>
-      <li><span class="id">5.8</span><span>Retirar NestJS, <code>public/index.html</code> y la publicación en GitHub Pages.</span></li>
+      <li><span class="id">5.8</span><span>Retirar NestJS, <code>apps/estatica/public/index.html</code> y la publicación en GitHub Pages.</span></li>
     </ol>
     <div class="done"><b>Hecho cuando:</b> la lista de paridad está completa, la versión nueva reemplaza a la anterior en el dominio de producción y NestJS ya no está en <code>package.json</code>.</div>
   </div>

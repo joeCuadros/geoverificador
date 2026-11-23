@@ -36,7 +36,7 @@ describe('migraciones', () => {
 });
 
 describe('cargadores', () => {
-  it('todos los archivos de public/data están en el catálogo y en la base', async () => {
+  it('todos los archivos de apps/estatica/public/data están en el catálogo y en la base', async () => {
     const rutas = listarArchivos(DATOS);
     expect(rutas.filter((r) => !definicionDe(r))).toEqual([]);
     const enBase = (await base.consulta('SELECT ruta FROM archivo_dato')).map((r) => r.ruta).sort();

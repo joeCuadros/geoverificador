@@ -1,10 +1,10 @@
-// GENERADO por scripts/generar-dominio.mjs a partir de public/js/verificaciones.js. No editar: cambie el original y corra `pnpm dominio:generar`.
+// GENERADO por tools/generar-dominio.mjs a partir de apps/estatica/public/js/verificaciones.js. No editar: cambie el original y corra `pnpm dominio:generar`.
 
 /**
  * verificaciones.js — Datos de «Verificaciones recomendadas antes de comprar» (sin DOM, sin red).
  *
  * Es contenido estático: una lista de trámites y consultas que GeoVerificador NO reemplaza. Para agregar una verificación
- * basta con sumar un objeto a ITEMS; la vista (app.js) lo dibuja sola y las pruebas (test/verificaciones.spec.ts) revisan
+ * basta con sumar un objeto a ITEMS; la vista (app.js) lo dibuja sola y las pruebas (apps/estatica/test/verificaciones.spec.ts) revisan
  * que la forma sea válida.
  *
  *   id          texto único, sin espacios

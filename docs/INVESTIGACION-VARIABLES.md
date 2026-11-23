@@ -14,7 +14,7 @@
 1. **La decisión del equipo de no usar puntaje global está respaldada por la literatura.** El Manual OECD/JRC dice que los pesos «son esencialmente juicios de valor», que «ponderar igual no significa no ponderar» y que la agregación lineal permite que un déficit se «compense» con un superávit [10]. Malczewski advierte que la combinación lineal ponderada se aplica «sin comprender del todo sus supuestos» [9]. Lo coherente con esa decisión es: tabla de indicadores sin total, filtros de mínimos fijados por el usuario, comparación de 2–3 puntos con detección de dominancia, y pesos solo si el usuario los pide, con prueba de sensibilidad (sección 6).
 2. **Lo que más pesa en una compra no es lo que la app calcula hoy.** En Perú la evidencia más fuerte es la **seguridad jurídica del predio** (título inscrito, cargas y gravámenes, saneamiento físico-legal) [27][28][29][30]. Eso no es una capa espacial: la app debe ofrecerlo como **lista de verificación con enlaces profundos** a SUNARP, no como dato calculado (sección 3, tabla B).
 3. **La mayor carencia espacial es el peligro por quebradas, huaicos, inundación y volcán.** La app solo tiene peligros geológicos puntuales, zona sísmica E.030 y registro de riesgos, todos ocultos. Existen fuentes estatales consultables (INGEMMET, CENEPRED, ANA, IGP) y la evidencia de precios muestra que el peligro de inundación se capitaliza (descuento medio de −4,6 % en llanura de inundación interior a 100 años) [18], pero **no se encontró ningún estudio hedónico peruano**.
-4. **Hallazgo crítico sobre el código existente.** El servicio que usa `scripts/descargar-peligros.mjs` (`.../arcgis/rest/services/DGAR/SRV__PELIGRO__GEOLOGICO/MapServer/0`) responde hoy **HTTP 200 con `{"error":{"code":499,"message":"Token Required"}}`** (verificado el 2026-11-02). Los datos congelados en el repositorio siguen valiendo, pero **el script ya no puede regenerarlos**. El servicio público equivalente es `.../services/SERV_PELIGROS_GEOLOGICOS/MapServer/0`, que sí responde (conteo = 1 en un recuadro de ~2 km alrededor del centro de Arequipa) (verificado el 2026-11-02).
+4. **Hallazgo crítico sobre el código existente.** El servicio que usa `tools/descargar-peligros.mjs` (`.../arcgis/rest/services/DGAR/SRV__PELIGRO__GEOLOGICO/MapServer/0`) responde hoy **HTTP 200 con `{"error":{"code":499,"message":"Token Required"}}`** (verificado el 2026-11-02). Los datos congelados en el repositorio siguen valiendo, pero **el script ya no puede regenerarlos**. El servicio público equivalente es `.../services/SERV_PELIGROS_GEOLOGICOS/MapServer/0`, que sí responde (conteo = 1 en un recuadro de ~2 km alrededor del centro de Arequipa) (verificado el 2026-11-02).
 5. **Qué se puede consumir desde el navegador y qué no.** Con CORS verificado (el servidor devolvió `Access-Control-Allow-Origin` con el origen de prueba): IGP (`ide.igp.gob.pe`), ANA (`geosnirh.ana.gob.pe`), IDEP (`www.idep.gob.pe/geoportal`), MINAM (`geoservidorperu.minam.gob.pe`) y la raíz del ArcGIS de CENEPRED (`sigrid.cenepred.gob.pe/arcgis`). **Sin CORS observado:** la API REST de GEOCATMIN (INGEMMET), el padrón de ESCALE (solo autoriza a `escale3.minedu.gob.pe:8080`), y bloqueados a clientes automáticos: `datosabiertos.gob.pe` (HTTP 418, WAF) y `geominsa.minsa.gob.pe` (HTTP 403). Para estos, la ruta es **descarga en tiempo de construcción** (script en el repo) y datos congelados, como ya se hace.
 6. **Umbrales: casi ninguno es normativo.** Solo se encontró norma peruana para escuelas, y sus distancias son referenciales (MINEDU, numeral 7.1, Cuadro N.° 1: inicial 500 m o 15 min [20b]; primaria 1 500 m o 30 min y secundaria 3 000 m o 45 min [20]; verificado en el texto de las dos RVM el 2026-11-09, ver la corrección de la sección 2.2). Para salud, transporte y área verde **no se encontró umbral normativo peruano**; los 1 000 m y 400 m deben etiquetarse como «convención del proyecto» o «parámetro del usuario» y los 300 m de área verde como «indicador de la OMS Europa (2016)», no como norma (sección 2.1).
 7. **Validación.** No hay estudio peruano de OSM contra RENIPRESS/ESCALE. La completitud de OSM varía mucho en ciudades latinoamericanas (7 %–73 % en Santiago de Chile) [14]; por eso la validación propia (precisión, exhaustividad y desfase posicional contra RENIPRESS y ESCALE) es necesaria y es barata (sección 5).
@@ -87,7 +87,7 @@
 | **OEFA** | `https://www.gob.pe/oefa` (200) | Fiscalización ambiental | Portal | — | — | Sin capa espacial verificada; baja prioridad. |
 | **Datos abiertos Perú** | `https://www.datosabiertos.gob.pe/` (HTTP 418 a clientes automáticos) | Catálogo nacional (RENIPRESS, catálogo sísmico IGP, etc.) | Navegador; la API CKAN está bloqueada a bots | No | Varía por conjunto | Las descargas se hacen a mano y se congelan con fecha. |
 
-**Sin hallazgo verificable:** *Plataforma de Fiscalización* (el término es ambiguo; no se identificó un sistema espacial), *MININTER/PNP* (la app ya usa la capa pública SIDPOL en `services6.arcgis.com`, según `scripts/descargar-delitos.mjs`), *Electrosur/SEAL* (`https://www.seal.com.pe` responde 200, pero no hay dato espacial de cobertura publicado que se haya encontrado).
+**Sin hallazgo verificable:** *Plataforma de Fiscalización* (el término es ambiguo; no se identificó un sistema espacial), *MININTER/PNP* (la app ya usa la capa pública SIDPOL en `services6.arcgis.com`, según `tools/descargar-delitos.mjs`), *Electrosur/SEAL* (`https://www.seal.com.pe` responde 200, pero no hay dato espacial de cobertura publicado que se haya encontrado).
 
 ### Tabla B. Consultas sobre el predio (no son capas; la app ofrece enlace profundo y checklist)
 
@@ -182,10 +182,10 @@ URLs abiertas por el autor se marcan (abierta); las demás provienen de resultad
 
 1. `docs/VALIDACION.md` (hipótesis H1–H3 y protocolo de validación).
 2. `docs/METODOLOGIA.md` (alcance, variables y límites).
-3. `scripts/descargar-peligros.mjs` (endpoint de peligros geológicos, hoy con «Token Required»).
-4. `scripts/descargar-delitos.mjs` (capa SIDPOL en ArcGIS Online).
-5. `scripts/extraer-equipamiento.mjs` (extracción OSM vía Overpass).
-6. `scripts/verificar-datos.mjs` (verificación automática de datos).
+3. `tools/descargar-peligros.mjs` (endpoint de peligros geológicos, hoy con «Token Required»).
+4. `tools/descargar-delitos.mjs` (capa SIDPOL en ArcGIS Online).
+5. `tools/extraer-equipamiento.mjs` (extracción OSM vía Overpass).
+6. `tools/verificar-datos.mjs` (verificación automática de datos).
 7–8. Reservadas (sin uso).
 
 **Metodología y decisión multicriterio**

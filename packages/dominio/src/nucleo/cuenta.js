@@ -1,8 +1,8 @@
-// GENERADO por scripts/generar-dominio.mjs a partir de public/js/cuenta.js. No editar: cambie el original y corra `pnpm dominio:generar`.
+// GENERADO por tools/generar-dominio.mjs a partir de apps/estatica/public/js/cuenta.js. No editar: cambie el original y corra `pnpm dominio:generar`.
 
 /**
  * cuenta.js — Lógica pura de la cuenta opcional (sin DOM). La usan la entrada de la barra (cuenta-ui.js) y la página
- * de acceso (login.js); se prueba con jest en test/cuenta.spec.ts.
+ * de acceso (login.js); se prueba con jest en apps/estatica/test/cuenta.spec.ts.
  *
  * La aplicación funciona completa sin cuenta. Si el servidor no tiene el inicio de sesión configurado (503), si el sitio es
  * estático (404) o si no hay red, la cuenta simplemente no aparece y nada más cambia.

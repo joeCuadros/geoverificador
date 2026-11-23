@@ -5,8 +5,8 @@
 
 ## Contexto
 
-Lo que recoge `pnpm datos:avisos` está marcado «no se publican ni se redistribuyen» (`scripts/lib/avisos/salida.js`) y se guarda en
-`datos-crudos/`, fuera de git. Facebook prohíbe el acceso automatizado en su `robots.txt`. Nexo permite el rastreo. Urbania y Adondevivir se leen
+Lo que recoge `pnpm datos:avisos` está marcado «no se publican ni se redistribuyen» (`tools/lib/avisos/salida.js`) y se guarda en
+`data/`, fuera de git. Facebook prohíbe el acceso automatizado en su `robots.txt`. Nexo permite el rastreo. Urbania y Adondevivir se leen
 por Apify. Ningún portal ha dado permiso por escrito para mostrar sus avisos en otro producto.
 
 ## Opciones
@@ -23,7 +23,7 @@ Nada se publica hasta que un abogado revise los términos de uso de cada portal.
 
 ## Cómo queda reflejado en el código
 
-- La tabla `aviso` guarda solo campos del inmueble (los del esquema de `scripts/lib/avisos/esquema.js`): no hay vendedor, teléfono, correo, fotos ni
+- La tabla `aviso` guarda solo campos del inmueble (los del esquema de `tools/lib/avisos/esquema.js`): no hay vendedor, teléfono, correo, fotos ni
   descripción.
 - Cada `fuente` de avisos tiene `permite_publicar` (falso por defecto). `buscar_avisos` solo devuelve avisos de fuentes con `permite_publicar = true`
   cuando `AVISOS_PUBLICOS=1`; en otro caso devuelve cero avisos y el motivo. En desarrollo local se activa con `AVISOS_PUBLICOS=todas`.

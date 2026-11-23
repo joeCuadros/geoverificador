@@ -1,4 +1,4 @@
-// GENERADO por scripts/generar-dominio.mjs. No editar.
+// GENERADO por tools/generar-dominio.mjs. No editar.
 export { default as AsistenteLLM } from './asistente-llm.js';
 export { default as Asistente } from './asistente.js';
 export { default as Calculos } from './calculos.js';

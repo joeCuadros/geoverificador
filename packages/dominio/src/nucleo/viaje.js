@@ -1,4 +1,4 @@
-// GENERADO por scripts/generar-dominio.mjs a partir de public/js/viaje.js. No editar: cambie el original y corra `pnpm dominio:generar`.
+// GENERADO por tools/generar-dominio.mjs a partir de apps/estatica/public/js/viaje.js. No editar: cambie el original y corra `pnpm dominio:generar`.
 
 import Calculos from './calculos.js';
 /**
@@ -37,7 +37,7 @@ const Viaje = (() => {
 
   const partesDe = (g) => (!g ? [] : g.type === 'LineString' ? [g.coordinates] : g.type === 'MultiLineString' ? g.coordinates : []).filter((p) => Array.isArray(p) && p.length >= 2);
 
-  /** Rutas de OpenStreetMap (public/data/rutas_osm.geojson). */
+  /** Rutas de OpenStreetMap (apps/estatica/public/data/rutas_osm.geojson). */
   function desdeOsm(fc) {
     return ((fc && fc.features) || []).filter((f) => f && f.properties && f.properties.tipo === 'ruta').map((f) => {
       const p = f.properties;
@@ -48,7 +48,7 @@ const Viaje = (() => {
     }).filter((r) => r.partes.length);
   }
 
-  /** Las paradas de OpenStreetMap ligadas a rutas (public/data/rutas_osm.geojson), para el trasbordo: [{ osm, nombre, lat, lon, rutas: [id de relación] }]. */
+  /** Las paradas de OpenStreetMap ligadas a rutas (apps/estatica/public/data/rutas_osm.geojson), para el trasbordo: [{ osm, nombre, lat, lon, rutas: [id de relación] }]. */
   function paradasDeOsm(fc) {
     return ((fc && fc.features) || []).filter((f) => f && f.properties && f.properties.tipo === 'parada' && f.geometry && f.geometry.type === 'Point').map((f) => {
       const [lon, lat] = f.geometry.coordinates;

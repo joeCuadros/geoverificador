@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { abrirBase, type Base } from '../src/cliente.ts';
 
 export const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-export const DATOS = path.join(RAIZ, 'public', 'data');
+export const DATOS = path.join(RAIZ, 'apps', 'estatica', 'public', 'data');
 
 /** La base que armó preparar-base.ts. Cada archivo de pruebas la abre y la cierra. */
 export function baseDePrueba(): Promise<Base> {
@@ -14,7 +14,7 @@ export function baseDePrueba(): Promise<Base> {
 
 export const leerDato = (ruta: string): any => JSON.parse(fs.readFileSync(path.join(DATOS, ruta), 'utf8'));
 
-/** El `fetch` de la aplicación actual: lee los archivos completos de public/data. */
+/** El `fetch` de la aplicación actual: lee los archivos completos de apps/estatica/public/data. */
 export const fetchArchivos = async (url: string) => {
   const ruta = path.join(DATOS, String(url).replace(/^.*?data\//, ''));
   if (!fs.existsSync(ruta)) return { ok: false, status: 404, json: async () => null };

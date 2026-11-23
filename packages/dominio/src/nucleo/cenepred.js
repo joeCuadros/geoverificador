@@ -1,4 +1,4 @@
-// GENERADO por scripts/generar-dominio.mjs a partir de public/js/cenepred.js. No editar: cambie el original y corra `pnpm dominio:generar`.
+// GENERADO por tools/generar-dominio.mjs a partir de apps/estatica/public/js/cenepred.js. No editar: cambie el original y corra `pnpm dominio:generar`.
 
 import Distritos from './distritos.js';
 import { CONFIG } from './entorno.js';
@@ -6,7 +6,7 @@ import { CONFIG } from './entorno.js';
  * cenepred.js — Escenario de riesgo del CENEPRED ante El Niño 2026-2027, por distrito (informativo, sin DOM).
  *
  * Fuente: servicio SIGRID del CENEPRED (capas «Riesgos a inundación» y «Riesgos a movimientos en masa»), congelado con
- * scripts/descargar-riesgo-cenepred.mjs en data/riesgo_cenepred_fen2027.json. Metodología: «Estudio de escenarios de riesgo por
+ * tools/descargar-riesgo-cenepred.mjs en data/riesgo_cenepred_fen2027.json. Metodología: «Estudio de escenarios de riesgo por
  * inundaciones y movimientos en masa ante lluvias intensas asociadas al Fenómeno El Niño» (CENEPRED, mayo de 2026).
  *
  * Lo que es: un nivel de riesgo (bajo, medio, alto o muy alto) por distrito y por fenómeno, para un escenario de lluvias como las de
@@ -183,7 +183,7 @@ const Cenepred = (() => {
         } catch (_) {
           throw new Error(`No se pudo leer el archivo del escenario de riesgo del CENEPRED (${url}).`);
         }
-        if (!res.ok) throw new Error(`No se encontró ${url} (HTTP ${res.status}). Genera el archivo con: node scripts/descargar-riesgo-cenepred.mjs`);
+        if (!res.ok) throw new Error(`No se encontró ${url} (HTTP ${res.status}). Genera el archivo con: node tools/descargar-riesgo-cenepred.mjs`);
         let datos;
         try {
           datos = await res.json();

@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   deploy:
-    name: Publicar public/ en GitHub Pages
+    name: Publicar apps/estatica/public/ en GitHub Pages
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -25,10 +25,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Subir public/
+      - name: Subir apps/estatica/public/
         uses: actions/upload-pages-artifact@v3
         with:
-          path: public
+          path: apps/estatica/public
 
       - name: Desplegar
         id: deployment

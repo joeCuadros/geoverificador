@@ -2,7 +2,7 @@
  * avisos.ts — Avisos en la base (fase 3): ingesta de una corrida del recolector, historial de precios, ciclo de vida, duplicados entre portales,
  * ficha de entorno precalculada y búsqueda.
  *
- * La ingesta recibe los avisos tal como los escribe `pnpm datos:avisos` (esquema de scripts/lib/avisos/esquema.js). No lee de la red por su cuenta:
+ * La ingesta recibe los avisos tal como los escribe `pnpm datos:avisos` (esquema de tools/lib/avisos/esquema.js). No lee de la red por su cuenta:
  * el tipo de cambio y el geocodificador se le entregan.
  */
 import {

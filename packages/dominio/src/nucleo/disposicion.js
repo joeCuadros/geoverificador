@@ -1,4 +1,4 @@
-// GENERADO por scripts/generar-dominio.mjs a partir de public/js/disposicion.js. No editar: cambie el original y corra `pnpm dominio:generar`.
+// GENERADO por tools/generar-dominio.mjs a partir de apps/estatica/public/js/disposicion.js. No editar: cambie el original y corra `pnpm dominio:generar`.
 
 /**
  * disposicion.js: Cómo se reparte la pantalla de trabajo entre el chat y el mapa (sin DOM, sin red).
@@ -9,7 +9,7 @@
  * El ancho elegido se recuerda como fracción del contenedor (localStorage, con try/catch).
  *
  * Se carga como script del navegador (define `Disposicion`) y también como módulo CommonJS para las pruebas
- * (test/disposicion.spec.ts). espacio-ui.js es quien toca el DOM.
+ * (apps/estatica/test/disposicion.spec.ts). espacio-ui.js es quien toca el DOM.
  */
 const Disposicion = (() => {
   const MIN_CHAT_PX = 360;

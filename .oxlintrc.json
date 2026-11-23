@@ -7,10 +7,10 @@
   "env": {
     "node": true
   },
-  "ignorePatterns": ["web/.next/**", "web/next-env.d.ts", "packages/dominio/src/**", "packages/dominio/tipos/**", "packages/dominio/cjs/**"],
+  "ignorePatterns": ["apps/web/.next/**", "apps/web/.next-e2e/**", "apps/web/next-env.d.ts", "packages/dominio/src/**", "packages/dominio/tipos/**", "packages/dominio/cjs/**"],
   "overrides": [
     {
-      "files": ["public/js/app.js", "public/js/*-ui.js", "public/js/login.js"],
+      "files": ["apps/estatica/public/js/app.js", "apps/estatica/public/js/*-ui.js", "apps/estatica/public/js/login.js"],
       "rules": {
         "typescript/no-floating-promises": "warn"
       }

@@ -1,11 +1,11 @@
-// GENERADO por scripts/generar-dominio.mjs a partir de public/js/volcan.js. No editar: cambie el original y corra `pnpm dominio:generar`.
+// GENERADO por tools/generar-dominio.mjs a partir de apps/estatica/public/js/volcan.js. No editar: cambie el original y corra `pnpm dominio:generar`.
 
 import Calculos from './calculos.js';
 /**
  * volcan.js — Peligro volcánico del Misti para un punto o un distrito (sin DOM, sin red).
  *
- * Trabaja con el archivo congelado public/data/peligro_volcanico_misti.geojson (zonas del IGP, ver
- * scripts/descargar-peligro-volcanico.mjs). Es INFORMATIVO: dice en qué zonas del mapa cae el punto, nunca «cumple» ni
+ * Trabaja con el archivo congelado apps/estatica/public/data/peligro_volcanico_misti.geojson (zonas del IGP, ver
+ * tools/descargar-peligro-volcanico.mjs). Es INFORMATIVO: dice en qué zonas del mapa cae el punto, nunca «cumple» ni
  * «no cumple» y nunca un puntaje. Un mapa de peligros es de escala regional: cerca de un borde, la zona no es exacta.
  *
  *   indexar(features)                       → zonas listas para consultar (con su caja)

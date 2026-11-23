@@ -17,7 +17,7 @@ Dejar Marketplace **fuera de la primera versión**.
 
 ## Cómo queda reflejado en el código
 
-- `marketplace` no está en `FUENTES_POR_DEFECTO` (`scripts/lib/avisos/cli.js`): solo corre si alguien lo pide con `--fuente marketplace`.
+- `marketplace` no está en `FUENTES_POR_DEFECTO` (`tools/lib/avisos/cli.js`): solo corre si alguien lo pide con `--fuente marketplace`.
 - La corrida programada (`.github/workflows/avisos.yml`) no lo incluye.
 - La fuente `marketplace` se crea en la base con `permite_publicar = false`.
 

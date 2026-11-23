@@ -1,5 +1,5 @@
 /**
- * cargar.ts — Cargadores desde los archivos de public/data a la base (tarea 2.3).
+ * cargar.ts — Cargadores desde los archivos de apps/estatica/public/data a la base (tarea 2.3).
  *
  * Un archivo se carga entero o no se carga: se borra lo anterior de ese archivo y se inserta lo nuevo en una transacción. Si su SHA-256 no cambió,
  * no se toca. Las propiedades y la geometría de cada elemento se guardan tal cual, de modo que la colección original se puede reconstruir.
@@ -111,7 +111,7 @@ async function insertar(tx: Base, tabla: string, ruta: string, elementos: Elemen
 /** Carga un archivo. `forzar` lo vuelve a cargar aunque no haya cambiado. */
 export async function cargarArchivo(base: Base, carpeta: string, ruta: string, { forzar = false } = {}): Promise<ResultadoCarga> {
   const def = definicionDe(ruta);
-  if (!def) throw new Error(`${ruta}: no está en el catálogo (packages/datos/src/catalogo.ts). Un archivo nuevo de public/data necesita su entrada.`);
+  if (!def) throw new Error(`${ruta}: no está en el catálogo (packages/datos/src/catalogo.ts). Un archivo nuevo de apps/estatica/public/data necesita su entrada.`);
   const bytes = fs.readFileSync(path.join(carpeta, ruta));
   const sha256 = createHash('sha256').update(bytes).digest('hex');
   const previo = await base.consulta<{ sha256: string; registros: number }>('SELECT sha256, registros FROM archivo_dato WHERE ruta = $1', [ruta]);
