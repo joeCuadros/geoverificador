@@ -8,6 +8,7 @@ import type { MapaDeRespuesta } from '../../lib/mapa-respuesta.ts';
 import type { Marcador } from '../../lib/marcadores.ts';
 import type { LugarDeFicha, ReporteDePunto } from '../../lib/reporte.ts';
 import { PANE_DE_CAPA, capaDeDatos, crearPanes, cuadro, dibujarLugares, dibujarRespuesta, dibujarViaje, type LugarDibujado } from './dibujo.ts';
+import { alAbrirSuperficie, avisarSuperficie } from './interfaz.ts';
 import { PanelCapas, type EstadoCapa } from './PanelCapas.tsx';
 import type { EstadoViaje, PuntoElegido } from './tipos.ts';
 
@@ -78,6 +79,8 @@ export function Mapa({ marcadores, avisoActivo, enfocar, punto, reporte, lugarAc
     activasRef.current = activas;
     capasRef.current = capas;
   }, [activas, capas]);
+  // Si se despliega la lista de resultados del buscador, el panel de capas se pliega (los dos se abren sobre el mapa).
+  useEffect(() => alAbrirSuperficie('buscador', () => setPanelAbierto(false)), []);
   // Los avisos de la respuesta, para encuadrar el círculo junto con ellos (este efecto va antes que el que dibuja la respuesta).
   const marcadoresRef = useRef(marcadores);
   useEffect(() => {
@@ -392,6 +395,7 @@ export function Mapa({ marcadores, avisoActivo, enfocar, punto, reporte, lugarAc
           abierto={panelAbierto}
           onAbrir={(a) => {
             setPanelAbierto(a);
+            if (a) avisarSuperficie('capas');
             if (a && errorDeLista) {
               fetch('/api/capas')
                 .then((r) => (r.ok ? r.json() : Promise.reject(new Error('lista'))))

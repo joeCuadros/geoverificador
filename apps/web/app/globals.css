@@ -115,33 +115,46 @@ input { min-height: 44px; padding: 8px 12px; border: 1px solid var(--input-borde
 .pestana:hover:not(:disabled) { background: var(--tinta-soft); }
 .pestana[aria-selected='true'] { color: var(--tinta); border-bottom-color: var(--tinta); background: var(--surface); }
 
-/* Buscador */
-.buscador { padding: 10px 16px; border-bottom: 1px solid var(--line); }
+/* Buscador: el campo con su etiqueta visible y su botón de borrar; los resultados se despliegan sobre el mapa (no lo empujan), arriba de las capas. */
+.buscador { position: relative; z-index: 700; padding: 10px max(16px, env(safe-area-inset-right)) 10px max(16px, env(safe-area-inset-left)); border-bottom: 1px solid var(--line); }
 .buscador label { display: block; font-size: .85rem; font-weight: 600; color: var(--ink-2); margin-bottom: 4px; }
 .buscador-fila { display: flex; gap: 8px; }
-.buscador-fila input { flex: 1; }
+.buscador-campo { position: relative; flex: 1; min-width: 0; }
+.buscador-campo input { width: 100%; padding-right: 44px; }
+.buscador-campo input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+.buscador-borrar { position: absolute; top: 0; right: 0; width: 44px; padding: 0; display: inline-flex; align-items: center; justify-content: center; background: transparent; color: var(--ink-2); border: 0; border-radius: var(--radius-sm); }
+.buscador-borrar:hover:not(:disabled) { background: var(--tinta-soft); color: var(--tinta); }
+.buscador-enviar { flex: none; }
 .buscador-estado p { margin: 8px 0 0; font-size: .9rem; }
-.resultados { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
-.resultado { width: 100%; display: flex; flex-direction: column; align-items: flex-start; text-align: left; background: var(--surface); color: var(--ink); border-color: var(--line-strong); font-weight: 400; }
-.resultado:hover:not(:disabled) { background: var(--tinta-soft); }
-.resultado-nombre { font-weight: 700; }
-.resultado-detalle { font-size: .82rem; color: var(--muted); }
+.mensaje-buscando { color: var(--ink-2); }
+.buscador > .mensaje-error { margin: 8px 0 0; font-size: .9rem; }
+.buscador-lista { position: absolute; z-index: 1; left: max(16px, env(safe-area-inset-left)); right: max(16px, env(safe-area-inset-right)); top: calc(100% - 4px); max-width: 560px; max-height: min(52dvh, 22rem); overflow-y: auto; overscroll-behavior: contain; list-style: none; margin: 0; padding: 6px; display: grid; gap: 4px; background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--radius); box-shadow: 0 8px 24px rgba(0, 0, 0, .28); }
+.buscador-opcion { width: 100%; display: flex; flex-direction: column; align-items: flex-start; text-align: left; background: var(--surface); color: var(--ink); border-color: transparent; font-weight: 400; }
+.buscador-opcion:hover:not(:disabled) { background: var(--tinta-soft); }
+.buscador-opcion:focus-visible { background: var(--tinta-soft); border-color: var(--tinta); }
+.buscador-opcion-nombre { font-weight: 700; }
+.buscador-opcion-detalle { font-size: .82rem; color: var(--muted); }
 .mensaje-error { color: var(--no); background: var(--no-bg); border: 1px solid var(--no-line); border-radius: var(--radius-sm); padding: 8px 12px; }
 .mensaje-vacio { color: var(--ink-2); }
+button[aria-disabled='true'] { opacity: .6; cursor: progress; }
 
 /* Mapa */
-.mapa-envoltorio { position: relative; display: flex; flex-direction: column; flex: 1; min-height: 400px; height: calc(44dvh + 56px); }
-.mapa-barra { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex: none; padding: 6px 10px; background: var(--surface); border-bottom: 1px solid var(--line); }
+.mapa-envoltorio { --barra: 57px; --pie: 28px; --zoom: 108px; position: relative; display: flex; flex-direction: column; flex: 1; min-height: 400px; height: calc(44dvh + 56px); }
+.mapa-barra { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex: none; min-height: var(--barra); padding: 6px max(10px, env(safe-area-inset-right)) 6px max(10px, env(safe-area-inset-left)); background: var(--surface); border-bottom: 1px solid var(--line); }
 .mapa-lienzo { position: relative; flex: 1; min-height: 0; }
 .solo-escritorio { display: none; }
 @media (min-width: 520px) { .solo-escritorio { display: inline; } }
 .mapa { position: absolute; inset: 0; z-index: 0; }
 .boton-centro { white-space: nowrap; }
-.mapa-nota { position: absolute; z-index: 500; top: 8px; left: 50%; transform: translateX(-50%); margin: 0; max-width: 90%; background: var(--amb-bg); color: var(--amb-text); border: 1px solid var(--amb-line); border-radius: var(--radius-sm); padding: 6px 10px; font-size: .85rem; }
+.mapa-nota { position: absolute; z-index: 500; top: 8px; left: 64px; max-width: calc(100% - 74px); margin: 0; background: var(--amb-bg); color: var(--amb-text); border: 1px solid var(--amb-line); border-radius: var(--radius-sm); padding: 6px 10px; font-size: .85rem; }
+/* Con el cajón de capas abierto (desde 640 px va a la derecha), el aviso no pasa por debajo de él. */
+@media (min-width: 640px) { .mapa-envoltorio:has(.capas-panel:not([hidden])) .mapa-nota { max-width: calc(100% - 64px - 360px); } }
 @media (min-width: 900px) { .mapa-envoltorio { height: auto; min-height: 0; } }
 .marcador-aviso span, .marcador-punto span { display: block; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .5); }
 .marcador-aviso span { width: 24px; height: 24px; margin: 3px; background: #c2410c; }
 .marcador-punto span { width: 22px; height: 22px; margin: 2px; background: var(--tinta); outline: 2px solid #fff; }
+/* Los botones de zoom miden 44 px donde se toca (los de Leaflet miden 30). El margen izquierdo de los cuadros (56 px, ver crearPanes) ya los deja libres. */
+@media (max-width: 899px), (pointer: coarse) { .mapa-lienzo .leaflet-control-zoom.leaflet-bar a { width: 44px; height: 44px; line-height: 44px; } }
 .leaflet-marker-icon:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; border-radius: 50%; }
 
 /* El círculo de «cerca de»: la distancia que el asistente entiende por «cerca», alrededor del lugar pedido. Trazo continuo y relleno suave (se lee sobre calles y zonas);
@@ -166,32 +179,58 @@ input { min-height: 44px; padding: 8px 12px; border: 1px solid var(--input-borde
   body { background: #fff; color: #000; }
 }
 
-/* Capas de datos del mapa: control con casillas por grupo, estado, leyenda, nota y fuente */
+/* Capas de datos del mapa: botón y panel con grupos, casillas, estado, leyenda, nota y fuente.
+   Panel: cajón a la derecha del mapa; en un teléfono (menos de 640 px), una hoja desde abajo dentro del mapa, sobre la franja de la escala y la atribución (que sigue a la vista).
+   Nunca tapa la barra de botones ni el buscador, y se desplaza por dentro. */
 .capas { flex: none; }
-.capas-boton { white-space: nowrap; }
-.capas-panel { position: absolute; z-index: 600; top: 58px; right: 10px; width: min(340px, calc(100% - 20px)); max-height: calc(100% - 68px); overflow-y: auto; background: var(--surface); color: var(--ink); border: 1px solid var(--line-strong); border-radius: var(--radius); box-shadow: 0 4px 16px rgba(0, 0, 0, .3); padding: 8px 10px; }
+.capas-boton { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.capas-panel { position: absolute; z-index: 600; top: calc(var(--barra) + 1px); right: max(10px, env(safe-area-inset-right)); width: min(340px, calc(100% - 20px)); max-height: calc(100% - var(--barra) - var(--pie) - 4px); overflow-y: auto; overscroll-behavior: contain; background: var(--surface); color: var(--ink); border: 1px solid var(--line-strong); border-radius: var(--radius); box-shadow: 0 4px 16px rgba(0, 0, 0, .3); padding: 0 12px max(8px, env(safe-area-inset-bottom)); animation: capas-entra .16s ease-out; }
 .capas-panel[hidden] { display: none; }
-.capas-grupo { border: 0; margin: 0 0 8px; padding: 0; min-width: 0; }
-.capas-grupo legend { font: 700 .75rem var(--sans); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); padding: 0; margin-bottom: 2px; }
-.capa label { display: flex; align-items: center; gap: 8px; min-height: 44px; cursor: pointer; }
-.capa input[type='checkbox'] { min-height: 0; width: 20px; height: 20px; flex: none; accent-color: var(--tinta); }
-.capa-detalle { margin: 0 0 8px 28px; font-size: .82rem; color: var(--ink-2); }
+@keyframes capas-entra { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (max-width: 639px) {
+  /* La hoja deja libres los botones de zoom (arriba a la izquierda): el mapa crece un poco mientras está abierta. */
+  .capas-panel { top: auto; bottom: var(--pie); left: max(8px, env(safe-area-inset-left)); right: max(8px, env(safe-area-inset-right)); width: auto; max-height: calc(100% - var(--barra) - var(--zoom) - var(--pie)); }
+  .mapa-envoltorio:has(.capas-panel:not([hidden])) { min-height: 480px; }
+}
+.capas-cabecera { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 8px; padding: 8px 0; margin-bottom: 4px; background: var(--surface); border-bottom: 1px solid var(--line); }
+.capas-titulo { flex: 1; margin: 0; font-size: 1.05rem; }
+.capas-quitar { padding: 8px 12px; font-size: .85rem; white-space: nowrap; }
+.capas-cerrar { width: 44px; padding: 0; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.capas-grupo { border: 0; margin: 0; padding: 8px 0 4px; min-width: 0; }
+.capas-grupo + .capas-grupo { border-top: 1px solid var(--line); }
+.capas-grupo legend { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; width: 100%; padding: 0; margin-bottom: 2px; font: 700 .75rem var(--sans); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); }
+.capas-grupo-cuenta { font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--tinta); }
+.capa-fila { display: flex; align-items: center; gap: 8px; }
+.capa label { flex: 1; display: flex; align-items: center; gap: 10px; min-width: 0; min-height: 44px; margin: 0; font-size: .95rem; font-weight: 500; color: var(--ink); cursor: pointer; }
+.capa input[type='checkbox'] { appearance: none; -webkit-appearance: none; display: grid; place-content: center; flex: none; width: 24px; height: 24px; min-height: 0; padding: 0; margin: 0; border: 2px solid var(--input-border); border-radius: 6px; background: var(--surface); cursor: pointer; }
+.capa input[type='checkbox']:checked { background: var(--tinta); border-color: var(--tinta); }
+.capa input[type='checkbox']:checked::after { content: ''; width: 11px; height: 6px; margin-top: -2px; border-left: 2.5px solid var(--on-tinta); border-bottom: 2.5px solid var(--on-tinta); transform: rotate(-45deg); }
+.capa-chip { display: inline-flex; align-items: center; gap: 4px; flex: none; padding: 2px 8px; border-radius: 999px; background: var(--tinta-soft); border: 1px solid var(--tinta-soft-line); color: var(--tinta); font-size: .75rem; font-weight: 700; }
+.capa-activa { margin-bottom: 4px; }
+.capa-detalle { margin: 0 0 8px 34px; padding-left: 10px; border-left: 2px solid var(--tinta-soft-line); font-size: .82rem; color: var(--ink-2); }
 .capa-detalle p { margin: 4px 0; }
-.capa-estado { font-weight: 600; }
+.capa-estado { display: flex; align-items: flex-start; gap: 6px; font-weight: 600; }
+.capa-estado svg { flex: none; margin-top: 2px; }
 .capa-estado-error { color: var(--no); }
 .capa-estado-lejos, .capa-estado-recortada { color: var(--amb-text); background: var(--amb-bg); border: 1px solid var(--amb-line); border-radius: 6px; padding: 2px 6px; }
 .capa-nota, .capa-fuente { color: var(--muted); }
 .capa-fuente { font-style: italic; }
-.leyenda { list-style: none; margin: 4px 0; padding: 0; display: grid; gap: 3px; }
-.leyenda li { display: flex; align-items: center; gap: 6px; }
-.muestra { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 16px; height: 16px; border-radius: 3px; border: 1px solid rgba(0, 0, 0, .35); color: #fff; font: 700 .65rem var(--sans); }
-.muestra-punto { border-radius: 50%; width: 18px; height: 18px; }
+.leyenda { list-style: none; margin: 4px 0; padding: 0; display: grid; gap: 4px; }
+.leyenda li { display: flex; align-items: center; gap: 8px; }
+/* Las muestras de la leyenda repiten lo que el mapa dibuja (forma, color, relleno y trazo): --m es el color, --g el grosor del borde y --r la opacidad del relleno. */
+.muestra { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 20px; height: 20px; color: #fff; font: 700 .65rem var(--sans); }
+.muestra-icono { border-radius: 50%; border: 2px solid #fff; background: var(--m); box-shadow: 0 0 0 1px rgba(0, 0, 0, .45); }
+.muestra-punto { width: 12px; height: 12px; margin: 4px; border-radius: 50%; border: 1px solid #fff; background: var(--m); box-shadow: 0 0 0 1px rgba(0, 0, 0, .45); }
+.muestra-anillo { border-radius: 50%; border: 2px solid var(--m); background: color-mix(in srgb, var(--m) calc(var(--r) * 100%), transparent); }
+.muestra-linea { height: 0; width: 24px; border-top: var(--g) solid var(--m); border-radius: 2px; }
+.muestra-area { border-radius: 3px; border: var(--g) solid var(--m); background: color-mix(in srgb, var(--m) calc(var(--r) * 100%), transparent); }
+.muestra-discontinua { border-style: dashed; }
 
 /* Marcadores de lugares: círculo con una letra */
 .leaflet-marker-icon.ent-marcador span { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .5); color: #fff; font: 700 .72rem var(--sans); }
 .leaflet-marker-icon.ent-sector span { font-size: .9rem; border-radius: 6px; }
 .leaflet-marker-icon.ent-ficha span { border-color: #fff; }
-.leaflet-marker-icon.ent-activo span { outline: 3px solid #f59e0b; outline-offset: 2px; transform: scale(1.25); }
+.leaflet-marker-icon.ent-activo span { outline: 3px solid var(--tinta-mapa); outline-offset: 2px; transform: scale(1.25); }
 .leaflet-marker-icon.marcador-aviso.ent-activo span { outline: 3px solid var(--tinta); outline-offset: 2px; transform: scale(1.2); }
 
 /* Chat: el estado del viaje al trabajo */
