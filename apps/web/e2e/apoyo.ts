@@ -1,5 +1,6 @@
 import { crc32, deflateSync } from 'node:zlib';
 import { expect, test as base, type Locator, type Page } from '@playwright/test';
+import { CLAVE_VISTO } from '../lib/onboarding.ts';
 
 /** Un PNG de 1×1 píxel del color dado (el color del fondo del mapa en las pruebas). */
 function pngDeUnPixel(r: number, g: number, b: number): Buffer {
@@ -22,8 +23,11 @@ function pngDeUnPixel(r: number, g: number, b: number): Buffer {
 /** Una tesela de 1×1 píxel: el mapa no depende de tile.openstreetmap.org, así que las pruebas no dependen de internet. */
 const TESELA = pngDeUnPixel(236, 233, 224);
 
-export const test = base.extend({
-  page: async ({ page, baseURL }, use) => {
+export const test = base.extend<{ onboardingVisto: boolean }>({
+  // La guía de primera visita no debe tapar las demás pruebas: por omisión el navegador ya la vio. e2e/onboarding.spec.ts usa `test.use({ onboardingVisto: false })`.
+  onboardingVisto: [true, { option: true }],
+  page: async ({ page, baseURL, onboardingVisto }, use) => {
+    if (onboardingVisto) await page.addInitScript((clave) => { try { window.localStorage.setItem(clave, '1'); } catch { /* sin almacenamiento */ } }, CLAVE_VISTO);
     await page.route('**/*', (ruta) => {
       const url = ruta.request().url();
       if (url.startsWith(baseURL!) || url.startsWith('data:') || url.startsWith('blob:')) return ruta.continue();

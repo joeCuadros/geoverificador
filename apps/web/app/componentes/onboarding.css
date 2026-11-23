@@ -1,0 +1,54 @@
+/* Guía de primera visita y botón «Ayuda». Solo los tokens de globals.css: sillar para la superficie, tinta para la acción, ámbar únicamente en la nota de «consulta referencial»,
+   estados con icono y texto, objetivos táctiles de 44 px (los botones ya los traen), claro y oscuro sin reglas propias. */
+
+/* El botón «Ayuda» vive en la banda superior, a la derecha del subtítulo. Los márgenes verticales negativos evitan que los 44 px de alto engorden la banda. */
+.onb-ayuda { margin: -6px 0 -6px auto; align-self: center; display: inline-flex; align-items: center; gap: 8px; background: transparent; color: var(--on-band); border-color: var(--band-muted); }
+.onb-ayuda:hover:not(:disabled) { background: rgba(255, 255, 255, .14); }
+.onb-ayuda .icono { flex: none; }
+
+/* El control que se está explicando: contorno de tinta con un halo de la superficie para que se lea también bajo el velo. */
+[data-onb-destacado] { outline: 3px solid var(--tinta); outline-offset: 3px; box-shadow: 0 0 0 3px var(--surface); border-radius: var(--radius-sm); }
+
+/* El velo y el cuadro. Por encima del mapa (Leaflet llega a 1000) y del resto de la página. */
+.onb-fondo { position: fixed; inset: 0; z-index: 3000; display: flex; justify-content: center; align-items: center; padding: 12px; background: rgba(16, 21, 32, .5); }
+.onb-fondo[data-lado='abajo'] { align-items: flex-end; }
+.onb-fondo[data-lado='arriba'] { align-items: flex-start; }
+.onb-dialogo { width: min(520px, 100%); max-height: var(--onb-alto-max, 100%); overflow-y: auto; overscroll-behavior: contain; background: var(--surface); color: var(--ink); border: 1px solid var(--line-strong); border-radius: var(--radius); box-shadow: 0 8px 28px rgba(0, 0, 0, .4); padding: 16px 20px 20px; animation: onb-entra .18s ease-out; }
+@keyframes onb-entra { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+.onb-progreso { display: flex; align-items: center; gap: 12px; margin: 0 0 8px; font-size: .85rem; color: var(--ink-2); }
+.onb-barra { display: flex; gap: 4px; flex: 1; }
+.onb-tramo { flex: 1; height: 4px; border-radius: 2px; background: var(--line-strong); }
+.onb-tramo-hecho { background: var(--tinta); }
+.onb-titulo { margin: 0 0 8px; font-size: 1.3rem; }
+.onb-intro { margin: 0 0 8px; }
+.onb-puntos { margin: 0 0 12px; padding-left: 20px; display: grid; gap: 6px; }
+
+/* La nota de «consulta referencial»: el único ámbar de la guía. */
+.onb-aviso { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 12px; padding: 8px 12px; background: var(--amb-bg); color: var(--amb-text); border: 1px solid var(--amb-line); border-radius: var(--radius-sm); font-size: .9rem; }
+.onb-aviso .icono { flex: none; margin-top: 3px; }
+/* Si el modelo está activo en este servidor: dato informativo (icono y texto), nunca un veredicto. */
+.onb-estado { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 12px; padding: 8px 12px; background: var(--tinta-soft); color: var(--ink); border: 1px solid var(--tinta-soft-line); border-radius: var(--radius-sm); font-size: .9rem; }
+.onb-estado .icono { flex: none; margin-top: 3px; color: var(--tinta); }
+
+.onb-acciones { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.onb-navegacion { display: flex; gap: 8px; margin-left: auto; }
+.onb-omitir { background: transparent; color: var(--tinta); border-color: transparent; text-decoration: underline; text-underline-offset: 3px; font-weight: 600; }
+.onb-omitir:hover:not(:disabled) { background: var(--tinta-soft); color: var(--tinta); }
+
+/* Pantallas angostas (375 px): el cuadro se ancla abajo si no señala nada, los botones ocupan el ancho y «Omitir» queda debajo. */
+@media (max-width: 600px) {
+  .onb-fondo[data-lado='centro'] { align-items: flex-end; }
+  .onb-dialogo { padding: 14px 16px 16px; }
+  .onb-navegacion { flex: 1 1 100%; margin-left: 0; }
+  .onb-navegacion button { flex: 1; }
+  .onb-omitir { order: 2; flex: 1 1 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onb-dialogo { animation: none; }
+}
+
+@media print {
+  .onb-ayuda, .onb-fondo { display: none !important; }
+}
