@@ -1,5 +1,5 @@
 import type * as Leaflet from 'leaflet';
-import type { CapaInfo, CapaServida } from '../../lib/capas.ts';
+import type { CapaInfo, CapaServida, FormaDeCapa } from '../../lib/capas.ts';
 import { etiquetaDeRadio, radioValido } from '../../lib/radio.ts';
 import type { LugarDeFicha } from '../../lib/reporte.ts';
 import type { LugarDeRespuesta, SectorDeRespuesta } from '../../lib/mapa-respuesta.ts';
@@ -83,6 +83,47 @@ export function iconoLetra(L: L, letra: string | null, color: string, clase = 'e
   return L.divIcon({ className: clase, html: span, iconSize: [tamano, tamano], iconAnchor: [tamano / 2, tamano / 2], popupAnchor: [0, -tamano / 2] });
 }
 
+/** El grosor del trazo de una capa de líneas. */
+const grosorDeLinea = (id: string): number => (id === 'rutas' ? 3 : 2.5);
+
+export interface EstiloDeArea {
+  color: string;
+  weight: number;
+  fill: boolean;
+  fillColor: string;
+  fillOpacity: number;
+  dashArray?: string;
+}
+
+/** Cómo se pinta el polígono de una capa: el mapa y la muestra de la leyenda del panel salen de aquí, así no pueden diferir. */
+export function estiloDeArea(id: string, color: string): EstiloDeArea {
+  if (id === 'distritos') return { color, weight: 2, fill: false, fillColor: color, fillOpacity: 0, dashArray: '2 5' };
+  if (id === 'electricidad') return { color, weight: 2, fill: true, fillColor: color, fillOpacity: 0.08, dashArray: '6 4' };
+  return { color, weight: 1.2, fill: true, fillColor: color, fillOpacity: id === 'zonificacion' ? 0.38 : 0.3 };
+}
+
+/**
+ * La muestra de una entrada de la leyenda, con la misma forma y el mismo color con que el mapa dibuja ese elemento: un icono con su letra (puntos con letra), un punto
+ * liso, el anillo de un sismo, un trazo o un área (con su relleno y su borde, discontinuo si el mapa lo dibuja así). Nunca es lo único que informa: el texto va al lado.
+ */
+export type MuestraDeLeyenda =
+  | { tipo: 'icono'; color: string; letra: string }
+  | { tipo: 'punto'; color: string }
+  | { tipo: 'anillo'; color: string; relleno: number }
+  | { tipo: 'linea'; color: string; grosor: number }
+  | { tipo: 'area'; color: string; grosor: number; relleno: number; discontinuo: boolean };
+
+export function muestraDeLeyenda(capa: { id: string; forma: FormaDeCapa }, item: { color: string; letra?: string }): MuestraDeLeyenda {
+  const color = colorSeguro(item.color, '#3b4a5a');
+  if (capa.forma === 'linea') return { tipo: 'linea', color, grosor: grosorDeLinea(capa.id) };
+  if (capa.forma === 'punto') {
+    if (capa.id === 'sismos') return { tipo: 'anillo', color, relleno: 0.25 };
+    return item.letra ? { tipo: 'icono', color, letra: item.letra } : { tipo: 'punto', color };
+  }
+  const e = estiloDeArea(capa.id, color);
+  return { tipo: 'area', color, grosor: e.weight, relleno: e.fill ? e.fillOpacity : 0, discontinuo: Boolean(e.dashArray) };
+}
+
 /** La capa de Leaflet de una capa de datos: puntos con letra, círculos de sismo, líneas y polígonos, cada uno con su cuadro (título, detalle y fuente). */
 export function capaDeDatos(L: L, info: CapaInfo, datos: CapaServida, panes: Record<string, string>): Leaflet.Layer {
   const pane = panes[info.id] ?? 'puntos';
@@ -99,10 +140,8 @@ export function capaDeDatos(L: L, info: CapaInfo, datos: CapaServida, panes: Rec
     style: (f) => {
       const p = (f?.properties ?? {}) as { color?: string };
       const color = colorSeguro(p.color, '#3b4a5a');
-      if (info.forma === 'linea') return { color, weight: info.id === 'rutas' ? 3 : 2.5, opacity: 0.85 };
-      if (info.id === 'distritos') return { color, weight: 2, fill: false, dashArray: '2 5' };
-      if (info.id === 'electricidad') return { color, weight: 2, dashArray: '6 4', fillColor: color, fillOpacity: 0.08 };
-      return { color, weight: 1.2, fillColor: color, fillOpacity: info.id === 'zonificacion' ? 0.38 : 0.3 };
+      if (info.forma === 'linea') return { color, weight: grosorDeLinea(info.id), opacity: 0.85 };
+      return estiloDeArea(info.id, color);
     },
     onEachFeature: (f, layer) => {
       const p = (f.properties ?? {}) as CapaServida['features'][number]['properties'];
