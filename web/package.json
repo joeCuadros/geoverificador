@@ -15,6 +15,7 @@
     "@electric-sql/pglite-postgis": "^0.2.16",
     "@geoverificador/agente": "workspace:*",
     "@geoverificador/datos": "workspace:*",
+    "@geoverificador/dominio": "workspace:*",
     "leaflet": "1.9.4",
     "next": "^15.5.0",
     "pg": "^8.23.1",

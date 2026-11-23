@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react';
 import ui from './ui.module.css';
 import estilos from './PanelPunto.module.css';
 import Buscador from './Buscador.tsx';
+import Umbrales from '@geoverificador/dominio/nucleo/umbrales';
+import type { Contexto } from '../lib/contexto.ts';
 import type { Dato, Etiquetado, Ficha, Punto } from '../lib/tipos.ts';
 import { fechaCorta, metros, tonoDe } from '../lib/formato.ts';
 
@@ -76,6 +78,7 @@ interface PropsPanel {
   guardado: boolean;
   onGuardar: () => void;
   onElegir: (p: Etiquetado) => void;
+  contexto: Contexto | null;
 }
 
 interface Viaje { distanciaM: number; hayRuta: boolean; mejor: { minutos: number | null; trasbordos: number; lineas: string[]; caminarM: number } | null; nota: string }
@@ -83,6 +86,9 @@ interface Viaje { distanciaM: number; hayRuta: boolean; mejor: { minutos: number
 export default function PanelPunto(p: PropsPanel) {
   const [viaje, setViaje] = useState<Viaje | null>(null);
   const [calculando, setCalculando] = useState(false);
+  const [umbral, setUmbral] = useState<number | null>(null);
+  useEffect(() => { try { setUmbral(Umbrales.leer(window.localStorage).quebradaMinM); } catch { setUmbral(null); } }, []);
+  const fijarUmbral = (v: string) => { const g = Umbrales.guardar(window.localStorage, { quebradaMinM: v }); setUmbral(g.quebradaMinM); };
 
   useEffect(() => {
     setViaje(null);
@@ -116,6 +122,7 @@ export default function PanelPunto(p: PropsPanel) {
         <p className={ui.sub}>{f?.distrito ? `Distrito de ${f.distrito.nombre.toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase())}` : p.cargando ? 'Buscando…' : ''}</p>
         <div className={estilos.acciones}>
           <button type="button" className={`${ui.boton} ${p.guardado ? ui.suave : ''}`} onClick={p.onGuardar}>{p.guardado ? '✓ Guardado para comparar' : '+ Guardar para comparar'}</button>
+          <button type="button" className={ui.boton} onClick={() => window.print()} disabled={!f}>Imprimir reporte</button>
         </div>
       </section>
 
@@ -168,6 +175,63 @@ export default function PanelPunto(p: PropsPanel) {
             ) : (
               <p className={ui.nota}>El punto queda fuera del plano de zonificación.</p>
             )}
+          </section>
+
+          <section className={ui.tarjeta}>
+            <p className={ui.tit}>Seguridad y sismos</p>
+            {p.contexto?.delito ? (
+              <div className={ui.fila}>
+                <div className={ui.filaEtiqueta}>Denuncias de robo y hurto<div className={ui.sub}>a {p.contexto.delito.radio} m, últimos {p.contexto.delito.meta.meses} meses</div></div>
+                <div className={ui.filaValor}>{p.contexto.delito.conteo.total}<div className={ui.sub}>{p.contexto.delito.conteo.ROBO ?? 0} robos · {p.contexto.delito.conteo.HURTO ?? 0} hurtos</div></div>
+                <details className={ui.filaDetalle}><summary>MININTER · SIDPOL (PNP)</summary><p>Son denuncias con ubicación, no todos los delitos: mucha gente no denuncia. Se cuentan en un radio, nunca como puntos individuales.</p></details>
+              </div>
+            ) : <p className={ui.nota}>{p.contexto ? 'No pude leer las denuncias para este punto.' : 'Cargando denuncias…'}</p>}
+            {p.contexto?.distrito?.zona != null && (
+              <div className={ui.fila}>
+                <div className={ui.filaEtiqueta}>Zona sísmica<div className={ui.sub}>Norma E.030 (MVCS), por distrito</div></div>
+                <div className={ui.filaValor}>Zona {p.contexto.distrito.zona}<div className={ui.sub}>Z = {String(p.contexto.distrito.z).replace('.', ',')}</div></div>
+                <details className={ui.filaDetalle}><summary>Qué significa</summary><p>Es regional: no considera el suelo del predio. Todo proyecto de edificación requiere un Estudio de Mecánica de Suelos.</p></details>
+              </div>
+            )}
+            {p.contexto?.peligro && (
+              <div className={ui.fila}>
+                <div className={ui.filaEtiqueta}>Peligros geológicos<div className={ui.sub}>INGEMMET, a {p.contexto.peligro.radio} m</div></div>
+                <div className={ui.filaValor}>{p.contexto.peligro.total}<div className={ui.sub}>{p.contexto.peligro.porTipo.map(([t, n]) => `${t} ${n}`).join(', ') || 'ninguno'}</div></div>
+              </div>
+            )}
+          </section>
+
+          <section className={ui.tarjeta}>
+            <p className={ui.tit}>Mercado y riesgo del distrito</p>
+            {p.contexto?.precio?.estado === 'INFORMATIVO' && p.contexto.precio.precioM2 ? (
+              <div className={ui.fila}>
+                <div className={ui.filaEtiqueta}>Precio de oferta por m²<div className={ui.sub}>mediana de {p.contexto.precio.nAvisos?.venta} avisos de venta en el distrito</div></div>
+                <div className={ui.filaValor}>S/ {Math.round(p.contexto.precio.precioM2.venta).toLocaleString('es-PE').replace(/,/g, ' ')}</div>
+                <details className={ui.filaDetalle}><summary>{p.contexto.precio.atribucion ?? p.contexto.precio.fuente}</summary><p>Es lo que piden los vendedores, no el valor de este inmueble ni un precio de cierre. No dice si un precio es caro o barato. Licencia {p.contexto.precio.licencia}.</p></details>
+              </div>
+            ) : <p className={ui.nota}>{p.contexto?.precio?.causa ?? (p.contexto ? 'Sin dato de precio para este distrito.' : 'Cargando…')}</p>}
+            {p.contexto?.cenepred?.lineas?.map((l) => (
+              <div className={ui.fila} key={l.fenomeno}>
+                <div className={ui.filaEtiqueta}>{l.texto.split(':')[0]}<div className={ui.sub}>CENEPRED, escenario El Niño 2027, por distrito</div></div>
+                <div className={ui.filaValor}><span className={`${ui.chip} ${/muy alto|alto/i.test(l.nivel) ? ui.mal : /medio/i.test(l.nivel) ? ui.aviso : ui.info}`}>{l.nivel}</span></div>
+                <details className={ui.filaDetalle}><summary>Detalle</summary><p>{l.texto}</p></details>
+              </div>
+            ))}
+            <p className={ui.nota}>Informativo: son estimaciones para todo el distrito, no una evaluación de tu predio.</p>
+          </section>
+
+          <section className={ui.tarjeta}>
+            <p className={ui.tit}>Mis umbrales</p>
+            <label className={estilos.umbral}>Distancia mínima a una quebrada o río (m)
+              <input className={ui.campo} inputMode="numeric" placeholder="Sin umbral" value={umbral ?? ''} onChange={(x) => fijarUmbral(x.target.value.replace(/\D/g, ''))} />
+            </label>
+            {(() => {
+              const cauces = f.peligros.filter((h) => h.clase === 'cauce' && h.distanciaM != null);
+              const cerca = cauces.length ? Math.min(...cauces.map((h) => h.distanciaM as number)) : null;
+              if (umbral == null) return <p className={ui.nota}>Ninguna norma fija esa distancia. Si escribes la tuya, la quebrada más cercana pasa a «cumple» o «no cumple» según tu umbral.</p>;
+              if (cerca == null) return <p className={ui.nota}>No hay cauces mapeados a 500 m: <span className={`${ui.chip} ${ui.ok}`}>Cumple según tu umbral</span></p>;
+              return <p className={ui.nota}>Cauce más cercano a {metros(cerca)}: <span className={`${ui.chip} ${cerca >= umbral ? ui.ok : ui.mal}`}>{cerca >= umbral ? 'Cumple' : 'No cumple'} según tu umbral de {metros(umbral)}</span></p>;
+            })()}
           </section>
 
           <section className={ui.tarjeta}>

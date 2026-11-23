@@ -220,3 +220,5 @@ const Delitos = (() => {
 
   return { load, indicador, capa };
 })();
+
+if (typeof module !== 'undefined' && module.exports) module.exports = Delitos;

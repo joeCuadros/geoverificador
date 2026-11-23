@@ -207,3 +207,5 @@ const Riesgos = (() => {
 
   return { CATALOGO, ESCALA, DECISIONES, identificar, nivel, leerEvaluacion, guardarEvaluacion, registroCsv };
 })();
+
+if (typeof module !== 'undefined' && module.exports) module.exports = Riesgos;

@@ -10,11 +10,10 @@
     "node": ">=24"
   },
   "scripts": {
-    "build": "nest build",
+    "build": "pnpm --filter @geoverificador/web build",
     "deploy": "nest deploy",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
-    "start": "nest start",
-    "start:dev": "nest start --watch",
+    "start": "pnpm --filter @geoverificador/web start",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
     "datos:extraer": "node scripts/extraer-equipamiento.mjs && node packages/datos/src/cli.ts cargar equipamiento --si-hay-base",
@@ -46,12 +45,16 @@
     "dominio:verificar": "node scripts/generar-dominio.mjs --verificar",
     "test:nuevo": "vitest run",
     "test:dominio": "node ./node_modules/jest/bin/jest.js --config jest.dominio.config.ts",
-    "lint": "oxlint --type-aware src/ test/ public/js/ api/ scripts/",
+    "lint": "oxlint --type-aware src/ test/ public/js/ api/ scripts/ web/app web/componentes web/lib packages/",
     "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js",
     "test:watch": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --watch",
     "test:cov": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --coverage",
     "test:debug": "node --inspect-brk --experimental-vm-modules -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "test:e2e": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config ./test/jest-e2e.json"
+    "test:e2e": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config ./test/jest-e2e.json",
+    "legado:build": "nest build",
+    "legado:start": "nest start",
+    "legado:start:dev": "nest start --watch",
+    "dev": "pnpm --filter @geoverificador/web dev"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",

@@ -59,3 +59,16 @@ button { cursor: pointer; }
 :focus-visible { outline: 2px solid var(--marca); outline-offset: 2px; }
 .leaflet-container { font: inherit; background: var(--superficie-2); }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+/* Impresión: solo el reporte */
+.solo-impresion { display: none; }
+@media print {
+  body { background: #fff; color: #000; }
+  .no-imprimir { display: none !important; }
+  .solo-impresion { display: block; position: static; padding: 0; font-size: 11pt; }
+  .reporte h1 { font-size: 18pt; margin: 0 0 4pt; }
+  .reporte h2 { font-size: 12pt; margin: 14pt 0 4pt; border-bottom: 1px solid #999; }
+  .reporte table { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
+  .reporte th, .reporte td { border: 1px solid #bbb; padding: 3pt 5pt; text-align: left; vertical-align: top; }
+  .reporte .nota-impresion { margin-top: 14pt; font-size: 9pt; color: #444; }
+}

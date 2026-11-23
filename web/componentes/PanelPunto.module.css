@@ -5,3 +5,4 @@
 .muestra { width: 28px; height: 28px; border-radius: 8px; border: 1px solid var(--borde); flex: none; }
 .viaje { margin-top: 12px; padding: 12px; border-radius: 12px; background: var(--marca-suave); }
 .enlace { border: 0; background: none; color: var(--marca); font-weight: 600; padding: 0 2px; }
+.umbral { display: grid; gap: 6px; font-size: 13px; color: var(--texto-2); }

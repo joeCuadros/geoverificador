@@ -1,0 +1,7 @@
+.dialogo { border: 1px solid var(--borde); border-radius: 20px; background: var(--superficie); color: var(--texto); padding: 24px; width: min(440px, calc(100vw - 32px)); box-shadow: var(--sombra); }
+.dialogo::backdrop { background: rgba(10, 18, 26, 0.55); backdrop-filter: blur(2px); }
+.texto { margin: 10px 0 18px; color: var(--texto-2); }
+.puntos { display: flex; gap: 6px; margin-bottom: 18px; }
+.puntos i { width: 8px; height: 8px; border-radius: 50%; background: var(--borde); }
+.puntos .on { width: 22px; border-radius: 8px; background: var(--marca); }
+.botones { display: flex; justify-content: space-between; gap: 8px; }

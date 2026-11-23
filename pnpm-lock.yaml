@@ -297,6 +297,9 @@ importers:
       '@geoverificador/datos':
         specifier: workspace:*
         version: link:../packages/datos
+      '@geoverificador/dominio':
+        specifier: workspace:*
+        version: link:../packages/dominio
       leaflet:
         specifier: 1.9.4
         version: 1.9.4
