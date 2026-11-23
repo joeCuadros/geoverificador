@@ -4,9 +4,12 @@
 
    Jerarquía de una respuesta, de lo más a lo menos importante:
      1. lo que el asistente dice (texto sin caja), con sus aclaraciones en una línea más quieta;
-     2. los resultados (tarjetas: nombre y precio, cuántos criterios cumple, cada criterio, acciones);
+     2. los resultados (tarjetas: nombre y precio, cuántos criterios con dato cumplen, cada criterio, acciones);
      3. lo que entendió (controles para corregirlo) y qué hacer ahora (respuestas rápidas);
-     4. lo que los datos no dicen («Antes de decidir»), plegable. */
+     4. lo que los datos no dicen («Límites de estos datos»), plegable.
+
+   Reglas del producto en el diseño: nada de esto ordena, puntúa ni recomienda. El número de un aviso es una etiqueta («Aviso 1») con contorno, no un puesto; el amarillo
+   se usa solo para avisos (privacidad, límite de caracteres); el relleno de tinta es solo para la acción principal (Enviar). */
 
 .chat {
   --sp-1: 4px;
@@ -27,6 +30,8 @@
 .chat .icono { flex: none; vertical-align: -3px; }
 .chat-log { display: flex; flex-direction: column; gap: 22px; flex: 1 1 auto; min-width: 0; }
 .chat-fin { height: 1px; flex: none; }
+/* Lo que recibe el foco con el teclado no queda debajo del campo de escribir pegado abajo (la altura la mide Chat.tsx; es 0 si el campo no va pegado). */
+.chat .chat-log :is(a[href], button, summary, input, [tabindex]) { scroll-margin-bottom: var(--alto-compositor); }
 
 /* Mensajes: lo que escribe la persona es una burbuja de tinta; lo que responde el asistente va sin caja, sobre el papel, y sus partes (tarjetas, ficha) sí tienen caja */
 @keyframes entra { from { opacity: 0; } }
@@ -47,7 +52,8 @@
 .chat .burbuja-error .icono { margin-right: 6px; }
 .chat .burbuja-cobertura { display: flex; align-items: flex-start; gap: 8px; margin: 0; font-size: .88rem; color: var(--ink-2); }
 .chat .burbuja-cobertura .icono { margin-top: 3px; color: var(--tinta); }
-.chat .burbuja-modelo { margin: 0; font-size: .8rem; color: var(--muted); }
+.chat .burbuja-modelo { margin: 0; font-size: .85rem; color: var(--ink-2); }
+.chat .burbuja-acciones { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
 
 /* Esperando */
 .chat .pensando { display: flex; align-items: center; gap: 10px; align-self: flex-start; color: var(--ink-2); font-size: .95rem; }
@@ -67,6 +73,8 @@
 .chat .chip-cuerpo { flex: 1 1 auto; display: flex; align-items: center; flex-wrap: wrap; gap: 0 8px; min-height: 44px; padding: 6px 12px; text-align: left; background: transparent; color: inherit; border: 0; border-radius: 0; font-weight: 400; }
 .chat button.chip-cuerpo:hover:not(:disabled) { background: var(--tinta-soft-line); }
 .chat .chip-fijo { cursor: default; }
+/* El chip recorta lo que sobresale (esquinas redondeadas): el anillo de foco va por dentro para que no se corte. */
+.chat .chip button:focus-visible { outline-offset: -3px; }
 .chat .chip-etiqueta { font-size: .78rem; color: var(--ink-2); }
 .chat .chip-valor { font-weight: 700; overflow-wrap: anywhere; }
 .chat .chip-flecha { display: inline-flex; margin-left: auto; padding-left: 4px; }
@@ -83,8 +91,6 @@
 .chat .sugerencia { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 14px; border: 1px solid var(--tinta-soft-line); border-radius: 999px; background: var(--surface); color: var(--tinta); font-size: .92rem; font-weight: 600; text-align: left; line-height: 1.25; transition: background-color .15s, border-color .15s; }
 .chat .sugerencia:hover:not(:disabled) { background: var(--tinta-soft); border-color: var(--tinta); }
 .chat .sugerencia-respuesta { border-color: var(--tinta); }
-.chat .sugerencia-alivio { background: var(--tinta); border-color: var(--tinta); color: var(--on-tinta); }
-.chat .sugerencia-alivio:hover:not(:disabled) { background: var(--tinta-hover); }
 .chat .sugerencia-ejemplo { width: 100%; justify-content: space-between; border-radius: 10px; color: var(--ink); font-weight: 500; }
 .chat .sugerencia-ejemplo .icono { color: var(--tinta); }
 
@@ -100,21 +106,17 @@
 /* Una tarjeta de aviso: nombre y precio primero; después cuántos criterios cumple, cada criterio, lo plegable, la fuente y las acciones */
 .chat li.tarjeta-aviso { display: grid; gap: var(--sp-3); padding: 14px; background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--radius); box-shadow: var(--sombra); scroll-margin-bottom: var(--alto-compositor); transition: box-shadow .2s var(--salida), border-color .2s var(--salida); }
 .chat li.tarjeta-aviso.aviso-activo { border-color: var(--tinta); box-shadow: 0 0 0 2px var(--tinta), var(--sombra); }
-.chat .tarjeta-cabecera { display: grid; grid-template-columns: auto 1fr; grid-template-areas: 'pos nombre' '. precio' '. detalle'; gap: 2px 10px; align-items: start; }
+.chat .tarjeta-cabecera { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: 'pos' 'nombre' 'precio' 'detalle'; gap: 2px; align-items: start; }
 .chat .tarjeta-titulo { display: contents; }
-.chat .tarjeta-cabecera .tarjeta-posicion { grid-area: pos; }
-.chat .tarjeta-posicion { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; background: var(--tinta); color: var(--on-tinta); font: 700 .8rem var(--sans); }
-.chat .aviso-nombre { grid-area: nombre; margin: 0; font: 700 1rem/1.3 var(--sans); overflow-wrap: anywhere; align-self: center; }
+.chat .tarjeta-cabecera .tarjeta-posicion { grid-area: pos; justify-self: start; margin-bottom: 2px; }
+/* «Aviso 1»: una etiqueta con contorno y sin relleno. Es el nombre con el que se puede pedir «compara el 1 y el 2», no un puesto ni una nota. */
+.chat .tarjeta-posicion { display: inline-block; padding: 1px 10px; border: 1px solid var(--muted); border-radius: 999px; background: transparent; color: var(--ink-2); font: 600 .78rem/1.5 var(--sans); white-space: nowrap; }
+.chat .aviso-nombre { grid-area: nombre; margin: 0; font: 700 1rem/1.3 var(--sans); overflow-wrap: anywhere; }
 .chat .aviso-precio { grid-area: precio; margin: 2px 0 0; font: 700 1.4rem/1.15 var(--serif); font-variant-numeric: lining-nums tabular-nums; color: var(--ink); overflow-wrap: anywhere; }
 .chat .aviso-precio-nota { display: block; margin-top: 2px; font: 400 .78rem/1.35 var(--sans); color: var(--muted); }
 .chat .aviso-detalle { grid-area: detalle; margin: 0; font-size: .85rem; color: var(--muted); }
 
-.chat .aviso-resumen { display: flex; align-items: center; gap: 10px; margin: 0; padding: 8px 10px; border-radius: var(--radius-sm); background: var(--surface-2); font-size: .9rem; }
-.chat .resumen-barras { display: inline-flex; gap: 3px; flex: none; }
-.chat .seg { width: 14px; height: 6px; border-radius: 3px; background: var(--line-strong); }
-.chat .seg-cumple { background: var(--ok); }
-.chat .seg-no_cumple { background: var(--no); }
-.chat .seg-sin_dato { background: transparent; border: 1.5px dashed var(--muted); }
+.chat .aviso-resumen { margin: 0; padding: 8px 10px; border-radius: var(--radius-sm); background: var(--surface-2); font-size: .9rem; line-height: 1.4; }
 
 /* Criterios y filas de la ficha: etiqueta, estado (icono + texto), valor grande a la derecha y, quieto, lo que se pidió con su fuente y fecha */
 .chat .criterios { margin: 0; display: grid; }
@@ -178,6 +180,7 @@
 
 /* Comparación */
 .chat .comparacion { display: grid; gap: var(--sp-3); }
+.chat .comparacion a:focus-visible { outline-offset: -2px; }
 .chat .comparacion-envoltorio { overflow-x: auto; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--surface); box-shadow: var(--sombra); }
 .chat .comparacion table { border-collapse: collapse; width: 100%; min-width: 22rem; font-size: .88rem; }
 .chat .comparacion th, .chat .comparacion td { padding: 8px 10px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
@@ -190,11 +193,23 @@
 .chat .punto-elegido { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-bottom: var(--sp-2); padding: 8px 10px; border: 1px solid var(--tinta-soft-line); border-radius: 10px; background: var(--tinta-soft); font-size: .85rem; }
 .chat .punto-elegido p { display: flex; align-items: flex-start; gap: 8px; margin: 0; flex: 1 1 12rem; overflow-wrap: anywhere; }
 .chat .punto-elegido .icono { margin-top: 2px; color: var(--tinta); }
-.chat .mensaje-form { display: flex; gap: var(--sp-2); }
+.chat .aviso-modelo { display: flex; align-items: flex-start; gap: 8px; margin: 0 0 var(--sp-2); padding: 8px 10px; border: 1px solid var(--amb-line); border-radius: var(--radius-sm); background: var(--amb-bg); color: var(--amb-text); font-size: .875rem; line-height: 1.4; }
+.chat .aviso-modelo .icono { margin-top: 2px; color: inherit; }
+.chat .mensaje-form { display: grid; gap: 6px; }
+.chat .mensaje-cabecera { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 12px; }
+.chat .mensaje-cabecera label { font-size: .9rem; font-weight: 600; color: var(--ink); }
+.chat .mensaje-contador { font-size: .82rem; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.chat .mensaje-contador-limite { padding: 0 8px; border: 1px solid var(--amb-line); border-radius: 999px; background: var(--amb-bg); color: var(--amb-text); font-weight: 600; }
+.chat .mensaje-fila { display: flex; gap: var(--sp-2); }
 .chat .mensaje-form input { flex: 1; min-width: 0; min-height: 48px; padding: 8px 14px; border-radius: 10px; font-size: 1rem; }
 .chat .mensaje-form input::placeholder { color: var(--muted); opacity: 1; }
 .chat .enviar { display: inline-flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 16px; border-radius: 10px; }
-.chat .nota-pie { margin: 6px 0 0; font-size: .75rem; line-height: 1.45; color: var(--muted); }
+.chat .nota-pie { margin: 6px 0 0; font-size: .85rem; line-height: 1.45; color: var(--ink-2); }
+
+/* En pantallas muy bajas (un teléfono acostado) el campo pegado abajo se comería la conversación: va en el flujo, después del último mensaje. */
+@media (max-height: 480px) {
+  .chat .compositor { position: static; box-shadow: none; }
+}
 
 @media (max-width: 480px) {
   .chat .burbuja-yo { max-width: 92%; }

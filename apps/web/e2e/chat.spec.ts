@@ -4,7 +4,7 @@ test.describe('chat', () => {
   test.beforeEach(async ({ page }) => abrir(page));
 
   test('empieza con la bienvenida y un campo etiquetado para escribir', async ({ page }) => {
-    await expect(page.getByRole('log', { name: 'Conversación con el asistente' })).toContainText('Cuéntame qué vivienda buscas en Arequipa');
+    await expect(page.getByRole('log', { name: 'Conversación con el asistente' })).toContainText('Cuéntame qué buscas en Arequipa');
     await expect(page.getByLabel('Tu consulta')).toBeEditable();
     await expect(page.getByText('Revisa siempre el aviso original')).toBeVisible();
   });
@@ -83,18 +83,34 @@ test.describe('chat', () => {
     await page.route('**/api/agente', (ruta) => ruta.abort('connectionrefused'));
     const r = await preguntar(page, 'hola');
     await expect(r).toContainText('No pude conectar');
-    await expect(r).toHaveAttribute('role', 'alert');
+    await expect(r).toContainText('Reintentar');
+    // Dice qué falló y qué hacer; el error es parte de la conversación (no una alerta anidada en el registro: la región `status` lo anuncia).
+    await expect(r).not.toHaveAttribute('role', 'alert');
+    await expect(page.locator('.chat').getByRole('status')).toContainText('No pude conectar');
     await expect(page.getByRole('button', { name: 'Enviar' })).toBeEnabled();
+    // Lo escrito vuelve al campo para no tener que escribirlo de nuevo.
+    await expect(page.getByLabel('Tu consulta')).toHaveValue('hola');
     await page.unroute('**/api/agente');
     const ok = await preguntar(page, 'hola');
     await expect(ok).toContainText('Puedo buscar avisos');
+  });
+
+  test('«Reintentar» vuelve a enviar el mismo mensaje sin repetirlo en la conversación', async ({ page }) => {
+    await page.route('**/api/agente', (ruta) => ruta.abort('connectionrefused'));
+    const error = await preguntar(page, 'hola');
+    await page.unroute('**/api/agente');
+    await error.getByRole('button', { name: 'Reintentar' }).click();
+    await expect(page.locator('.burbuja-agente').last()).toContainText('Puedo buscar avisos');
+    await expect(page.locator('.burbuja-error')).toHaveCount(0);
+    await expect(page.locator('.burbuja-yo')).toHaveCount(1);
   });
 
   test('muestra el mensaje del servidor cuando responde con un error', async ({ page }) => {
     await page.route('**/api/agente', (ruta) => ruta.fulfill({ status: 429, contentType: 'application/json', body: JSON.stringify({ error: 'Llegaste al límite de consultas por hora. Intenta más tarde.' }) }));
     const r = await preguntar(page, 'hola');
     await expect(r).toContainText('Llegaste al límite de consultas por hora');
-    await expect(r).toHaveAttribute('role', 'alert');
+    await expect(r).not.toHaveAttribute('role', 'alert');
+    await expect(page.locator('.chat').getByRole('status')).toContainText('Llegaste al límite de consultas por hora');
   });
 
   test('un texto con HTML se muestra como texto y no se ejecuta', async ({ page }) => {

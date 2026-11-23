@@ -18,7 +18,7 @@ test.beforeEach(async ({ page }) => abrir(page));
 const FUENTE_Y_FECHA = /Fuente: .+ · datos del \d{4}-\d{2}-\d{2}/;
 
 test.describe('H1 · búsqueda con criterios', () => {
-  test('cada aviso trae su marca por criterio con el valor, la fuente y la fecha, el «Cumple X de Y» y la última vez visto', async ({ page }) => {
+  test('cada aviso trae su marca por criterio con el valor, la fuente y la fecha, los criterios con dato que cumplen y la última vez visto', async ({ page }) => {
     const r = await preguntar(page, 'un departamento en Yanahuara a menos de 150 m de un colegio');
     // Cumple, no cumple y sin dato: las tres marcas son un icono dibujado más su texto (el color nunca es lo único), con su valor, su fuente y la fecha de los datos.
     const cumple = r.locator('.criterio-cumple', { hasText: 'Colegio' });
@@ -37,9 +37,11 @@ test.describe('H1 · búsqueda con criterios', () => {
     await expect(sinDato.locator('.estado svg')).toHaveCount(1);
     await expect(sinDato).toContainText('sin dato (el aviso no tiene coordenadas)');
     const resumenes = r.locator('.aviso-resumen');
-    await expect(resumenes.filter({ hasText: 'Cumple 1 de 1 criterios · 0 sin dato' })).toHaveCount(1);
-    await expect(resumenes.filter({ hasText: 'Cumple 0 de 1 criterios · 0 sin dato' })).toHaveCount(1);
-    await expect(resumenes.filter({ hasText: 'Cumple 0 de 1 criterios · 1 sin dato' })).toHaveCount(1);
+    await expect(resumenes.filter({ hasText: 'Criterios con dato que cumplen: 1 de 1 · 0 sin dato' })).toHaveCount(1);
+    await expect(resumenes.filter({ hasText: 'Criterios con dato que cumplen: 0 de 1 · 0 sin dato' })).toHaveCount(1);
+    await expect(resumenes.filter({ hasText: 'Ningún criterio con dato · 1 sin dato' })).toHaveCount(1);
+    // Es un recuento, no una barra ni una nota: no hay segmentos dibujados.
+    await expect(r.locator('.resumen-barras, .seg')).toHaveCount(0);
     await expect(r.locator('.aviso-fuente')).toHaveText([/Visto por última vez el \d{4}-\d{2}-\d{2}/, /Visto por última vez el \d{4}-\d{2}-\d{2}/, /Visto por última vez el \d{4}-\d{2}-\d{2}/]);
     for (const url of [AVISO_1.url, AVISO_2.url, URL_3]) await expect(r.locator(`a.boton-enlace[href="${url}"]`)).toHaveCount(1);
   });
@@ -75,7 +77,7 @@ test.describe('H1 · búsqueda con criterios', () => {
     await expect(sinDato).toContainText('sin dato (el aviso no tiene coordenadas)');
     await expect(r.locator('.criterio-cumple, .criterio-no_cumple').filter({ hasText: /sin dato/i })).toHaveCount(0);
     expect(await r.innerText()).not.toMatch(/Colegio\s*0 m/);
-    await expect(r.locator('.aviso-resumen').filter({ hasText: 'Cumple 0 de 1 criterios · 1 sin dato' })).toHaveCount(1);
+    await expect(r.locator('.aviso-resumen').filter({ hasText: 'Ningún criterio con dato · 1 sin dato' })).toHaveCount(1);
     await expect(r.locator('.notas-resultado')).toContainText('sus criterios de cercanía figuran como «sin dato»');
   });
 

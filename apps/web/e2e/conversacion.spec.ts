@@ -110,8 +110,8 @@ test.describe('respuestas rápidas y resumen editable', () => {
 
   test('cambiar un dato del resumen: otra distancia vuelve a medir', async ({ page }) => {
     const r = await preguntar(page, CONSULTA_AVISOS);
-    await chip(r, 'criterio:colegio').getByRole('button', { name: /Tocar para cambiarlo/ }).click();
-    await expect(chip(r, 'criterio:colegio').getByRole('button', { name: /Tocar para cambiarlo/ })).toHaveAttribute('aria-expanded', 'true');
+    await chip(r, 'criterio:colegio').getByRole('button', { name: /Activar para cambiarlo/ }).click();
+    await expect(chip(r, 'criterio:colegio').getByRole('button', { name: /Activar para cambiarlo/ })).toHaveAttribute('aria-expanded', 'true');
     const nuevo = await tocar(page, 'A 150 m');
     await expect(nuevo.locator('.criterio-pie').first()).toContainText('Pediste: a 150 m o menos');
     await expect(chip(nuevo, 'criterio:colegio')).toContainText('a 150 m o menos');
@@ -204,7 +204,7 @@ test.describe('lo que el asistente responde del mapa y entre avisos', () => {
 });
 
 test.describe('estado de espera y distribución', () => {
-  test('mientras responde muestra qué hace y se anuncia como estado', async ({ page }) => {
+  test('mientras responde muestra qué hace, con un texto fijo y sin anunciarse (lo que se anuncia es el titular de la respuesta)', async ({ page }) => {
     await abrir(page);
     await page.route('**/api/agente', async (ruta) => {
       await new Promise((f) => setTimeout(f, 1500));
@@ -214,8 +214,11 @@ test.describe('estado de espera y distribución', () => {
     await page.getByRole('button', { name: 'Enviar' }).click();
     const espera = page.locator('.pensando');
     await expect(espera).toBeVisible();
-    await expect(espera).toHaveAttribute('role', 'status');
+    await expect(espera).not.toHaveAttribute('role', /./);
     await expect(espera).toContainText('Entendiendo tu mensaje');
+    const texto = await espera.innerText();
+    await page.waitForTimeout(1000); // el texto no cambia por pasos: una región viva lo volvería a leer cada vez
+    expect(await espera.innerText()).toBe(texto);
     await expect(page.getByRole('button', { name: 'Enviar' })).toBeDisabled();
     await expect(page.locator('.burbuja-agente')).toHaveCount(2);
     await expect(espera).toHaveCount(0);
