@@ -130,6 +130,8 @@ export interface PeligroDePunto {
   /** 0 si el punto está dentro del polígono. */
   distanciaM: number;
   fuenteId: string;
+  /** Geometría del cauce o del peligro geológico (para dibujarlo); null en la zona volcánica, cuyo polígono es enorme y no se repite. */
+  geometria: any | null;
 }
 
 /**
@@ -150,7 +152,7 @@ export async function peligrosDe(base: Base, p: Punto, { radioM = 500, clases = 
     .map((f) => {
       const g = f.geometry;
       const distanciaM = g.type === 'Point' ? Calculos.haversine(p.lat, p.lon, g.coordinates[1], g.coordinates[0]) : /LineString/.test(g.type) ? Calculos.distanciaAGeometriaLineaM(p.lat, p.lon, g) : Calculos.distanciaAGeometriaM(p.lat, p.lon, g);
-      return { clase: f.clase, tipo: f.tipo, nivel: f.nivel, nombre: f.nombre, props: f.props, distanciaM, fuenteId: f.fuente_id };
+      return { clase: f.clase, tipo: f.tipo, nivel: f.nivel, nombre: f.nombre, props: f.props, distanciaM, fuenteId: f.fuente_id, geometria: f.clase === 'volcanico' ? null : g };
     })
     .filter((x) => x.clase === 'volcanico' || x.distanciaM <= radioM)
     .sort((a, b) => a.distanciaM - b.distanciaM);

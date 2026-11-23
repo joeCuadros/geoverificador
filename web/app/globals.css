@@ -1,0 +1,210 @@
+/* GeoVerificador (web). Mismos tokens que la aplicación estática: sillar claro, tinta de plano para la acción, estados siempre con texto.
+   Primero móvil (mapa arriba, panel debajo); desde 900 px, panel a la izquierda y mapa a la derecha, cada uno con su desplazamiento. */
+
+:root {
+  color-scheme: light dark;
+  --bg: #f3eee3;
+  --surface: #fbf8f1;
+  --surface-2: #ece6d8;
+  --line: #d8cfbc;
+  --line-strong: #b9ad94;
+  --input-border: #7d7461;
+  --ink: #1b2233;
+  --ink-2: #3a4254;
+  --muted: #565c6b;
+  --tinta: #1c3a6b;
+  --tinta-hover: #142b53;
+  --on-tinta: #fbf8f1;
+  --tinta-soft: #dfe7f3;
+  --tinta-soft-line: #b6c6e1;
+  --band: #15294f;
+  --on-band: #f3eee3;
+  --band-muted: #c3cfe6;
+  --no: #9b2415;
+  --no-bg: #f9e3de;
+  --no-line: #dc9d92;
+  --amb-bg: #fff1c9;
+  --amb-line: #b07a12;
+  --amb-text: #4a3000;
+  --ok: #17603a;
+  --ok-bg: #e1f1e6;
+  --ok-line: #8cc5a3;
+  --focus: #1c3a6b;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --sans: 'Public Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --serif: 'Source Serif 4', Georgia, 'Times New Roman', serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #101520;
+    --surface: #171d2b;
+    --surface-2: #1f2738;
+    --line: #2c3548;
+    --line-strong: #46506a;
+    --input-border: #7b86a0;
+    --ink: #ece8de;
+    --ink-2: #cfcbc0;
+    --muted: #a4a9b8;
+    --tinta: #9dbcf0;
+    --tinta-hover: #bcd1f6;
+    --on-tinta: #0d1730;
+    --tinta-soft: #1f2c47;
+    --tinta-soft-line: #34476d;
+    --band: #0a0e17;
+    --on-band: #ece8de;
+    --band-muted: #a4a9b8;
+    --no: #ffa595;
+    --no-bg: #3a1a15;
+    --no-line: #8a3b2e;
+    --amb-bg: #35280a;
+    --amb-line: #8a6a22;
+    --amb-text: #f6dfa5;
+    --ok: #8fd6a6;
+    --ok-bg: #12301f;
+    --ok-line: #2f6b47;
+    --focus: #9dbcf0;
+  }
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { font: 16px/1.5 var(--sans); background: var(--bg); color: var(--ink); }
+h1, h2, h3, h4 { font-family: var(--serif); line-height: 1.25; }
+a { color: var(--tinta); }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+.solo-lectores { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.saltar { position: absolute; left: 8px; top: -60px; z-index: 2000; background: var(--tinta); color: var(--on-tinta); padding: 10px 14px; border-radius: var(--radius-sm); }
+.saltar:focus { top: 8px; }
+
+/* Botones y campos: objetivos táctiles de 44 px */
+button, input { font: inherit; }
+button { min-height: 44px; padding: 8px 16px; border: 1px solid var(--tinta); border-radius: var(--radius-sm); background: var(--tinta); color: var(--on-tinta); font-weight: 600; cursor: pointer; }
+button:hover:not(:disabled) { background: var(--tinta-hover); }
+button:disabled { opacity: .6; cursor: progress; }
+.boton-secundario { background: var(--surface); color: var(--tinta); border-color: var(--tinta-soft-line); }
+.boton-secundario:hover:not(:disabled) { background: var(--tinta-soft); }
+input { min-height: 44px; padding: 8px 12px; border: 1px solid var(--input-border); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); min-width: 0; }
+
+/* Estructura */
+.app { display: grid; grid-template-rows: auto 1fr; min-height: 100dvh; }
+.banda { background: var(--band); color: var(--on-band); padding: 10px 16px; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.banda h1 { margin: 0; font-size: 1.25rem; }
+.banda p { margin: 0; color: var(--band-muted); font-size: .9rem; }
+.zona-mapa { display: flex; flex-direction: column; border-bottom: 1px solid var(--line); background: var(--surface); }
+.panel { background: var(--surface); min-width: 0; display: flex; flex-direction: column; }
+.cuerpo-panel { padding: 12px 16px 24px; min-height: 0; flex: 1; }
+.cuerpo-panel[hidden] { display: none; }
+
+@media (min-width: 900px) {
+  .app { height: 100dvh; grid-template-columns: minmax(380px, 460px) 1fr; grid-template-rows: auto 1fr; grid-template-areas: 'banda banda' 'panel mapa'; }
+  .banda { grid-area: banda; }
+  .panel { grid-area: panel; border-right: 1px solid var(--line); overflow: hidden; }
+  .cuerpo-panel { overflow-y: auto; }
+  .zona-mapa { grid-area: mapa; border-bottom: 0; min-height: 0; }
+}
+
+/* Pestañas */
+.pestanas { display: flex; border-bottom: 1px solid var(--line); background: var(--surface-2); }
+.pestana { flex: 1; background: transparent; color: var(--ink-2); border: 0; border-bottom: 3px solid transparent; border-radius: 0; }
+.pestana:hover:not(:disabled) { background: var(--tinta-soft); }
+.pestana[aria-selected='true'] { color: var(--tinta); border-bottom-color: var(--tinta); background: var(--surface); }
+
+/* Buscador */
+.buscador { padding: 10px 16px; border-bottom: 1px solid var(--line); }
+.buscador label { display: block; font-size: .85rem; font-weight: 600; color: var(--ink-2); margin-bottom: 4px; }
+.buscador-fila { display: flex; gap: 8px; }
+.buscador-fila input { flex: 1; }
+.buscador-estado p { margin: 8px 0 0; font-size: .9rem; }
+.resultados { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+.resultado { width: 100%; display: flex; flex-direction: column; align-items: flex-start; text-align: left; background: var(--surface); color: var(--ink); border-color: var(--line-strong); font-weight: 400; }
+.resultado:hover:not(:disabled) { background: var(--tinta-soft); }
+.resultado-nombre { font-weight: 700; }
+.resultado-detalle { font-size: .82rem; color: var(--muted); }
+.mensaje-error { color: var(--no); background: var(--no-bg); border: 1px solid var(--no-line); border-radius: var(--radius-sm); padding: 8px 12px; }
+.mensaje-vacio { color: var(--ink-2); }
+
+/* Mapa */
+.mapa-envoltorio { position: relative; display: flex; flex-direction: column; flex: 1; min-height: 400px; height: calc(44dvh + 56px); }
+.mapa-barra { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex: none; padding: 6px 10px; background: var(--surface); border-bottom: 1px solid var(--line); }
+.mapa-lienzo { position: relative; flex: 1; min-height: 0; }
+.solo-escritorio { display: none; }
+@media (min-width: 520px) { .solo-escritorio { display: inline; } }
+.mapa { position: absolute; inset: 0; z-index: 0; }
+.boton-centro { white-space: nowrap; }
+.mapa-nota { position: absolute; z-index: 500; top: 8px; left: 50%; transform: translateX(-50%); margin: 0; max-width: 90%; background: var(--amb-bg); color: var(--amb-text); border: 1px solid var(--amb-line); border-radius: var(--radius-sm); padding: 6px 10px; font-size: .85rem; }
+@media (min-width: 900px) { .mapa-envoltorio { height: auto; min-height: 0; } }
+.marcador-aviso span, .marcador-punto span { display: block; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .5); }
+.marcador-aviso span { width: 24px; height: 24px; margin: 3px; background: #c2410c; }
+.marcador-punto span { width: 22px; height: 22px; margin: 2px; background: var(--tinta); outline: 2px solid #fff; }
+.leaflet-marker-icon:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; border-radius: 50%; }
+.cuadro-aviso p { margin: 4px 0; }
+
+/* Asistente */
+.chat { display: flex; flex-direction: column; gap: 12px; }
+.chat-log { display: flex; flex-direction: column; gap: 10px; }
+.burbuja { padding: 10px 12px; border-radius: var(--radius); max-width: 92%; overflow-wrap: anywhere; }
+.burbuja p { margin: 0; white-space: pre-wrap; }
+.burbuja-agente { background: var(--surface-2); border: 1px solid var(--line); }
+.burbuja-yo { background: var(--tinta-soft); border: 1px solid var(--tinta-soft-line); align-self: flex-end; }
+.burbuja-error { background: var(--no-bg); border-color: var(--no-line); color: var(--no); }
+.avisos-mapa { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--line-strong); }
+.avisos-titulo { font-size: .85rem; font-weight: 700; margin-bottom: 6px !important; }
+.avisos-mapa ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.avisos-mapa li { display: grid; gap: 2px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 8px; }
+.aviso-nombre { font-weight: 700; }
+.aviso-detalle { font-size: .85rem; color: var(--muted); }
+.avisos-mapa button { justify-self: start; margin-top: 4px; }
+.estado-carga { margin: 0; color: var(--muted); }
+.chat-form { display: flex; gap: 8px; position: sticky; bottom: 0; padding: 8px 0; background: var(--surface); }
+.chat-form input { flex: 1; }
+.nota-pie { font-size: .8rem; color: var(--muted); margin: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
+}
+
+/* Impresión: solo la ficha */
+@media print {
+  .banda, .zona-mapa, .pestanas, .saltar, .ficha-acciones, .chat { display: none !important; }
+  .app { display: block; height: auto; }
+  .panel, .cuerpo-panel { overflow: visible; border: 0; }
+  .cuerpo-panel[hidden] { display: none !important; }
+  body { background: #fff; color: #000; }
+}
+
+/* Capas de datos del mapa: control con casillas por grupo, estado, leyenda, nota y fuente */
+.capas { flex: none; }
+.capas-boton { white-space: nowrap; }
+.capas-panel { position: absolute; z-index: 600; top: 58px; right: 10px; width: min(340px, calc(100% - 20px)); max-height: calc(100% - 68px); overflow-y: auto; background: var(--surface); color: var(--ink); border: 1px solid var(--line-strong); border-radius: var(--radius); box-shadow: 0 4px 16px rgba(0, 0, 0, .3); padding: 8px 10px; }
+.capas-panel[hidden] { display: none; }
+.capas-grupo { border: 0; margin: 0 0 8px; padding: 0; min-width: 0; }
+.capas-grupo legend { font: 700 .75rem var(--sans); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); padding: 0; margin-bottom: 2px; }
+.capa label { display: flex; align-items: center; gap: 8px; min-height: 44px; cursor: pointer; }
+.capa input[type='checkbox'] { min-height: 0; width: 20px; height: 20px; flex: none; accent-color: var(--tinta); }
+.capa-detalle { margin: 0 0 8px 28px; font-size: .82rem; color: var(--ink-2); }
+.capa-detalle p { margin: 4px 0; }
+.capa-estado { font-weight: 600; }
+.capa-estado-error { color: var(--no); }
+.capa-estado-lejos, .capa-estado-recortada { color: var(--amb-text); background: var(--amb-bg); border: 1px solid var(--amb-line); border-radius: 6px; padding: 2px 6px; }
+.capa-nota, .capa-fuente { color: var(--muted); }
+.capa-fuente { font-style: italic; }
+.leyenda { list-style: none; margin: 4px 0; padding: 0; display: grid; gap: 3px; }
+.leyenda li { display: flex; align-items: center; gap: 6px; }
+.muestra { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 16px; height: 16px; border-radius: 3px; border: 1px solid rgba(0, 0, 0, .35); color: #fff; font: 700 .65rem var(--sans); }
+.muestra-punto { border-radius: 50%; width: 18px; height: 18px; }
+
+/* Marcadores de lugares: círculo con una letra */
+.leaflet-marker-icon.ent-marcador span { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .5); color: #fff; font: 700 .72rem var(--sans); }
+.leaflet-marker-icon.ent-sector span { font-size: .9rem; border-radius: 6px; }
+.leaflet-marker-icon.ent-ficha span { border-color: #fff; }
+.leaflet-marker-icon.ent-activo span { outline: 3px solid #f59e0b; outline-offset: 2px; transform: scale(1.25); }
+.leaflet-marker-icon.marcador-aviso.ent-activo span { outline: 3px solid var(--tinta); outline-offset: 2px; transform: scale(1.2); }
+
+/* Chat: lo resaltado y las acciones de cada tarjeta */
+.aviso-acciones { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.avisos-mapa li.aviso-activo { border: 2px solid var(--tinta); background: var(--tinta-soft); }
+.viaje-estado { margin: 0; font-size: .85rem; background: var(--tinta-soft); border: 1px solid var(--tinta-soft-line); border-radius: var(--radius-sm); padding: 6px 10px; }
+.cuadro-aviso button { margin-top: 6px; min-height: 36px; }

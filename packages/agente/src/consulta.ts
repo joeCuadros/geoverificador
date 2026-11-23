@@ -6,6 +6,7 @@
  */
 import { normalizar } from '@geoverificador/dominio/texto';
 import type { CriterioPedido, IdCriterio } from './criterios.ts';
+import { distancia } from './difuso.ts';
 
 export type Intencion = 'buscar_avisos' | 'buscar_zonas' | 'comparar' | 'verificar_punto' | 'fuente' | 'saludo' | 'otra';
 export type Moneda = 'PEN' | 'USD';
@@ -29,10 +30,14 @@ export interface Consulta {
   /** Para `fuente`: de qué dato pregunta. Para `comparar`: los avisos nombrados. */
   tema: string | null;
   avisos: number[];
+  /** La persona dijo que le da igual el tipo de inmueble («cualquiera»): se busca de todos los tipos. */
+  tipoCualquiera: boolean;
+  /** Para `comparar`: los lugares de la lista de la última respuesta que nombró («el 1 y el 2»), empezando en 1. */
+  posiciones: number[];
 }
 
 export const CONSULTA_VACIA: Consulta = {
-  intencion: 'otra', tipo: null, precioMax: null, moneda: null, distrito: null, dormitoriosMin: null, areaMinM2: null, criterios: [], trabajoLugar: null, sinTrasbordo: false, lugarCerca: null, noDisponible: [], tema: null, avisos: [],
+  intencion: 'otra', tipo: null, precioMax: null, moneda: null, distrito: null, dormitoriosMin: null, areaMinM2: null, criterios: [], trabajoLugar: null, sinTrasbordo: false, lugarCerca: null, noDisponible: [], tema: null, avisos: [], tipoCualquiera: false, posiciones: [],
 };
 
 const NUMEROS: Record<string, number> = { un: 1, una: 1, uno: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7, ocho: 8, nueve: 9, diez: 10, quince: 15, veinte: 20, treinta: 30 };
@@ -49,8 +54,8 @@ export function normalizarFrase(crudo: string): string {
 const METROS_POR_MINUTO_A_PIE = 1.07 * 60;
 const METROS_POR_CUADRA = 100;
 
-const TIPOS: [RegExp, Consulta['tipo'], string | null][] = [
-  [/\b(departamentos?|depas?|dptos?|deptos?|flat|duplex|minidepartamento|mini departamento)\b/, 'departamento', null],
+export const TIPOS: [RegExp, Consulta['tipo'], string | null][] = [
+  [/\b(departamentos?|apartamentos?|depas?|dptos?|deptos?|flat|duplex|minidepartamento|mini departamento)\b/, 'departamento', null],
   [/\b(cuartos?|habitacion(es)?|monoambiente)\b(?! (dormitorios|de bano))/, 'departamento', 'cuartos en alquiler (solo hay avisos de venta; busqué departamentos)'],
   [/\b(casas?|chalet)\b/, 'casa', null],
   [/\b(terrenos?|lotes?)\b/, 'terreno', null],
@@ -58,7 +63,7 @@ const TIPOS: [RegExp, Consulta['tipo'], string | null][] = [
   [/\b(oficinas?)\b/, 'oficina', null],
 ];
 
-const CRITERIOS_TEXTO: [RegExp, IdCriterio][] = [
+export const CRITERIOS_TEXTO: [RegExp, IdCriterio][] = [
   [/\b(mall|malls|centros? comercial(es)?|shopping)\b/, 'mall'],
   [/\b(universidad(es)?|la u\b|facultad)/, 'universidad'],
   [/\b(colegios?|escuelas?|inicial|primaria|secundaria|jardin|nido)\b/, 'colegio'],
@@ -131,7 +136,7 @@ export function leerLugarDeTrabajo(crudo: string): string | null {
  * Interpreta una frase. `ctx.distritos`: nombres de los distritos (como en el archivo de límites). `ctx.previa`: la consulta que se está
  * completando; `ctx.pendiente`: lo que se le preguntó a la persona en el turno anterior (su respuesta llena ese campo).
  */
-export function interpretar(crudo: string, ctx: { distritos?: string[]; previa?: Consulta | null; pendiente?: 'tipo' | 'trabajo' | 'moneda' | null } = {}): Consulta {
+export function interpretar(crudo: string, ctx: { distritos?: string[]; previa?: Consulta | null; pendiente?: Faltante | null } = {}): Consulta {
   const t = normalizarFrase(crudo);
   const previa = ctx.previa ?? null;
 
@@ -179,7 +184,12 @@ export function interpretar(crudo: string, ctx: { distritos?: string[]; previa?:
   const area = /\b(?:mas de|minimo(?: de)?|al menos|desde|de) (\d{2,6}) ?(?:m2|m 2|metros cuadrados|metros)\b/.exec(t) ?? /\b(\d{2,6}) ?(?:m2|m 2|metros cuadrados)\b/.exec(t);
   if (area) c.areaMinM2 = Number(area[1]);
 
-  const distrito = (ctx.distritos ?? []).map((d) => ({ d, n: normalizar(d) })).sort((a, b) => b.n.length - a.n.length).find(({ n }) => new RegExp(`\\b(en|de|por|distrito de|distrito) ${n}\\b`).test(t));
+  // «cerca de la Universidad de San Agustín» o «trabajo en el mercado» nombran un lugar: lo que dicen no es un criterio ni un distrito por sí solo.
+  c.lugarCerca = leerLugarCerca(crudo);
+  c.trabajoLugar = leerLugarDeTrabajo(crudo);
+  const sinLugares = [c.lugarCerca, c.trabajoLugar].reduce<string>((txt, l) => (l ? txt.replace(normalizarFrase(l), ' ') : txt), t);
+
+  const distrito = leerDistrito(sinLugares, ctx.distritos ?? []);
   if (distrito) c.distrito = distrito.d;
 
   // Criterios: cada uno toma la distancia que se diga en su mismo tramo de la frase (entre comas o «y»).
@@ -188,15 +198,15 @@ export function interpretar(crudo: string, ctx: { distritos?: string[]; previa?:
     if (!c.criterios.some((x) => x.id === id)) c.criterios.push({ id, ...extra });
   };
   for (const [patron, id] of CRITERIOS_TEXTO) {
-    if (!patron.test(t)) continue;
+    if (!patron.test(sinLugares)) continue;
     if (id === 'paradero' && !/\bparaderos?\b/.test(t)) continue;
     if (id === 'lejos_de_cauce' && !/\b(lejos|fuera|sin|no|lejos de)\b/.test(t)) continue;
-    const tramo = tramos.find((x) => patron.test(x)) ?? t;
+    const tramo = tramos.find((x) => patron.test(x)) ?? sinLugares;
     const metros = leerDistancia(tramo);
     agregar(id, metros !== null && id !== 'agua' && id !== 'luz' && id !== 'desague' ? { metros } : {});
   }
 
-  c.trabajoLugar = leerLugarDeTrabajo(crudo);
+  if (c.lugarCerca) agregar('lugar');
   c.sinTrasbordo = /\b(sin trasbordos?|sin transbordos?|directa|directo|sin cambiar de)\b/.test(t) && /\b(combi|bus|ruta|transporte|trasbordo|transbordo)\b/.test(t);
   if (/\b(mi|del|al|el) (trabajo|oficina|chamba|centro de labores)\b|\bdonde trabajo\b/.test(t) || c.trabajoLugar) {
     const min = /\b(\d+|quince|veinte|treinta) ?(min|minutos?)\b(?! (a pie|caminando))/.exec(t);
@@ -211,18 +221,22 @@ export function interpretar(crudo: string, ctx: { distritos?: string[]; previa?:
   c.avisos = [...new Set(ids)];
 
   if (/^(hola|buenas|buenos dias|buenas tardes|buenas noches|gracias|ayuda|que puedes hacer)\b/.test(t) && !c.tipo && !c.criterios.length) c.intencion = 'saludo';
-  else if (/\b(cual|que aviso|compar[ae]|entre estos|entre los dos|mejor para llegar)\b/.test(t) && (c.avisos.length >= 2 || /\b(estos dos|los dos|ambos)\b/.test(t))) c.intencion = 'comparar';
+  else if (ES_COMPARAR.test(t) || (/\b(cual|que aviso|entre estos|entre los dos|mejor para llegar)\b/.test(t) && (c.avisos.length >= 2 || /\b(estos dos|los dos|ambos)\b/.test(t)))) {
+    c.intencion = 'comparar';
+    c.posiciones = leerPosiciones(t);
+  }
   else if (/\b(de donde sale|que fuente|fuente de|de que fecha|que tan actual|licencia|de donde sacas|como sabes)\b/.test(t)) {
     c.intencion = 'fuente';
     c.tema = c.criterios[0]?.id ?? (/\bprecio|aviso/.test(t) ? 'avisos' : /\bzonific/.test(t) ? 'zona_comercio' : /\bruta|combi|bus/.test(t) ? 'trabajo' : null);
-  } else if (/\b(me ofrecen|que deberia revisar|que debo revisar|que reviso|es seguro comprar|verificar este|revisar este)\b/.test(t)) c.intencion = 'verificar_punto';
+  } else if (ES_PUNTO.test(t) && !c.tipo && c.precioMax === null) c.intencion = 'verificar_punto';
   else if (/\b(zonas?|sectores?|barrios?|donde (puedo |me conviene |conviene )?vivir|en que parte)\b/.test(t) && !c.tipo && c.precioMax === null) c.intencion = 'buscar_zonas';
   else if (c.tipo || c.precioMax !== null || c.dormitoriosMin !== null || /\b(avisos?|comprar|venta|vendo|vende|busco|quiero|necesito)\b/.test(t)) c.intencion = c.tipo || c.precioMax !== null || c.criterios.length ? 'buscar_avisos' : 'otra';
   else if (c.criterios.length) c.intencion = 'buscar_zonas';
   return c;
 }
 
-export type Faltante = 'tipo' | 'trabajo' | 'moneda';
+/** Lo que el asistente puede estar esperando que la persona conteste. `aclarar`: eligió entre varias opciones de un lugar dudoso. */
+export type Faltante = 'tipo' | 'trabajo' | 'moneda' | 'precio' | 'distrito' | 'lugar' | 'aclarar';
 
 /**
  * Lo primero que falta para poder buscar, o null. Se pregunta UNA sola cosa por turno (tarea 6.3), en este orden: el tipo de inmueble,
@@ -230,7 +244,7 @@ export type Faltante = 'tipo' | 'trabajo' | 'moneda';
  */
 export function loQueFalta(c: Consulta): Faltante | null {
   if (c.intencion !== 'buscar_avisos') return null;
-  if (!c.tipo) return 'tipo';
+  if (!c.tipo && !c.tipoCualquiera) return 'tipo';
   if (c.criterios.some((x) => x.id === 'trabajo') && !c.trabajoLugar) return 'trabajo';
   if (c.precioMax !== null && !c.moneda) return 'moneda';
   return null;
@@ -240,4 +254,104 @@ export const PREGUNTA: Record<Faltante, string> = {
   tipo: '¿Qué tipo de inmueble buscas: departamento, casa, terreno, local u oficina?',
   trabajo: '¿Dónde queda tu trabajo? Dime un lugar conocido o una dirección (por ejemplo, «Parque Industrial» o «cerca de la UNSA»).',
   moneda: '¿El precio máximo es en soles o en dólares?',
+  precio: '¿Hasta cuánto quieres pagar? Por ejemplo: «400 mil soles» o «90 mil dólares».',
+  distrito: '¿En qué distrito? Por ejemplo: Cayma, Yanahuara o Cerro Colorado.',
+  lugar: '¿Cerca de qué lugar? Dime su nombre o una dirección.',
+  aclarar: '¿A cuál te referías?',
 };
+
+// ------------------------------------------------------------------ Lectura de partes de una frase
+
+const ES_COMPARAR = /\b(compar\w*|diferencias? entre|que diferencia|cual (?:es mejor|me conviene|conviene|elijo)|lado a lado)\b/;
+const ES_PUNTO =
+  /\b(me ofrecen|que deberia revisar|que debo revisar|que reviso|es seguro comprar|verificar este|revisar este|que (?:hay|tiene|tienen) (?:en|por|cerca de|alrededor de) (?:este|ese|el|mi|esta|esa) (?:punto|lugar|sitio|sector|zona|ubicacion)|que (?:hay|tiene) (?:aqui|ahi|alli|en el mapa)|(?:verific\w*|revis\w*|analiz\w*|consult\w*|evalu\w*|mira\w*) (?:este|ese|el|mi|esta|esa) (?:punto|lugar|sitio|sector|ubicacion)|(?:este|ese|mi) punto|el punto (?:elegido|seleccionado|que (?:elegi|marque|seleccione|puse))|el lugar que (?:elegi|marque|seleccione))\b/;
+
+const ORDINALES: Record<string, number> = { primero: 1, primer: 1, primera: 1, segundo: 2, segunda: 2, tercero: 3, tercer: 3, tercera: 3, cuarto: 4, cuarta: 4, quinto: 5, quinta: 5 };
+
+/** Los lugares de la lista que se nombran: «el 1 y el 3», «el primero y el segundo», «los dos primeros». Sin números: los dos primeros. */
+export function leerPosiciones(t: string): number[] {
+  const nombrados = new Set<number>();
+  for (const m of t.matchAll(/\b([1-9])\b/g)) nombrados.add(Number(m[1]));
+  for (const m of t.matchAll(/\b(primero|primer|primera|segundo|segunda|tercero|tercer|tercera|cuarto|cuarta|quinto|quinta)\b/g)) nombrados.add(ORDINALES[m[1]]);
+  if (nombrados.size < 2) {
+    nombrados.clear();
+    const cantidad = /\b(los|las) tres\b/.test(t) ? 3 : 2;
+    for (let i = 1; i <= cantidad; i++) nombrados.add(i);
+  }
+  return [...nombrados].sort((a, b) => a - b).slice(0, 3);
+}
+
+const TEXTO_GENERICO = /^(un|una|unos|unas|algun|alguna|algunos|algunas|mi|mis|tu|tus|su|sus|todo|todos|toda|todas|cualquier|cualquiera|donde|lo)\b/;
+const CABEZA_DE_CRITERIO = /^(colegios?|escuelas?|universidad(?:es)?|malls?|centros? comercial(?:es)?|hospital(?:es)?|clinicas?|postas?|centros? de salud|paraderos?|mercados?|supermercados?|bancos?|parques?|quebradas?|rios?|salud|transporte|avenidas?|calles?)\b/;
+
+/**
+ * «cerca a la UNSA», «cerca de la plaza de Yanahuara»: un lugar con nombre del que se quiere estar cerca, tal como se escribió. null si lo que sigue es una
+ * categoría («cerca de un colegio»), algo propio («cerca de mi trabajo») o no hay lugar.
+ */
+export function leerLugarCerca(crudo: string): string | null {
+  const m = /\b(?:cerca|cercas|pegado|junto|al\s+lado|al\s+costado|frente|proximo)\s+(?:de|a|al|del)\s+(?:(?:la|el|los|las)\s+)?(.+?)(?=\s+(?:y|e|con|que|hasta|pero|sin|para|donde|en\s+(?:el\s+)?distrito)\s|[,;.?!]|$)/i.exec(crudo);
+  if (!m) return null;
+  const lugar = limpiarLugar(m[1]);
+  const n = normalizar(lugar);
+  if (n.length < 2 || TEXTO_GENERICO.test(n)) return null;
+  const cabeza = CABEZA_DE_CRITERIO.exec(n);
+  if (cabeza) {
+    const resto = n.slice(cabeza[0].length).trim();
+    // «universidad de San Agustín» o «universidad nacional de San Agustín» son lugares con nombre; «universidad» o «colegio de mi hijo» no.
+    if (resto === '' || /^(de|del)\s+(la|el|los|las|un|una|mi|mis|tu|su)\b/.test(resto)) return null;
+  }
+  return lugar;
+}
+
+/** «cualquiera», «me da igual», «lo que sea»: la persona no tiene preferencia. */
+export const SIN_PREFERENCIA =
+  /\b(cualquiera|cualquier cosa|cualquier tipo|me da igual|da igual|me es igual|es igual|lo que sea|lo que haya|el que sea|no importa|me importa poco|sin preferencia|no tengo preferencia|indistinto|indiferente|ni idea|como quieras|lo que (?:tu )?(?:veas|recomiendes)|no se)\b/;
+export const sinPreferencia = (t: string): boolean => SIN_PREFERENCIA.test(t);
+
+export function nombreBonito(distrito: string): string {
+  return distrito
+    .toLowerCase()
+    .replace(/(^|\s)\S/g, (c) => c.toUpperCase())
+    .replace(/\s(Y|De|Del|La|El)\b/g, (m) => m.toLowerCase());
+}
+
+/**
+ * El distrito de una frase ya normalizada: «en Cayma», «distrito de Paucarpata». Tolera una errata en el nombre cuando lo precede «en», «de», «por» o
+ * «distrito» y la primera letra coincide («en caima», «en cerro colorao»). `dicho` trae lo que se escribió cuando hubo que corregir.
+ */
+export function leerDistrito(t: string, distritos: string[]): { d: string; dicho: string | null } | null {
+  const lista = distritos.map((d) => ({ d, n: normalizar(d) })).sort((a, b) => b.n.length - a.n.length);
+  const exacto = lista.find(({ n }) => new RegExp(`\\b(en|de|por|distrito de|distrito) ${n}\\b`).test(t));
+  if (exacto) return { d: exacto.d, dicho: null };
+  const palabras = t.split(' ');
+  for (let i = 0; i < palabras.length - 1; i++) {
+    if (!/^(en|de|por|distrito)$/.test(palabras[i])) continue;
+    for (let largo = 3; largo >= 1; largo--) {
+      const frase = palabras.slice(i + 1, i + 1 + largo).join(' ');
+      const parecido = distritoParecido(frase, lista);
+      if (parecido) return { d: parecido.d, dicho: frase };
+    }
+  }
+  return null;
+}
+
+/** El nombre de distrito que más se parece a `frase` (sin marcador), si es claro: misma primera letra, 5 letras o más y una o dos letras de diferencia. */
+function distritoParecido(frase: string, lista: { d: string; n: string }[]): { d: string } | null {
+  if (frase.length < 5) return null;
+  const candidatos = lista.map((x) => ({ x, dist: distancia(frase, x.n) })).filter(({ x, dist }) => x.n[0] === frase[0] && dist > 0 && dist <= (x.n.length >= 9 ? 2 : 1));
+  if (candidatos.length === 0) return null;
+  candidatos.sort((a, b) => a.dist - b.dist);
+  if (candidatos[1] && candidatos[1].dist === candidatos[0].dist) return null;
+  return { d: candidatos[0].x.d };
+}
+
+/** Un distrito dicho solo, sin «en»: «¿y Cayma?», «caima». Tolera una errata. null si la frase no es solo un distrito. */
+export function distritoSuelto(t: string, distritos: string[]): { d: string; dicho: string | null } | null {
+  const resto = t.replace(/^(?:y|ahora|mejor|que tal|y que tal|y si es|y si fuera|dime de)\s+(?:(?:en|por|de|el distrito de|distrito de|distrito)\s+)?/, '').replace(/^(?:en|por|de|distrito de|distrito)\s+/, '').trim();
+  if (!resto || resto.split(' ').length > 3) return null;
+  const lista = distritos.map((d) => ({ d, n: normalizar(d) }));
+  const exacto = lista.find(({ n }) => n === resto);
+  if (exacto) return { d: exacto.d, dicho: null };
+  const parecido = distritoParecido(resto, lista);
+  return parecido ? { d: parecido.d, dicho: resto } : null;
+}

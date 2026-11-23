@@ -133,6 +133,26 @@ pnpm start             # compila y arranca en http://localhost:3000
 
 El frontend es JavaScript sin dependencias de compilación (Leaflet se carga desde CDN). Las cinco variables se resuelven con archivos locales de `public/data`: la zonificación y el equipamiento ya congelado en `public/data/equipamiento` (salud de RENIPRESS y colegios de ESCALE, con OpenStreetMap de respaldo; paraderos y áreas verdes de OpenStreetMap). Solo la búsqueda de direcciones (Nominatim) consulta un servicio externo, al pulsar «Buscar». Si falta un archivo de equipamiento, la aplicación consulta Overpass en vivo como respaldo, con reintentos entre los servidores de `CONFIG.overpassEndpoints`.
 
+## Aplicación web nueva (Next.js, en `web/`)
+
+Chat, mapa y ficha de un punto en una sola pantalla, sobre la base PostgreSQL + PostGIS de `packages/datos` (la aplicación estática de `public/` sigue como referencia).
+
+```bash
+# 1. Una base local sin Docker (PGlite): migra y carga public/data (unos segundos)
+DATABASE_URL=pglite://.pglite node packages/datos/src/cli.ts cargar
+# 2. Opcional: avisos propios para el chat y el mapa (ver docs/adr/0002-base-legal-avisos.md)
+DATABASE_URL=pglite://.pglite node packages/datos/src/cli.ts avisos <archivo.json>
+# 3. Servidor de desarrollo (desde web/); AVISOS_PUBLICAR=todas muestra avisos en desarrollo, sin definirla no se muestra ninguno
+cd web && DATABASE_URL=pglite://$(pwd)/../.pglite AVISOS_PUBLICAR=todas pnpm dev
+```
+
+- Rutas: `GET /api/ficha?lat=&lon=` ficha de un punto de Arequipa (cada sección con su fuente y su fecha, y los lugares más cercanos para dibujarlos), `GET /api/buscar?q=` ubica un lugar con los datos locales, `POST /api/agente` es el chat (además de los avisos, trae `mapa`: el trabajo y los sectores que ubicó), `GET /api/capas` lista las capas del mapa con su fuente y su fecha, `GET /api/capas/<id>?bbox=oeste,sur,este,norte&zoom=Z` sirve una capa por ventana y `GET /api/viaje?origenLat=&origenLon=&destinoLat=&destinoLon=` da la combi o bus con su trazado.
+- Mapa: el control «Capas del mapa» enciende capas de la base (colegios, salud, comercio por necesidad, paraderos, parques, acopio de agua, concesión eléctrica y minera, zonificación del PDM, peligro volcánico, quebradas, peligros geológicos, sismos, rutas de bus y distritos), cada una con su leyenda, lo que no dice y su fuente con la fecha de los datos. Se piden por ventana y zoom: si hay más elementos que el máximo, o la vista está muy lejos, el panel lo dice. No se ofrecen el censo por manzana, el riesgo por distrito del CENEPRED ni las denuncias (la base no los sirve por ventana o el módulo está apagado).
+- Mapa, ficha y asistente se influyen: la ficha dibuja lo más cercano de cada sección (con una línea punteada desde el punto) y cada fila tiene «Ver en el mapa»; un lugar del mapa marca su fila; una tarjeta de aviso enfoca su marcador y un marcador resalta su tarjeta; el trabajo que el asistente ubicó, los sectores de una búsqueda de zonas y la combi o bus del aviso resaltado se dibujan. El elemento del mapa lleva `data-vista`, `data-capas` y `data-viaje` con lo que hay dibujado (para las pruebas).
+- La ficha muestra solo lo que entrega `fichaDePunto`: no incluye sismos, el escenario del CENEPRED, el precio por m² del distrito, el aviso del PDM nuevo ni las verificaciones previas a comprar de la aplicación estática.
+- PGlite admite un solo proceso por carpeta: no abras la misma carpeta desde dos procesos a la vez.
+- Pruebas: `pnpm test:nuevo` (unitarias y de integración, incluye `web/pruebas/`), `pnpm web:typecheck` y `pnpm web:e2e` (Playwright, ver abajo).
+
 ## Scripts
 
 | Comando | Qué hace | Red |
@@ -207,4 +227,12 @@ pnpm test:e2e          # extremo a extremo (GET / y GET /api, sin servidor exter
 pnpm lint
 pnpm build
 pnpm datos:verificar
+pnpm test:nuevo        # vitest: paquetes y web/pruebas (necesita ~15 s para armar la base de pruebas)
+pnpm web:typecheck     # tsc de web/
+pnpm web:e2e           # Playwright: chat, mapa y ficha de la aplicación web (ver abajo)
 ```
+
+### Pruebas de extremo a extremo de la aplicación web
+
+`pnpm web:e2e` (o `pnpm test:e2e` dentro de `web/`) usa Playwright con el **Chrome instalado** (`channel: 'chrome'`; no descarga navegadores). Si no hay Chrome: `E2E_NAVEGADOR=msedge pnpm web:e2e`. Es autosuficiente: `web/e2e/iniciar-servidor.mjs` arma una base nueva en `.pglite-e2e/` (migraciones, `public/data` y cuatro avisos ficticios de `web/e2e/datos/avisos.json`, guardados con la misma función de ingesta de `pnpm avisos:ingerir`; no usa `datos-crudos/`), compila en `web/.next-e2e/` y levanta tres servidores en los puertos 3210 (principal), 3211 (sin publicar avisos, ADR 0002) y 3212 (degradado: base vacía y límites bajos, para los errores internos y el 429). El mapa no consulta internet: las teselas de OpenStreetMap se sustituyen en las pruebas. Con `E2E_PUERTO` se cambia el puerto base; `E2E_REUSAR_SERVIDOR=1` reutiliza servidores ya levantados con `node web/e2e/iniciar-servidor.mjs`. El informe HTML queda en `web/playwright-report/`.
+

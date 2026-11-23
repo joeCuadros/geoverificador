@@ -1,0 +1,118 @@
+/* La ficha del punto. Lo esencial primero; cada elemento es una fila con su estado (icono + texto + color), su distancia y su fuente con fecha; el método y los límites van
+   plegados. Mismos tokens que el resto (sillar y tinta de plano). Primero móvil: una columna de 358 px sin desplazamiento horizontal. */
+
+.ficha { display: flex; flex-direction: column; gap: 22px; overflow-wrap: anywhere; min-width: 0; }
+.ficha h2, .ficha h3, .ficha h4, .ficha h5 { margin: 0; }
+.ficha p { margin: 0; }
+.ficha ul { margin: 0; padding: 0; list-style: none; }
+.ficha :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.ficha-vacia, .ficha-estado { color: var(--ink-2); }
+
+/* Cabecera y aviso */
+.f-cabecera { display: grid; gap: 2px; }
+.f-cabecera h2 { font-size: 1.5rem; }
+.f-sub { font-size: .9rem; color: var(--ink-2); }
+.f-fecha { font-size: .78rem; color: var(--muted); }
+.f-aviso { padding: 8px 12px; background: var(--amb-bg); border: 1px solid var(--amb-line); border-radius: var(--radius-sm); font-size: .82rem; color: var(--amb-text); }
+
+/* Lo esencial: cada frase lleva a su grupo */
+.f-esencial { display: grid; gap: 8px; }
+.f-esencial h3 { font-size: 1.05rem; }
+.f-esencial ul { border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--surface-2); overflow: hidden; }
+.f-esencial li + li { border-top: 1px solid var(--line); }
+.f-esencial a { display: grid; grid-template-columns: 5.2rem 1fr; gap: 10px; align-items: baseline; min-height: 44px; padding: 10px 12px; color: var(--ink); text-decoration: none; }
+.f-esencial a:hover { background: var(--tinta-soft); }
+.f-esencial-tema { font-weight: 700; font-size: .85rem; color: var(--tinta); }
+.f-esencial-texto { font-size: .92rem; }
+
+/* Navegación entre grupos: se queda a la vista y se desplaza por dentro si no cabe */
+.f-nav { position: sticky; top: 0; z-index: 5; margin: 0 -16px; padding: 0 16px; background: var(--surface); border-bottom: 1px solid var(--line); }
+.f-nav ul { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: thin; }
+.f-nav a { display: flex; align-items: center; min-height: 44px; padding: 0 9px; white-space: nowrap; font-size: .9rem; font-weight: 600; color: var(--ink-2); text-decoration: none; border-bottom: 3px solid transparent; }
+.f-nav a:hover { color: var(--tinta); border-bottom-color: var(--tinta-soft-line); }
+
+/* Grupos */
+.f-grupo { display: grid; gap: 8px; scroll-margin-top: 56px; }
+.f-grupo-cab { display: flex; align-items: center; justify-content: space-between; gap: 4px 10px; flex-wrap: wrap; }
+.f-grupo h3 { font-size: 1.2rem; }
+.f-grupo h3:focus-visible { outline-offset: 4px; }
+.f-grupo-resumen { font-size: .95rem; color: var(--ink-2); }
+.f-subgrupo { display: grid; gap: 4px; margin-top: 6px; }
+.f-subgrupo h4 { font-size: .8rem; font-weight: 700; color: var(--ink-2); letter-spacing: .02em; }
+.f-items { border-top: 1px solid var(--line); }
+.f-item { border-bottom: 1px solid var(--line); }
+
+/* Un elemento: todo él es el botón que lo muestra en el mapa */
+.f-item-cuerpo { display: flex; flex-direction: column; gap: 4px; width: 100%; padding: 12px 8px; text-align: left; }
+button.f-item-boton { min-height: 44px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--ink); font-weight: 400; }
+button.f-item-boton:hover:not(:disabled) { background: var(--tinta-soft); }
+button.f-item-boton[aria-pressed='true'] { background: var(--tinta-soft); box-shadow: inset 0 0 0 2px var(--tinta); }
+.f-item-activo .f-ver { font-weight: 700; }
+.f-fila { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.f-titulo { font-weight: 700; }
+.f-distancia { margin-left: auto; font-size: 1.05rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.f-nombre { font-size: .95rem; }
+.f-texto { font-size: .92rem; color: var(--ink-2); }
+.f-datos { display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: .8rem; color: var(--ink-2); }
+.f-dato-etiqueta { color: var(--muted); }
+.f-fuente { font-size: .75rem; color: var(--muted); }
+.f-ver { display: inline-flex; align-items: center; gap: 4px; font-size: .75rem; color: var(--tinta); }
+
+/* Estado: icono, texto y color; informativo y sin dato no se parecen a un veredicto */
+.estado { display: inline-flex; align-items: center; gap: 4px; padding: 1px 9px 1px 6px; border: 1px solid transparent; border-radius: 999px; font-size: .75rem; font-weight: 700; white-space: nowrap; }
+.estado-icono { flex: none; }
+.estado-cumple { color: var(--ok); background: var(--ok-bg); border-color: var(--ok-line); }
+.estado-no_cumple { color: var(--no); background: var(--no-bg); border-color: var(--no-line); }
+.estado-informativo { color: var(--tinta); background: transparent; border-color: var(--tinta-soft-line); }
+.estado-sin_dato { color: var(--muted); background: transparent; border: 1px dashed var(--line-strong); }
+
+/* Medidor: dónde queda la distancia respecto de la referencia */
+.f-referencia { display: flex; align-items: center; gap: 10px; }
+.f-referencia-texto { flex: none; font-size: .78rem; color: var(--ink-2); }
+.medidor { position: relative; flex: 1 1 auto; min-width: 60px; max-width: 220px; height: 8px; border-radius: 4px; background: var(--surface-2); border: 1px solid var(--line-strong); }
+.medidor-relleno { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px 0 0 3px; background: var(--tinta); }
+.medidor-cumple { background: var(--ok); }
+.medidor-no_cumple { background: var(--no); }
+.medidor-marca { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: var(--ink); }
+
+/* Un colegio que sirve a varios niveles: un criterio por nivel */
+.f-criterios { display: grid; gap: 6px; }
+.f-criterio { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 4px 8px; }
+.f-criterio-etiqueta { font-weight: 600; font-size: .88rem; }
+.f-criterio-ref { font-size: .78rem; color: var(--ink-2); text-align: right; }
+.f-criterio .medidor { grid-column: 1 / -1; max-width: none; }
+
+/* Lo plegado: método, límites, escenarios */
+.f-mas { margin: 0 8px 8px; }
+.f-mas summary::-webkit-details-marker, .f-paso summary::-webkit-details-marker { display: none; }
+.f-mas summary::before, .f-paso summary::before { content: ''; flex: none; width: 7px; height: 7px; margin: 0 10px 2px 2px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); }
+.f-mas[open] > summary::before, .f-paso[open] > summary::before { transform: rotate(45deg); margin-bottom: 4px; }
+.f-mas summary, .f-paso summary { list-style: none; display: flex; align-items: center; min-height: 44px; font-size: .85rem; font-weight: 600; color: var(--tinta); cursor: pointer; }
+.f-mas-grupo { margin: 4px 0 0; }
+.f-mas-bloque { display: grid; gap: 4px; margin-bottom: 12px; padding-top: 8px; border-top: 1px solid var(--line); }
+.f-mas-bloque h5 { font-size: .85rem; font-weight: 700; color: var(--ink); }
+.f-mas-bloque p strong { color: var(--ink); }
+.f-mas p, .f-paso p { font-size: .84rem; color: var(--ink-2); }
+.f-lista { display: grid; gap: 6px; padding-left: 18px !important; list-style: disc !important; font-size: .86rem; color: var(--ink-2); }
+.f-paso { margin: 0 8px; }
+.f-paso p { margin-bottom: 8px; }
+.f-limites .f-lista { padding-left: 18px; }
+.f-acciones { margin-top: -6px; }
+
+@media (min-width: 900px) {
+  .f-nav { margin: 0 -16px; }
+}
+
+/* Impresión: todo desplegado, sin controles */
+@media print {
+  .f-nav, .f-ver, .f-acciones { display: none !important; }
+  .ficha { gap: 14px; font-size: 10pt; }
+  .f-item { break-inside: avoid; }
+  button.f-item-boton { padding: 0; box-shadow: none !important; background: transparent !important; }
+  .f-mas summary, .f-paso summary { min-height: 0; font-weight: 700; color: #000; }
+  details::details-content { content-visibility: visible; display: block; height: auto; }
+  details > summary::marker { content: ''; }
+  .estado { border: 1px solid #000 !important; background: none !important; color: #000 !important; }
+  .medidor-relleno, .medidor-marca { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .f-esencial ul { background: none; }
+}

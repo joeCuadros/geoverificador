@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AvisoRecolectado } from '@geoverificador/dominio/avisos';
 import type { Base } from '@geoverificador/datos/cliente';
@@ -38,13 +39,87 @@ describe('herramientas', () => {
     const r = await ejecutar('geocodificar_lugar', { texto: 'Plaza de Armas' }, ctx());
     expect(r.candidatos.length).toBeGreaterThan(0);
   });
+  it('nombra las líneas del viaje con la etiqueta real de la ruta, no con un objeto convertido a texto', async () => {
+    const archivo = JSON.parse(fs.readFileSync(new URL('../../../public/data/rutas_osm.geojson', import.meta.url), 'utf8'));
+    const etiquetas = new Set<string>(archivo.features.map((f: any) => f.properties?.linea).filter((x: unknown) => typeof x === 'string'));
+    const pares = [
+      { origen: { lat: -16.3905, lon: -71.5435 }, destino: { lat: -16.4215, lon: -71.544 } },
+      { origen: { lat: -16.3989, lon: -71.5369 }, destino: { lat: -16.4215, lon: -71.544 } },
+      { origen: { lat: -16.4295, lon: -71.5165 }, destino: { lat: -16.3989, lon: -71.5369 } },
+    ];
+    const lineas: string[] = [];
+    for (const p of pares) {
+      const r = await ejecutar('tiempo_de_viaje', p, ctx());
+      if (r.mejor) lineas.push(...r.mejor.lineas);
+    }
+    expect(lineas.length).toBeGreaterThan(0);
+    for (const l of lineas) {
+      expect(l).not.toMatch(/object/i);
+      expect(l === 'sin código' || etiquetas.has(l)).toBe(true);
+    }
+  });
+});
+
+describe('el trazado del viaje para el mapa', () => {
+  const PARES = [
+    { origen: { lat: -16.3905, lon: -71.5435 }, destino: { lat: -16.4215, lon: -71.544 } },
+    { origen: { lat: -16.3989, lon: -71.5369 }, destino: { lat: -16.4215, lon: -71.544 } },
+    { origen: { lat: -16.4295, lon: -71.5165 }, destino: { lat: -16.3989, lon: -71.5369 } },
+    { origen: { lat: -16.3905, lon: -71.5435 }, destino: { lat: -16.4179, lon: -71.5497 } },
+  ];
+  it('sin pedirlo no se devuelve la geometría (las búsquedas de avisos miden muchos viajes)', async () => {
+    const r = await ejecutar('tiempo_de_viaje', PARES[0], ctx());
+    expect(r.mejor).not.toBeNull();
+    expect(r.trazado).toBeUndefined();
+  });
+  it('pedido, trae los tramos de la mejor opción con su línea, sus puntos de subida y bajada y los vértices de la ruta tal como están en los datos', async () => {
+    let visto = 0;
+    for (const p of PARES) {
+      const r = await ejecutar('tiempo_de_viaje', { ...p, trazado: true }, ctx());
+      if (!r.mejor) continue;
+      visto++;
+      expect(r.trazado).toBeTruthy();
+      const t = r.trazado!;
+      expect(t.tramos).toHaveLength(r.mejor.trasbordos + 1);
+      expect(t.trasbordos).toHaveLength(r.mejor.trasbordos);
+      expect(t.tramos.map((x) => x.linea)).toEqual(r.mejor.lineas);
+      for (const x of t.tramos) {
+        expect(x.segmento.length).toBeGreaterThanOrEqual(2);
+        for (const [lon, lat] of x.segmento) {
+          expect(Math.abs(lat - -16.4)).toBeLessThan(0.5);
+          expect(Math.abs(lon - -71.5)).toBeLessThan(0.5);
+        }
+        expect(x.subida).toMatchObject({ lat: expect.any(Number), lon: expect.any(Number) });
+        expect(x.bajada).toMatchObject({ lat: expect.any(Number), lon: expect.any(Number) });
+      }
+    }
+    expect(visto).toBeGreaterThan(0);
+  });
+  it('con un trasbordo trae el punto donde se cambia de ruta', async () => {
+    let conTrasbordo = 0;
+    for (const p of PARES) {
+      const r = await ejecutar('tiempo_de_viaje', { ...p, trazado: true }, ctx());
+      if (r.mejor?.trasbordos === 1) {
+        conTrasbordo++;
+        expect(r.trazado!.trasbordos[0]).toMatchObject({ lat: expect.any(Number), lon: expect.any(Number) });
+        expect(r.trazado!.tramos).toHaveLength(2);
+      }
+    }
+    expect(conTrasbordo).toBeGreaterThan(0);
+  });
+  it('sin ruta no inventa un trazado', async () => {
+    const r = await ejecutar('tiempo_de_viaje', { origen: { lat: -16.3905, lon: -71.5435 }, destino: { lat: -16.2, lon: -71.3 }, trazado: true }, ctx());
+    expect(r.mejor).toBeNull();
+    expect(r.trazado).toBeNull();
+  });
 });
 
 describe('el ciclo del agente', () => {
   it('saluda y explica qué puede hacer', async () => {
     const r = await responder('hola', ESTADO_INICIAL, ctx());
     expect(r.tipo).toBe('info');
-    expect(r.herramientas).toHaveLength(0);
+    // El saludo solo consulta cuántos avisos hay (cobertura_avisos); no busca ni mide nada.
+    expect(r.herramientas.map((h) => h.nombre)).toEqual(['cobertura_avisos']);
   });
   it('pregunta una sola cosa cuando falta el trabajo', async () => {
     const r = await responder('Quiero un departamento cerca de mi trabajo y que no cueste más de medio millón', ESTADO_INICIAL, ctx());

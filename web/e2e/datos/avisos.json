@@ -1,0 +1,26 @@
+[
+  {
+    "fuente": "urbania", "id_fuente": "e2e-yanahuara-1", "url": "https://portal.example/inmueble/e2e-yanahuara-1",
+    "titulo": "Departamento de prueba en Yanahuara", "tipo_inmueble": "departamento", "tipo_portal": "Departamento", "es_proyecto": false,
+    "precio": 400000, "precio_max": null, "moneda": "PEN", "area_total_m2": 90, "area_construida_m2": 90, "dormitorios": 3, "dormitorios_max": null, "banos": 2, "estacionamientos": 1,
+    "distrito": "YANAHUARA", "zona": "Yanahuara", "direccion": null, "lat": -16.3905, "lon": -71.5435, "fecha_publicacion": "2026-11-01"
+  },
+  {
+    "fuente": "urbania", "id_fuente": "e2e-yanahuara-2", "url": "https://portal.example/inmueble/e2e-yanahuara-2",
+    "titulo": "Departamento de prueba amplio en Yanahuara", "tipo_inmueble": "departamento", "tipo_portal": "Departamento", "es_proyecto": false,
+    "precio": 430000, "precio_max": null, "moneda": "PEN", "area_total_m2": 110, "area_construida_m2": 110, "dormitorios": 3, "dormitorios_max": null, "banos": 2, "estacionamientos": 1,
+    "distrito": "YANAHUARA", "zona": "Yanahuara", "direccion": null, "lat": -16.3935, "lon": -71.5465, "fecha_publicacion": "2026-11-02"
+  },
+  {
+    "fuente": "urbania", "id_fuente": "e2e-yanahuara-3", "url": "https://portal.example/inmueble/e2e-yanahuara-3",
+    "titulo": "Departamento de prueba sin ubicación en Yanahuara", "tipo_inmueble": "departamento", "tipo_portal": "Departamento", "es_proyecto": false,
+    "precio": 380000, "precio_max": null, "moneda": "PEN", "area_total_m2": 80, "area_construida_m2": 80, "dormitorios": 2, "dormitorios_max": null, "banos": 1, "estacionamientos": 0,
+    "distrito": "YANAHUARA", "zona": "Yanahuara", "direccion": null, "lat": null, "lon": null, "fecha_publicacion": "2026-11-03"
+  },
+  {
+    "fuente": "urbania", "id_fuente": "e2e-cayma-1", "url": "https://portal.example/inmueble/e2e-cayma-1",
+    "titulo": "Casa de prueba en Cayma", "tipo_inmueble": "casa", "tipo_portal": "Casa", "es_proyecto": false,
+    "precio": 650000, "precio_max": null, "moneda": "PEN", "area_total_m2": 200, "area_construida_m2": 160, "dormitorios": 4, "dormitorios_max": null, "banos": 3, "estacionamientos": 2,
+    "distrito": "CAYMA", "zona": "Cayma", "direccion": null, "lat": -16.3680, "lon": -71.5460, "fecha_publicacion": "2026-11-04"
+  }
+]

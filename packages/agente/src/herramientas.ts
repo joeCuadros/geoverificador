@@ -10,9 +10,10 @@ import Calculos from '@geoverificador/dominio/nucleo/calculos';
 import CONFIG from '@geoverificador/dominio/nucleo/config';
 import Viaje from '@geoverificador/dominio/nucleo/viaje';
 import { topeEnSoles } from '@geoverificador/dominio/avisos';
-import { avisoPorId, buscarAvisos, tipoCambioVigente, type AvisoHallado, type FiltrosAvisos } from '@geoverificador/datos/avisos';
+import { avisoPorId, buscarAvisos, estadoDeAvisos, tipoCambioVigente, type AvisoHallado, type FiltrosAvisos } from '@geoverificador/datos/avisos';
 import type { Base } from '@geoverificador/datos/cliente';
 import { fuente as leerFuente, fuentes as leerFuentes } from '@geoverificador/datos/consultas';
+import { fichaDePunto } from '@geoverificador/datos/ficha';
 import { geocodificarLocal, geocodificarNominatim, PRECISION_UTIL_M, type OpcionesNominatim } from '@geoverificador/datos/geocodificar';
 import { CRITERIOS, LIMITES, cumplidos, evaluar, ordenar, sinDato, type CriterioEvaluado, type IdCriterio, type ViajeMedido } from './criterios.ts';
 
@@ -38,7 +39,13 @@ const criterioEvaluado = z.object({
   id: idCriterio, etiqueta: z.string(), cumple: z.boolean().nullable(), valor: z.string(), pedido: z.string(), referencia: z.string().nullable(), fuente: z.string().nullable(), fecha: z.string().nullable(), nota: z.string(), convencion: z.boolean(),
 });
 
-export const ESQUEMAS = {
+export const puntoViaje = z.object({ lat: z.number(), lon: z.number() });
+const trazadoViaje = z.object({
+  tramos: z.array(z.object({ nombre: z.string(), linea: z.string(), color: z.string().nullable(), segmento: z.array(z.tuple([z.number(), z.number()])), subida: puntoViaje, bajada: puntoViaje, caminarOrigenM: z.number(), caminarDestinoM: z.number() })),
+  trasbordos: z.array(z.object({ lat: z.number(), lon: z.number(), nombre: z.string().nullable() })),
+});
+
+const ESQUEMAS = {
   geocodificar_lugar: {
     descripcion: 'Convierte el nombre de un lugar de Arequipa o una dirección en un punto. Úsala antes de medir «cerca de» o un viaje. Si devuelve varios candidatos distintos o ninguno, pregunta a la persona.',
     entrada: z.object({ texto: z.string().min(2).max(200).describe('Nombre o dirección tal como lo dijo la persona, p. ej. «Parque Industrial» o «UNSA».') }),
@@ -90,7 +97,7 @@ export const ESQUEMAS = {
   },
   tiempo_de_viaje: {
     descripcion: 'Dice qué combi o bus lleva de un punto a otro (directo o con un trasbordo) y el tiempo aproximado sin contar la espera. Si no hay ruta en los datos, lo dice.',
-    entrada: z.object({ origen: punto, destino: punto, sinTrasbordo: z.boolean().optional() }),
+    entrada: z.object({ origen: punto, destino: punto, sinTrasbordo: z.boolean().optional(), trazado: z.boolean().optional().describe('Devolver también la geometría de la mejor opción para dibujarla en el mapa.') }),
     salida: z.object({
       distanciaM: z.number(),
       hayRuta: z.boolean(),
@@ -98,6 +105,8 @@ export const ESQUEMAS = {
       directas: z.number(),
       conTrasbordo: z.number(),
       nota: z.string(),
+      /** Solo si se pide: la geometría de la mejor opción tal como está en los datos (null si no hay ruta). */
+      trazado: trazadoViaje.nullable().optional(),
     }),
   },
   buscar_zonas: {
@@ -113,6 +122,61 @@ export const ESQUEMAS = {
     descripcion: 'Dice de qué fuente sale un dato, con su licencia, su fecha y su límite. Úsala cuando preguntan «¿de dónde sale?» o «¿de qué fecha es?».',
     entrada: z.object({ tema: z.string().min(2).max(60).describe('Un criterio (colegio, universidad, mall, salud, paradero, mercado, agua, luz, zona_comercio, trabajo…) o «avisos».') }),
     salida: z.object({ fuentes: z.array(z.object({ id: z.string(), nombre: z.string(), licencia: z.string().nullable(), licenciaVerificada: z.boolean(), fecha: z.string().nullable(), url: z.string().nullable(), limite: z.string().nullable() })) }),
+  },
+  cobertura_avisos: {
+    descripcion: 'Dice cuántos avisos vigentes hay, en qué distritos y de qué tipos, y cuándo se vio el más reciente. Úsala para saludar, para decir qué cubre el asistente y para ofrecer distritos con avisos. Respeta la regla de publicación: con la publicación apagada no cuenta nada.',
+    entrada: z.object({}),
+    salida: z.object({
+      publicacionActiva: z.boolean(),
+      vigentes: z.number(),
+      distritos: z.array(z.object({ nombre: z.string(), total: z.number() })),
+      tipos: z.array(z.object({ tipo: z.string(), total: z.number() })),
+      fuentes: z.array(z.object({ nombre: z.string(), total: z.number() })),
+      /** Fecha (AAAA-MM-DD) en que se vio por última vez el aviso más reciente. */
+      ultimaVez: z.string().nullable(),
+      /** Fecha de la última corrida del recolector de avisos. */
+      ultimaCorrida: z.string().nullable(),
+      motivo: z.string().nullable(),
+    }),
+  },
+  diagnosticar_filtros: {
+    descripcion: 'Cuando una búsqueda de avisos no devuelve nada, dice cuántos avisos habría si se quitara cada filtro (tipo, distrito, precio, dormitorios, área) y cuánto cuesta el más barato al quitar el precio. Los criterios de cercanía no filtran: solo ordenan.',
+    entrada: z.object({
+      tipo: z.enum(['departamento', 'casa', 'terreno', 'local', 'oficina']).nullable().optional(),
+      precioMax: z.number().positive().nullable().optional(),
+      moneda: z.enum(['PEN', 'USD']).nullable().optional(),
+      distrito: z.string().max(60).nullable().optional(),
+      dormitoriosMin: z.number().int().min(0).max(20).nullable().optional(),
+      areaMinM2: z.number().positive().nullable().optional(),
+    }),
+    salida: z.object({
+      total: z.number(),
+      sinNingunFiltro: z.number(),
+      sinFiltro: z.array(z.object({ filtro: z.enum(['tipo', 'distrito', 'precio', 'dormitorios', 'area']), total: z.number(), precioMinimoPen: z.number().nullable() })),
+    }),
+  },
+  ficha_de_punto: {
+    descripcion: 'Dice qué hay en un punto del mapa: distrito, zonificación, lo más cercano de salud, educación, transporte y área verde con su distancia, fuente y fecha, y los peligros de contexto. Es informativa: no puntúa ni recomienda.',
+    entrada: punto,
+    salida: z.object({
+      punto: punto,
+      distrito: z.string().nullable(),
+      zona: z.object({ codigo: z.string(), nombre: z.string().nullable(), edificable: z.string().nullable(), fuente: z.string().nullable(), fecha: z.string().nullable() }).nullable(),
+      filas: z.array(
+        z.object({
+          etiqueta: z.string(),
+          estado: z.enum(['cumple', 'no_cumple', 'sin_dato', 'informativo']),
+          nombre: z.string().nullable(),
+          distanciaM: z.number().nullable(),
+          umbralM: z.number().nullable(),
+          valor: z.string().nullable(),
+          fuente: z.string().nullable(),
+          fecha: z.string().nullable(),
+        }),
+      ),
+      peligros: z.array(z.object({ texto: z.string(), distanciaM: z.number().nullable(), fuente: z.string().nullable(), fecha: z.string().nullable() })),
+      limites: z.array(z.string()),
+    }),
   },
 } as const;
 
@@ -144,15 +208,25 @@ export function olvidarMemoria(): void {
   zonasEnMemoria = null;
 }
 
-async function medirViaje(base: Base, origen: { lat: number; lon: number }, destino: { lat: number; lon: number }, sinTrasbordo = false): Promise<Salida<'tiempo_de_viaje'>> {
+/** La etiqueta de la línea tal como viene en los datos de la ruta; «sin código» cuando la ruta no la trae. */
+const etiquetaDeLinea = (ruta: any): string => (typeof ruta?.linea === 'string' && ruta.linea.trim()) || 'sin código';
+
+const grado5 = (n: number) => Math.round(n * 1e5) / 1e5;
+const coordenadas = (segmento: [number, number][]): [number, number][] => segmento.map(([x, y]) => [grado5(x), grado5(y)]);
+const punto5 = (p: { lat: number; lon: number }) => ({ lat: grado5(p.lat), lon: grado5(p.lon) });
+
+async function medirViaje(base: Base, origen: { lat: number; lon: number }, destino: { lat: number; lon: number }, sinTrasbordo = false, conTrazado = false): Promise<Salida<'tiempo_de_viaje'>> {
   const { rutas: lista } = await rutas(base);
   const tiempo = CONFIG.viaje.tiempo;
   const distanciaM = Calculos.haversine(origen.lat, origen.lon, destino.lat, destino.lon);
   const d = Viaje.rutasDirectas(origen, destino, lista, { caminarM: CONFIG.viaje.caminarM });
   const directas = Viaje.unir(d.directas);
+  const trazados = new Map<object, z.infer<typeof trazadoViaje>>();
   const opciones: Salida<'tiempo_de_viaje'>['mejor'][] = directas.map((x: any) => {
     const t = Viaje.estimarTiempo(x, tiempo);
-    return { minutos: t.totalSinEsperaMin, trasbordos: 0, lineas: [Viaje.codigoLinea(x.ruta) ?? x.ruta?.linea ?? 'sin código'].filter(Boolean), caminarM: Math.round(x.caminarTotalM), esperaMediaMin: t.esperaMediaMin };
+    const o = { minutos: t.totalSinEsperaMin, trasbordos: 0, lineas: [etiquetaDeLinea(x.ruta)], caminarM: Math.round(x.caminarTotalM), esperaMediaMin: t.esperaMediaMin };
+    if (conTrazado) trazados.set(o, { tramos: [{ nombre: x.ruta?.nombre ?? etiquetaDeLinea(x.ruta), linea: etiquetaDeLinea(x.ruta), color: x.ruta?.color ?? null, segmento: coordenadas(x.segmento), subida: punto5(x.subida), bajada: punto5(x.bajada), caminarOrigenM: Math.round(x.caminarOrigenM), caminarDestinoM: Math.round(x.caminarDestinoM) }], trasbordos: [] });
+    return o;
   });
   let conTrasbordo = 0;
   if (!sinTrasbordo && directas.length === 0) {
@@ -160,11 +234,22 @@ async function medirViaje(base: Base, origen: { lat: number; lon: number }, dest
     conTrasbordo = t.trasbordos.length;
     for (const x of t.trasbordos.slice(0, 5) as any[]) {
       const e = Viaje.estimarTiempoTrasbordo(x, tiempo);
-      opciones.push({ minutos: e.totalSinEsperaMin, trasbordos: 1, lineas: [x.rutaA, x.rutaB].map((r: any) => Viaje.codigoLinea(r) ?? r?.linea ?? 'sin código'), caminarM: Math.round(x.caminarTotalM), esperaMediaMin: e.esperaMediaMin });
+      const o = { minutos: e.totalSinEsperaMin, trasbordos: 1, lineas: [x.rutaA, x.rutaB].map(etiquetaDeLinea), caminarM: Math.round(x.caminarTotalM), esperaMediaMin: e.esperaMediaMin };
+      opciones.push(o);
+      if (conTrazado) {
+        trazados.set(o, {
+          tramos: [
+            { nombre: x.rutaA?.nombre ?? etiquetaDeLinea(x.rutaA), linea: etiquetaDeLinea(x.rutaA), color: x.rutaA?.color ?? null, segmento: coordenadas(x.segmentoA), subida: punto5(x.subida), bajada: punto5(x.bajadaA), caminarOrigenM: Math.round(x.caminarOrigenM), caminarDestinoM: Math.round(x.caminarTrasbordoM) },
+            { nombre: x.rutaB?.nombre ?? etiquetaDeLinea(x.rutaB), linea: etiquetaDeLinea(x.rutaB), color: x.rutaB?.color ?? null, segmento: coordenadas(x.segmentoB), subida: punto5(x.subidaB), bajada: punto5(x.bajada), caminarOrigenM: Math.round(x.caminarTrasbordoM), caminarDestinoM: Math.round(x.caminarDestinoM) },
+          ],
+          trasbordos: [{ ...punto5(x.trasbordo), nombre: x.parada?.nombre ?? null }],
+        });
+      }
     }
   }
   const conTiempo = opciones.filter((o) => o && o.minutos !== null).sort((a, b) => a!.minutos! - b!.minutos!);
   const mejor = conTiempo[0] ?? opciones[0] ?? null;
+  const mejorOpcion = mejor as object | null;
   return {
     distanciaM: Math.round(distanciaM),
     hayRuta: opciones.length > 0,
@@ -172,6 +257,7 @@ async function medirViaje(base: Base, origen: { lat: number; lon: number }, dest
     directas: directas.length,
     conTrasbordo,
     nota: 'Tiempo aproximado: caminata en línea recta a 1,07 m/s más la duración que OpenStreetMap etiqueta para la ruta, prorrateada por la distancia. No incluye la espera. Las rutas cubren el 72 % de la ciudad.',
+    ...(conTrazado ? { trazado: (mejorOpcion && trazados.get(mejorOpcion)) || null } : {}),
   };
 }
 
@@ -296,8 +382,8 @@ const IMPLEMENTACION: { [N in NombreHerramienta]: (entrada: z.infer<(typeof ESQU
     return { aviso: { id: a.id, titulo: a.titulo, url: a.url, fuente: a.fuenteNombre, distrito: a.distrito, vistoPorUltimaVez: a.ultimaVezVisto.slice(0, 10) }, criterios: a.criterios, motivoVacio: a.criterios ? null : 'El aviso no tiene coordenadas: no se pudo medir su entorno.' };
   },
 
-  async tiempo_de_viaje({ origen, destino, sinTrasbordo }, ctx) {
-    return medirViaje(ctx.base, origen, destino, sinTrasbordo ?? false);
+  async tiempo_de_viaje({ origen, destino, sinTrasbordo, trazado }, ctx) {
+    return medirViaje(ctx.base, origen, destino, sinTrasbordo ?? false, trazado ?? false);
   },
 
   async buscar_zonas({ criterios, distrito }, ctx) {
@@ -313,6 +399,106 @@ const IMPLEMENTACION: { [N in NombreHerramienta]: (entrada: z.infer<(typeof ESQU
       sectores: (f.filas ?? []).map((s: any) => ({ nombre: s.nombre ?? s.titulo ?? null, distrito: s.distrito ?? null, hectareas: Math.round(s.hectareas ?? 0), lat: s.centro?.lat ?? s.lat, lon: s.centro?.lon ?? s.lon })).filter((s: any) => Number.isFinite(s.lat) && Number.isFinite(s.lon)),
       texto: f.texto,
       fecha: d.fecha,
+    };
+  },
+
+  async cobertura_avisos(_e, ctx) {
+    if (ctx.publicar === 'ninguna') {
+      return { publicacionActiva: false, vigentes: 0, distritos: [], tipos: [], fuentes: [], ultimaVez: null, ultimaCorrida: null, motivo: 'La publicación de avisos de terceros no está activada (ADR 0002).' };
+    }
+    const filas = await ctx.base.consulta(
+      `SELECT a.distrito, a.tipo_inmueble, f.nombre AS fuente, count(*)::int AS n, max(a.ultima_vez_visto) AS visto
+       FROM aviso a JOIN fuente f ON f.id = a.fuente_id
+       WHERE a.estado = 'vigente' AND (a.grupo_id IS NULL OR a.grupo_id = a.id)${ctx.publicar === 'permitidas' ? ' AND f.permite_publicar' : ''}
+       GROUP BY 1, 2, 3`,
+    );
+    const sumar = (clave: (f: any) => string | null) => {
+      const m = new Map<string, number>();
+      for (const f of filas) {
+        const k = clave(f);
+        if (k) m.set(k, (m.get(k) ?? 0) + Number(f.n));
+      }
+      return [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+    };
+    const visto = filas.map((f: any) => (f.visto instanceof Date ? f.visto.toISOString() : String(f.visto ?? ''))).filter(Boolean).sort().at(-1) ?? null;
+    const estado = await estadoDeAvisos(ctx.base);
+    return {
+      publicacionActiva: true,
+      vigentes: filas.reduce((n: number, f: any) => n + Number(f.n), 0),
+      distritos: sumar((f) => f.distrito).map(([nombre, total]) => ({ nombre, total })),
+      tipos: sumar((f) => f.tipo_inmueble).map(([tipo, total]) => ({ tipo, total })),
+      fuentes: sumar((f) => f.fuente).map(([nombre, total]) => ({ nombre, total })),
+      ultimaVez: visto ? visto.slice(0, 10) : null,
+      ultimaCorrida: estado.ultimaCorrida ? estado.ultimaCorrida.slice(0, 10) : null,
+      motivo: filas.length === 0 ? 'Todavía no hay avisos vigentes.' : null,
+    };
+  },
+
+  async diagnosticar_filtros(e, ctx) {
+    const tc = await tipoCambioVigente(ctx.base, ctx.hoy);
+    let precioMaxPen: number | null = null;
+    if (e.precioMax != null) {
+      if (!e.moneda) throw new ErrorDeHerramienta('Falta la moneda del precio máximo: pregunta si es en soles o en dólares.');
+      precioMaxPen = topeEnSoles(e.precioMax, e.moneda, ctx.hoy, tc);
+    }
+    const filtros: FiltrosAvisos = { tipo: e.tipo ?? null, precioMaxPen, distrito: e.distrito ?? null, dormitoriosMin: e.dormitoriosMin ?? null, areaMinM2: e.areaMinM2 ?? null, limite: 200, publicar: ctx.publicar };
+    const medir = async (f: FiltrosAvisos) => {
+      const r = await buscarAvisos(ctx.base, f);
+      const precios = r.avisos.map((a) => a.precioPen).filter((x): x is number => x !== null);
+      // El mínimo solo es exacto si la lista no se recortó.
+      return { total: r.total, precioMinimoPen: r.total <= r.avisos.length && precios.length ? Math.min(...precios) : null };
+    };
+    const quitando: [Exclude<Salida<'diagnosticar_filtros'>['sinFiltro'][number]['filtro'], never>, boolean, Partial<FiltrosAvisos>][] = [
+      ['tipo', filtros.tipo != null, { tipo: null }],
+      ['distrito', filtros.distrito != null, { distrito: null }],
+      ['precio', filtros.precioMaxPen != null, { precioMaxPen: null }],
+      ['dormitorios', filtros.dormitoriosMin != null, { dormitoriosMin: null }],
+      ['area', filtros.areaMinM2 != null, { areaMinM2: null }],
+    ];
+    const sinFiltro = [];
+    for (const [filtro, activo, quitar] of quitando) if (activo) sinFiltro.push({ filtro, ...(await medir({ ...filtros, ...quitar })) });
+    return { total: (await medir(filtros)).total, sinNingunFiltro: (await medir({ limite: 1, publicar: ctx.publicar })).total, sinFiltro };
+  },
+
+  async ficha_de_punto(p, ctx) {
+    const f = await fichaDePunto(ctx.base, p);
+    const e = f.entorno ?? {};
+    const estadoDe = (r: any): Salida<'ficha_de_punto'>['filas'][number]['estado'] => ({ CUMPLE: 'cumple', 'NO CUMPLE': 'no_cumple', INFORMATIVO: 'informativo' } as const)[String(r?.estado ?? '').toUpperCase() as 'CUMPLE'] ?? 'sin_dato';
+    const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+    const fila = (etiqueta: string, r: any): Salida<'ficha_de_punto'>['filas'][number] => ({
+      etiqueta, estado: estadoDe(r), nombre: typeof r?.nombre === 'string' && r.nombre.trim() ? r.nombre.trim() : null, distanciaM: num(r?.distanciaM), umbralM: num(r?.umbralM), valor: null,
+      fuente: typeof r?.fuente === 'string' ? r.fuente : null, fecha: typeof r?.fecha === 'string' ? r.fecha : null,
+    });
+    const filas = [fila('Salud', e.salud), fila('Educación inicial', e.educacion?.inicial), fila('Educación primaria', e.educacion?.primaria), fila('Educación secundaria', e.educacion?.secundaria), fila('Transporte', e.transporte), fila('Área verde', e.areaVerde)];
+    if (e.electricidad) filas.push({ ...fila('Electricidad (informativo)', e.electricidad), estado: 'informativo', distanciaM: null, valor: e.electricidad.dentro ? `dentro del área de concesión${e.electricidad.concesionaria ? ` de ${e.electricidad.concesionaria}` : ''}; no dice si el predio está conectado` : 'fuera de las áreas de concesión; no dice si el predio está conectado' });
+    const c = e.censo;
+    if (c?.tieneCifras) {
+      for (const [etiqueta, v] of [['Agua por red pública (manzana, censo 2017)', c.agua], ['Luz eléctrica (manzana, censo 2017)', c.luz], ['Desagüe por red pública (manzana, censo 2017)', c.desague]] as const) {
+        filas.push({ ...fila(etiqueta, c), estado: v === null || v === undefined ? 'sin_dato' : 'informativo', nombre: null, distanciaM: null, valor: typeof v === 'number' ? `${v} % de las viviendas de la manzana` : null });
+      }
+    } else if (c) filas.push({ ...fila('Servicios de la manzana (censo 2017)', c), estado: 'sin_dato', nombre: null, distanciaM: null, valor: 'la manzana no tiene cifras del censo' });
+
+    const fuenteDe = async (id: string | null | undefined) => {
+      const x = id ? await leerFuente(ctx.base, id) : null;
+      return { fuente: x?.nombre ?? null, fecha: x?.fecha ? String(x.fecha).slice(0, 10) : null };
+    };
+    const zona = f.zona ? { codigo: f.zona.codigo, nombre: f.zona.regla?.nombre ?? null, edificable: f.zona.regla?.edificable ?? null, ...(await fuenteDe(f.zona.fuenteId)) } : null;
+    const vistos = new Set<string>();
+    const peligros = [];
+    for (const x of f.peligros.slice(0, 12)) {
+      const texto = x.clase === 'volcanico' ? `${x.props.etiqueta ?? (x.nivel ? `Peligro ${x.nivel}` : 'Zona de peligro')}: ${x.props.detalle ?? x.tipo ?? 'zona del Misti'}` : String(x.nombre ?? x.props.subtipo ?? x.props.tipo ?? x.tipo ?? 'Registro sin nombre');
+      if (vistos.has(texto)) continue;
+      vistos.add(texto);
+      peligros.push({ texto, distanciaM: num(x.distanciaM), ...(await fuenteDe(x.fuenteId)) });
+      if (peligros.length === 5) break;
+    }
+    return {
+      punto: p,
+      distrito: f.distrito?.nombre ?? null,
+      zona,
+      filas,
+      peligros,
+      limites: ['Ficha informativa con datos públicos: no es una recomendación de compra ni reemplaza los certificados municipales.', 'Las distancias son en línea recta.'],
     };
   },
 

@@ -94,3 +94,9 @@ qwen-image-ui/
 .next/
 web/next-env.d.ts
 .bd-local/
+
+# Base y compilación de las pruebas de extremo a extremo de web/ (web/e2e/iniciar-servidor.mjs) y sus informes
+/.pglite-e2e*/
+web/.next-e2e/
+web/test-results/
+web/playwright-report/

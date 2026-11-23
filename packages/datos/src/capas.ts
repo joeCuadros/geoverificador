@@ -29,6 +29,16 @@ export const CAPAS: Record<string, DefCapa> = {
   },
   distritos: { zoomMin: 0, maximo: 50, sql: `SELECT props, ${geo('geom')} AS geometry FROM distrito WHERE geom && ${ENV} ORDER BY orden LIMIT $6` },
   volcan: { zoomMin: 10, maximo: 200, sql: `SELECT props, ${geo('geom')} AS geometry FROM peligro WHERE clase = 'volcanico' AND geom && ${ENV} ORDER BY orden LIMIT $6` },
+  /** Zonas de peligro volcánico del Misti sin la ceniza: la ceniza cubre toda la ciudad y, dibujada, no dice nada de un lugar (como en la aplicación estática). */
+  volcanZonas: { zoomMin: 10, maximo: 200, sql: `SELECT props, ${geo('geom')} AS geometry FROM peligro WHERE clase = 'volcanico' AND tipo IS DISTINCT FROM 'ceniza' AND geom && ${ENV} ORDER BY orden LIMIT $6` },
+  /** Sismos reportados por el IGP (ventana reciente, no el catálogo histórico). */
+  sismos: { zoomMin: 0, maximo: 400, sql: `SELECT props, ST_AsGeoJSON(geom, 6)::jsonb AS geometry FROM peligro WHERE clase = 'sismo' AND geom && ${ENV} AND $5::float8 IS NOT NULL ORDER BY orden LIMIT $6` },
+  /** Peligros geológicos registrados por INGEMMET (inventario de eventos, no mapa de susceptibilidad). */
+  geologicos: { zoomMin: 11, maximo: 600, sql: `SELECT props || jsonb_build_object('tipo', tipo) AS props, ST_AsGeoJSON(geom, 6)::jsonb AS geometry FROM peligro WHERE clase = 'geologico' AND geom && ${ENV} AND $5::float8 IS NOT NULL ORDER BY orden LIMIT $6` },
+  /** Áreas de concesión de distribución eléctrica (MINEM-DGE): a quién le corresponde el servicio, no una conexión. */
+  electricidad: { zoomMin: 9, maximo: 20, sql: `SELECT props, ${geo('geom')} AS geometry FROM concesion WHERE clase = 'electrica' AND geom && ${ENV} ORDER BY orden LIMIT $6` },
+  /** Concesiones mineras vigentes o en trámite del Catastro Minero (las extinguidas no se sirven). */
+  mineria: { zoomMin: 11, maximo: 400, sql: `SELECT props, ${geo('geom')} AS geometry FROM concesion WHERE clase = 'minera' AND props->>'estado' IS DISTINCT FROM 'EXTINGUIDO' AND geom && ${ENV} ORDER BY orden LIMIT $6` },
   cauces: { zoomMin: 11, maximo: 400, sql: `SELECT props, ${geo('geom')} AS geometry FROM peligro WHERE clase = 'cauce' AND geom && ${ENV} ORDER BY orden LIMIT $6` },
 };
 
@@ -74,4 +84,12 @@ export async function capaRecortada(base: Base, capa: string, caja: Caja, zoom: 
   const filas = await base.consulta(def.sql, [o, s, e, n, tolerancia(zoom), def.maximo + 1, ...extra]);
   const recortada = filas.length > def.maximo;
   return { type: 'FeatureCollection', capa, recortada, features: filas.slice(0, def.maximo).filter((f) => f.geometry).map((f) => ({ type: 'Feature', properties: f.props, geometry: f.geometry })) };
+}
+
+/** Zoom mínimo y máximo de elementos de una capa (para que la web los diga sin pedirla). */
+export function limitesDeCapa(capa: string): { zoomMin: number; maximo: number } {
+  const def = CAPAS[capa];
+  if (def) return { zoomMin: def.zoomMin, maximo: def.maximo };
+  if (capa.startsWith('lugar:')) return { zoomMin: 12, maximo: 2500 };
+  throw new ErrorDeCapa(`Capa desconocida: ${capa}.`);
 }

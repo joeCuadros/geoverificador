@@ -82,7 +82,7 @@ export interface CriterioEvaluado {
   convencion: boolean;
 }
 
-const dist = (m: number): string => (m < 1000 ? `${Math.round(m)} m` : `${(Math.round(m / 100) / 10).toFixed(1).replace('.', ',')} km`);
+export const dist = (m: number): string => (m < 1000 ? `${Math.round(m)} m` : `${(Math.round(m / 100) / 10).toFixed(1).replace('.', ',')} km`);
 /** Distancia a pie en línea recta a partir de la cual «cerca del trabajo» se cumple sin mirar el transporte. */
 export const TRABAJO_A_PIE_M = 1500;
 
