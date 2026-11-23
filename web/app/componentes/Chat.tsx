@@ -2,7 +2,8 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import type { MapaDeRespuesta } from '../../lib/mapa-respuesta.ts';
 import { aMarcadores, type Marcador } from '../../lib/marcadores.ts';
-import { Comparacion, Entendido, FichaDelPunto, Pensando, Resultados, Sugerencias, Texto } from './ChatPartes.tsx';
+import { Comparacion, Entendido, FichaDelPunto, Narracion, Pensando, Resultados, Sugerencias } from './ChatPartes.tsx';
+import { IconoAlerta, IconoEnviar, IconoInfo, IconoMapa } from './Iconos.tsx';
 import type { Envio, EstadoDelAgente, RespuestaApi, Turno } from './chat-tipos.ts';
 import { llevarAlFinal, llevarAlInicio, llevarALaVista } from './desplazar.ts';
 import { MAPA_VACIO, type EstadoViaje, type PuntoElegido } from './tipos.ts';
@@ -175,13 +176,19 @@ export function Chat({ onResultado, activo, viaje, punto, onEnfocar, onVerFicha 
               role={t.error ? 'alert' : undefined}
             >
               <p className="burbuja-texto">
+                {t.error && <IconoAlerta />}
                 <span className="solo-lectores">{t.quien === 'yo' ? 'Tú: ' : 'Asistente: '}</span>
-                <Texto texto={t.texto} />
+                <Narracion texto={t.texto} ordenar={Boolean(t.r && (t.r.tipo === 'resultado' || t.r.tipo === 'vacio'))} />
               </p>
-              {t.id === 0 && agente && <p className="burbuja-cobertura">{agente.resumen}</p>}
+              {t.id === 0 && agente && (
+                <p className="burbuja-cobertura">
+                  <IconoInfo />
+                  <span>{agente.resumen}</span>
+                </p>
+              )}
               {t.r?.comparacion && <Comparacion c={t.r.comparacion} />}
-              {t.r?.ficha && <FichaDelPunto f={t.r.ficha} />}
-              {t.r?.resultados && <Resultados r={t.r.resultados} ubicados={t.ubicados ?? []} activo={activo} onEnfocar={onEnfocar} onVerFicha={onVerFicha} />}
+              {t.r?.ficha && <FichaDelPunto f={t.r.ficha} vivo={vivo} />}
+              {t.r?.resultados && <Resultados r={t.r.resultados} ubicados={t.ubicados ?? []} activo={activo} vivo={vivo} onEnfocar={onEnfocar} onVerFicha={onVerFicha} />}
               {t.r?.modo === 'modelo' && <p className="burbuja-modelo">La frase de apertura la redactó un modelo de lenguaje y se comprobó contra los datos; los avisos, cifras y fuentes salen de las herramientas.</p>}
               {vivo && t.r && <Entendido chips={t.r.entendido ?? []} deshabilitado={cargando} onEnviar={(e) => void enviar(e)} />}
               {vivo && t.r && <Sugerencias lista={t.r.sugerencias ?? []} titulo="Respuestas rápidas" deshabilitado={cargando} onEnviar={(e) => void enviar(e)} />}
@@ -200,8 +207,11 @@ export function Chat({ onResultado, activo, viaje, punto, onEnfocar, onVerFicha 
         {punto && (
           <div className="punto-elegido">
             <p>
-              <strong>Punto elegido en el mapa:</strong> {punto.etiqueta ? `${punto.etiqueta} · ` : ''}
-              {coordenadas(punto)}
+              <IconoMapa />
+              <span>
+                <strong>Punto elegido en el mapa:</strong> {punto.etiqueta ? `${punto.etiqueta} · ` : ''}
+                {coordenadas(punto)}
+              </span>
             </p>
             <button type="button" className="boton-secundario" disabled={cargando} onClick={() => void enviar({ mensaje: '¿Qué hay en el punto que elegí?', ajuste: { accion: 'punto' } })}>
               ¿Qué hay aquí?
@@ -213,8 +223,9 @@ export function Chat({ onResultado, activo, viaje, punto, onEnfocar, onVerFicha 
             Tu consulta
           </label>
           <input id="mensaje" ref={campo} name="mensaje" autoComplete="off" maxLength={600} placeholder={EJEMPLO} />
-          <button type="submit" disabled={cargando}>
+          <button type="submit" className="enviar" disabled={cargando}>
             Enviar
+            <IconoEnviar />
           </button>
         </form>
       </div>

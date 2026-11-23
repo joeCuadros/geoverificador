@@ -78,6 +78,11 @@ export function Mapa({ marcadores, avisoActivo, enfocar, punto, reporte, lugarAc
     activasRef.current = activas;
     capasRef.current = capas;
   }, [activas, capas]);
+  // Los avisos de la respuesta, para encuadrar el círculo junto con ellos (este efecto va antes que el que dibuja la respuesta).
+  const marcadoresRef = useRef(marcadores);
+  useEffect(() => {
+    marcadoresRef.current = marcadores;
+  }, [marcadores]);
 
   // ------------------------------------------------------------------ El mapa
   useEffect(() => {
@@ -327,9 +332,20 @@ export function Mapa({ marcadores, avisoActivo, enfocar, punto, reporte, lugarAc
     const g = grupos.current?.respuesta;
     if (!listo || !L || !g) return;
     g.clearLayers();
-    dibujarRespuesta(L, g, respuesta.lugares, respuesta.sectores);
+    const limitesDelCirculo = dibujarRespuesta(L, g, respuesta.lugares, respuesta.sectores);
+    // El círculo de «cerca de» queda a la vista del DOM: centro y radio en metros (vacío si no hay).
+    const pedido = respuesta.lugares.find((l) => l.rol === 'lugar' && l.radioM);
+    contenedor.current?.setAttribute('data-circulo', pedido?.radioM ? `${pedido.lat.toFixed(5)}|${pedido.lon.toFixed(5)}|${Math.round(pedido.radioM)}` : '');
     const puntos = [...respuesta.lugares, ...respuesta.sectores].map((p) => [p.lat, p.lon] as [number, number]);
     if (respuesta.sectores.length && puntos.length) ajustar(L.latLngBounds(puntos), 15);
+    else if (limitesDelCirculo) {
+      // El mapa encuadra todo lo que es «cerca» y, si hay avisos, también dónde quedan respecto de él; pero si están tan lejos que el círculo quedaría
+      // como un punto (más de 6 veces su tamaño), se encuadra solo el círculo: los avisos se ven con «Ver en el mapa».
+      const todo = L.latLngBounds(limitesDelCirculo.getSouthWest(), limitesDelCirculo.getNorthEast());
+      for (const a of marcadoresRef.current) todo.extend([a.lat, a.lon]);
+      const demasiadoLejos = todo.getNorth() - todo.getSouth() > 6 * (limitesDelCirculo.getNorth() - limitesDelCirculo.getSouth()) || todo.getEast() - todo.getWest() > 6 * (limitesDelCirculo.getEast() - limitesDelCirculo.getWest());
+      ajustar(demasiadoLejos ? limitesDelCirculo : todo, 16);
+    }
   }, [respuesta, listo, ajustar]);
 
   useEffect(() => {

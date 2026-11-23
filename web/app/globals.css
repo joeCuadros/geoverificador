@@ -30,6 +30,9 @@
   --ok-bg: #e1f1e6;
   --ok-line: #8cc5a3;
   --focus: #1c3a6b;
+  /* Lo que se dibuja sobre el mapa (el círculo de «cerca de» y su rótulo): el fondo del mapa es siempre claro, así que esta tinta no cambia con el tema. */
+  --tinta-mapa: #1c3a6b;
+  --sobre-mapa: #ffffff;
   --radius: 12px;
   --radius-sm: 8px;
   --sans: 'Public Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
@@ -140,27 +143,15 @@ input { min-height: 44px; padding: 8px 12px; border: 1px solid var(--input-borde
 .marcador-aviso span { width: 24px; height: 24px; margin: 3px; background: #c2410c; }
 .marcador-punto span { width: 22px; height: 22px; margin: 2px; background: var(--tinta); outline: 2px solid #fff; }
 .leaflet-marker-icon:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; border-radius: 50%; }
+
+/* El círculo de «cerca de»: la distancia que el asistente entiende por «cerca», alrededor del lugar pedido. Trazo continuo y relleno suave (se lee sobre calles y zonas);
+   el rótulo es una pastilla blanca con el mismo azul: contraste mayor a 10:1 en los dos temas. */
+.circulo-cerca { stroke: var(--tinta-mapa); stroke-width: 3px; stroke-opacity: .9; fill: var(--tinta-mapa); fill-opacity: .08; }
+.etiqueta-circulo-caja { background: none; border: 0; }
+.etiqueta-circulo { position: absolute; left: 0; top: 0; transform: translate(-50%, -50%); padding: 2px 9px; border: 2px solid var(--tinta-mapa); border-radius: 999px; background: var(--sobre-mapa); color: var(--tinta-mapa); font: 700 .8rem/1.3 var(--sans); white-space: nowrap; box-shadow: 0 1px 3px rgba(0, 0, 0, .3); }
 .cuadro-aviso p { margin: 4px 0; }
 
-/* Asistente */
-.chat { display: flex; flex-direction: column; gap: 12px; }
-.chat-log { display: flex; flex-direction: column; gap: 10px; }
-.burbuja { padding: 10px 12px; border-radius: var(--radius); max-width: 92%; overflow-wrap: anywhere; }
-.burbuja p { margin: 0; white-space: pre-wrap; }
-.burbuja-agente { background: var(--surface-2); border: 1px solid var(--line); }
-.burbuja-yo { background: var(--tinta-soft); border: 1px solid var(--tinta-soft-line); align-self: flex-end; }
-.burbuja-error { background: var(--no-bg); border-color: var(--no-line); color: var(--no); }
-.avisos-mapa { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--line-strong); }
-.avisos-titulo { font-size: .85rem; font-weight: 700; margin-bottom: 6px !important; }
-.avisos-mapa ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-.avisos-mapa li { display: grid; gap: 2px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 8px; }
-.aviso-nombre { font-weight: 700; }
-.aviso-detalle { font-size: .85rem; color: var(--muted); }
-.avisos-mapa button { justify-self: start; margin-top: 4px; }
-.estado-carga { margin: 0; color: var(--muted); }
-.chat-form { display: flex; gap: 8px; position: sticky; bottom: 0; padding: 8px 0; background: var(--surface); }
-.chat-form input { flex: 1; }
-.nota-pie { font-size: .8rem; color: var(--muted); margin: 0; }
+/* Asistente: sus estilos están en componentes/chat.css */
 
 @media (prefers-reduced-motion: reduce) {
   * { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
@@ -203,8 +194,6 @@ input { min-height: 44px; padding: 8px 12px; border: 1px solid var(--input-borde
 .leaflet-marker-icon.ent-activo span { outline: 3px solid #f59e0b; outline-offset: 2px; transform: scale(1.25); }
 .leaflet-marker-icon.marcador-aviso.ent-activo span { outline: 3px solid var(--tinta); outline-offset: 2px; transform: scale(1.2); }
 
-/* Chat: lo resaltado y las acciones de cada tarjeta */
-.aviso-acciones { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
-.avisos-mapa li.aviso-activo { border: 2px solid var(--tinta); background: var(--tinta-soft); }
-.viaje-estado { margin: 0; font-size: .85rem; background: var(--tinta-soft); border: 1px solid var(--tinta-soft-line); border-radius: var(--radius-sm); padding: 6px 10px; }
+/* Chat: el estado del viaje al trabajo */
+.viaje-estado { margin: 0; font-size: .85rem; background: var(--tinta-soft); border: 1px solid var(--tinta-soft-line); border-radius: var(--radius-sm); padding: 8px 12px; }
 .cuadro-aviso button { margin-top: 6px; min-height: 36px; }

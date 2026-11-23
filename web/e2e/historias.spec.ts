@@ -20,18 +20,21 @@ const FUENTE_Y_FECHA = /Fuente: .+ · datos del \d{4}-\d{2}-\d{2}/;
 test.describe('H1 · búsqueda con criterios', () => {
   test('cada aviso trae su marca por criterio con el valor, la fuente y la fecha, el «Cumple X de Y» y la última vez visto', async ({ page }) => {
     const r = await preguntar(page, 'un departamento en Yanahuara a menos de 150 m de un colegio');
-    // ✔ cumple, ✘ no cumple, ? sin dato: las tres marcas, cada una con texto, con su valor, su fuente y la fecha de los datos.
+    // Cumple, no cumple y sin dato: las tres marcas son un icono dibujado más su texto (el color nunca es lo único), con su valor, su fuente y la fecha de los datos.
     const cumple = r.locator('.criterio-cumple', { hasText: 'Colegio' });
     await expect(cumple).toHaveCount(1);
-    await expect(cumple).toContainText('✔ Cumple');
+    await expect(cumple.locator('.estado-cumple')).toHaveText('Cumple');
+    await expect(cumple.locator('.estado svg')).toHaveCount(1);
     await expect(cumple).toContainText('142 m');
     await expect(cumple.locator('.criterio-pie')).toContainText(FUENTE_Y_FECHA);
     const noCumple = r.locator('.criterio-no_cumple', { hasText: 'Colegio' });
-    await expect(noCumple).toContainText('✘ No cumple');
+    await expect(noCumple.locator('.estado-no_cumple')).toHaveText('No cumple');
+    await expect(noCumple.locator('.estado svg')).toHaveCount(1);
     await expect(noCumple).toContainText('157 m');
     await expect(noCumple.locator('.criterio-pie')).toContainText(FUENTE_Y_FECHA);
     const sinDato = r.locator('.criterio-sin_dato', { hasText: 'Colegio' });
-    await expect(sinDato).toContainText('? Sin dato');
+    await expect(sinDato.locator('.estado-sin_dato')).toHaveText('Sin dato');
+    await expect(sinDato.locator('.estado svg')).toHaveCount(1);
     await expect(sinDato).toContainText('sin dato (el aviso no tiene coordenadas)');
     const resumenes = r.locator('.aviso-resumen');
     await expect(resumenes.filter({ hasText: 'Cumple 1 de 1 criterios · 0 sin dato' })).toHaveCount(1);
@@ -63,11 +66,12 @@ test.describe('H1 · búsqueda con criterios', () => {
     expect(despues).toBe(true);
   });
 
-  test('R3 · «sin dato» es un estado propio: se marca con «?» y nunca cuenta como cumplido ni como cero', async ({ page }) => {
+  test('R3 · «sin dato» es un estado propio: se marca con su icono («?») y su texto, y nunca cuenta como cumplido ni como cero', async ({ page }) => {
     const r = await preguntar(page, CONSULTA_AVISOS);
     const sinDato = r.locator('.criterio-sin_dato');
     await expect(sinDato).toHaveCount(1);
-    await expect(sinDato).toContainText('? Sin dato');
+    await expect(sinDato.locator('.estado-sin_dato')).toHaveText('Sin dato');
+    await expect(sinDato.locator('.estado svg')).toHaveCount(1);
     await expect(sinDato).toContainText('sin dato (el aviso no tiene coordenadas)');
     await expect(r.locator('.criterio-cumple, .criterio-no_cumple').filter({ hasText: /sin dato/i })).toHaveCount(0);
     expect(await r.innerText()).not.toMatch(/Colegio\s*0 m/);

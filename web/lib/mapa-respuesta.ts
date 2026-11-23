@@ -1,10 +1,17 @@
+import { CRITERIOS } from '@geoverificador/agente/criterios';
 import { enArequipa } from '@geoverificador/dominio/avisos';
+import { radioValido } from './radio.ts';
 
 export interface LugarDeRespuesta {
   rol: 'trabajo' | 'lugar';
   nombre: string;
   lat: number;
   lon: number;
+  /**
+   * Solo el «lugar pedido» con su criterio «cerca de» activo: la distancia de «cerca», en metros (la que la persona dijo o, si no dijo ninguna, la de referencia).
+   * El mapa dibuja con ella el círculo de preferencia. El trabajo no la lleva: se mide en tiempo de viaje, no en distancia.
+   */
+  radioM?: number;
 }
 
 export interface SectorDeRespuesta {
@@ -41,9 +48,13 @@ export function mapaDeRespuesta(llamadas: Llamada[], consulta: { criterios?: { i
   const sectores: SectorDeRespuesta[] = [];
   for (const h of llamadas) {
     if (h.nombre === 'buscar_avisos') {
-      const e = (h.entrada ?? {}) as { trabajo?: unknown; lugar?: unknown };
+      const e = (h.entrada ?? {}) as { trabajo?: unknown; lugar?: unknown; criterios?: { id?: string; metros?: unknown }[] };
       if (esPunto(e.trabajo)) lugares.push({ rol: 'trabajo', nombre: e.trabajo.nombre, lat: e.trabajo.lat, lon: e.trabajo.lon });
-      if (esPunto(e.lugar)) lugares.push({ rol: 'lugar', nombre: e.lugar.nombre, lat: e.lugar.lat, lon: e.lugar.lon });
+      if (esPunto(e.lugar)) {
+        const pedido = e.criterios?.find((c) => c.id === 'lugar');
+        // Sin el criterio «lugar» (la persona lo quitó) el lugar sigue ubicado pero ya no hay una distancia de «cerca» que dibujar.
+        lugares.push({ rol: 'lugar', nombre: e.lugar.nombre, lat: e.lugar.lat, lon: e.lugar.lon, ...(pedido ? { radioM: radioValido(pedido.metros) ? pedido.metros : CRITERIOS.lugar.omision } : {}) });
+      }
     } else if (h.nombre === 'buscar_zonas') {
       const lista = ((h.salida ?? {}) as { sectores?: any[] }).sectores ?? [];
       for (const s of lista) if (Number.isFinite(s?.lat) && Number.isFinite(s?.lon)) sectores.push({ n: sectores.length + 1, nombre: s.nombre ?? null, distrito: s.distrito ?? null, hectareas: Number(s.hectareas) || 0, lat: s.lat, lon: s.lon });

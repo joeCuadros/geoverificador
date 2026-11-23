@@ -250,6 +250,64 @@ test.describe('asistente y mapa', () => {
   });
 });
 
+test.describe('el círculo de «cerca de»', () => {
+  const chipLugar = (page: import('@playwright/test').Page) => page.locator('.burbuja-agente').last().locator('[data-chip="lugar"]');
+
+  test('«cerca de la UNSA» dibuja un círculo con el radio de «cerca», lo sigue al cambiarlo y desaparece al quitar el criterio', async ({ page }) => {
+    await abrir(page);
+    await preguntar(page, 'un departamento cerca de la UNSA');
+    // Centro en la UNSA y radio de referencia (1,5 km), a la vista del DOM como el resto de lo dibujado.
+    await expect(mapa(page)).toHaveAttribute('data-circulo', /^-16\.\d{5}\|-71\.\d{5}\|1500$/);
+    const [lat, lon] = ((await mapa(page).getAttribute('data-circulo')) ?? '').split('|').map(Number);
+    await expect(page.locator('.circulo-cerca')).toHaveCount(1);
+    await expect(page.locator('.etiqueta-circulo')).toHaveText('1,5 km');
+    // El lugar queda marcado en el centro del círculo.
+    await expect(page.locator('.ent-respuesta')).toHaveCount(1);
+    await expect(page.locator('.ent-respuesta')).toHaveAttribute('title', /^Lugar pedido: Universidad Nacional de San Agustín/);
+    // Tiene tamaño en el mapa y no tapa los clics: un clic encima sigue eligiendo un punto.
+    const caja = (await page.locator('.circulo-cerca').boundingBox())!;
+    expect(caja.width).toBeGreaterThan(40);
+    await expect(page.locator('.circulo-cerca')).toHaveCSS('pointer-events', 'none');
+
+    // Cambiar el radio en «Lo que entendí» cambia el círculo y su rótulo; el centro no se mueve.
+    await chipLugar(page).getByRole('button', { name: /Tocar para cambiarlo/ }).click();
+    await page.locator('.burbuja-agente').last().getByRole('button', { name: 'A 800 m' }).click();
+    await expect(mapa(page)).toHaveAttribute('data-circulo', `${lat.toFixed(5)}|${lon.toFixed(5)}|800`);
+    await expect(page.locator('.etiqueta-circulo')).toHaveText('800 m');
+    await expect(page.locator('.circulo-cerca')).toHaveCount(1);
+
+    // Quitar el criterio quita el círculo (y su rótulo).
+    await chipLugar(page).getByRole('button', { name: /Quitar de tu búsqueda: Cerca de/ }).click();
+    await expect(mapa(page)).toHaveAttribute('data-circulo', '');
+    await expect(page.locator('.circulo-cerca')).toHaveCount(0);
+    await expect(page.locator('.etiqueta-circulo')).toHaveCount(0);
+  });
+
+  test('sin un lugar pedido no hay círculo (cerca de un colegio no es un lugar con nombre); con un lugar, un círculo y solo uno', async ({ page }) => {
+    await abrir(page);
+    await preguntar(page, CONSULTA_AVISOS);
+    await expect(mapa(page)).toHaveAttribute('data-circulo', '');
+    await expect(page.locator('.circulo-cerca')).toHaveCount(0);
+    await preguntar(page, 'un departamento cerca de la UNSA');
+    await expect(mapa(page)).toHaveAttribute('data-circulo', /\|1500$/);
+    await expect(page.locator('.circulo-cerca')).toHaveCount(1);
+    await expect(page.locator('.etiqueta-circulo')).toHaveCount(1);
+  });
+
+  test('el círculo se ve en el tema claro y en el oscuro (el mapa de fondo es siempre claro: la tinta del círculo no cambia con el tema)', async ({ page }) => {
+    for (const esquema of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme: esquema });
+      await abrir(page);
+      await preguntar(page, 'un departamento cerca de la UNSA');
+      await expect(page.locator('.circulo-cerca')).toHaveCount(1);
+      const trazo = await page.locator('.circulo-cerca').evaluate((el) => getComputedStyle(el).stroke);
+      expect(trazo, esquema).toBe('rgb(28, 58, 107)');
+      const etiqueta = await page.locator('.etiqueta-circulo').evaluate((el) => ({ color: getComputedStyle(el).color, fondo: getComputedStyle(el).backgroundColor }));
+      expect(etiqueta, esquema).toEqual({ color: 'rgb(28, 58, 107)', fondo: 'rgb(255, 255, 255)' });
+    }
+  });
+});
+
 test.describe('de la pregunta a la ficha y de vuelta', () => {
   test('el aviso del asistente, su marcador, su ficha y sus lugares forman un solo recorrido', async ({ page }) => {
     await abrir(page);

@@ -1,5 +1,6 @@
 import type * as Leaflet from 'leaflet';
 import type { CapaInfo, CapaServida } from '../../lib/capas.ts';
+import { etiquetaDeRadio, radioValido } from '../../lib/radio.ts';
 import type { LugarDeFicha } from '../../lib/reporte.ts';
 import type { LugarDeRespuesta, SectorDeRespuesta } from '../../lib/mapa-respuesta.ts';
 import type { Marcador } from '../../lib/marcadores.ts';
@@ -16,6 +17,7 @@ export const PANES = {
   concesiones: 353,
   volcan: 354,
   verde: 356,
+  circulo: 358,
   lineas: 420,
   viaje: 425,
   puntos: 430,
@@ -139,12 +141,41 @@ export function dibujarLugares(L: L, grupo: Leaflet.LayerGroup, punto: { lat: nu
   return dibujados;
 }
 
-/** Los lugares que el asistente ubicó (el trabajo, el otro lugar) y los sectores de la búsqueda de zonas (solo su centro: el contorno no está calculado). */
-export function dibujarRespuesta(L: L, grupo: Leaflet.LayerGroup, lugares: LugarDeRespuesta[], sectores: SectorDeRespuesta[]): void {
+/** Metros por grado de latitud: con ella se sube desde el centro del círculo hasta su borde norte, donde va el rótulo. */
+const METROS_POR_GRADO = 111_320;
+
+/**
+ * El círculo de preferencia: todo lo que cae dentro es «cerca» para quien pidió estar cerca de ese lugar. Se dibuja con SVG (el mapa usa lienzo para los puntos de las capas)
+ * porque su color sale del CSS: el mapa de fondo es siempre claro, así que la tinta del círculo no cambia con el tema. No es interactivo: no tapa los clics del mapa.
+ * El rótulo con la distancia va sobre el borde norte; es solo visual, la misma distancia está escrita en «Lo que entendí».
+ */
+export function dibujarCirculo(L: L, grupo: Leaflet.LayerGroup, centro: { lat: number; lon: number }, radioM: number): Leaflet.LatLngBounds | null {
+  if (!radioValido(radioM)) return null;
+  const circulo = L.circle([centro.lat, centro.lon], { radius: radioM, renderer: L.svg({ pane: 'circulo' }), className: 'circulo-cerca', interactive: false, pane: 'circulo' }).addTo(grupo);
+  const span = document.createElement('span');
+  span.className = 'etiqueta-circulo';
+  span.setAttribute('aria-hidden', 'true');
+  span.textContent = etiquetaDeRadio(radioM);
+  const icono = L.divIcon({ className: 'etiqueta-circulo-caja', html: span, iconSize: [0, 0], iconAnchor: [0, 0] });
+  L.marker([centro.lat + radioM / METROS_POR_GRADO, centro.lon], { icon: icono, interactive: false, keyboard: false, pane: 'ficha' }).addTo(grupo);
+  return circulo.getBounds();
+}
+
+/**
+ * Los lugares que el asistente ubicó (el trabajo, el otro lugar) y los sectores de la búsqueda de zonas (solo su centro: el contorno no está calculado).
+ * El «lugar pedido» con su criterio «cerca de» trae además el radio: se dibuja su círculo y se devuelven sus límites (null si no hay ninguno).
+ */
+export function dibujarRespuesta(L: L, grupo: Leaflet.LayerGroup, lugares: LugarDeRespuesta[], sectores: SectorDeRespuesta[]): Leaflet.LatLngBounds | null {
+  let limites: Leaflet.LatLngBounds | null = null;
   for (const l of lugares) {
     const rol = l.rol === 'trabajo' ? 'Trabajo' : 'Lugar pedido';
-    L.marker([l.lat, l.lon], { icon: iconoLetra(L, l.rol === 'trabajo' ? 'T' : 'L', l.rol === 'trabajo' ? '#b91c1c' : '#6b2d7a', 'ent-marcador ent-respuesta', 28), title: `${rol}: ${l.nombre}`, keyboard: true, pane: 'viaje' })
-      .bindPopup(cuadro(l.nombre, [`${rol}, tal como lo ubicó el asistente.`]))
+    const radio = l.rol === 'lugar' && radioValido(l.radioM) ? l.radioM : null;
+    if (radio !== null) {
+      const b = dibujarCirculo(L, grupo, l, radio);
+      if (b) limites = limites ? limites.extend(b) : b;
+    }
+    L.marker([l.lat, l.lon], { icon: iconoLetra(L, l.rol === 'trabajo' ? 'T' : 'L', l.rol === 'trabajo' ? '#b91c1c' : '#6b2d7a', 'ent-marcador ent-respuesta', 28), title: `${rol}: ${l.nombre}${radio !== null ? ` (cerca: a ${etiquetaDeRadio(radio)} o menos)` : ''}`, keyboard: true, pane: 'viaje' })
+      .bindPopup(cuadro(l.nombre, [`${rol}, tal como lo ubicó el asistente.`, radio !== null ? `El círculo marca a ${etiquetaDeRadio(radio)} o menos: lo que entiende el asistente por «cerca».` : null]))
       .addTo(grupo);
   }
   for (const s of sectores) {
@@ -153,6 +184,7 @@ export function dibujarRespuesta(L: L, grupo: Leaflet.LayerGroup, lugares: Lugar
       .bindPopup(cuadro(`Sector ${s.n}${s.nombre ? ` · cerca de ${s.nombre}` : ''}`, ['Aquí se cumple todo lo que pediste.', [s.distrito, ha].filter(Boolean).join(' · '), 'Se marca el centro del sector; su contorno no se dibuja.']))
       .addTo(grupo);
   }
+  return limites;
 }
 
 /** El trazado de la mejor combi o bus: cada tramo con su color, dónde subes y dónde bajas y, con un trasbordo, el punto donde cambias de ruta. */
