@@ -1,0 +1,8 @@
+.scroll { overflow-x: auto; }
+.tabla { width: 100%; border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.tabla th, .tabla td { padding: 9px 8px; border-top: 1px solid var(--borde); text-align: left; vertical-align: top; }
+.tabla thead th { border-top: 0; position: relative; padding-right: 22px; }
+.tabla tbody th { color: var(--texto-2); font-weight: 600; white-space: nowrap; }
+.nombre { border: 0; background: none; padding: 0; font-weight: 700; text-align: left; color: var(--texto); }
+.quitar { position: absolute; right: 0; top: 6px; border: 0; background: none; color: var(--texto-2); font-size: 18px; line-height: 1; }
+.mejor { color: var(--ok); font-weight: 700; background: var(--ok-suave); border-radius: 6px; }

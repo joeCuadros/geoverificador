@@ -1,0 +1,7 @@
+.acciones { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.servicio + .servicio { margin-top: 12px; }
+.servicioCab { display: flex; justify-content: space-between; font-size: 14px; }
+.zona { display: flex; gap: 12px; align-items: flex-start; }
+.muestra { width: 28px; height: 28px; border-radius: 8px; border: 1px solid var(--borde); flex: none; }
+.viaje { margin-top: 12px; padding: 12px; border-radius: 12px; background: var(--marca-suave); }
+.enlace { border: 0; background: none; color: var(--marca); font-weight: 600; padding: 0 2px; }

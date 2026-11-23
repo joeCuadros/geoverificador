@@ -1,0 +1,5 @@
+.capa { display: grid; grid-template-columns: auto auto 1fr; gap: 10px; align-items: center; padding: 8px 0; cursor: pointer; }
+.capa input { width: 18px; height: 18px; accent-color: var(--marca); }
+.muestra { width: 14px; height: 14px; border-radius: 4px; border: 1px solid rgba(0, 0, 0, 0.15); }
+.texto { display: grid; }
+.texto small { color: var(--texto-2); font-size: 12px; }

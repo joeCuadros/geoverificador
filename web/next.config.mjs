@@ -3,8 +3,8 @@ export default {
   transpilePackages: ['@geoverificador/agente', '@geoverificador/datos', '@geoverificador/dominio'],
   serverExternalPackages: ['@electric-sql/pglite', '@electric-sql/pglite-postgis', 'pg'],
   poweredByHeader: false,
-  // La aplicación de mapa de siempre (public/index.html) sigue siendo la portada; el agente vive en /agente.
+  // La aplicación anterior (public/index.html) queda en /clasico mientras se verifica la paridad.
   async rewrites() {
-    return { beforeFiles: [{ source: '/', destination: '/index.html' }], afterFiles: [], fallback: [] };
+    return { beforeFiles: [{ source: '/clasico', destination: '/index.html' }], afterFiles: [], fallback: [] };
   },
 };

@@ -1,0 +1,61 @@
+:root {
+  --bg: #f4f6f8;
+  --superficie: #ffffff;
+  --superficie-2: #f0f3f6;
+  --borde: #e1e6ec;
+  --texto: #14202b;
+  --texto-2: #52606d;
+  --marca: #0f6e5a;
+  --marca-2: #0b574a;
+  --marca-suave: #e3f4ef;
+  --ok: #1a7f4b;
+  --ok-suave: #e1f5ea;
+  --mal: #b4332a;
+  --mal-suave: #fbe7e5;
+  --aviso: #8a5a00;
+  --aviso-suave: #fff1d6;
+  --info: #35566e;
+  --info-suave: #e8eff4;
+  --sombra: 0 1px 2px rgba(15, 30, 45, 0.06), 0 8px 24px rgba(15, 30, 45, 0.1);
+  --radio: 14px;
+  --panel-ancho: 420px;
+  color-scheme: light;
+}
+:root[data-tema='oscuro'] {
+  --bg: #0e1419;
+  --superficie: #161e26;
+  --superficie-2: #1d2731;
+  --borde: #2a3642;
+  --texto: #e8eef3;
+  --texto-2: #9fb0be;
+  --marca: #3ec8a6;
+  --marca-2: #2fae8f;
+  --marca-suave: #123a31;
+  --ok: #52d18c;
+  --ok-suave: #123525;
+  --mal: #ff8a80;
+  --mal-suave: #3d1b19;
+  --aviso: #f2c26b;
+  --aviso-suave: #3a2d10;
+  --info: #9cc3dd;
+  --info-suave: #17303f;
+  --sombra: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.5);
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-tema='claro']) {
+    --bg: #0e1419; --superficie: #161e26; --superficie-2: #1d2731; --borde: #2a3642; --texto: #e8eef3; --texto-2: #9fb0be;
+    --marca: #3ec8a6; --marca-2: #2fae8f; --marca-suave: #123a31; --ok: #52d18c; --ok-suave: #123525; --mal: #ff8a80; --mal-suave: #3d1b19;
+    --aviso: #f2c26b; --aviso-suave: #3a2d10; --info: #9cc3dd; --info-suave: #17303f;
+    --sombra: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.5);
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--texto); font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 15px; line-height: 1.45; -webkit-font-smoothing: antialiased; }
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--marca); outline-offset: 2px; }
+.leaflet-container { font: inherit; background: var(--superficie-2); }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }

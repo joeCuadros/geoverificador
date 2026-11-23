@@ -217,7 +217,7 @@ export function interpretar(crudo: string, ctx: { distritos?: string[]; previa?:
     c.tema = c.criterios[0]?.id ?? (/\bprecio|aviso/.test(t) ? 'avisos' : /\bzonific/.test(t) ? 'zona_comercio' : /\bruta|combi|bus/.test(t) ? 'trabajo' : null);
   } else if (/\b(me ofrecen|que deberia revisar|que debo revisar|que reviso|es seguro comprar|verificar este|revisar este)\b/.test(t)) c.intencion = 'verificar_punto';
   else if (/\b(zonas?|sectores?|barrios?|donde (puedo |me conviene |conviene )?vivir|en que parte)\b/.test(t) && !c.tipo && c.precioMax === null) c.intencion = 'buscar_zonas';
-  else if (c.tipo || c.precioMax !== null || c.dormitoriosMin !== null || /\b(avisos?|comprar|venta|vendo|vende|busco|quiero|necesito)\b/.test(t)) c.intencion = c.tipo || c.precioMax !== null || c.criterios.length ? 'buscar_avisos' : 'otra';
+  else if (c.tipo || c.precioMax !== null || c.dormitoriosMin !== null || /\b(avisos?|proyectos?|inmuebles?|propiedad(?:es)?|vivienda|comprar|venta|vendo|vende|busco|quiero|necesito)\b/.test(t)) c.intencion = c.tipo || c.precioMax !== null || c.criterios.length ? 'buscar_avisos' : 'otra';
   else if (c.criterios.length) c.intencion = 'buscar_zonas';
   return c;
 }

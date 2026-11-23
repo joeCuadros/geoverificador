@@ -12,7 +12,7 @@ async function atender(req: Request, { params }: { params: Promise<{ accion: str
   for (const [k, v] of new URL(req.url).searchParams) if (!(k in consulta)) consulta[k] = v;
   const cabeceras: Record<string, string> = {};
   req.headers.forEach((v, k) => (cabeceras[k.toLowerCase()] = v));
-  const r = await manejarAuth({ accion, metodo: req.method, consulta, cabeceras }, {});
+  const r: any = await manejarAuth({ accion, metodo: req.method, consulta, cabeceras }, {});
   const h = new Headers({ 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer', 'X-Content-Type-Options': 'nosniff' });
   for (const c of r.cookies ?? []) h.append('Set-Cookie', c);
   if (r.ubicacion) { h.set('Location', r.ubicacion); return new Response(null, { status: r.status, headers: h }); }

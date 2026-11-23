@@ -1,0 +1,6 @@
+.caja { position: relative; }
+.lista { position: absolute; z-index: 800; left: 0; right: 0; top: calc(100% + 6px); margin: 0; padding: 6px; list-style: none; background: var(--superficie); border: 1px solid var(--borde); border-radius: 14px; box-shadow: var(--sombra); max-height: 320px; overflow-y: auto; }
+.lista li { display: grid; gap: 1px; padding: 9px 10px; border-radius: 10px; cursor: pointer; }
+.lista li span { font-size: 12.5px; color: var(--texto-2); }
+.lista li:hover, .activo { background: var(--marca-suave); }
+.nota { color: var(--texto-2); font-size: 13px; cursor: default !important; }

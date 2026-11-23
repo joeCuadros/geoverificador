@@ -22,5 +22,5 @@ export async function POST(req: Request) {
   const mensaje = typeof cuerpo.mensaje === 'string' ? cuerpo.mensaje.trim().slice(0, MAX_MENSAJE) : '';
   if (!mensaje) return Response.json({ error: 'Escribe tu consulta.' }, { status: 400 });
   const r = await responder(mensaje, cuerpo.estado ?? ESTADO_INICIAL, { base: await laBase(), hoy: new Date().toISOString().slice(0, 10), publicar: publicar() });
-  return Response.json({ texto: r.texto, tipo: r.tipo, estado: r.estado, avisos: r.avisos.map((a) => ({ id: a.id, titulo: a.titulo, url: a.url, lat: a.lat, lon: a.lon, cumplidos: a.cumplidos, pedidos: a.pedidos })) });
+  return Response.json({ texto: r.texto, tipo: r.tipo, estado: r.estado, avisos: r.avisos });
 }
