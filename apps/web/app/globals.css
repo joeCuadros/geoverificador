@@ -35,8 +35,9 @@
   --sobre-mapa: #ffffff;
   --radius: 12px;
   --radius-sm: 8px;
-  --sans: 'Public Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --serif: 'Source Serif 4', Georgia, 'Times New Roman', serif;
+  /* --fuente-sans y --fuente-serif las define app/layout.tsx (next/font/local, con su fuente de respaldo de métricas ajustadas); si faltaran, cae a los nombres y al sistema. */
+  --sans: var(--fuente-sans, system-ui), 'Public Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --serif: var(--fuente-serif, Georgia), 'Source Serif 4', Georgia, 'Times New Roman', serif;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -62,7 +63,7 @@
     --no-bg: #3a1a15;
     --no-line: #8a3b2e;
     --amb-bg: #35280a;
-    --amb-line: #8a6a22;
+    --amb-line: #b08a30;
     --amb-text: #f6dfa5;
     --ok: #8fd6a6;
     --ok-bg: #12301f;
@@ -72,8 +73,10 @@
 }
 
 * { box-sizing: border-box; }
+/* scroll-padding: lo que queda pegado (la navegación de la ficha arriba, el campo del asistente abajo) no tapa el destino de un salto o de scrollIntoView. */
+html { scroll-padding-top: 3.75rem; scroll-padding-bottom: 7rem; }
 html, body { margin: 0; }
-body { font: 16px/1.5 var(--sans); background: var(--bg); color: var(--ink); }
+body { font: 1rem/1.5 var(--sans); background: var(--bg); color: var(--ink); }
 h1, h2, h3, h4 { font-family: var(--serif); line-height: 1.25; }
 a { color: var(--tinta); }
 :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
@@ -81,6 +84,8 @@ a { color: var(--tinta); }
 .solo-lectores { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .saltar { position: absolute; left: 8px; top: -60px; z-index: 2000; background: var(--tinta); color: var(--on-tinta); padding: 10px 14px; border-radius: var(--radius-sm); }
 .saltar:focus { top: 8px; }
+/* Destinos de los enlaces de salto: reciben el foco por programa (tabindex -1); el contorno queda por dentro para que no lo recorte el borde de la pantalla. */
+.zona-mapa:focus-visible, .panel:focus-visible { outline-offset: -3px; }
 
 /* Botones y campos: objetivos táctiles de 44 px */
 button, input { font: inherit; }
@@ -98,7 +103,7 @@ input { min-height: 44px; padding: 8px 12px; border: 1px solid var(--input-borde
 .banda p { margin: 0; color: var(--band-muted); font-size: .9rem; }
 .zona-mapa { display: flex; flex-direction: column; border-bottom: 1px solid var(--line); background: var(--surface); }
 .panel { background: var(--surface); min-width: 0; display: flex; flex-direction: column; }
-.cuerpo-panel { padding: 12px 16px 24px; min-height: 0; flex: 1; }
+.cuerpo-panel { padding: 12px 16px 24px; min-height: 0; flex: 1; scroll-padding-top: 3.75rem; scroll-padding-bottom: 7rem; }
 .cuerpo-panel[hidden] { display: none; }
 
 @media (min-width: 900px) {
@@ -152,10 +157,14 @@ button[aria-disabled='true'] { opacity: .6; cursor: progress; }
 @media (min-width: 900px) { .mapa-envoltorio { height: auto; min-height: 0; } }
 .marcador-aviso span, .marcador-punto span { display: block; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .5); }
 .marcador-aviso span { width: 24px; height: 24px; margin: 3px; background: #c2410c; }
-.marcador-punto span { width: 22px; height: 22px; margin: 2px; background: var(--tinta); outline: 2px solid #fff; }
+/* Las marcas del mapa usan la tinta del mapa, no la del tema: el fondo del mapa es siempre claro, y con el tema oscuro --tinta es un azul claro que casi no se distingue de él. */
+.marcador-punto span { width: 22px; height: 22px; margin: 2px; background: var(--tinta-mapa); outline: 2px solid #fff; }
 /* Los botones de zoom miden 44 px donde se toca (los de Leaflet miden 30). El margen izquierdo de los cuadros (56 px, ver crearPanes) ya los deja libres. */
 @media (max-width: 899px), (pointer: coarse) { .mapa-lienzo .leaflet-control-zoom.leaflet-bar a { width: 44px; height: 44px; line-height: 44px; } }
-.leaflet-marker-icon:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; border-radius: 50%; }
+.leaflet-marker-icon:focus-visible { outline: 3px solid var(--tinta-mapa); outline-offset: 3px; border-radius: 50%; }
+/* El cuadro de Leaflet es blanco en los dos temas: su enlace lleva la tinta del mapa (en el tema oscuro, --tinta es azul claro sobre blanco). */
+.leaflet-popup-content a { color: var(--tinta-mapa); }
+.leaflet-popup-content a:focus-visible { outline-color: var(--tinta-mapa); }
 
 /* El círculo de «cerca de»: la distancia que el asistente entiende por «cerca», alrededor del lugar pedido. Trazo continuo y relleno suave (se lee sobre calles y zonas);
    el rótulo es una pastilla blanca con el mismo azul: contraste mayor a 10:1 en los dos temas. */
@@ -231,8 +240,11 @@ button[aria-disabled='true'] { opacity: .6; cursor: progress; }
 .leaflet-marker-icon.ent-sector span { font-size: .9rem; border-radius: 6px; }
 .leaflet-marker-icon.ent-ficha span { border-color: #fff; }
 .leaflet-marker-icon.ent-activo span { outline: 3px solid var(--tinta-mapa); outline-offset: 2px; transform: scale(1.25); }
-.leaflet-marker-icon.marcador-aviso.ent-activo span { outline: 3px solid var(--tinta); outline-offset: 2px; transform: scale(1.2); }
+.leaflet-marker-icon.marcador-aviso.ent-activo span { outline: 3px solid var(--tinta-mapa); outline-offset: 2px; transform: scale(1.2); }
 
 /* Chat: el estado del viaje al trabajo */
 .viaje-estado { margin: 0; font-size: .85rem; background: var(--tinta-soft); border: 1px solid var(--tinta-soft-line); border-radius: var(--radius-sm); padding: 8px 12px; }
+.nota-viaje { margin: 0 0 12px; }
 .cuadro-aviso button { margin-top: 6px; min-height: 36px; }
+/* En una pantalla táctil (o estrecha) el botón del cuadro mide 44 px, como los demás. */
+@media (pointer: coarse), (max-width: 899px) { .cuadro-aviso button { min-height: 44px; } }

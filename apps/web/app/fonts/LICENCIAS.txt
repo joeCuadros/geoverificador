@@ -1,0 +1,6 @@
+Tipografías incluidas (subconjunto latino, fuente variable en woff2), ambas con la licencia SIL Open Font License 1.1 (https://openfontlicense.org):
+
+  PublicSans-latin-wght.woff2   Public Sans, (c) 2015 The Public Sans Project Authors (https://github.com/uswds/public-sans)
+  SourceSerif4-latin-wght.woff2 Source Serif 4, (c) Adobe (https://github.com/adobe-fonts/source-serif)
+
+Obtenidas del paquete npm @fontsource-variable (public-sans y source-serif-4), que las redistribuye con la misma licencia.
