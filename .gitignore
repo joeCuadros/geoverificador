@@ -94,3 +94,4 @@ qwen-image-ui/
 .next/
 web/next-env.d.ts
 .bd-local/
+web/public/

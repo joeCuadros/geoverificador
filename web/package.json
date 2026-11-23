@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "node sincronizar-public.mjs",
     "dev": "next dev",
+    "prebuild": "node sincronizar-public.mjs",
     "build": "next build",
     "start": "next start"
   },
