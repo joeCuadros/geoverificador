@@ -1,8 +1,8 @@
 'use client';
-import { useEffect, useRef, type MouseEvent } from 'react';
+import { useEffect, useRef, type MouseEvent, type RefObject } from 'react';
 import type { GrupoDeFicha, ItemDeFicha, ReporteDePunto } from '../../lib/reporte.ts';
 import '../ficha.css';
-import { CuerpoDeItem, DetallesDeGrupo, EstadoChip, MasDeItem } from './FichaPartes.tsx';
+import { ConteoDeGrupo, CuerpoDeItem, DetallesDeGrupo, EstadoChip, MasDeItem } from './FichaPartes.tsx';
 import type { EstadoFicha, PuntoElegido } from './tipos.ts';
 
 const grados = (n: number) => n.toFixed(5).replace('.', ',');
@@ -31,19 +31,26 @@ interface PropsItem {
   onLugar: (id: string) => void;
 }
 
-/** Un elemento de la ficha. Si tiene lugar en el mapa, todo él es un solo botón que lo resalta allí; el detalle se despliega aparte. */
+/**
+ * Un elemento de la ficha. Si tiene lugar en el mapa, todo él es un solo botón que lo resalta allí; el detalle se despliega aparte.
+ * El nombre del botón es corto («Ver en el mapa: …») y el estado, la distancia y la fuente le llegan como descripción, para que quien usa lector de pantalla los oiga también.
+ */
 function Item({ item, activo, sinChipInformativo, onLugar }: PropsItem) {
   const nombreAccesible = `${item.titulo}${item.nombre ? `: ${item.nombre}` : ''}`;
+  const idDatos = `ficha-i-${item.id}-datos`;
+  const cuerpo = (
+    <span id={idDatos} className="f-item-datos">
+      <CuerpoDeItem item={item} sinChipInformativo={sinChipInformativo} />
+    </span>
+  );
   return (
-    <li className={`f-item${activo ? ' f-item-activo' : ''}`} data-item={item.id} data-lugar={item.lugarId ?? undefined} aria-current={activo ? 'true' : undefined}>
+    <li className={`f-item${activo ? ' f-item-activo' : ''}`} data-item={item.id} data-estado={item.estado ?? undefined} data-lugar={item.lugarId ?? undefined} aria-current={activo ? 'true' : undefined}>
       {item.lugarId ? (
-        <button type="button" className="f-item-cuerpo f-item-boton" aria-pressed={activo} aria-label={`Ver en el mapa: ${nombreAccesible}`} onClick={() => onLugar(item.lugarId!)}>
-          <CuerpoDeItem item={item} sinChipInformativo={sinChipInformativo} />
+        <button type="button" className="f-item-cuerpo f-item-boton" aria-pressed={activo} aria-label={`Ver en el mapa: ${nombreAccesible}`} aria-describedby={idDatos} onClick={() => onLugar(item.lugarId!)}>
+          {cuerpo}
         </button>
       ) : (
-        <div className="f-item-cuerpo">
-          <CuerpoDeItem item={item} sinChipInformativo={sinChipInformativo} />
-        </div>
+        <div className="f-item-cuerpo">{cuerpo}</div>
       )}
       <MasDeItem item={item} />
     </li>
@@ -60,7 +67,8 @@ function Grupo({ grupo, lugarActivo, onLugar }: { grupo: GrupoDeFicha; lugarActi
         </h3>
         {grupo.soloInformativo && <EstadoChip estado="informativo" texto="Solo informativo" />}
       </div>
-      {grupo.resumen && <p className="f-grupo-resumen">{grupo.resumen}</p>}
+      {grupo.resumen && <p className="f-prosa f-grupo-resumen">{grupo.resumen}</p>}
+      <ConteoDeGrupo conteo={grupo.conteo} />
       {grupo.subgrupos.map((s, i) => (
         <div key={s.titulo ?? i} className="f-subgrupo">
           {s.titulo && <h4>{s.titulo}</h4>}
@@ -98,14 +106,30 @@ function useDesplegarAlImprimir(raiz: React.RefObject<HTMLElement | null>) {
   }, [raiz]);
 }
 
+/**
+ * Cuando la ficha aparece y el foco se quedó sin lugar (se pulsó un botón del asistente que ya no se ve, o «Reintentar», que desapareció), lo lleva al título de la ficha
+ * para que quien usa teclado o lector de pantalla empiece a leer ahí. Si el foco está en otro control visible (el mapa, el botón del centro), no se lo quita.
+ */
+function useEnfocarAlAbrir(titulo: RefObject<HTMLElement | null>) {
+  useEffect(() => {
+    const a = document.activeElement as HTMLElement | null;
+    const perdido = !a || a === document.body || !a.isConnected || a.getClientRects().length === 0;
+    if (perdido) titulo.current?.focus();
+  }, [titulo]);
+}
+
 function FichaCompleta({ punto, r, lugarActivo, onLugar }: { punto: PuntoElegido; r: ReporteDePunto; lugarActivo: string | null; onLugar: (id: string) => void }) {
   const raiz = useRef<HTMLElement>(null);
+  const titulo = useRef<HTMLHeadingElement>(null);
   useDesplegarAlImprimir(raiz);
+  useEnfocarAlAbrir(titulo);
   const navegacion = [...r.grupos.map((g) => ({ id: `ficha-g-${g.id}`, texto: g.corto })), { id: 'ficha-pasos', texto: 'Antes de decidir' }];
   return (
     <article ref={raiz} className="ficha" aria-labelledby="ficha-titulo" data-testid="ficha">
       <header className="f-cabecera">
-        <h2 id="ficha-titulo">Ficha del punto</h2>
+        <h2 id="ficha-titulo" ref={titulo} tabIndex={-1}>
+          Ficha del punto
+        </h2>
         <p className="f-sub">
           {punto.etiqueta ? <strong>{punto.etiqueta} · </strong> : null}
           {r.distrito ? `Distrito de ${r.distrito} · ` : ''}
@@ -113,19 +137,25 @@ function FichaCompleta({ punto, r, lugarActivo, onLugar }: { punto: PuntoElegido
             {grados(r.punto.lat)}; {grados(r.punto.lon)}
           </span>
         </p>
-        <p className="f-fecha">Generada el {fechaLarga(r.generado)}</p>
+        <p className="f-fecha">
+          Generada el <time dateTime={r.generado}>{fechaLarga(r.generado)}</time>
+          <span className="f-fecha-nota">Cada dato dice su fuente y la fecha de sus datos.</span>
+        </p>
       </header>
 
       <section className="f-esencial" aria-labelledby="ficha-esencial">
         <h3 id="ficha-esencial">Lo esencial de este punto</h3>
+        <p className="f-esencial-nota">Cada línea resume un grupo y cuenta sus distancias de referencia que cumplen, no cumplen o no tienen dato.</p>
         <ul>
           {r.esencial.map((e) => {
             const g = r.grupos.find((x) => x.id === e.grupo)!;
             return (
               <li key={e.grupo}>
                 <a href={`#ficha-g-${e.grupo}`} onClick={(ev) => irA(ev, `ficha-g-${e.grupo}`)}>
-                  <span className="f-esencial-tema">{g.corto}</span>
-                  <span className="f-esencial-texto">{e.texto}</span>
+                  <span className="f-esencial-frase">
+                    <span className="f-esencial-tema">{g.corto}</span> <span className="f-esencial-texto">{e.texto}</span>
+                  </span>
+                  <ConteoDeGrupo conteo={g.conteo} />
                 </a>
               </li>
             );
@@ -133,7 +163,7 @@ function FichaCompleta({ punto, r, lugarActivo, onLugar }: { punto: PuntoElegido
         </ul>
       </section>
 
-      <p className="f-aviso" role="note">
+      <p className="f-prosa f-aviso" role="note">
         {r.aviso}
       </p>
 
@@ -157,13 +187,13 @@ function FichaCompleta({ punto, r, lugarActivo, onLugar }: { punto: PuntoElegido
         <h3 id="ficha-pasos-t" tabIndex={-1}>
           Antes de decidir
         </h3>
-        <p className="f-grupo-resumen">Esta ficha es referencial: lo que sigue se comprueba fuera de ella.</p>
+        <p className="f-prosa f-grupo-resumen">Esta ficha es referencial: lo que sigue se comprueba fuera de ella.</p>
         <ul className="f-items">
           {r.pasos.map((p) => (
             <li key={p.id} className="f-item">
               <details className="f-paso">
                 <summary>{p.titulo}</summary>
-                <p>{p.detalle}</p>
+                <p className="f-prosa">{p.detalle}</p>
                 {p.enlaces.length > 0 && (
                   <ul className="f-lista">
                     {p.enlaces.map((e) => (
@@ -187,14 +217,14 @@ function FichaCompleta({ punto, r, lugarActivo, onLugar }: { punto: PuntoElegido
         </h3>
         <ul className="f-lista">
           {r.limitacionesClave.map((l, i) => (
-            <li key={i}>{l}</li>
+            <li key={i} className="f-prosa">{l}</li>
           ))}
         </ul>
         <details className="f-mas">
           <summary>Todas las limitaciones ({r.limitaciones.length})</summary>
           <ul className="f-lista">
             {r.limitaciones.map((l, i) => (
-              <li key={i}>{l}</li>
+              <li key={i} className="f-prosa">{l}</li>
             ))}
           </ul>
         </details>
@@ -224,33 +254,36 @@ export function Ficha({ punto, estado, onReintentar, lugarActivo, onLugar }: { p
     return (
       <div className="ficha-vacia">
         <h2>Ficha del punto</h2>
-        <p>Elige un punto en el mapa para ver qué dicen los datos públicos de ese lugar: haz clic o toca el mapa, busca un lugar por su nombre, usa el centro del mapa o pulsa un aviso del asistente.</p>
+        <p className="f-prosa">Elige un punto en el mapa para ver qué dicen los datos públicos de ese lugar: haz clic o toca el mapa, busca un lugar por su nombre, usa el centro del mapa o pulsa un aviso del asistente.</p>
       </div>
     );
   }
 
   const donde = punto.etiqueta ? `${punto.etiqueta} · ` : '';
-  if (estado.tipo === 'cargando') {
-    return (
-      <div className="ficha-estado" role="status">
-        <h2>Ficha del punto</h2>
-        <p>
-          Armando la ficha de {donde}
-          {grados(punto.lat)}; {grados(punto.lon)}…
-        </p>
-      </div>
-    );
-  }
-  if (estado.tipo === 'error') {
-    return (
-      <div className="ficha-estado" role="alert">
-        <h2>Ficha del punto</h2>
-        <p className="mensaje-error">{estado.mensaje}</p>
-        <button type="button" onClick={onReintentar}>
-          Reintentar
-        </button>
-      </div>
-    );
-  }
-  return <FichaCompleta punto={punto} r={estado.reporte} lugarActivo={lugarActivo} onLugar={onLugar} />;
+  const lugar = `${donde}${grados(punto.lat)}; ${grados(punto.lon)}`;
+  // El anuncio vive fuera de los estados para que el lector de pantalla lo diga al pasar de uno a otro (un aviso que aparece ya armado no siempre se lee).
+  const anuncio = estado.tipo === 'cargando' ? `Armando la ficha de ${lugar}.` : estado.tipo === 'listo' ? `La ficha de ${lugar} está lista.` : '';
+  return (
+    <>
+      <p role="status" className="solo-lectores">
+        {anuncio}
+      </p>
+      {estado.tipo === 'cargando' ? (
+        <div className="ficha-estado" aria-busy="true">
+          <h2>Ficha del punto</h2>
+          <p className="f-prosa">Armando la ficha de {lugar}…</p>
+        </div>
+      ) : estado.tipo === 'error' ? (
+        <div className="ficha-estado" role="alert">
+          <h2>Ficha del punto</h2>
+          <p className="mensaje-error">{estado.mensaje}</p>
+          <button type="button" onClick={onReintentar}>
+            Reintentar
+          </button>
+        </div>
+      ) : (
+        <FichaCompleta punto={punto} r={estado.reporte} lugarActivo={lugarActivo} onLugar={onLugar} />
+      )}
+    </>
+  );
 }

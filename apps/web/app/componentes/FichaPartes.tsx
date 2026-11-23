@@ -1,41 +1,72 @@
 'use client';
-import type { EstadoDeItem, ItemDeFicha, Referencia } from '../../lib/reporte.ts';
+import type { EstadoDeItem, GrupoDeFicha, ItemDeFicha, Referencia } from '../../lib/reporte.ts';
 
 const ETIQUETA: Record<EstadoDeItem, string> = { cumple: 'Cumple', no_cumple: 'No cumple', informativo: 'Informativo', sin_dato: 'Sin dato' };
+
+/** El dibujo de un estado: cada uno tiene su forma (la de «sin dato» es discontinua y con interrogación), así que no depende del color. */
+function IconoEstado({ estado, tam = 16 }: { estado: EstadoDeItem; tam?: number }) {
+  return (
+    <svg className="estado-icono" viewBox="0 0 20 20" width={tam} height={tam} aria-hidden="true" focusable="false">
+      {estado === 'cumple' && (
+        <>
+          <circle cx="10" cy="10" r="8.25" fill="none" stroke="currentColor" strokeWidth="1.8" />
+          <path d="M6.2 10.4l2.6 2.6 5-5.6" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+        </>
+      )}
+      {estado === 'no_cumple' && (
+        <>
+          <circle cx="10" cy="10" r="8.25" fill="none" stroke="currentColor" strokeWidth="1.8" />
+          <path d="M7 7l6 6M13 7l-6 6" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+        </>
+      )}
+      {estado === 'informativo' && (
+        <>
+          <circle cx="10" cy="10" r="8.25" fill="none" stroke="currentColor" strokeWidth="1.8" />
+          <path d="M10 9v5" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+          <circle cx="10" cy="6.4" r="1.1" fill="currentColor" />
+        </>
+      )}
+      {estado === 'sin_dato' && (
+        <>
+          <circle cx="10" cy="10" r="8.25" fill="none" stroke="currentColor" strokeWidth="1.8" strokeDasharray="3 2.6" />
+          <path d="M7.8 7.9a2.3 2.3 0 114 1.5c-.8.7-1.8 1.1-1.8 2.3" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+          <circle cx="10" cy="14.4" r="1" fill="currentColor" />
+        </>
+      )}
+    </svg>
+  );
+}
 
 /** El estado de un dato: icono, texto y color a la vez (el color nunca es lo único que informa). Informativo y sin dato no se parecen a un veredicto. */
 export function EstadoChip({ estado, texto }: { estado: EstadoDeItem; texto?: string }) {
   return (
     <span className={`estado estado-${estado}`}>
-      <svg className="estado-icono" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true" focusable="false">
-        {estado === 'cumple' && (
-          <>
-            <circle cx="10" cy="10" r="8.25" fill="none" stroke="currentColor" strokeWidth="1.8" />
-            <path d="M6.2 10.4l2.6 2.6 5-5.6" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
-          </>
-        )}
-        {estado === 'no_cumple' && (
-          <>
-            <circle cx="10" cy="10" r="8.25" fill="none" stroke="currentColor" strokeWidth="1.8" />
-            <path d="M7 7l6 6M13 7l-6 6" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
-          </>
-        )}
-        {estado === 'informativo' && (
-          <>
-            <circle cx="10" cy="10" r="8.25" fill="none" stroke="currentColor" strokeWidth="1.8" />
-            <path d="M10 9v5" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
-            <circle cx="10" cy="6.4" r="1.1" fill="currentColor" />
-          </>
-        )}
-        {estado === 'sin_dato' && (
-          <>
-            <circle cx="10" cy="10" r="8.25" fill="none" stroke="currentColor" strokeWidth="1.8" strokeDasharray="3 2.6" />
-            <path d="M7.8 7.9a2.3 2.3 0 114 1.5c-.8.7-1.8 1.1-1.8 2.3" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-            <circle cx="10" cy="14.4" r="1" fill="currentColor" />
-          </>
-        )}
-      </svg>
+      <IconoEstado estado={estado} />
       {texto ?? ETIQUETA[estado]}
+    </span>
+  );
+}
+
+const plural = (n: number, uno: string, varios: string) => `${n} ${n === 1 ? uno : varios}`;
+
+/**
+ * Cuántas distancias de referencia de un grupo cumplen, no cumplen o no tienen dato: un recuento de hechos, sin total ni puntaje. «Sin dato» se cuenta aparte y con su
+ * propio dibujo: no es un «no cumple». No se muestra si el grupo no tiene ninguna distancia de referencia.
+ */
+export function ConteoDeGrupo({ conteo }: { conteo: GrupoDeFicha['conteo'] }) {
+  const partes: { estado: EstadoDeItem; texto: string }[] = [];
+  if (conteo.cumple) partes.push({ estado: 'cumple', texto: plural(conteo.cumple, 'cumple', 'cumplen') });
+  if (conteo.noCumple) partes.push({ estado: 'no_cumple', texto: plural(conteo.noCumple, 'no cumple', 'no cumplen') });
+  if (conteo.sinDato) partes.push({ estado: 'sin_dato', texto: plural(conteo.sinDato, 'sin dato', 'sin dato') });
+  if (!partes.length) return null;
+  return (
+    <span className="f-conteo">
+      {partes.map((p) => (
+        <span key={p.estado} className={`f-conteo-item f-conteo-${p.estado}`}>
+          <IconoEstado estado={p.estado} tam={14} />
+          {p.texto}
+        </span>
+      ))}
     </span>
   );
 }
@@ -64,13 +95,13 @@ function IconoMapa() {
   );
 }
 
-/** La fuente y la fecha de los datos, en una línea corta junto a la cifra. */
+/** La fuente y la fecha de los datos, en una línea corta junto a la cifra. Si la base no trae fecha, lo dice. */
 export function Fuente({ fuente }: { fuente: ItemDeFicha['fuente'] }) {
   return (
     <span className="f-fuente">
-      {fuente.texto}
+      <span className="f-fuente-rotulo">Fuente:</span> {fuente.texto}
       {' · '}
-      {fuente.fecha ? `datos del ${fuente.fecha}` : 'sin fecha en la base'}
+      <span className={fuente.fecha ? undefined : 'f-fuente-sin-fecha'}>{fuente.fecha ? `datos del ${fuente.fecha}` : 'sin fecha en la base'}</span>
     </span>
   );
 }
@@ -132,7 +163,7 @@ export function MasDeItem({ item }: { item: ItemDeFicha }) {
       <summary>{item.detalle.titulo}</summary>
       <ul className="f-lista">
         {item.detalle.lineas.map((l, i) => (
-          <li key={i}>{l}</li>
+          <li key={i} className="f-prosa">{l}</li>
         ))}
       </ul>
     </details>
@@ -162,19 +193,19 @@ export function DetallesDeGrupo({ items }: { items: ItemDeFicha[] }) {
       <summary>Cómo se calculó y qué no dicen estos datos</summary>
       {bloques.map(({ it, metodo, noDice, origen }) => (
         <div key={it.id} className="f-mas-bloque">
-          <h5>{it.titulo}</h5>
+          <h4>{it.titulo}</h4>
           {metodo && (
-            <p>
+            <p className="f-prosa">
               <strong>Cómo se calculó.</strong> {metodo}
             </p>
           )}
           {origen && (
-            <p>
+            <p className="f-prosa">
               <strong>Origen de la referencia.</strong> {origen}.
             </p>
           )}
           {noDice && (
-            <p>
+            <p className="f-prosa">
               <strong>Qué no dice.</strong> {noDice}
             </p>
           )}
