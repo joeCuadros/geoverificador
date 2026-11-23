@@ -3,8 +3,7 @@ export default {
   transpilePackages: ['@geoverificador/agente', '@geoverificador/datos', '@geoverificador/dominio'],
   serverExternalPackages: ['@electric-sql/pglite', '@electric-sql/pglite-postgis', 'pg'],
   poweredByHeader: false,
-  // La aplicación anterior (public/index.html) queda en /clasico mientras se verifica la paridad.
   async rewrites() {
-    return { beforeFiles: [{ source: '/clasico', destination: '/index.html' }, { source: '/login.html', destination: '/acceso' }], afterFiles: [], fallback: [] };
+    return { beforeFiles: [{ source: '/login.html', destination: '/acceso' }], afterFiles: [], fallback: [] };
   },
 };

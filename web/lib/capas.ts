@@ -54,6 +54,24 @@ function puntosEstaticos(ruta: string, color: string, nombre: (p: any) => string
   };
 }
 
+/** Mapa de calor de denuncias: celdas de ~275 m con el conteo, nunca puntos. */
+function calorDeDenuncias(): DefCapaMapa['cargar'] {
+  let datos: any = null;
+  return async (_mapa, grupo) => {
+    if (datos) return;
+    datos = await fetch('/api/delitos').then((r) => r.json()).catch(() => null);
+    grupo.clearLayers();
+    if (!datos?.celdas) return;
+    const h = datos.celda / 2;
+    for (const c of datos.celdas as { lat: number; lon: number; n: number }[]) {
+      const t = Math.sqrt(c.n / datos.max);
+      L.rectangle([[c.lat - h, c.lon - h], [c.lat + h, c.lon + h]], { stroke: false, fillColor: '#c2410c', fillOpacity: 0.12 + 0.5 * t, interactive: true })
+        .bindTooltip(`${c.n} denuncias de robo y hurto en esta celda (${datos.meta.meses} meses)`, { sticky: true })
+        .addTo(grupo);
+    }
+  };
+}
+
 export const capasDelMapa: Record<string, DefCapaMapa> = {
   distritos: { etiqueta: 'Distritos', descripcion: 'Límites oficiales (INEI)', grupo: 'Ciudad', color: '#52606d', cargar: desdeApi('distritos', () => ({ color: '#52606d', weight: 1.5, fillOpacity: 0, dashArray: '4 4' }), undefined, (f) => f.properties?.distrito ?? '') },
   zonas: { etiqueta: 'Zonificación', descripcion: 'Plano del PDM 2016-2025 (vigencia cumplida)', grupo: 'Ciudad', color: '#e0b3b3', cargar: desdeApi('zonas', (f) => ({ color: f.properties?.color ?? '#999', weight: 0.5, fillColor: f.properties?.color ?? '#999', fillOpacity: 0.45 }), undefined, (f) => `${f.properties?.codigo ?? ''} ${f.properties?.nombre ?? ''}`.trim()) },
@@ -63,6 +81,7 @@ export const capasDelMapa: Record<string, DefCapaMapa> = {
   educacion: { etiqueta: 'Colegios', descripcion: 'Padrón ESCALE (MINEDU)', grupo: 'Entorno', color: '#e69a00', cargar: puntosEstaticos('equipamiento/educacion.geojson', '#e69a00', (p) => p.nombre ?? p.name ?? 'Institución educativa') },
   universidades: { etiqueta: 'Universidades', descripcion: 'Licenciadas por Sunedu', grupo: 'Entorno', color: '#7a3fc4', cargar: puntosEstaticos('equipamiento/educacion_superior.geojson', '#7a3fc4', (p) => p.nombre ?? p.name ?? 'Universidad') },
   censo: { etiqueta: 'Manzanas del censo', descripcion: 'Cobertura de agua, luz y desagüe (2017); desde zoom 15', grupo: 'Entorno', color: '#1a7f4b', cargar: desdeApi('censo', (f) => ({ color: '#1a7f4b', weight: 0.6, fillColor: '#1a7f4b', fillOpacity: f.properties?.con_datos ? 0.18 : 0.04 })) },
+  delitos: { etiqueta: 'Denuncias (calor)', descripcion: 'Robo y hurto agregados en celdas (MININTER)', grupo: 'Peligros', color: '#c2410c', cargar: calorDeDenuncias() },
   cauces: { etiqueta: 'Quebradas y ríos', descripcion: 'Cauces (peligro de huaico)', grupo: 'Peligros', color: '#0b7285', cargar: desdeApi('cauces', () => ({ color: '#0b7285', weight: 2.5 }), undefined, (f) => f.properties?.nombre ?? 'Cauce') },
   volcan: { etiqueta: 'Peligro volcánico', descripcion: 'Mapa del IGP (Misti)', grupo: 'Peligros', color: '#c2410c', cargar: desdeApi('volcan', () => ({ color: '#c2410c', weight: 0.8, fillColor: '#c2410c', fillOpacity: 0.15 }), undefined, (f) => f.properties?.etiqueta ?? '') },
 };

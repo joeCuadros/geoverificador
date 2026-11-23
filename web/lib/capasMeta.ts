@@ -10,6 +10,7 @@ export const capasMeta: Record<string, MetaCapa> = {
   educacion: { etiqueta: 'Colegios', descripcion: 'Padrón ESCALE (MINEDU)', grupo: 'Entorno', color: '#e69a00' },
   universidades: { etiqueta: 'Universidades', descripcion: 'Licenciadas por Sunedu', grupo: 'Entorno', color: '#7a3fc4' },
   censo: { etiqueta: 'Manzanas del censo', descripcion: 'Cobertura de agua, luz y desagüe (2017); desde zoom 15', grupo: 'Entorno', color: '#1a7f4b' },
+  delitos: { etiqueta: 'Denuncias (calor)', descripcion: 'Robo y hurto agregados en celdas (MININTER)', grupo: 'Peligros', color: '#c2410c' },
   cauces: { etiqueta: 'Quebradas y ríos', descripcion: 'Cauces (peligro de huaico)', grupo: 'Peligros', color: '#0b7285' },
   volcan: { etiqueta: 'Peligro volcánico', descripcion: 'Mapa del IGP (Misti)', grupo: 'Peligros', color: '#c2410c' },
 };

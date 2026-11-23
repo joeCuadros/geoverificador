@@ -1,5 +1,21 @@
 # GeoVerificador
 
+## Cómo correrlo
+
+La aplicación es una app **Next.js** (carpeta `web/`) sobre una base **PostgreSQL + PostGIS**. El núcleo de cálculo (`packages/dominio`) se genera desde las bibliotecas puras de `public/js`; las consultas están en `packages/datos` y el agente de búsqueda en `packages/agente`.
+
+```bash
+pnpm install
+DATABASE_URL=pglite://.bd-local pnpm bd:migrar     # base local embebida (sin Docker); en producción: postgres://…
+DATABASE_URL=pglite://.bd-local pnpm bd:cargar
+DATABASE_URL=pglite://.bd-local pnpm dev           # http://localhost:3000
+```
+
+- `AVISOS_PUBLICAR=ninguna|permitidas|todas`: qué avisos se muestran (ADR 0002). Sin definir, ninguno.
+- Pruebas: `pnpm test` (bibliotecas, Jest), `pnpm test:dominio`, `pnpm test:nuevo` (base, avisos, agente; Vitest). `pnpm dominio:verificar` comprueba que el paquete de dominio está al día.
+- Despliegue: en Vercel, Root Directory = `web`. Decisiones de diseño en `docs/adr/`.
+- La aplicación anterior (HTML estático) ya no se publica; sus bibliotecas siguen en `public/js` como fuente del dominio.
+
 Ficha de un predio en Arequipa metropolitana, con datos públicos. Se elige un punto en el mapa y la aplicación evalúa **5 variables**, cada una por separado y con su fuente:
 
 | Variable | Qué muestra | Umbral | Fuente |
