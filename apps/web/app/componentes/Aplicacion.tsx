@@ -6,6 +6,7 @@ import { Buscador } from './Buscador.tsx';
 import { Chat } from './Chat.tsx';
 import { Ficha } from './Ficha.tsx';
 import { Mapa } from './Mapa.tsx';
+import { Onboarding } from './Onboarding.tsx';
 import { MAPA_VACIO, type PuntoElegido } from './tipos.ts';
 import { useFicha } from './useFicha.ts';
 import { useViaje } from './useViaje.ts';
@@ -67,6 +68,7 @@ export function Aplicacion() {
       <header className="banda">
         <h1>GeoVerificador</h1>
         <p>Predios de Arequipa</p>
+        <Onboarding />
       </header>
 
       <section className="zona-mapa" aria-label="Mapa">
