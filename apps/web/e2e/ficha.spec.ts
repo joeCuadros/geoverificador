@@ -4,7 +4,7 @@
  * botón «Ver ficha del centro del mapa» en un teléfono.
  */
 import type { Page } from '@playwright/test';
-import { abrir, alejar, clicEnMapa, expect, ficha, mapa, test } from './apoyo.ts';
+import { AVISO_1, CONSULTA_AVISOS, abrir, alejar, clicEnMapa, expect, ficha, mapa, preguntar, test } from './apoyo.ts';
 
 async function abrirFichaDelCentro(page: Page) {
   const respuesta = page.waitForResponse((r) => r.url().includes('/api/ficha') && r.status() === 200);
@@ -159,6 +159,179 @@ test.describe('ficha: leerla', () => {
   });
 });
 
+test.describe('ficha: jerarquía, desconocidos y lectura', () => {
+  test.beforeEach(async ({ page }) => abrir(page));
+
+  test('lo esencial cuenta las distancias de cada grupo con icono y texto, sin total ni puntaje, y «sin dato» no se mezcla con «no cumple»', async ({ page }) => {
+    const reporte = await abrirFichaDelCentro(page);
+    for (const g of reporte.grupos) {
+      const conteo = ficha(page).locator(`#ficha-g-${g.id} > .f-conteo`);
+      const esperado = g.conteo.cumple + g.conteo.noCumple + g.conteo.sinDato;
+      await expect(conteo, g.id).toHaveCount(esperado > 0 ? 1 : 0);
+      if (esperado === 0) continue;
+      for (const [clase, n] of [
+        ['cumple', g.conteo.cumple],
+        ['no_cumple', g.conteo.noCumple],
+        ['sin_dato', g.conteo.sinDato],
+      ] as const) {
+        const parte = conteo.locator(`.f-conteo-${clase}`);
+        await expect(parte, `${g.id} ${clase}`).toHaveCount(n > 0 ? 1 : 0);
+        if (n > 0) {
+          await expect(parte).toContainText(String(n));
+          expect(await parte.locator('svg').count(), `${g.id} ${clase}: el icono acompaña al texto`).toBe(1);
+        }
+      }
+      // El mismo recuento aparece en lo esencial, junto a la frase que lleva al grupo.
+      await expect(ficha(page).locator(`.f-esencial a[href="#ficha-g-${g.id}"] .f-conteo`)).toHaveCount(1);
+    }
+    await expect(ficha(page).locator('.f-conteo').first()).not.toContainText(/puntaje|mejor|recomendad|\d+\s*\/\s*\d+|total/i);
+  });
+
+  test('un dato sin dato se ve distinto de un «no cumple»: línea discontinua, fondo hundido y su propio dibujo', async ({ page }) => {
+    await alejar(page, 5);
+    await clicEnMapa(page, 150, 100);
+    await expect(ficha(page)).toBeVisible();
+    const zona = item(page, 'zona');
+    await expect(zona).toHaveAttribute('data-estado', 'sin_dato');
+    expect(await zona.evaluate((e) => getComputedStyle(e).borderBottomStyle)).toBe('dashed');
+    const chip = zona.locator('.estado-sin_dato');
+    expect(await chip.evaluate((e) => getComputedStyle(e).borderTopStyle)).toBe('dashed');
+    await expect(chip.locator('svg')).toHaveCount(1);
+    // Ningún elemento sin dato lleva el chip de un veredicto.
+    await expect(ficha(page).locator('li[data-estado="sin_dato"] :is(.estado-cumple, .estado-no_cumple)')).toHaveCount(0);
+  });
+
+  test('el origen de cada dato se lee con su fuente rotulada y, si falta la fecha, lo dice', async ({ page }) => {
+    await abrirFichaDelCentro(page);
+    await expect(item(page, 'salud').locator('.f-fuente')).toContainText(/Fuente: .*RENIPRESS.* · datos del \d{4}-\d{2}-\d{2}/s);
+    await expect(item(page, 'zona').locator('.f-fuente')).toContainText(/Fuente: .* · sin fecha en la base/s);
+    await expect(ficha(page).locator('.f-fecha time')).toHaveAttribute('datetime', /^\d{4}-\d{2}-\d{2}T/);
+  });
+
+  test('la prosa va en Source Serif 4 con renglones de 65 caracteres y los datos en Public Sans', async ({ page }) => {
+    await abrirFichaDelCentro(page);
+    const fuentes = await ficha(page).evaluate((raiz) => {
+      const de = (sel: string) => [...raiz.querySelectorAll(sel)].map((e) => getComputedStyle(e).fontFamily);
+      return { prosa: de('.f-grupo-resumen, .f-aviso, .f-texto'), datos: de('.f-distancia, .f-fuente, .estado') };
+    });
+    expect(fuentes.prosa.length).toBeGreaterThan(2);
+    for (const f of fuentes.prosa) expect(f).toContain('Source Serif 4');
+    expect(fuentes.datos.length).toBeGreaterThan(2);
+    for (const f of fuentes.datos) expect(f).toContain('Public Sans');
+    // Ningún párrafo de prosa pasa de 65ch (65 × el ancho de «0» de su tipografía).
+    const pasados = await ficha(page).locator('.f-prosa').evaluateAll((es) =>
+      es
+        .map((e) => {
+          const cs = getComputedStyle(e);
+          const lienzo = document.createElement('canvas').getContext('2d')!;
+          lienzo.font = `${cs.fontSize} ${cs.fontFamily}`;
+          const cero = lienzo.measureText('0').width;
+          return { texto: (e.textContent ?? '').slice(0, 30), ancho: e.getBoundingClientRect().width, limite: 65 * cero + 1 };
+        })
+        .filter((m) => m.ancho > m.limite),
+    );
+    expect(pasados).toEqual([]);
+  });
+
+  test('el botón de un elemento con lugar lleva el estado y la fuente como descripción para el lector de pantalla', async ({ page }) => {
+    await abrirFichaDelCentro(page);
+    const boton = ficha(page).locator('button.f-item-boton').first();
+    expect(await boton.getAttribute('aria-describedby')).toMatch(/^ficha-i-/);
+    await expect(boton).toHaveAccessibleName(/^Ver en el mapa: /);
+    await expect(boton).toHaveAccessibleDescription(/(Cumple|No cumple|Informativo|Sin dato)[\s\S]*Fuente: /);
+  });
+
+  test('los encabezados bajan de a un nivel: ficha (2), grupos (3), subgrupos y detalles (4)', async ({ page }) => {
+    await abrirFichaDelCentro(page);
+    await page.locator('.ficha details').evaluateAll((es) => es.forEach((d) => ((d as HTMLDetailsElement).open = true)));
+    const niveles = await ficha(page).evaluate((raiz) => [...raiz.querySelectorAll('h1, h2, h3, h4, h5, h6')].map((h) => Number(h.tagName[1])));
+    expect(niveles[0]).toBe(2);
+    for (let i = 1; i < niveles.length; i++) expect(niveles[i] - niveles[i - 1], `encabezado ${i}`).toBeLessThanOrEqual(1);
+    expect(niveles).not.toContain(5);
+  });
+
+  test('un anuncio para lectores de pantalla dice cuándo se arma y cuándo está lista la ficha', async ({ page }) => {
+    await page.route('**/api/ficha*', async (ruta) => {
+      await new Promise((f) => setTimeout(f, 600));
+      await ruta.continue();
+    });
+    await page.getByRole('button', { name: 'Ver ficha del centro del mapa' }).click();
+    const anuncio = page.getByRole('tabpanel', { name: 'Ficha del punto' }).getByRole('status');
+    await expect(anuncio).toHaveText(/^Armando la ficha de /);
+    await expect(ficha(page)).toBeVisible();
+    await expect(anuncio).toHaveText(/ está lista\.$/);
+  });
+
+  test('si el foco se quedó sin lugar (se tocó un botón del asistente que ya no se ve), pasa al título de la ficha', async ({ page }) => {
+    const r = await preguntar(page, CONSULTA_AVISOS);
+    await r.getByRole('button', { name: new RegExp(`Ver ficha del entorno: ${AVISO_1.titulo}`) }).click();
+    await expect(ficha(page)).toBeVisible();
+    await expect(ficha(page).getByRole('heading', { level: 2, name: 'Ficha del punto' })).toBeFocused();
+  });
+
+  test('si falla la ficha y se reintenta, el foco llega al título y no se queda en el botón que desapareció', async ({ page }) => {
+    await page.route('**/api/ficha*', (ruta) => ruta.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'No se pudo armar la ficha de este punto. Intenta de nuevo.' }) }));
+    await page.getByRole('button', { name: 'Ver ficha del centro del mapa' }).click();
+    const reintentar = page.getByRole('button', { name: 'Reintentar' });
+    await expect(reintentar).toBeVisible();
+    await page.unroute('**/api/ficha*');
+    await reintentar.click();
+    await expect(ficha(page)).toBeVisible();
+    await expect(ficha(page).getByRole('heading', { level: 2, name: 'Ficha del punto' })).toBeFocused();
+  });
+
+  test('si el foco está en el mapa, abrir la ficha no se lo quita', async ({ page }) => {
+    await clicEnMapa(page);
+    await expect(ficha(page)).toBeVisible();
+    await expect(ficha(page).getByRole('heading', { level: 2, name: 'Ficha del punto' })).not.toBeFocused();
+  });
+
+  test('con movimiento reducido, la ficha no hace transiciones', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await abrirFichaDelCentro(page);
+    const duraciones = await ficha(page).locator('.f-esencial a, .f-nav a, button.f-item-boton').evaluateAll((es) => es.map((e) => getComputedStyle(e).transitionDuration));
+    expect(duraciones.length).toBeGreaterThan(3);
+    for (const d of duraciones) expect(d).toBe('0s');
+  });
+
+  test('en el tema oscuro el ámbar sigue siendo solo del aviso y el estado se lee con contraste', async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await abrirFichaDelCentro(page);
+    const luz = (rgb: string) => {
+      const [r, g, b] = rgb
+        .match(/\d+(\.\d+)?/g)!
+        .slice(0, 3)
+        .map(Number)
+        .map((v) => {
+          const c = v / 255;
+          return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+        });
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const contraste = (a: string, b: string) => {
+      const [x, y] = [luz(a), luz(b)].sort((p, q) => q - p);
+      return (x + 0.05) / (y + 0.05);
+    };
+    const aviso = await ficha(page).locator('.f-aviso').evaluate((e) => ({ fondo: getComputedStyle(e).backgroundColor, texto: getComputedStyle(e).color }));
+    expect(aviso.fondo).toBe('rgb(53, 40, 10)');
+    expect(contraste(aviso.fondo, aviso.texto)).toBeGreaterThanOrEqual(4.5);
+    // El texto de cada estado contra el fondo de su fila (el del panel, #171d2b, si la fila no tiene uno propio).
+    for (const clase of ['estado-cumple', 'estado-no_cumple', 'estado-sin_dato']) {
+      const c = ficha(page).locator(`.${clase}`).first();
+      if (!(await c.count())) continue;
+      const m = await c.evaluate((e) => {
+        const fila = e.closest('li');
+        const fondo = fila ? getComputedStyle(fila).backgroundColor : 'rgba(0, 0, 0, 0)';
+        return { fondo, texto: getComputedStyle(e).color };
+      });
+      const fondo = m.fondo === 'rgba(0, 0, 0, 0)' ? 'rgb(23, 29, 43)' : m.fondo;
+      expect(contraste(fondo, m.texto), clase).toBeGreaterThanOrEqual(4.5);
+    }
+    const ambar = await ficha(page).evaluate((raiz) => [...raiz.querySelectorAll('*')].filter((e) => getComputedStyle(e).backgroundColor === 'rgb(53, 40, 10)' && !e.classList.contains('f-aviso')).length);
+    expect(ambar).toBe(0);
+  });
+});
+
 test.describe('ficha: imprimir', () => {
   test('al imprimir se despliega todo y se quitan los controles', async ({ page }) => {
     await abrir(page);
@@ -192,6 +365,28 @@ test.describe('ficha en un teléfono', () => {
     expect(sobresale).toEqual([]);
     // Objetivos de al menos 44 px.
     for (const sel of ['.f-nav a', 'button.f-item-boton', '.f-esencial a', 'summary']) {
+      const cajas = await ficha(page).locator(sel).evaluateAll((es) => es.map((e) => e.getBoundingClientRect().height));
+      expect(cajas.length, sel).toBeGreaterThan(0);
+      for (const h of cajas) expect(h, sel).toBeGreaterThanOrEqual(43.5);
+    }
+  });
+});
+
+test.describe('ficha a 375 px', () => {
+  test.use({ viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true });
+
+  test('cabe sin desplazamiento horizontal, con objetivos de 44 px y sin que nada se salga del panel', async ({ page }) => {
+    await abrir(page);
+    await abrirFichaDelCentro(page);
+    await page.locator('.ficha details').evaluateAll((es) => es.forEach((d) => ((d as HTMLDetailsElement).open = true)));
+    const [ancho, visible] = await page.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth]);
+    expect(ancho).toBeLessThanOrEqual(visible);
+    const sobresale = await ficha(page).evaluate((raiz) => {
+      const borde = raiz.getBoundingClientRect().right + 1;
+      return [...raiz.querySelectorAll('*')].filter((e) => !e.closest('.f-nav') && e.getBoundingClientRect().right > borde).map((e) => `${e.tagName}.${e.className}`);
+    });
+    expect(sobresale).toEqual([]);
+    for (const sel of ['.f-nav a', 'button.f-item-boton', '.f-esencial a', 'summary', '.f-acciones button']) {
       const cajas = await ficha(page).locator(sel).evaluateAll((es) => es.map((e) => e.getBoundingClientRect().height));
       expect(cajas.length, sel).toBeGreaterThan(0);
       for (const h of cajas) expect(h, sel).toBeGreaterThanOrEqual(43.5);

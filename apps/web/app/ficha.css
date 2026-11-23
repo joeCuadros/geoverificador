@@ -1,64 +1,105 @@
-/* La ficha del punto. Lo esencial primero; cada elemento es una fila con su estado (icono + texto + color), su distancia y su fuente con fecha; el método y los límites van
-   plegados. Mismos tokens que el resto (sillar y tinta de plano). Primero móvil: una columna de 358 px sin desplazamiento horizontal. */
+/* La ficha del punto. Orden de lectura: el estado y lo esencial primero, después cada grupo con sus datos (cada uno con su estado, su distancia y su fuente con fecha)
+   y al final los pasos y los límites; el método va plegado. Mismos tokens que el resto (sillar y tinta de plano; el ámbar solo es del aviso).
+   Tipografía: Public Sans para los datos (estados, cifras, fuentes) y Source Serif 4 para lo que se lee como prosa (`.f-prosa`, a 65 caracteres como máximo).
+   Primero móvil: una columna de 343 px sin desplazamiento horizontal; desde 900 px vive en el panel de la izquierda (lo coloca la aplicación). */
 
-.ficha { display: flex; flex-direction: column; gap: 22px; overflow-wrap: anywhere; min-width: 0; }
-.ficha h2, .ficha h3, .ficha h4, .ficha h5 { margin: 0; }
+.ficha {
+  --f-1: 4px;
+  --f-2: 8px;
+  --f-3: 12px;
+  --f-4: 16px;
+  --f-5: 24px;
+  --medida: 65ch;
+  display: flex;
+  flex-direction: column;
+  gap: var(--f-5);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.ficha h2, .ficha h3, .ficha h4 { margin: 0; }
 .ficha p { margin: 0; }
 .ficha ul { margin: 0; padding: 0; list-style: none; }
 .ficha :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-.ficha-vacia, .ficha-estado { color: var(--ink-2); }
+.ficha-vacia, .ficha-estado { display: grid; gap: var(--f-2); color: var(--ink-2); }
+.ficha-vacia h2, .ficha-estado h2 { margin: 0; font-size: 1.5rem; color: var(--ink); }
+.ficha-vacia p, .ficha-estado p { margin: 0; }
+.ficha-estado button { justify-self: start; }
 
-/* Cabecera y aviso */
-.f-cabecera { display: grid; gap: 2px; }
+/* Prosa: la que se lee de corrido va en serif, con renglones de hasta 65 caracteres y sin viudas */
+.f-prosa { max-width: var(--medida); font-family: var(--serif); line-height: 1.55; text-wrap: pretty; }
+
+/* Cabecera: qué punto es y de cuándo es la ficha */
+.f-cabecera { display: grid; gap: var(--f-1); }
 .f-cabecera h2 { font-size: 1.5rem; }
-.f-sub { font-size: .9rem; color: var(--ink-2); }
-.f-fecha { font-size: .78rem; color: var(--muted); }
-.f-aviso { padding: 8px 12px; background: var(--amb-bg); border: 1px solid var(--amb-line); border-radius: var(--radius-sm); font-size: .82rem; color: var(--amb-text); }
+.f-cabecera h2:focus-visible { outline-offset: 4px; border-radius: var(--radius-sm); }
+.f-sub { font-size: .95rem; color: var(--ink); }
+.f-fecha { font-size: .8rem; color: var(--muted); max-width: var(--medida); }
+.f-fecha-nota { display: block; }
 
-/* Lo esencial: cada frase lleva a su grupo */
-.f-esencial { display: grid; gap: 8px; }
-.f-esencial h3 { font-size: 1.05rem; }
+/* Aviso: lo único en ámbar */
+.f-aviso { padding: var(--f-3) var(--f-4); background: var(--amb-bg); border: 1px solid var(--amb-line); border-radius: var(--radius); font-size: .9rem; color: var(--amb-text); }
+
+/* Lo esencial: es lo primero que se lee; cada frase lleva a su grupo y trae el recuento de sus distancias de referencia */
+.f-esencial { display: grid; gap: var(--f-2); }
+.f-esencial h3 { font-size: 1.15rem; }
+.f-esencial-nota { font-size: .8rem; color: var(--muted); max-width: var(--medida); }
 .f-esencial ul { border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--surface-2); overflow: hidden; }
 .f-esencial li + li { border-top: 1px solid var(--line); }
-.f-esencial a { display: grid; grid-template-columns: 5.2rem 1fr; gap: 10px; align-items: baseline; min-height: 44px; padding: 10px 12px; color: var(--ink); text-decoration: none; }
+.f-esencial a { display: grid; gap: var(--f-1); align-content: center; min-height: 44px; padding: var(--f-3) var(--f-4); color: var(--ink); text-decoration: none; transition: background-color .15s ease-out; }
 .f-esencial a:hover { background: var(--tinta-soft); }
-.f-esencial-tema { font-weight: 700; font-size: .85rem; color: var(--tinta); }
-.f-esencial-texto { font-size: .92rem; }
+.f-esencial a:focus-visible { outline-offset: -3px; }
+.f-esencial-frase { font-family: var(--serif); font-size: 1rem; line-height: 1.5; }
+.f-esencial-tema { font-family: var(--sans); font-size: .9rem; font-weight: 700; color: var(--tinta); }
+
+/* Recuento de distancias de referencia: icono + texto; «sin dato» tiene su propio dibujo y no se mezcla con «no cumple» */
+.f-conteo { display: flex; flex-wrap: wrap; gap: 2px var(--f-4); font-size: .82rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.f-conteo-item { display: inline-flex; align-items: center; gap: 5px; }
+.f-conteo-cumple { color: var(--ok); }
+.f-conteo-no_cumple { color: var(--no); }
+.f-conteo-sin_dato { color: var(--muted); }
+.f-conteo .estado-icono { flex: none; }
 
 /* Navegación entre grupos: se queda a la vista y se desplaza por dentro si no cabe */
-.f-nav { position: sticky; top: 0; z-index: 5; margin: 0 -16px; padding: 0 16px; background: var(--surface); border-bottom: 1px solid var(--line); }
+.f-nav { position: sticky; top: 0; z-index: 5; margin: 0 calc(-1 * var(--f-4)); padding: 0 var(--f-4); background: var(--surface); border-bottom: 1px solid var(--line); }
 .f-nav ul { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: thin; }
-.f-nav a { display: flex; align-items: center; min-height: 44px; padding: 0 9px; white-space: nowrap; font-size: .9rem; font-weight: 600; color: var(--ink-2); text-decoration: none; border-bottom: 3px solid transparent; }
+.f-nav a { display: flex; align-items: center; min-height: 44px; padding: 0 var(--f-3); white-space: nowrap; font-size: .9rem; font-weight: 600; color: var(--ink-2); text-decoration: none; border-bottom: 3px solid transparent; transition: color .15s ease-out, border-color .15s ease-out; }
 .f-nav a:hover { color: var(--tinta); border-bottom-color: var(--tinta-soft-line); }
 
-/* Grupos */
-.f-grupo { display: grid; gap: 8px; scroll-margin-top: 56px; }
-.f-grupo-cab { display: flex; align-items: center; justify-content: space-between; gap: 4px 10px; flex-wrap: wrap; }
-.f-grupo h3 { font-size: 1.2rem; }
-.f-grupo h3:focus-visible { outline-offset: 4px; }
-.f-grupo-resumen { font-size: .95rem; color: var(--ink-2); }
-.f-subgrupo { display: grid; gap: 4px; margin-top: 6px; }
-.f-subgrupo h4 { font-size: .8rem; font-weight: 700; color: var(--ink-2); letter-spacing: .02em; }
+/* Grupos: una línea fuerte los separa y el mismo ritmo se repite en todos */
+.f-grupo { display: grid; gap: var(--f-3); scroll-margin-top: 56px; padding-top: var(--f-4); border-top: 1px solid var(--line-strong); }
+.f-nav + .f-grupo { padding-top: 0; border-top: 0; }
+.f-grupo-cab { display: flex; align-items: center; justify-content: space-between; gap: var(--f-1) var(--f-3); flex-wrap: wrap; }
+.f-grupo h3 { font-size: 1.25rem; }
+.f-grupo h3:focus-visible { outline-offset: 4px; border-radius: var(--radius-sm); }
+.f-grupo-resumen { font-size: 1rem; color: var(--ink-2); }
+.f-subgrupo { display: grid; gap: var(--f-1); margin-top: var(--f-2); }
+.f-subgrupo h4 { font-family: var(--sans); font-size: .8rem; font-weight: 700; color: var(--ink-2); letter-spacing: .02em; }
 .f-items { border-top: 1px solid var(--line); }
 .f-item { border-bottom: 1px solid var(--line); }
 
 /* Un elemento: todo él es el botón que lo muestra en el mapa */
-.f-item-cuerpo { display: flex; flex-direction: column; gap: 4px; width: 100%; padding: 12px 8px; text-align: left; }
-button.f-item-boton { min-height: 44px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--ink); font-weight: 400; }
+.f-item-cuerpo { display: flex; flex-direction: column; gap: var(--f-1); width: 100%; padding: var(--f-3) var(--f-2); text-align: left; }
+.f-item-datos { display: flex; flex-direction: column; gap: var(--f-1); min-width: 0; }
+button.f-item-boton { min-height: 44px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--ink); font-weight: 400; transition: background-color .15s ease-out; }
 button.f-item-boton:hover:not(:disabled) { background: var(--tinta-soft); }
 button.f-item-boton[aria-pressed='true'] { background: var(--tinta-soft); box-shadow: inset 0 0 0 2px var(--tinta); }
 .f-item-activo .f-ver { font-weight: 700; }
-.f-fila { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.f-fila { display: flex; align-items: center; gap: var(--f-2); flex-wrap: wrap; }
 .f-titulo { font-weight: 700; }
 .f-distancia { margin-left: auto; font-size: 1.05rem; font-weight: 700; font-variant-numeric: tabular-nums; }
 .f-nombre { font-size: .95rem; }
-.f-texto { font-size: .92rem; color: var(--ink-2); }
-.f-datos { display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: .8rem; color: var(--ink-2); }
+.f-texto { max-width: var(--medida); font-family: var(--serif); font-size: .98rem; line-height: 1.5; color: var(--ink-2); }
+.f-datos { display: flex; flex-wrap: wrap; gap: 2px var(--f-3); font-size: .82rem; color: var(--ink-2); }
 .f-dato-etiqueta { color: var(--muted); }
-.f-fuente { font-size: .75rem; color: var(--muted); }
-.f-ver { display: inline-flex; align-items: center; gap: 4px; font-size: .75rem; color: var(--tinta); }
+.f-fuente { font-size: .78rem; color: var(--muted); }
+.f-fuente-rotulo { font-weight: 600; }
+.f-fuente-sin-fecha { font-style: italic; }
+.f-ver { display: inline-flex; align-items: center; gap: var(--f-1); font-size: .78rem; font-weight: 600; color: var(--tinta); }
 
-/* Estado: icono, texto y color; informativo y sin dato no se parecen a un veredicto */
+/* Sin dato: el elemento queda hundido y con línea discontinua, así no se confunde con un «no cumple» ni se pasa por alto */
+.f-item[data-estado='sin_dato'] { background: var(--surface-2); border-bottom-style: dashed; border-bottom-color: var(--line-strong); }
+
+/* Estado: icono, texto y color; informativo y sin dato no se parecen a un veredicto (el asistente usa las mismas clases) */
 .estado { display: inline-flex; align-items: center; gap: 4px; padding: 1px 9px 1px 6px; border: 1px solid transparent; border-radius: 999px; font-size: .75rem; font-weight: 700; white-space: nowrap; }
 .estado-icono { flex: none; }
 .estado-cumple { color: var(--ok); background: var(--ok-bg); border-color: var(--ok-line); }
@@ -76,31 +117,33 @@ button.f-item-boton[aria-pressed='true'] { background: var(--tinta-soft); box-sh
 .medidor-marca { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: var(--ink); }
 
 /* Un colegio que sirve a varios niveles: un criterio por nivel */
-.f-criterios { display: grid; gap: 6px; }
-.f-criterio { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 4px 8px; }
+.f-criterios { display: grid; gap: var(--f-2); }
+.f-criterio { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 4px var(--f-2); }
 .f-criterio-etiqueta { font-weight: 600; font-size: .88rem; }
 .f-criterio-ref { font-size: .78rem; color: var(--ink-2); text-align: right; }
 .f-criterio .medidor { grid-column: 1 / -1; max-width: none; }
 
 /* Lo plegado: método, límites, escenarios */
-.f-mas { margin: 0 8px 8px; }
+.f-mas { margin: 0 var(--f-2) var(--f-2); }
 .f-mas summary::-webkit-details-marker, .f-paso summary::-webkit-details-marker { display: none; }
-.f-mas summary::before, .f-paso summary::before { content: ''; flex: none; width: 7px; height: 7px; margin: 0 10px 2px 2px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); }
+.f-mas summary::before, .f-paso summary::before { content: ''; flex: none; width: 7px; height: 7px; margin: 0 10px 2px 2px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); transition: transform .15s ease-out; }
 .f-mas[open] > summary::before, .f-paso[open] > summary::before { transform: rotate(45deg); margin-bottom: 4px; }
-.f-mas summary, .f-paso summary { list-style: none; display: flex; align-items: center; min-height: 44px; font-size: .85rem; font-weight: 600; color: var(--tinta); cursor: pointer; }
-.f-mas-grupo { margin: 4px 0 0; }
-.f-mas-bloque { display: grid; gap: 4px; margin-bottom: 12px; padding-top: 8px; border-top: 1px solid var(--line); }
-.f-mas-bloque h5 { font-size: .85rem; font-weight: 700; color: var(--ink); }
-.f-mas-bloque p strong { color: var(--ink); }
-.f-mas p, .f-paso p { font-size: .84rem; color: var(--ink-2); }
-.f-lista { display: grid; gap: 6px; padding-left: 18px !important; list-style: disc !important; font-size: .86rem; color: var(--ink-2); }
-.f-paso { margin: 0 8px; }
-.f-paso p { margin-bottom: 8px; }
-.f-limites .f-lista { padding-left: 18px; }
-.f-acciones { margin-top: -6px; }
+.f-mas summary, .f-paso summary { list-style: none; display: flex; align-items: center; min-height: 44px; font-size: .88rem; font-weight: 600; color: var(--tinta); cursor: pointer; }
+.f-mas-grupo { margin: var(--f-1) 0 0; }
+.f-mas-bloque { display: grid; gap: var(--f-1); margin-bottom: var(--f-3); padding-top: var(--f-2); border-top: 1px solid var(--line); }
+.f-mas-bloque h4 { font-family: var(--sans); font-size: .88rem; font-weight: 700; color: var(--ink); }
+.f-mas-bloque p strong { font-family: var(--sans); font-size: .85rem; color: var(--ink); }
+.f-mas p, .f-paso p { font-size: .92rem; color: var(--ink-2); }
+.f-lista { display: grid; gap: var(--f-2); padding-left: 18px !important; list-style: disc !important; font-size: .92rem; color: var(--ink-2); }
+.f-lista-enlaces { font-family: var(--sans); font-size: .88rem; }
+.f-lista-enlaces a { display: inline-block; padding: 10px 0; }
+.f-paso { margin: 0 var(--f-2); }
+.f-paso p { margin-bottom: var(--f-2); }
+.f-acciones { margin-top: calc(-1 * var(--f-2)); }
 
-@media (min-width: 900px) {
-  .f-nav { margin: 0 -16px; }
+/* Quien prefiere menos movimiento no ve ninguna transición */
+@media (prefers-reduced-motion: reduce) {
+  .f-esencial a, .f-nav a, button.f-item-boton, .f-mas summary::before, .f-paso summary::before { transition: none; }
 }
 
 /* Impresión: todo desplegado, sin controles */
@@ -108,11 +151,13 @@ button.f-item-boton[aria-pressed='true'] { background: var(--tinta-soft); box-sh
   .f-nav, .f-ver, .f-acciones { display: none !important; }
   .ficha { gap: 14px; font-size: 10pt; }
   .f-item { break-inside: avoid; }
+  .f-item[data-estado='sin_dato'] { background: none; }
   button.f-item-boton { padding: 0; box-shadow: none !important; background: transparent !important; }
   .f-mas summary, .f-paso summary { min-height: 0; font-weight: 700; color: #000; }
   details::details-content { content-visibility: visible; display: block; height: auto; }
   details > summary::marker { content: ''; }
   .estado { border: 1px solid #000 !important; background: none !important; color: #000 !important; }
+  .f-conteo-item { color: #000 !important; }
   .medidor-relleno, .medidor-marca { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
   .f-esencial ul { background: none; }
 }
