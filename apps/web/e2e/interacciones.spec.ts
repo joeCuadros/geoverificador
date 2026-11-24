@@ -270,7 +270,7 @@ test.describe('el círculo de «cerca de»', () => {
     await expect(page.locator('.circulo-cerca')).toHaveCSS('pointer-events', 'none');
 
     // Cambiar el radio en «Lo que entendí» cambia el círculo y su rótulo; el centro no se mueve.
-    await chipLugar(page).getByRole('button', { name: /Tocar para cambiarlo/ }).click();
+    await chipLugar(page).getByRole('button', { name: /Activar para cambiarlo/ }).click();
     await page.locator('.burbuja-agente').last().getByRole('button', { name: 'A 800 m' }).click();
     await expect(mapa(page)).toHaveAttribute('data-circulo', `${lat.toFixed(5)}|${lon.toFixed(5)}|800`);
     await expect(page.locator('.etiqueta-circulo')).toHaveText('800 m');
@@ -312,7 +312,7 @@ test.describe('de la pregunta a la ficha y de vuelta', () => {
   test('el aviso del asistente, su marcador, su ficha y sus lugares forman un solo recorrido', async ({ page }) => {
     await abrir(page);
     await preguntar(page, CONSULTA_AVISOS);
-    await page.getByRole('button', { name: `Ver ficha del entorno: ${AVISO_1.titulo}` }).click();
+    await page.getByRole('button', { name: `Ver ficha del punto: ${AVISO_1.titulo}` }).click();
     await expect(ficha(page)).toBeVisible();
     const { lat, lon } = leerCoordenadas(await page.getByTestId('ficha-coordenadas').innerText());
     expect(lat).toBeCloseTo(AVISO_1.lat, 4);

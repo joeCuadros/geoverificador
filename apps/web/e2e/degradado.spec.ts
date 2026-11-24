@@ -29,7 +29,7 @@ test.describe('error interno', () => {
     await abrir(page);
     await page.getByLabel('Tu consulta').fill('hola');
     await page.getByRole('button', { name: 'Enviar' }).click();
-    const aviso = alerta(page).filter({ hasText: 'No pude procesar tu consulta' });
+    const aviso = page.locator('.burbuja-error').filter({ hasText: 'No pude procesar tu consulta' });
     await expect(aviso).toBeVisible();
     expect(await aviso.innerText()).not.toMatch(SIN_FILTRACIONES);
     await expect(page.getByRole('button', { name: 'Enviar' })).toBeEnabled();
@@ -75,6 +75,6 @@ test.describe('límite por hora', () => {
     await abrir(page);
     await page.getByLabel('Tu consulta').fill('hola');
     await page.getByRole('button', { name: 'Enviar' }).click();
-    await expect(alerta(page).filter({ hasText: 'Llegaste al límite de consultas por hora' })).toBeVisible();
+    await expect(page.locator('.burbuja-error').filter({ hasText: 'Llegaste al límite de consultas por hora' })).toBeVisible();
   });
 });

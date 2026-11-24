@@ -102,7 +102,7 @@ function distancias(id: IdCriterio, actual: number): Sugerencia[] {
 export function resumenDe(c: Consulta): string {
   const partes: string[] = [];
   if (c.tipo) partes.push(capitalizar(c.tipo));
-  else if (c.tipoCualquiera) partes.push('cualquier tipo de inmueble');
+  else if (c.tipoCualquiera) partes.push('cualquier tipo');
   if (c.distrito) partes.push(`en ${nombreBonito(c.distrito)}`);
   if (c.precioMax !== null) partes.push(`hasta ${dinero(c.precioMax, c.moneda)}`);
   if (c.dormitoriosMin !== null) partes.push(`${c.dormitoriosMin} dormitorios o más`);
@@ -175,7 +175,7 @@ export function ejemplos(cobertura: Cobertura | null, hayPunto: boolean): Sugere
 /** Siguientes pasos razonables después de una búsqueda con resultados. */
 export function siguientesPasos(c: Consulta, o: { cobertura: Cobertura | null; mostrados: number; hayPunto: boolean }): Sugerencia[] {
   const pasos: Sugerencia[] = [];
-  if (o.mostrados >= 2) pasos.push({ texto: 'Compara los dos primeros', mensaje: 'compara el 1 y el 2', rol: 'siguiente' });
+  if (o.mostrados >= 2) pasos.push({ texto: 'Compara el 1 y el 2', mensaje: 'compara el 1 y el 2', rol: 'siguiente' });
   if (c.precioMax !== null) pasos.push({ texto: 'Más barato', mensaje: 'más barato', rol: 'siguiente' });
   else pasos.push({ texto: 'Poner un tope de precio', ajuste: { accion: 'preguntar', campo: 'precio' }, rol: 'siguiente' });
   const otros = (o.cobertura?.distritos ?? []).filter((d) => d.nombre !== c.distrito).slice(0, 2);
@@ -198,7 +198,7 @@ export function alivios(c: Consulta, d: Salida<'diagnosticar_filtros'>, cob: Cob
     if (precio.precioMinimoPen !== null) a.push({ texto: `Subir el tope a ${soles(precio.precioMinimoPen)}`, ajuste: { accion: 'poner_precio', valor: precio.precioMinimoPen, moneda: 'PEN' }, rol: 'alivio' });
   }
   if ((hay('distrito')?.total ?? 0) > 0) a.push({ texto: 'Buscar en cualquier distrito', ajuste: { accion: 'quitar', campo: 'distrito' }, rol: 'alivio' });
-  if ((hay('tipo')?.total ?? 0) > 0) a.push({ texto: 'Cualquier tipo de inmueble', ajuste: { accion: 'poner_tipo', valor: 'cualquiera' }, rol: 'alivio' });
+  if ((hay('tipo')?.total ?? 0) > 0) a.push({ texto: 'Cualquier tipo', ajuste: { accion: 'poner_tipo', valor: 'cualquiera' }, rol: 'alivio' });
   if ((hay('dormitorios')?.total ?? 0) > 0) a.push({ texto: 'Quitar los dormitorios', ajuste: { accion: 'quitar', campo: 'dormitorios' }, rol: 'alivio' });
   if ((hay('area')?.total ?? 0) > 0) a.push({ texto: 'Quitar el área mínima', ajuste: { accion: 'quitar', campo: 'area' }, rol: 'alivio' });
   if (a.length === 0 && d.sinNingunFiltro > 0) a.push({ texto: `Ver todos los avisos (${d.sinNingunFiltro})`, ajuste: { accion: 'sin_filtros' }, rol: 'alivio' });
@@ -241,7 +241,7 @@ export function ayudaSinEntender(intentos: number, mensaje: string, c: Consulta 
   const lo = c && (c.tipo || c.tipoCualquiera || c.distrito || c.precioMax !== null || c.criterios.length) ? resumenDe(c) : null;
   const entendido = lo ? `Hasta ahora entendí: ${lo}.` : 'Todavía no tengo ningún dato de tu búsqueda.';
   const variantes = [
-    `No logré entender «${eco}» como una búsqueda. ${entendido} Dime, por ejemplo, el tipo de inmueble, el distrito o qué quieres tener cerca; o toca una opción.`,
+    `No logré entender «${eco}» como una búsqueda. ${entendido} Dime, por ejemplo, el tipo, el distrito o qué quieres tener cerca; o toca una opción.`,
     `Sigo sin poder interpretar «${eco}». ${entendido} Puedo buscar avisos de venta, buscar zonas con lo que te importa o decirte qué hay en un punto del mapa. ¿Cuál de las tres?`,
     `Probemos con algo más concreto: «${eco}» no me da datos que pueda usar. ${entendido} Si prefieres, te muestro los avisos que tengo sin ningún filtro y los afinamos juntos.`,
     `Todavía no puedo interpretar «${eco}». ${entendido} Escribe una sola cosa, por ejemplo «casa en Cayma» o «cerca de un colegio», o elige una opción de abajo.`,
@@ -261,7 +261,7 @@ export function repreguntar(f: Faltante, intentos: number, mensaje: string): str
   const eco = mensaje.trim().length > 40 ? `${mensaje.trim().slice(0, 37)}…` : mensaje.trim();
   const por: Record<Faltante, string[]> = {
     tipo: [
-      `No pude usar «${eco}» como tipo de inmueble. Elige uno: departamento, casa, terreno, local u oficina; o di «cualquiera» si te da igual.`,
+      `No pude usar «${eco}» como tipo. Elige uno: departamento, casa, terreno, local u oficina; o di «cualquiera» si te da igual.`,
       `Todavía me falta el tipo para buscar. Toca una opción de abajo o escribe una sola palabra, por ejemplo «casa».`,
     ],
     moneda: [

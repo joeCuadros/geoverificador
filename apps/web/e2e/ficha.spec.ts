@@ -264,7 +264,7 @@ test.describe('ficha: jerarquía, desconocidos y lectura', () => {
 
   test('si el foco se quedó sin lugar (se tocó un botón del asistente que ya no se ve), pasa al título de la ficha', async ({ page }) => {
     const r = await preguntar(page, CONSULTA_AVISOS);
-    await r.getByRole('button', { name: new RegExp(`Ver ficha del entorno: ${AVISO_1.titulo}`) }).click();
+    await r.getByRole('button', { name: new RegExp(`Ver ficha del punto: ${AVISO_1.titulo}`) }).click();
     await expect(ficha(page)).toBeVisible();
     await expect(ficha(page).getByRole('heading', { level: 2, name: 'Ficha del punto' })).toBeFocused();
   });

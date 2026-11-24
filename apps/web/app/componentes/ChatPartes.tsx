@@ -1,12 +1,15 @@
 'use client';
-import { useEffect, useId, useState } from 'react';
+import { useId, useState } from 'react';
 import type { Ajuste } from '@geoverificador/agente/agente';
 import { partirEnlaces } from '../../lib/enlaces.ts';
 import { enlaceSeguro, type Marcador } from '../../lib/marcadores.ts';
 import type { Referencia } from '../../lib/reporte.ts';
+import { metros, numero, pieDeFuente, referenciaTexto } from './chat-formato.ts';
 import type { Envio, RespuestaApi } from './chat-tipos.ts';
 import { EstadoChip, Medidor } from './FichaPartes.tsx';
 import { IconoAlerta, IconoChevron, IconoCerrar, IconoEnlace, IconoEntorno, IconoFlecha, IconoInfo, IconoMapa, IconoOrden } from './Iconos.tsx';
+
+const PESTANA_NUEVA = '(abre en otra pestaña)';
 
 type Sugerencia = RespuestaApi['sugerencias'][number];
 type Chip = RespuestaApi['entendido'][number];
@@ -20,6 +23,7 @@ export function Texto({ texto }: { texto: string }) {
         p.tipo === 'enlace' ? (
           <a key={i} href={p.valor} target="_blank" rel="noopener noreferrer">
             {p.valor}
+            <span className="solo-lectores"> {PESTANA_NUEVA}</span>
           </a>
         ) : (
           <span key={i}>{p.valor}</span>
@@ -67,7 +71,7 @@ export function Sugerencias({ lista, titulo, deshabilitado, onEnviar }: { lista:
   if (lista.length === 0) return null;
   return (
     <div className="sugerencias" role="group" aria-label={titulo}>
-      <ul>
+      <ul role="list">
         {lista.map((s, i) => (
           <li key={`${s.texto}-${i}`}>
             <button type="button" className={`sugerencia sugerencia-${s.rol}`} disabled={deshabilitado} onClick={() => onEnviar(enviarDe(s))}>
@@ -91,13 +95,13 @@ function ChipEntendido({ chip, deshabilitado, onEnviar }: { chip: Chip; deshabil
     <li className={`chip${chip.corregido ? ' chip-corregido' : ''}${abierto ? ' chip-abierto' : ''}`} data-chip={chip.clave}>
       <div className="chip-fila">
         {chip.cambiar.length > 0 ? (
-          <button type="button" className="chip-cuerpo" aria-expanded={abierto} aria-controls={id} disabled={deshabilitado} onClick={() => setAbierto((a) => !a)}>
+          <button type="button" className="chip-cuerpo" aria-expanded={abierto} aria-controls={abierto ? id : undefined} disabled={deshabilitado} onClick={() => setAbierto((a) => !a)}>
             <span className="chip-etiqueta">{chip.etiqueta}</span>
             <span className="chip-valor">{chip.valor}</span>
             <span className="chip-flecha">
               <IconoChevron />
             </span>
-            <span className="solo-lectores">. Tocar para cambiarlo</span>
+            <span className="solo-lectores">. Activar para cambiarlo</span>
           </button>
         ) : (
           <span className="chip-cuerpo chip-fijo">
@@ -135,7 +139,7 @@ export function Entendido({ chips, deshabilitado, onEnviar }: { chips: Chip[]; d
   return (
     <section className="entendido" aria-label="Lo que entendí de tu búsqueda">
       <h3 className="entendido-titulo">Lo que entendí</h3>
-      <ul className="chips">
+      <ul className="chips" role="list">
         {chips.map((c) => (
           <ChipEntendido key={c.clave} chip={c} deshabilitado={deshabilitado} onEnviar={onEnviar} />
         ))}
@@ -147,16 +151,16 @@ export function Entendido({ chips, deshabilitado, onEnviar }: { chips: Chip[]; d
 // ------------------------------------------------------------------ Límites (lo que los datos no dicen)
 
 /**
- * «Antes de decidir»: lo que estos datos no dicen. Queda abierto en la respuesta más reciente y plegado en las anteriores; cada persona lo abre o lo cierra.
+ * «Límites de estos datos»: lo que estos datos no dicen. Queda abierto en la respuesta más reciente y plegado en las anteriores; cada persona lo abre o lo cierra.
  */
-export function Limites({ lineas, abierto, etiqueta }: { lineas: string[]; abierto: boolean; etiqueta?: string }) {
+export function Limites({ lineas, abierto }: { lineas: string[]; abierto: boolean }) {
   if (lineas.length === 0) return null;
   return (
-    <div className="limites" role="note" aria-label={etiqueta}>
+    <div className="limites">
       <details open={abierto}>
         <summary>
           <IconoInfo />
-          <span className="limites-titulo">Antes de decidir</span>
+          <span className="limites-titulo">Límites de estos datos</span>
           <span className="limites-flecha">
             <IconoChevron />
           </span>
@@ -181,16 +185,14 @@ const nombreBonito = (s: string) =>
 
 function TarjetaAviso({ t, marcador, activo, onEnfocar, onVerFicha }: { t: Tarjeta; marcador: Marcador | null; activo: boolean; onEnfocar: (m: Marcador) => void; onVerFicha: (m: Marcador) => void }) {
   const url = enlaceSeguro(t.url);
-  const datos = [t.tipo ? t.tipo.charAt(0).toUpperCase() + t.tipo.slice(1) : null, t.distrito ? nombreBonito(t.distrito) : null, t.areaM2 !== null ? `${t.areaM2} m²` : null, t.dormitorios !== null ? `${t.dormitorios} dormitorios` : null].filter(Boolean);
+  const datos = [t.tipo ? t.tipo.charAt(0).toUpperCase() + t.tipo.slice(1) : null, t.distrito ? nombreBonito(t.distrito) : null, t.areaM2 !== null ? `${numero(t.areaM2)} m²` : null, t.dormitorios !== null ? `${t.dormitorios} dormitorios` : null].filter(Boolean);
   // «US$ 23 695 (≈ S/ 80 728 al cambio de 3.407, 2026-11-12)»: el precio del aviso va grande y su conversión, con su cambio y su fecha, queda debajo.
   const partePrecio = /^(.*?)\s*(\(.*\))$/.exec(t.precioTexto);
   const [precio, conversion] = partePrecio ? [partePrecio[1], partePrecio[2]] : [t.precioTexto, null];
   return (
     <li className={`tarjeta-aviso${activo ? ' aviso-activo' : ''}`} data-aviso-id={t.id} aria-current={activo ? 'true' : undefined}>
       <div className="tarjeta-cabecera">
-        <span className="tarjeta-posicion" aria-hidden="true">
-          {t.posicion}
-        </span>
+        <span className="tarjeta-posicion">Aviso {t.posicion}</span>
         <div className="tarjeta-titulo">
           <h3 className="aviso-nombre">{t.titulo}</h3>
           <p className="aviso-detalle">{datos.join(' · ') || 'Sin más datos'}</p>
@@ -202,14 +204,13 @@ function TarjetaAviso({ t, marcador, activo, onEnfocar, onVerFicha }: { t: Tarje
       </div>
       {t.pedidos > 0 && (
         <p className="aviso-resumen">
-          <span className="resumen-barras" aria-hidden="true">
-            {t.criterios.map((c) => (
-              <i key={c.id} className={`seg seg-${c.estado}`} />
-            ))}
-          </span>
-          <span>
-            Cumple <strong>{t.cumplidos}</strong> de {t.pedidos} criterios · {t.sinDato} sin dato
-          </span>
+          {t.pedidos - t.sinDato > 0 ? (
+            <span>
+              Criterios con dato que cumplen: <strong>{t.cumplidos}</strong> de {t.pedidos - t.sinDato} · {t.sinDato} sin dato
+            </span>
+          ) : (
+            <span>Ningún criterio con dato · {t.sinDato} sin dato</span>
+          )}
         </p>
       )}
       {t.criterios.length > 0 && (
@@ -224,7 +225,7 @@ function TarjetaAviso({ t, marcador, activo, onEnfocar, onVerFicha }: { t: Tarje
                 </span>
                 <span className="criterio-pie">
                   Pediste: {c.pedido}
-                  {c.fuente || c.fecha ? ` · Fuente: ${c.fuente ?? 'sin registrar'}${c.fecha ? ` · datos del ${c.fecha}` : ''}` : ''}
+                  {pieDeFuente(c.fuente, c.fecha) ? ` · ${pieDeFuente(c.fuente, c.fecha)}` : ''}
                 </span>
               </dd>
             </div>
@@ -249,14 +250,18 @@ function TarjetaAviso({ t, marcador, activo, onEnfocar, onVerFicha }: { t: Tarje
       <p className="aviso-fuente">
         Visto por última vez el {t.vistoPorUltimaVez} · Fuente: {t.fuente}
         {t.tambienEn.length ? ` · también en ${t.tambienEn.join(', ')}` : ''}
-        {t.tipoInferido ? ' · el tipo de inmueble se dedujo del título' : ''}
+        {t.tipoInferido ? ' · el tipo se dedujo del título' : ''}
         {t.esProyecto ? ' · es un proyecto en venta' : ''}
       </p>
       <div className="aviso-acciones">
         {url && (
-          <a className="boton-enlace" href={url} target="_blank" rel="noopener noreferrer" aria-label={`Abrir el aviso original de ${t.titulo} (se abre en otra pestaña)`}>
+          <a className="boton-enlace" href={url} target="_blank" rel="noopener noreferrer">
             <IconoEnlace />
             Abrir el aviso original
+            <span className="solo-lectores">
+              {' '}
+              de {t.titulo} {PESTANA_NUEVA}
+            </span>
           </a>
         )}
         {marcador ? (
@@ -265,9 +270,9 @@ function TarjetaAviso({ t, marcador, activo, onEnfocar, onVerFicha }: { t: Tarje
               <IconoMapa />
               Ver en el mapa
             </button>
-            <button type="button" className="boton-secundario" aria-label={`Ver ficha del entorno: ${t.titulo}`} onClick={() => onVerFicha(marcador)}>
+            <button type="button" className="boton-secundario" aria-label={`Ver ficha del punto: ${t.titulo}`} onClick={() => onVerFicha(marcador)}>
               <IconoEntorno />
-              Ver ficha del entorno
+              Ver ficha del punto
             </button>
           </>
         ) : (
@@ -283,7 +288,7 @@ export function Resultados({ r, ubicados, activo, vivo, onEnfocar, onVerFicha }:
   const conMapa = r.tarjetas.filter((t) => marcador(t.id));
   const sinMapa = r.tarjetas.filter((t) => !marcador(t.id));
   const lista = (ts: Tarjeta[], clase: string) => (
-    <ul className={clase}>
+    <ul className={clase} role="list">
       {ts.map((t) => (
         <TarjetaAviso key={t.id} t={t} marcador={marcador(t.id)} activo={t.id === activo} onEnfocar={onEnfocar} onVerFicha={onVerFicha} />
       ))}
@@ -311,7 +316,7 @@ export function Resultados({ r, ubicados, activo, vivo, onEnfocar, onVerFicha }:
         </div>
       )}
       {r.notas.length > 0 && (
-        <ul className="notas-resultado">
+        <ul className="notas-resultado" role="list">
           {r.notas.map((n) => (
             <li key={n}>
               <IconoInfo />
@@ -320,15 +325,12 @@ export function Resultados({ r, ubicados, activo, vivo, onEnfocar, onVerFicha }:
           ))}
         </ul>
       )}
-      <Limites lineas={r.limites} abierto={vivo} etiqueta="Límites de estos datos" />
+      <Limites lineas={r.limites} abierto={vivo} />
     </section>
   );
 }
 
 // ------------------------------------------------------------------ Punto del mapa y comparación
-
-const metros = (m: number) => (m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(2).replace('.', ',')} km`);
-const referenciaTexto = (m: number) => (m < 1000 ? `${m} m` : `${(m / 1000).toFixed(1).replace('.', ',')} km`);
 
 /** «Peligro bajo: Escenario…» → el nivel (para marcarlo a la vista) y el resto. Si el texto no empieza así, no hay nivel. */
 function nivelDePeligro(texto: string): { nivel: 'bajo' | 'moderado' | 'alto' | 'muy_alto' | null; etiqueta: string; resto: string } {
@@ -360,12 +362,7 @@ function Peligro({ p }: { p: NonNullable<RespuestaApi['ficha']>['peligros'][numb
       ) : (
         <span className="peligro-texto">{p.texto}</span>
       )}
-      {(p.fuente || p.fecha) && (
-        <span className="criterio-pie">
-          {p.fuente ? `Fuente: ${p.fuente}` : ''}
-          {p.fecha ? `${p.fuente ? ' · ' : ''}datos del ${p.fecha}` : ''}
-        </span>
-      )}
+      {pieDeFuente(p.fuente, p.fecha) && <span className="criterio-pie">{pieDeFuente(p.fuente, p.fecha)}</span>}
     </li>
   );
 }
@@ -410,7 +407,7 @@ export function FichaDelPunto({ f, vivo }: { f: NonNullable<RespuestaApi['ficha'
                 )}
                 <span className="criterio-pie">
                   {x.umbralM !== null ? `Referencia: ${referenciaTexto(x.umbralM)}` : ''}
-                  {x.fuente || x.fecha ? `${x.umbralM !== null ? ' · ' : ''}Fuente: ${x.fuente ?? 'sin registrar'}${x.fecha ? ` · datos del ${x.fecha}` : ''}` : ''}
+                  {pieDeFuente(x.fuente, x.fecha) ? `${x.umbralM !== null ? ' · ' : ''}${pieDeFuente(x.fuente, x.fecha)}` : ''}
                 </span>
               </dd>
             </div>
@@ -419,11 +416,11 @@ export function FichaDelPunto({ f, vivo }: { f: NonNullable<RespuestaApi['ficha'
       </dl>
       {f.peligros.length > 0 && (
         <div className="peligros">
-          <h4 className="peligros-titulo">
+          <h3 className="peligros-titulo">
             <IconoAlerta />
-            Peligros de contexto (no son una evaluación del predio)
-          </h4>
-          <ul>
+            Peligros de contexto (no son una evaluación del punto)
+          </h3>
+          <ul role="list">
             {f.peligros.map((p) => (
               <Peligro key={p.texto} p={p} />
             ))}
@@ -438,7 +435,7 @@ export function FichaDelPunto({ f, vivo }: { f: NonNullable<RespuestaApi['ficha'
 export function Comparacion({ c }: { c: NonNullable<RespuestaApi['comparacion']> }) {
   return (
     <section className="comparacion" aria-label="Comparación de avisos">
-      <div className="comparacion-envoltorio">
+      <div className="comparacion-envoltorio" role="region" aria-label="Comparación lado a lado (se desplaza en horizontal)" tabIndex={0}>
         <table>
           <caption className="solo-lectores">Comparación lado a lado de los avisos {c.columnas.map((x) => x.posicion).join(' y ')}</caption>
           <thead>
@@ -446,12 +443,11 @@ export function Comparacion({ c }: { c: NonNullable<RespuestaApi['comparacion']>
               <th scope="col">Dato</th>
               {c.columnas.map((x) => (
                 <th key={x.id} scope="col">
-                  <span className="tarjeta-posicion" aria-hidden="true">
-                    {x.posicion}
-                  </span>{' '}
+                  <span className="tarjeta-posicion">Aviso {x.posicion}</span>{' '}
                   {enlaceSeguro(x.url) ? (
                     <a href={x.url} target="_blank" rel="noopener noreferrer">
                       {x.titulo}
+                      <span className="solo-lectores"> {PESTANA_NUEVA}</span>
                     </a>
                   ) : (
                     x.titulo
@@ -473,7 +469,7 @@ export function Comparacion({ c }: { c: NonNullable<RespuestaApi['comparacion']>
         </table>
       </div>
       {c.fuentes.length > 0 && (
-        <ul className="notas-resultado">
+        <ul className="notas-resultado" role="list">
           {c.fuentes.map((f) => (
             <li key={f.etiqueta}>
               <IconoInfo />
@@ -486,7 +482,9 @@ export function Comparacion({ c }: { c: NonNullable<RespuestaApi['comparacion']>
       )}
       <p className="resultados-orden">
         <IconoOrden />
-        <span>{c.nota}</span>
+        <span>
+          {c.nota} Las columnas siguen el orden de la lista de la que vienen, que es un orden de lectura, no una calificación ni una recomendación.
+        </span>
       </p>
     </section>
   );
@@ -494,23 +492,19 @@ export function Comparacion({ c }: { c: NonNullable<RespuestaApi['comparacion']>
 
 // ------------------------------------------------------------------ Esperando
 
-/** Mientras el asistente trabaja: dice qué está haciendo (primero entiende, después busca y mide) y no se repite como una pantalla congelada. */
+/**
+ * Mientras el asistente trabaja. El texto es fijo (no cambia por paso) y no es una región viva: lo que se anuncia a los lectores de pantalla es el titular de la
+ * respuesta, una sola vez, desde `Chat`. Los puntos solo se animan si la persona no pidió menos movimiento (globals.css lo apaga).
+ */
 export function Pensando() {
-  const [paso, setPaso] = useState(0);
-  useEffect(() => {
-    const a = setTimeout(() => setPaso(1), 1200);
-    const b = setTimeout(() => setPaso(2), 4500);
-    return () => (clearTimeout(a), clearTimeout(b));
-  }, []);
-  const textos = ['Entendiendo tu mensaje…', 'Buscando avisos y midiendo distancias…', 'Sigo midiendo: cada aviso se compara con los datos de la ciudad…'];
   return (
-    <div className="pensando" role="status">
+    <div className="pensando">
       <span className="pensando-puntos" aria-hidden="true">
         <i />
         <i />
         <i />
       </span>
-      <span>{textos[paso]}</span>
+      <span>Entendiendo tu mensaje y buscando en los datos…</span>
     </div>
   );
 }

@@ -1,11 +1,11 @@
 import { AVISO_1, CONSULTA_AVISOS, abrir, expect, ficha, leerCoordenadas, preguntar, test } from './apoyo.ts';
 
-test('de la pregunta a la ficha: el aviso del chat se ubica en el mapa y su botón abre la ficha del entorno', async ({ page }) => {
+test('de la pregunta a la ficha: el aviso del chat se ubica en el mapa y su botón abre la ficha del punto', async ({ page }) => {
   await abrir(page);
   const r = await preguntar(page, CONSULTA_AVISOS);
   await expect(page.locator('.marcador-aviso')).toHaveCount(2);
 
-  await r.getByRole('button', { name: new RegExp(`Ver ficha del entorno: ${AVISO_1.titulo}`) }).click();
+  await r.getByRole('button', { name: new RegExp(`Ver ficha del punto: ${AVISO_1.titulo}`) }).click();
   await expect(page.getByRole('tab', { name: 'Ficha del punto' })).toHaveAttribute('aria-selected', 'true');
   await expect(ficha(page)).toBeVisible();
   const { lat, lon } = leerCoordenadas(await page.getByTestId('ficha-coordenadas').innerText());

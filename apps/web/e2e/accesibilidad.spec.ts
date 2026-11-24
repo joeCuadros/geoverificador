@@ -36,10 +36,13 @@ test.describe('estructura y accesibilidad', () => {
     await expect(page.getByRole('tabpanel', { name: 'Asistente' })).toBeHidden();
   });
 
-  test('el registro de la conversación anuncia las respuestas y los campos tienen etiqueta', async ({ page }) => {
+  test('el registro de la conversación no es una región viva (el titular se anuncia por una sola región «status») y los campos tienen etiqueta', async ({ page }) => {
     await abrir(page);
     const log = page.getByRole('log', { name: 'Conversación con el asistente' });
-    await expect(log).toHaveAttribute('aria-live', 'polite');
+    // Si el registro anunciara lo que se le agrega, leería otra vez todas las tarjetas de cada respuesta.
+    await expect(log).toHaveAttribute('aria-live', 'off');
+    await expect(log.locator('[role="status"], [role="alert"], [aria-live]:not([aria-live="off"])')).toHaveCount(0);
+    await expect(page.locator('.chat').getByRole('status')).toHaveCount(1);
     await expect(page.getByLabel('Tu consulta')).toBeVisible();
     await expect(page.getByRole('searchbox', { name: 'Buscar un lugar' })).toBeVisible();
     await expect(page.getByRole('search', { name: 'Buscar un lugar' })).toBeVisible();
@@ -105,7 +108,7 @@ test.describe('diseño adaptable', () => {
     test('se puede preguntar, tocar un aviso y leer la ficha sin desbordar la pantalla', async ({ page }) => {
       await abrir(page);
       const r = await preguntar(page, CONSULTA_AVISOS);
-      await r.getByRole('button', { name: /Ver ficha del entorno/ }).first().tap();
+      await r.getByRole('button', { name: /Ver ficha del punto/ }).first().tap();
       await expect(ficha(page)).toBeVisible();
       const [ancho, visible] = await page.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth]);
       expect(ancho).toBeLessThanOrEqual(visible);
