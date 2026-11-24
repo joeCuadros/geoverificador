@@ -1,7 +1,7 @@
 'use client';
 import { useCallback, useEffect, useId, useRef, useState, type FocusEvent, type FormEvent, type KeyboardEvent } from 'react';
 import { IconoCerrar } from './Iconos.tsx';
-import { alAbrirSuperficie, avisarSuperficie, indiceDeResultado } from './interfaz.ts';
+import { alAbrirSuperficie, anuncioDeResultados, avisarSuperficie, indiceDeResultado } from './interfaz.ts';
 
 interface Resultado {
   nombre: string;
@@ -20,7 +20,8 @@ const ORIGEN: Record<Resultado['origen'], string> = { destino: 'lugar de referen
 /**
  * Busca un lugar por su nombre en los datos locales (sin servicios externos) y deja elegir uno para ver su ficha.
  * Los resultados se despliegan sobre el mapa (no lo empujan) y se recorren con el teclado: ↓ desde el campo entra en la lista, ↑ ↓ Inicio y Fin se mueven, Enter elige
- * y Esc la cierra y devuelve el foco al campo. Cada estado (buscando, sin resultados, cuántos hay) se anuncia en una región «polite»; los errores, como alerta.
+ * y Esc la cierra y devuelve el foco al campo. Cada estado (buscando, sin resultados, cuántos hay) se anuncia en una región «polite» que no contiene la lista (solo
+ * dice cuántos resultados hay); los errores, como alerta, unida al campo (aria-invalid y aria-describedby) y con el foco de vuelta en él.
  */
 export function Buscador({ onElegir }: { onElegir: (lat: number, lon: number, etiqueta: string) => void }) {
   const [texto, setTexto] = useState('');
@@ -59,6 +60,8 @@ export function Buscador({ onElegir }: { onElegir: (lat: number, lon: number, et
     if (q.length < 2) {
       setAbierta(false);
       setEstado({ tipo: 'error', mensaje: 'Escribe al menos 2 letras del lugar que buscas.', corto: true });
+      // Quien envió con el botón tiene el foco en él: el error es del campo, así que el foco vuelve al campo.
+      campo.current?.focus();
       return;
     }
     pedido.current?.abort();
@@ -71,7 +74,7 @@ export function Buscador({ onElegir }: { onElegir: (lat: number, lon: number, et
       const j = await r.json().catch(() => ({}));
       if (control.signal.aborted) return;
       if (!r.ok) {
-        setEstado({ tipo: 'error', mensaje: j.error ?? 'No se pudo buscar el lugar. Intenta de nuevo.', corto: false });
+        setEstado({ tipo: 'error', mensaje: j.error ?? 'No se pudo buscar el lugar. Pulsa Buscar para intentarlo de nuevo.', corto: false });
         return;
       }
       const resultados: Resultado[] = j.resultados ?? [];
@@ -79,7 +82,7 @@ export function Buscador({ onElegir }: { onElegir: (lat: number, lon: number, et
       setAbierta(resultados.length > 0);
     } catch (e) {
       if ((e as Error).name === 'AbortError') return;
-      setEstado({ tipo: 'error', mensaje: 'No pude conectar. Revisa tu conexión e intenta de nuevo.', corto: false });
+      setEstado({ tipo: 'error', mensaje: 'No se pudo conectar. Revisa tu conexión y pulsa Buscar para intentarlo de nuevo.', corto: false });
     }
   }
 
@@ -134,9 +137,9 @@ export function Buscador({ onElegir }: { onElegir: (lat: number, lon: number, et
     estado.tipo === 'buscando'
       ? 'Buscando…'
       : estado.tipo === 'listo' && estado.resultados.length === 0
-        ? `No encontré «${estado.texto}» en los datos. Prueba con el nombre de un colegio, un mall, un distrito, o haz clic en el mapa.`
+        ? `Sin resultados para «${estado.texto}» en los datos. Prueba con el nombre de un colegio, un mall, un distrito, o haz clic en el mapa.`
         : estado.tipo === 'listo'
-          ? `${estado.resultados.length === 1 ? '1 resultado' : `${estado.resultados.length} resultados`} para «${estado.texto}». Usa la flecha hacia abajo para recorrerlos.`
+          ? anuncioDeResultados(estado.resultados.length)
           : '';
 
   return (

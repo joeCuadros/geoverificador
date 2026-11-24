@@ -142,7 +142,7 @@ test.describe('panel de capas: estado, leyenda y teclado', () => {
     await page.route('**/api/capas/salud?*', (ruta) => ruta.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'x' }) }));
     await activarCapa(page, 'Salud');
     await activarCapa(page, 'Colegios');
-    await expect(capaEnPanel(page, 'Salud').getByRole('status')).toHaveText('No se pudo cargar esta capa. Se vuelve a intentar al mover el mapa.');
+    await expect(capaEnPanel(page, 'Salud').getByRole('status')).toHaveText('No se pudo cargar esta capa. Revisa tu conexión y pulsa Reintentar.');
     await expect(capaEnPanel(page, 'Colegios').getByRole('status')).toHaveText(/^\d+ elementos en esta vista\.$/);
     // Cada estado lleva su icono además del texto.
     await expect(capaEnPanel(page, 'Salud').locator('.capa-estado svg')).toHaveCount(1);
@@ -278,9 +278,12 @@ test.describe('buscador de lugares: etiqueta, estados y teclado', () => {
 
   test('anuncia cuántos resultados hay y, si no hay ninguno, lo dice en la misma región', async ({ page }) => {
     await buscar(page, 'Real Plaza');
-    await expect(estadoDeBusqueda(page)).toHaveText(/^\d+ resultados para «Real Plaza»\. Usa la flecha hacia abajo para recorrerlos\.$/);
+    // La región solo dice cuántos hay; la lista queda fuera de ella y las instrucciones van en la descripción del campo.
+    await expect(estadoDeBusqueda(page)).toHaveText(/^\d+ resultados$/);
+    await expect(estadoDeBusqueda(page).getByRole('list')).toHaveCount(0);
+    await expect(campo(page)).toHaveAccessibleDescription(/flechas arriba y abajo/);
     await buscar(page, 'zzzxqwv');
-    await expect(estadoDeBusqueda(page)).toContainText('No encontré «zzzxqwv» en los datos');
+    await expect(estadoDeBusqueda(page)).toContainText('Sin resultados para «zzzxqwv» en los datos');
     await expect(estadoDeBusqueda(page)).toBeVisible();
     await expect(resultados(page)).toHaveCount(0);
     await expect(alerta(page)).toHaveCount(0); // «sin resultados» no es un error

@@ -110,7 +110,7 @@ test.describe('capas encendidas', () => {
     await expect(cuadro).toContainText('ZRE-CH');
     await expect(cuadro).toContainText('Reglamentación especial centro histórico');
     await expect(cuadro).toContainText('Fuente: Plano de zonificación del Plan de Desarrollo Metropolitano de Arequipa 2016-2025');
-    await expect(cuadro).toContainText('sin fecha en la base');
+    await expect(cuadro).toContainText('sin fecha registrada');
   });
 
   test('con varias capas encendidas cada una tiene su estado y su leyenda; apagar una la quita y deja las demás', async ({ page }) => {
@@ -166,7 +166,7 @@ test.describe('capas encendidas', () => {
     await page.route('**/api/capas/salud?*', (ruta) => ruta.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'No se pudo cargar la capa. Intenta de nuevo.' }) }));
     await activarCapa(page, 'Salud');
     await activarCapa(page, 'Colegios');
-    await expect(capaEnPanel(page, 'Salud').locator('.capa-estado')).toHaveText('No se pudo cargar esta capa. Se vuelve a intentar al mover el mapa.');
+    await expect(capaEnPanel(page, 'Salud').locator('.capa-estado')).toHaveText('No se pudo cargar esta capa. Revisa tu conexión y pulsa Reintentar.');
     await expect.poll(async () => (await capasDibujadas(page)).colegios ?? 0).toBeGreaterThan(0);
     expect((await capasDibujadas(page)).salud).toBeUndefined();
   });

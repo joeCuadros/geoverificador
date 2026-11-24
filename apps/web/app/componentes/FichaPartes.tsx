@@ -1,7 +1,13 @@
 'use client';
 import type { EstadoDeItem, GrupoDeFicha, ItemDeFicha, Referencia } from '../../lib/reporte.ts';
 
+/** Cómo se llama cada estado en el asistente: allí «Cumple» responde a un criterio que la persona pidió. */
 const ETIQUETA: Record<EstadoDeItem, string> = { cumple: 'Cumple', no_cumple: 'No cumple', informativo: 'Informativo', sin_dato: 'Sin dato' };
+/**
+ * Y en la ficha: la distancia de referencia no es un criterio de nadie ni un veredicto sobre el lugar, solo un punto de comparación; por eso se dice «dentro» o «fuera de la
+ * referencia» y no «cumple» o «no cumple».
+ */
+const ETIQUETA_FICHA: Record<EstadoDeItem, string> = { cumple: 'Dentro de la referencia', no_cumple: 'Fuera de la referencia', informativo: 'Informativo', sin_dato: 'Sin dato' };
 
 /** El dibujo de un estado: cada uno tiene su forma (la de «sin dato» es discontinua y con interrogación), así que no depende del color. */
 function IconoEstado({ estado, tam = 16 }: { estado: EstadoDeItem; tam?: number }) {
@@ -37,27 +43,28 @@ function IconoEstado({ estado, tam = 16 }: { estado: EstadoDeItem; tam?: number 
   );
 }
 
-/** El estado de un dato: icono, texto y color a la vez (el color nunca es lo único que informa). Informativo y sin dato no se parecen a un veredicto. */
-export function EstadoChip({ estado, texto }: { estado: EstadoDeItem; texto?: string }) {
+/**
+ * El estado de un dato: icono, texto y color a la vez (el color nunca es lo único que informa). Informativo y sin dato no se parecen a un veredicto.
+ * `enFicha` usa las palabras de la ficha («Dentro de la referencia»); sin él, las del asistente («Cumple»).
+ */
+export function EstadoChip({ estado, texto, enFicha = false }: { estado: EstadoDeItem; texto?: string; enFicha?: boolean }) {
   return (
     <span className={`estado estado-${estado}`}>
       <IconoEstado estado={estado} />
-      {texto ?? ETIQUETA[estado]}
+      {texto ?? (enFicha ? ETIQUETA_FICHA : ETIQUETA)[estado]}
     </span>
   );
 }
 
-const plural = (n: number, uno: string, varios: string) => `${n} ${n === 1 ? uno : varios}`;
-
 /**
- * Cuántas distancias de referencia de un grupo cumplen, no cumplen o no tienen dato: un recuento de hechos, sin total ni puntaje. «Sin dato» se cuenta aparte y con su
- * propio dibujo: no es un «no cumple». No se muestra si el grupo no tiene ninguna distancia de referencia.
+ * Cuántas distancias de referencia de un grupo quedan dentro de la referencia, fuera de ella o sin dato: un recuento de hechos, sin total ni puntaje. «Sin dato» se cuenta
+ * aparte y con su propio dibujo: no es «fuera de la referencia». No se muestra si el grupo no tiene ninguna distancia de referencia.
  */
 export function ConteoDeGrupo({ conteo }: { conteo: GrupoDeFicha['conteo'] }) {
   const partes: { estado: EstadoDeItem; texto: string }[] = [];
-  if (conteo.cumple) partes.push({ estado: 'cumple', texto: plural(conteo.cumple, 'cumple', 'cumplen') });
-  if (conteo.noCumple) partes.push({ estado: 'no_cumple', texto: plural(conteo.noCumple, 'no cumple', 'no cumplen') });
-  if (conteo.sinDato) partes.push({ estado: 'sin_dato', texto: plural(conteo.sinDato, 'sin dato', 'sin dato') });
+  if (conteo.cumple) partes.push({ estado: 'cumple', texto: `${conteo.cumple} dentro de la referencia` });
+  if (conteo.noCumple) partes.push({ estado: 'no_cumple', texto: `${conteo.noCumple} fuera de la referencia` });
+  if (conteo.sinDato) partes.push({ estado: 'sin_dato', texto: `${conteo.sinDato} sin dato` });
   if (!partes.length) return null;
   return (
     <span className="f-conteo">
@@ -95,13 +102,13 @@ function IconoMapa() {
   );
 }
 
-/** La fuente y la fecha de los datos, en una línea corta junto a la cifra. Si la base no trae fecha, lo dice. */
+/** La fuente y la fecha de los datos, en una línea corta junto a la cifra. Si la base no trae fecha, dice «sin fecha registrada». */
 export function Fuente({ fuente }: { fuente: ItemDeFicha['fuente'] }) {
   return (
     <span className="f-fuente">
       <span className="f-fuente-rotulo">Fuente:</span> {fuente.texto}
       {' · '}
-      <span className={fuente.fecha ? undefined : 'f-fuente-sin-fecha'}>{fuente.fecha ? `datos del ${fuente.fecha}` : 'sin fecha en la base'}</span>
+      <span className={fuente.fecha ? undefined : 'f-fuente-sin-fecha'}>{fuente.fecha ? `datos del ${fuente.fecha}` : 'sin fecha registrada'}</span>
     </span>
   );
 }
@@ -112,7 +119,7 @@ export function CuerpoDeItem({ item, sinChipInformativo = false }: { item: ItemD
   return (
     <>
       <span className="f-fila">
-        {item.estado && !(sinChipInformativo && item.estado === 'informativo') && <EstadoChip estado={item.estado} />}
+        {item.estado && !(sinChipInformativo && item.estado === 'informativo') && <EstadoChip estado={item.estado} enFicha />}
         <span className="f-titulo">{item.titulo}</span>
         {item.distancia && <span className="f-distancia">{item.distancia.texto}</span>}
       </span>
@@ -128,7 +135,7 @@ export function CuerpoDeItem({ item, sinChipInformativo = false }: { item: ItemD
         <span className="f-criterios">
           {item.criterios.map((c) => (
             <span key={c.etiqueta} className="f-criterio">
-              <EstadoChip estado={c.estado} />
+              <EstadoChip estado={c.estado} enFicha />
               <span className="f-criterio-etiqueta">{c.etiqueta}</span>
               {c.referencia && <span className="f-criterio-ref">{c.estado === 'sin_dato' ? `referencia ${c.referencia.texto}` : c.referencia.texto}</span>}
               {item.distancia && c.referencia && c.estado !== 'sin_dato' && <Medidor referencia={c.referencia} estado={c.estado} distancia={item.distancia.texto} />}
@@ -171,7 +178,7 @@ export function MasDeItem({ item }: { item: ItemDeFicha }) {
 }
 
 /**
- * Cómo se calculó cada dato del grupo y qué no dice, en un solo desplegable por grupo: los textos repetidos (la nota de todo el comercio, por ejemplo) salen una vez.
+ * Cómo se calculó cada dato del grupo y sus límites (lo que no dice), en un solo desplegable por grupo: los textos repetidos (la nota de todo el comercio, por ejemplo) salen una vez.
  * La fuente y la fecha no están aquí: están siempre a la vista junto a cada cifra.
  */
 export function DetallesDeGrupo({ items }: { items: ItemDeFicha[] }) {
@@ -190,7 +197,7 @@ export function DetallesDeGrupo({ items }: { items: ItemDeFicha[] }) {
   if (!bloques.length) return null;
   return (
     <details className="f-mas f-mas-grupo">
-      <summary>Cómo se calculó y qué no dicen estos datos</summary>
+      <summary>Cómo se calculó y límites de estos datos</summary>
       {bloques.map(({ it, metodo, noDice, origen }) => (
         <div key={it.id} className="f-mas-bloque">
           <h4>{it.titulo}</h4>
@@ -206,7 +213,7 @@ export function DetallesDeGrupo({ items }: { items: ItemDeFicha[] }) {
           )}
           {noDice && (
             <p className="f-prosa">
-              <strong>Qué no dice.</strong> {noDice}
+              <strong>Límites de estos datos.</strong> {noDice}
             </p>
           )}
         </div>

@@ -1,26 +1,16 @@
 'use client';
 import { useId, useRef, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 import type { CapaInfo, GrupoDeCapa } from '../../lib/capas.ts';
-import { muestraDeLeyenda } from './dibujo.ts';
+import { colorDeTexto, muestraDeLeyenda, textoDeFuente, type ElementoDeLista } from './dibujo.ts';
 import { IconoAlerta, IconoCerrar, IconoInfo } from './Iconos.tsx';
-
-export type EstadoCapa = { tipo: 'cargando' } | { tipo: 'ok'; n: number } | { tipo: 'recortada'; n: number } | { tipo: 'lejos'; zoomMin: number; ventana: boolean } | { tipo: 'error' };
+import { textoDeEstado, type EstadoCapa } from './interfaz.ts';
 
 const GRUPOS: GrupoDeCapa[] = ['Servicios', 'Zonificación', 'Riesgo', 'Movilidad', 'Límites'];
 
-export function textoDeEstado(e: EstadoCapa): string {
-  switch (e.tipo) {
-    case 'cargando':
-      return 'Cargando…';
-    case 'ok':
-      return e.n === 0 ? 'Sin elementos en esta vista.' : e.n === 1 ? '1 elemento en esta vista.' : `${e.n} elementos en esta vista.`;
-    case 'recortada':
-      return `Se muestran los primeros ${e.n}: acerca el mapa para ver el resto.`;
-    case 'lejos':
-      return e.ventana ? 'La vista abarca demasiado terreno: acerca el mapa para ver esta capa.' : `Acerca el mapa (zoom ${e.zoomMin} o más) para ver esta capa.`;
-    case 'error':
-      return 'No se pudo cargar esta capa. Se vuelve a intentar al mover el mapa.';
-  }
+/** Los elementos de una capa dibujada que se listan en el panel (los más cercanos al centro de la vista) y cuántos hay en total. */
+export interface ListaDeCapa {
+  total: number;
+  items: ElementoDeLista[];
 }
 
 /** Los iconos del panel: el mismo trazo que los del asistente (Iconos.tsx), ocultos a los lectores porque siempre acompañan a un texto. */
@@ -73,6 +63,8 @@ function Muestra({ capa, item }: { capa: CapaInfo; item: CapaInfo['leyenda'][num
     estilo['--r'] = m.relleno;
   }
   if (m.tipo === 'anillo') estilo['--r'] = m.relleno;
+  // La letra toma el color que mejor se lee sobre el de la muestra (blanco o tinta), como en el mapa.
+  if (m.tipo === 'icono') estilo.color = colorDeTexto(m.color);
   return (
     <span className={`muestra muestra-${m.tipo}${m.tipo === 'area' && m.discontinuo ? ' muestra-discontinua' : ''}`} style={estilo as CSSProperties} aria-hidden="true">
       {m.tipo === 'icono' ? m.letra : ''}
@@ -85,17 +77,21 @@ interface Props {
   errorDeLista: boolean;
   activas: ReadonlySet<string>;
   estados: Readonly<Record<string, EstadoCapa>>;
+  listas: Readonly<Record<string, ListaDeCapa>>;
   abierto: boolean;
   onAbrir: (abierto: boolean) => void;
   onAlternar: (id: string) => void;
+  onReintentarLista: () => void;
+  onReintentarCapa: (id: string) => void;
+  onVerElemento: (capa: string, clave: string) => void;
 }
 
 /**
  * El control de capas: un botón que despliega el panel (cajón a la derecha del mapa; en un teléfono, una hoja desde abajo). Las capas van en grupos con nombre; de cada una
  * se ve si está activa (casilla marcada y la palabra «Activa», nunca solo un color) y, si lo está, su estado, su leyenda con las muestras del mapa, lo que no dice y su fuente
- * con la fecha de sus datos. Se maneja con el teclado: el botón avisa con aria-expanded, cada capa es una casilla y Esc pliega el panel y devuelve el foco al botón.
+ * con la fecha de sus datos y, cuando ya se dibujó, la «Lista de elementos de esta vista»: la vía con teclado a los cuadros de lo que se dibuja en el mapa. Se maneja con el teclado: el botón avisa con aria-expanded, cada capa es una casilla y Esc pliega el panel y devuelve el foco al botón.
  */
-export function PanelCapas({ capas, errorDeLista, activas, estados, abierto, onAbrir, onAlternar }: Props) {
+export function PanelCapas({ capas, errorDeLista, activas, estados, listas, abierto, onAbrir, onAlternar, onReintentarLista, onReintentarCapa, onVerElemento }: Props) {
   const n = activas.size;
   const boton = useRef<HTMLButtonElement>(null);
   const idTitulo = useId();
@@ -142,9 +138,14 @@ export function PanelCapas({ capas, errorDeLista, activas, estados, abierto, onA
           </button>
         </div>
         {errorDeLista && (
-          <p className="mensaje-error" role="alert">
-            No se pudo cargar la lista de capas. Cierra y vuelve a abrir este panel para reintentar.
-          </p>
+          <>
+            <p className="mensaje-error" role="alert">
+              No se pudo cargar la lista de capas. Revisa tu conexión y pulsa Reintentar.
+            </p>
+            <button type="button" className="capa-reintentar boton-secundario" onClick={onReintentarLista}>
+              Reintentar
+            </button>
+          </>
         )}
         {!capas && !errorDeLista && <p role="status">Cargando las capas…</p>}
         {capas &&
@@ -161,6 +162,7 @@ export function PanelCapas({ capas, errorDeLista, activas, estados, abierto, onA
                 {delGrupo.map((c) => {
                   const activa = activas.has(c.id);
                   const estado = estados[c.id];
+                  const lista = estado && (estado.tipo === 'ok' || estado.tipo === 'recortada') ? listas[c.id] : undefined;
                   return (
                     <div key={c.id} className={`capa${activa ? ' capa-activa' : ''}`}>
                       <div className="capa-fila">
@@ -176,11 +178,37 @@ export function PanelCapas({ capas, errorDeLista, activas, estados, abierto, onA
                       </div>
                       {activa && (
                         <div className="capa-detalle">
-                          {estado && (
-                            <p className={`capa-estado capa-estado-${estado.tipo}`} role="status">
-                              <IconoDeEstado tipo={estado.tipo} />
-                              {textoDeEstado(estado)}
-                            </p>
+                          {/* La región de estado existe desde que la capa se activa (vacía): así sus cambios (Cargando… → N elementos, o el error) se anuncian. */}
+                          <p className={`capa-estado${estado ? ` capa-estado-${estado.tipo}` : ''}`} role="status">
+                            {estado && (
+                              <>
+                                <IconoDeEstado tipo={estado.tipo} />
+                                {textoDeEstado(estado)}
+                              </>
+                            )}
+                          </p>
+                          {estado?.tipo === 'error' && (
+                            <button type="button" className="capa-reintentar boton-secundario" onClick={() => onReintentarCapa(c.id)}>
+                              Reintentar<span className="solo-lectores"> la capa {c.titulo}</span>
+                            </button>
+                          )}
+                          {lista && lista.items.length > 0 && (
+                            <details className="capa-lista">
+                              <summary>Lista de elementos de esta vista ({lista.total})</summary>
+                              <p className="capa-lista-nota">
+                                {lista.total > lista.items.length ? `Los ${lista.items.length} más cercanos al centro del mapa. ` : ''}Al elegir uno se abre su cuadro en el mapa y el foco pasa a él.
+                              </p>
+                              <ul>
+                                {lista.items.map((it) => (
+                                  <li key={it.clave}>
+                                    <button type="button" className="capa-elemento" onClick={() => onVerElemento(c.id, it.clave)}>
+                                      <span className="capa-elemento-titulo">{it.titulo}</span>
+                                      {it.detalle && <span className="capa-elemento-detalle">{it.detalle}</span>}
+                                    </button>
+                                  </li>
+                                ))}
+                              </ul>
+                            </details>
                           )}
                           <ul className="leyenda" aria-label={`Leyenda: ${c.titulo}`}>
                             {c.leyenda.map((l) => (
@@ -192,7 +220,7 @@ export function PanelCapas({ capas, errorDeLista, activas, estados, abierto, onA
                           </ul>
                           <p className="capa-nota">{c.nota}</p>
                           <p className="capa-fuente">
-                            Fuente: {c.fuente.nombre} · {c.fuente.fecha ? `datos del ${c.fuente.fecha}` : 'la base no registra la fecha de los datos'}
+                            {textoDeFuente(c.fuente.nombre, c.fuente.fecha)}
                             {c.fuente.licencia ? ` · licencia ${c.fuente.licencia}` : ''}
                           </p>
                         </div>

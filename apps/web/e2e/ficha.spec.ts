@@ -38,12 +38,14 @@ test.describe('ficha: leerla', () => {
 
   test('el estado se dice con icono y texto, y lo informativo no se parece a un veredicto', async ({ page }) => {
     await abrirFichaDelCentro(page);
+    // En la ficha, una distancia de referencia no es un veredicto: «Dentro de la referencia» / «Fuera de la referencia» (el «Cumple» es del asistente).
     for (const [clase, texto] of [
-      ['estado-cumple', 'Cumple'],
-      ['estado-no_cumple', 'No cumple'],
+      ['estado-cumple', 'Dentro de la referencia'],
+      ['estado-no_cumple', 'Fuera de la referencia'],
     ] as const) {
       const chip = ficha(page).locator(`.${clase}`).first();
       await expect(chip).toContainText(texto);
+      await expect(chip).not.toContainText(/^(No )?cumple$/i);
       expect(await chip.locator('svg').count()).toBe(1); // el icono acompaña al texto: el color no es lo único que informa
     }
     // Servicios y riesgos son datos de contexto: el grupo lo dice una vez y sus filas no repiten «Informativo».
@@ -107,7 +109,7 @@ test.describe('ficha: leerla', () => {
     await expect(plegado.locator('.f-mas-bloque').first()).toBeHidden();
     await plegado.locator('summary').click();
     await expect(plegado.locator('.f-mas-bloque').first()).toBeVisible();
-    await expect(plegado).toContainText('Qué no dice');
+    await expect(plegado.locator('.f-mas-bloque', { hasText: 'Límites de estos datos' }).first()).toBeVisible();
   });
 
   test('con el teclado se abre y se cierra el detalle de un grupo', async ({ page }) => {
@@ -123,7 +125,7 @@ test.describe('ficha: leerla', () => {
   test('hay pasos concretos antes de decidir y solo las limitaciones que aplican, con el resto plegado', async ({ page }) => {
     await abrirFichaDelCentro(page);
     const pasos = ficha(page).locator('#ficha-pasos');
-    await expect(pasos.getByRole('heading', { level: 3, name: 'Antes de decidir' })).toBeVisible();
+    await expect(pasos.getByRole('heading', { level: 3, name: 'Qué comprobar antes de decidir' })).toBeVisible();
     await expect(pasos).toContainText(/Certificado de Zonificación/);
     await expect(pasos).toContainText(/Copia literal de la partida/);
     const limites = ficha(page).locator('.f-limites');
@@ -131,7 +133,7 @@ test.describe('ficha: leerla', () => {
     expect(visibles).toBeGreaterThanOrEqual(2);
     expect(visibles).toBeLessThanOrEqual(4);
     const todas = limites.locator('details.f-mas');
-    await expect(todas.locator('summary')).toContainText(/Todas las limitaciones \(\d+\)/);
+    await expect(todas.locator('summary')).toContainText(/Todos los límites \(\d+\)/);
     await todas.locator('summary').click();
     expect(await todas.locator('li').count()).toBeGreaterThan(visibles);
   });
@@ -204,7 +206,7 @@ test.describe('ficha: jerarquía, desconocidos y lectura', () => {
   test('el origen de cada dato se lee con su fuente rotulada y, si falta la fecha, lo dice', async ({ page }) => {
     await abrirFichaDelCentro(page);
     await expect(item(page, 'salud').locator('.f-fuente')).toContainText(/Fuente: .*RENIPRESS.* · datos del \d{4}-\d{2}-\d{2}/s);
-    await expect(item(page, 'zona').locator('.f-fuente')).toContainText(/Fuente: .* · sin fecha en la base/s);
+    await expect(item(page, 'zona').locator('.f-fuente')).toContainText(/Fuente: .* · sin fecha registrada/s);
     await expect(ficha(page).locator('.f-fecha time')).toHaveAttribute('datetime', /^\d{4}-\d{2}-\d{2}T/);
   });
 
@@ -238,7 +240,7 @@ test.describe('ficha: jerarquía, desconocidos y lectura', () => {
     const boton = ficha(page).locator('button.f-item-boton').first();
     expect(await boton.getAttribute('aria-describedby')).toMatch(/^ficha-i-/);
     await expect(boton).toHaveAccessibleName(/^Ver en el mapa: /);
-    await expect(boton).toHaveAccessibleDescription(/(Cumple|No cumple|Informativo|Sin dato)[\s\S]*Fuente: /);
+    await expect(boton).toHaveAccessibleDescription(/(Dentro de la referencia|Fuera de la referencia|Informativo|Sin dato)[\s\S]*Fuente: /);
   });
 
   test('los encabezados bajan de a un nivel: ficha (2), grupos (3), subgrupos y detalles (4)', async ({ page }) => {
