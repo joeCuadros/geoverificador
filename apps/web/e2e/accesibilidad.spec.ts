@@ -3,12 +3,14 @@ import { abrir, clicEnMapa, expect, ficha, mapa, preguntar, test, CONSULTA_AVISO
 test.describe('estructura y accesibilidad', () => {
   test('la página tiene idioma, título, un solo h1 y las regiones principales', async ({ page }) => {
     await abrir(page);
-    await expect(page.locator('html')).toHaveAttribute('lang', 'es');
+    await expect(page.locator('html')).toHaveAttribute('lang', 'es-PE');
     await expect(page).toHaveTitle(/GeoVerificador/);
     await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
     await expect(page.getByRole('banner')).toBeVisible();
     await expect(page.getByRole('main')).toBeVisible();
-    await expect(page.getByRole('region', { name: 'Mapa' })).toBeVisible();
+    // La región no repite el nombre del mapa que contiene (el grupo «Mapa de Arequipa…»).
+    await expect(page.getByRole('region', { name: 'Buscar y elegir un punto' })).toBeVisible();
+    await expect(page.getByRole('region', { name: /^Mapa/ })).toHaveCount(0);
     await expect(page.getByRole('group', { name: /Mapa de Arequipa/ })).toBeVisible();
   });
 
@@ -19,6 +21,22 @@ test.describe('estructura y accesibilidad', () => {
     await expect(saltar).toBeFocused();
     await saltar.press('Enter');
     await expect(page).toHaveURL(/#panel$/);
+    // El panel tiene tabindex -1: el enlace le pasa el foco también en Safari, que no lo mueve a un destino que no se puede enfocar.
+    await expect(page.getByRole('main')).toBeFocused();
+  });
+
+  test('el enlace para saltar al mapa lleva a la zona del buscador y el mapa', async ({ page }) => {
+    await abrir(page);
+    await page.keyboard.press('Tab');
+    await page.keyboard.press('Tab');
+    const saltar = page.getByRole('link', { name: 'Saltar al mapa' });
+    await expect(saltar).toBeFocused();
+    await saltar.press('Enter');
+    await expect(page).toHaveURL(/#zona-mapa$/);
+    await expect(page.getByRole('region', { name: 'Buscar y elegir un punto' })).toBeFocused();
+    // Desde ahí, el siguiente Tab llega al buscador.
+    await page.keyboard.press('Tab');
+    await expect(page.getByRole('searchbox', { name: 'Buscar un lugar' })).toBeFocused();
   });
 
   test('las pestañas siguen el patrón de WAI-ARIA y se cambian con las flechas', async ({ page }) => {

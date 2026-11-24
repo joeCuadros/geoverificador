@@ -10,6 +10,9 @@ const filaDe = (page: import('@playwright/test').Page, id: string) => ficha(page
 const itemsDe = (reporte: any): any[] => reporte.grupos.flatMap((g: any) => g.subgrupos.flatMap((x: any) => x.items));
 const botonDe = (page: import('@playwright/test').Page, id: string) => filaDe(page, id).locator('button.f-item-boton');
 
+/** Ningún aviso viene elegido: la persona elige uno con su tarjeta («Ver en el mapa»), y recién entonces se mide y se dibuja su ruta al trabajo. */
+const elegirPrimerAviso = (page: import('@playwright/test').Page) => page.locator('.avisos-mapa li').first().getByRole('button', { name: /^Ver en el mapa:/ }).click();
+
 async function abrirFichaDelCentro(page: import('@playwright/test').Page) {
   const respuesta = page.waitForResponse((r) => r.url().includes('/api/ficha') && r.status() === 200);
   await page.getByRole('button', { name: 'Ver ficha del centro del mapa' }).click();
@@ -154,18 +157,32 @@ test.describe('asistente y mapa', () => {
     expect(Math.abs(v.lon - AVISO_2.lon)).toBeLessThan(0.002);
   });
 
-  test('el primer aviso empieza resaltado y al elegir otro el resalte pasa a ese', async ({ page }) => {
+  test('ningún aviso empieza resaltado (el orden de la lista no es una preferencia); al elegir uno el resalte es suyo y pasa a otro al elegirlo', async ({ page }) => {
     await preguntar(page, CONSULTA_AVISOS);
+    await expect(page.locator('.avisos-mapa li')).toHaveCount(2);
+    await expect(page.locator('.avisos-mapa li[aria-current="true"]')).toHaveCount(0);
+    await expect(page.locator('.marcador-aviso.ent-activo')).toHaveCount(0);
+    await page.getByRole('button', { name: `Ver en el mapa: ${AVISO_1.titulo}` }).click();
+    await expect(page.locator('.avisos-mapa li[aria-current="true"] .aviso-nombre')).toHaveText(AVISO_1.titulo);
+    await page.getByRole('button', { name: `Ver en el mapa: ${AVISO_2.titulo}` }).click();
     await expect(page.locator('.avisos-mapa li[aria-current="true"]')).toHaveCount(1);
-    const primero = await page.locator('.avisos-mapa li[aria-current="true"] .aviso-nombre').innerText();
-    const otro = primero === AVISO_1.titulo ? AVISO_2.titulo : AVISO_1.titulo;
-    await page.getByRole('button', { name: `Ver en el mapa: ${otro}` }).click();
-    await expect(page.locator('.avisos-mapa li[aria-current="true"] .aviso-nombre')).toHaveText(otro);
+    await expect(page.locator('.avisos-mapa li[aria-current="true"] .aviso-nombre')).toHaveText(AVISO_2.titulo);
   });
 
-  test('el trabajo que el asistente ubicó se dibuja con su nombre y se traza la combi o bus del aviso resaltado', async ({ page }) => {
-    const viaje = page.waitForResponse((r) => r.url().includes('/api/viaje'));
+  test('el trabajo que el asistente ubicó se dibuja con su nombre; la combi o bus se traza solo para el aviso que la persona elige', async ({ page }) => {
+    let pedidos = 0;
+    page.on('request', (r) => {
+      if (r.url().includes('/api/viaje')) pedidos++;
+    });
     await preguntar(page, CONSULTA_TRABAJO);
+    await expect(page.getByRole('button', { name: 'Trabajo: Parque Industrial' })).toBeVisible();
+    // Sin aviso elegido no se mide ni se dibuja ninguna ruta, y se le dice a la persona cómo verla.
+    await expect(page.getByText('Para ver la ruta al trabajo en el mapa, elige un aviso')).toBeVisible();
+    await expect(mapa(page)).not.toHaveAttribute('data-viaje', /\d/);
+    expect(pedidos).toBe(0);
+    const viaje = page.waitForResponse((r) => r.url().includes('/api/viaje'));
+    await page.locator('.avisos-mapa li').first().getByRole('button', { name: /^Ver en el mapa:/ }).click();
+    await expect(page.getByText('Para ver la ruta al trabajo en el mapa, elige un aviso')).toHaveCount(0);
     const respuesta = await viaje;
     expect(respuesta.status()).toBe(200);
     const datos = await respuesta.json();
@@ -185,6 +202,7 @@ test.describe('asistente y mapa', () => {
 
   test('al elegir otro aviso se pide y se dibuja su viaje, no el del anterior', async ({ page }) => {
     await preguntar(page, CONSULTA_TRABAJO);
+    await elegirPrimerAviso(page);
     await expect(mapa(page)).toHaveAttribute('data-viaje', /^\d+\|/);
     const primero = (await mapa(page).getAttribute('data-viaje'))!.split('|')[0];
     const tarjetas = page.locator('.avisos-mapa li');
@@ -201,6 +219,7 @@ test.describe('asistente y mapa', () => {
   test('sin ruta en los datos el asistente lo dice y no se dibuja ningún trazado (respuesta del viaje simulada)', async ({ page }) => {
     await page.route('**/api/viaje*', (ruta) => ruta.fulfill({ contentType: 'application/json', body: JSON.stringify({ distanciaM: 9000, hayRuta: false, mejor: null, directas: 0, conTrasbordo: 0, nota: 'x', trazado: null }) }));
     await preguntar(page, CONSULTA_TRABAJO);
+    await elegirPrimerAviso(page);
     await expect(page.getByTestId('viaje-estado')).toContainText('No hay una ruta directa ni con un trasbordo en los datos');
     await expect(mapa(page)).toHaveAttribute('data-viaje', '');
   });
@@ -208,6 +227,7 @@ test.describe('asistente y mapa', () => {
   test('si el viaje no se puede medir, lo dice', async ({ page }) => {
     await page.route('**/api/viaje*', (ruta) => ruta.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'No se pudo medir el viaje. Intenta de nuevo.' }) }));
     await preguntar(page, CONSULTA_TRABAJO);
+    await elegirPrimerAviso(page);
     await expect(page.getByTestId('viaje-estado')).toHaveText('No se pudo medir el viaje. Intenta de nuevo.');
   });
 
@@ -225,6 +245,7 @@ test.describe('asistente y mapa', () => {
   test('una búsqueda nueva sin trabajo borra el trabajo y el viaje de la anterior', async ({ page }) => {
     await preguntar(page, CONSULTA_TRABAJO);
     await expect(page.getByRole('button', { name: 'Trabajo: Parque Industrial' })).toBeVisible();
+    await elegirPrimerAviso(page);
     await expect(mapa(page)).toHaveAttribute('data-viaje', /^\d+\|/);
     await preguntar(page, CONSULTA_AVISOS);
     await expect(page.getByRole('button', { name: /^Trabajo:/ })).toHaveCount(0);
