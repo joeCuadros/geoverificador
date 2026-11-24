@@ -1,0 +1,13 @@
+# Files that must never be uploaded when deploying apps/web with the Vercel CLI.
+# Local PGlite databases (hundreds of MB each) and raw data dumps.
+.pglite*
+data
+# Local agent and tooling state.
+.atl
+.mcp.json
+.claude
+# Build and test output.
+**/.next
+**/.next-e2e
+**/test-results
+**/playwright-report
