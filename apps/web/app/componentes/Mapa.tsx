@@ -1,18 +1,38 @@
 'use client';
 import 'leaflet/dist/leaflet.css';
+import './mapa-a11y.css';
 import CONFIG from '@geoverificador/dominio/nucleo/config';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type * as Leaflet from 'leaflet';
 import type { CapaInfo, CapaServida } from '../../lib/capas.ts';
 import type { MapaDeRespuesta } from '../../lib/mapa-respuesta.ts';
 import type { Marcador } from '../../lib/marcadores.ts';
 import type { LugarDeFicha, ReporteDePunto } from '../../lib/reporte.ts';
-import { PANE_DE_CAPA, capaDeDatos, crearPanes, cuadro, dibujarLugares, dibujarRespuesta, dibujarViaje, type LugarDibujado } from './dibujo.ts';
-import { alAbrirSuperficie, avisarSuperficie } from './interfaz.ts';
-import { PanelCapas, type EstadoCapa } from './PanelCapas.tsx';
+import {
+  PANE_DE_CAPA,
+  abrirConEspacio,
+  abrirCuadroDe,
+  capaDeDatos,
+  claveDeElemento,
+  crearPanes,
+  cuadro,
+  dibujarLugares,
+  dibujarRespuesta,
+  dibujarViaje,
+  elementosCercanos,
+  iconoDeAviso,
+  nombreDeAviso,
+  type ElementoAbrible,
+  type LugarDibujado,
+} from './dibujo.ts';
+import { alAbrirSuperficie, avisarSuperficie, type EstadoCapa } from './interfaz.ts';
+import { PanelCapas, type ListaDeCapa } from './PanelCapas.tsx';
 import type { EstadoViaje, PuntoElegido } from './tipos.ts';
 
 type Origen = PuntoElegido['origen'];
+
+/** Un aviso del mapa puede traer el número de su tarjeta en el asistente (si no, se numera por orden). */
+type MarcadorNumerado = Marcador & { posicion?: number };
 
 interface Props {
   marcadores: Marcador[];
@@ -31,12 +51,18 @@ interface Props {
 }
 
 /**
- * Los cambios de vista son siempre instantáneos: respetan `prefers-reduced-motion` y, además, Leaflet descarta un cambio de zoom que llega mientras otro
- * se anima (el encuadre del viaje llega justo después del de los avisos y se perdía).
+ * Los cambios de vista que hace la aplicación son siempre instantáneos: Leaflet descarta un cambio de zoom que llega mientras otro se anima (el encuadre del
+ * viaje llega justo después del de los avisos y se perdía). Las animaciones de lo que hace la persona (zoom, desvanecimientos, inercia, desplazar con las flechas)
+ * se apagan al crear el mapa si pide `prefers-reduced-motion: reduce`.
  */
 const SIN_ANIMACION = { animate: false } as const;
 const RETARDO_MOVER_MS = 350;
 const FICHA_RADIO_VISTA_M = 1500;
+
+const AYUDA_DEL_MAPA =
+  'Elige un punto con un clic o un toque. Con el teclado: enfoca el mapa, muévelo con las flechas (con más y menos se acerca o se aleja) y pulsa «Ver ficha del centro del mapa» para ver la ficha del punto que queda en la mira del centro. Lo que dibujan las capas también está en la «Lista de elementos de esta vista» del panel de capas.';
+
+const esperaMenosMovimiento = (): boolean => Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
 
 /**
  * El mapa (Leaflet, como la aplicación estática). Dibuja, cada cosa en su capa: los datos que la persona enciende (zonas, riesgos, servicios…, pedidos a la base
@@ -51,7 +77,12 @@ export function Mapa({ marcadores, avisoActivo, enfocar, punto, reporte, lugarAc
   const marcaPunto = useRef<Leaflet.Marker | null>(null);
   const marcasAviso = useRef(new Map<number, Leaflet.Marker>());
   const lugaresDibujados = useRef(new Map<string, LugarDibujado>());
-  const capasDibujadas = useRef(new Map<string, Leaflet.Layer>());
+  const capasDibujadas = useRef(new Map<string, Leaflet.GeoJSON>());
+  const elementos = useRef(new Map<string, Map<string, ElementoAbrible>>());
+  const cuadroAbierto = useRef<Leaflet.Popup | null>(null);
+  const cuadroDeCapa = useRef<{ capa: string; clave: string } | null>(null);
+  const retornoDelFoco = useRef<HTMLElement | null>(null);
+  const sinMoverFoco = useRef(false);
   const cuentaDeCapas = useRef(new Map<string, number>());
   const controles = useRef(new Map<string, AbortController>());
   const retardo = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -66,6 +97,8 @@ export function Mapa({ marcadores, avisoActivo, enfocar, punto, reporte, lugarAc
   const [panelAbierto, setPanelAbierto] = useState(false);
   const [activas, setActivas] = useState<ReadonlySet<string>>(new Set());
   const [estados, setEstados] = useState<Record<string, EstadoCapa>>({});
+  const [listas, setListas] = useState<Record<string, ListaDeCapa>>({});
+  const idAyuda = useId();
   const activasRef = useRef(activas);
   const capasRef = useRef(capas);
 
@@ -95,10 +128,25 @@ export function Mapa({ marcadores, avisoActivo, enfocar, punto, reporte, lugarAc
       const L = (await import('leaflet')).default as unknown as typeof Leaflet;
       if (cancelado || !contenedor.current) return;
       leaflet.current = L;
-      const m = L.map(contenedor.current, { zoomControl: true, preferCanvas: true }).setView(CONFIG.center as [number, number], CONFIG.zoom as number);
+      // El mapa se maneja con el teclado (flechas para moverlo, + y − para el zoom) y, si la persona pide menos movimiento, sin animaciones.
+      const reducido = esperaMenosMovimiento();
+      const m = L.map(contenedor.current, {
+        zoomControl: false,
+        preferCanvas: true,
+        keyboard: true,
+        ...(reducido ? { zoomAnimation: false, fadeAnimation: false, markerZoomAnimation: false, inertia: false } : {}),
+      }).setView(CONFIG.center as [number, number], CONFIG.zoom as number);
+      if (reducido) {
+        // Las flechas desplazan con una animación propia de Leaflet que ninguna opción apaga.
+        const desplazar = m.panBy.bind(m);
+        m.panBy = ((desde, opciones) => desplazar(desde, { ...opciones, animate: false })) as typeof m.panBy;
+      }
+      // Los controles de Leaflet vienen en inglés: se arman aquí con sus nombres en español.
+      L.control.zoom({ position: 'topleft', zoomInTitle: 'Acercar', zoomOutTitle: 'Alejar' }).addTo(m);
+      m.attributionControl.setPrefix(false);
       L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        attribution: '&copy; Colaboradores de <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       })
         .on('tileerror', () => setSinFondo(true))
         .addTo(m);
@@ -106,6 +154,45 @@ export function Mapa({ marcadores, avisoActivo, enfocar, punto, reporte, lugarAc
       crearPanes(L, m);
       grupos.current = { lugares: L.layerGroup().addTo(m), avisos: L.layerGroup().addTo(m), respuesta: L.layerGroup().addTo(m), viaje: L.layerGroup().addTo(m) };
       m.on('click', (e: Leaflet.LeafletMouseEvent) => alElegir.current(e.latlng.lat, e.latlng.lng, 'mapa', null));
+      // Cuadros (ventanas emergentes): al abrirse con el teclado o con un clic, el foco entra al primer botón o enlace; al cerrarse, vuelve a donde estaba.
+      m.on('popupopen', (e: Leaflet.PopupEvent) => {
+        const cuadroNuevo = e.popup;
+        const raiz = cuadroNuevo.getElement();
+        const cerrar = (cuadroNuevo as unknown as { _closeButton?: HTMLElement })._closeButton;
+        cerrar?.setAttribute('aria-label', 'Cerrar');
+        cerrar?.setAttribute('title', 'Cerrar');
+        cuadroAbierto.current = cuadroNuevo;
+        const fuente = (cuadroNuevo as unknown as { _source?: Leaflet.Layer })._source;
+        const clave = fuente ? claveDeElemento(fuente) : null;
+        cuadroDeCapa.current = null;
+        if (fuente && clave) for (const [id, capa] of capasDibujadas.current) if (capa.hasLayer(fuente)) cuadroDeCapa.current = { capa: id, clave };
+        const antes = document.activeElement as HTMLElement | null;
+        retornoDelFoco.current = antes && antes !== document.body && !raiz?.contains(antes) ? antes : null;
+        if (sinMoverFoco.current) return;
+        const destino = raiz?.querySelector<HTMLElement>('.leaflet-popup-content a[href], .leaflet-popup-content button') ?? raiz?.querySelector<HTMLElement>('.cuadro-aviso');
+        destino?.focus({ preventScroll: true });
+      });
+      m.on('popupclose', (e: Leaflet.PopupEvent) => {
+        const raiz = e.popup.getElement();
+        const activo = document.activeElement as HTMLElement | null;
+        const perdido = !activo || activo === document.body || !activo.isConnected || Boolean(raiz?.contains(activo));
+        const retorno = retornoDelFoco.current;
+        if (cuadroAbierto.current === e.popup) {
+          cuadroAbierto.current = null;
+          cuadroDeCapa.current = null;
+          retornoDelFoco.current = null;
+        }
+        if (!perdido) return;
+        // Vuelve al marcador (o al botón de la lista) que abrió el cuadro; si ya no se ve, al mapa.
+        retorno?.focus({ preventScroll: true });
+        if (document.activeElement !== retorno && (!activo || raiz?.contains(activo))) contenedor.current?.focus({ preventScroll: true });
+      });
+      // Esc cierra el cuadro abierto estando el foco en el mapa, en un marcador o dentro del cuadro.
+      contenedor.current.addEventListener('keydown', (ev) => {
+        if (ev.key !== 'Escape' || !cuadroAbierto.current) return;
+        ev.stopPropagation();
+        m.closePopup();
+      });
       // La vista queda a la vista del DOM (zoom y centro): útil para las pruebas y para quien inspeccione la página.
       const anotarVista = () => {
         const c = m.getCenter();
@@ -134,6 +221,8 @@ export function Mapa({ marcadores, avisoActivo, enfocar, punto, reporte, lugarAc
       for (const c of controles.current.values()) c.abort();
       controles.current.clear();
       capasDibujadas.current.clear();
+      elementos.current.clear();
+      cuadroAbierto.current = null;
       marcasAviso.current.clear();
       lugaresDibujados.current.clear();
       mapa.current?.remove();
@@ -157,25 +246,29 @@ export function Mapa({ marcadores, avisoActivo, enfocar, punto, reporte, lugarAc
   }, []);
 
   // ------------------------------------------------------------------ Capas de datos
-  useEffect(() => {
-    let vivo = true;
+  const cargarLista = useCallback(() => {
     fetch('/api/capas')
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error('lista'))))
       .then((j) => {
-        if (vivo) {
-          setCapas(j.capas as CapaInfo[]);
-          setErrorDeLista(false);
-        }
+        setCapas(j.capas as CapaInfo[]);
+        setErrorDeLista(false);
       })
-      .catch(() => {
-        if (vivo) setErrorDeLista(true);
-      });
-    return () => {
-      vivo = false;
-    };
+      .catch(() => setErrorDeLista(true));
   }, []);
+  useEffect(() => {
+    cargarLista();
+  }, [cargarLista]);
 
   const poner = (id: string, e: EstadoCapa) => setEstados((x) => ({ ...x, [id]: e }));
+  /** Quita de la lista del panel y de la memoria los elementos de una capa que ya no está dibujada. */
+  const olvidarElementos = (id: string) => {
+    elementos.current.delete(id);
+    setListas((x) => {
+      if (!(id in x)) return x;
+      const { [id]: _quitada, ...resto } = x;
+      return resto;
+    });
+  };
 
   async function cargarCapa(id: string) {
     const m = mapa.current;
@@ -188,6 +281,7 @@ export function Mapa({ marcadores, avisoActivo, enfocar, punto, reporte, lugarAc
       if (previa) m.removeLayer(previa);
       capasDibujadas.current.delete(id);
       cuentaDeCapas.current.delete(id);
+      olvidarElementos(id);
       anotarDibujo();
     };
     const b = m.getBounds();
@@ -210,6 +304,8 @@ export function Mapa({ marcadores, avisoActivo, enfocar, punto, reporte, lugarAc
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j.error ?? 'capa');
       const datos = j as CapaServida;
+      // Si el cuadro de un elemento de esta capa estaba abierto, se vuelve a abrir cuando la capa se redibuje (mover el mapa la pide de nuevo).
+      const cuadroPrevio = cuadroDeCapa.current?.capa === id ? { clave: cuadroDeCapa.current.clave, conFoco: Boolean(cuadroAbierto.current?.getElement()?.contains(document.activeElement)) } : null;
       quitar();
       if (!activasRef.current.has(id)) return;
       if (datos.requiereZoom) {
@@ -220,7 +316,14 @@ export function Mapa({ marcadores, avisoActivo, enfocar, punto, reporte, lugarAc
       capa.addTo(m);
       capasDibujadas.current.set(id, capa);
       cuentaDeCapas.current.set(id, datos.features.length);
+      const cercanos = elementosCercanos(capa, m.getCenter());
+      elementos.current.set(id, new Map(cercanos.elementos.map((e) => [e.clave, e])));
+      setListas((x) => ({ ...x, [id]: { total: cercanos.total, items: cercanos.elementos.map(({ clave, titulo, detalle }) => ({ clave, titulo, detalle })) } }));
       anotarDibujo();
+      if (cuadroPrevio) {
+        const igual = capa.getLayers().find((l) => claveDeElemento(l) === cuadroPrevio.clave);
+        if (igual) conFoco(cuadroPrevio.conFoco, () => abrirCuadroDe(igual));
+      }
       poner(id, datos.recortada ? { tipo: 'recortada', n: datos.features.length } : { tipo: 'ok', n: datos.features.length });
     } catch (e) {
       if ((e as Error).name !== 'AbortError') poner(id, { tipo: 'error' });
@@ -236,6 +339,7 @@ export function Mapa({ marcadores, avisoActivo, enfocar, punto, reporte, lugarAc
       if (previa) mapa.current?.removeLayer(previa);
       capasDibujadas.current.delete(id);
       cuentaDeCapas.current.delete(id);
+      olvidarElementos(id);
       anotarDibujo();
       setEstados((x) => {
         const { [id]: _quitado, ...resto } = x;
@@ -247,6 +351,24 @@ export function Mapa({ marcadores, avisoActivo, enfocar, punto, reporte, lugarAc
     if (nuevas.has(id)) void cargarCapa(id);
   }
 
+  /** Abre un cuadro desde el código: con `enfocar` el foco entra en él; sin él (lo pidió un botón de la ficha o del chat) el foco se queda donde estaba. */
+  function conFoco(enfocar: boolean, abrir: () => void) {
+    sinMoverFoco.current = !enfocar;
+    try {
+      abrir();
+    } finally {
+      sinMoverFoco.current = false;
+    }
+  }
+
+  /** Desde la «Lista de elementos de esta vista»: abre el cuadro del elemento y lleva el foco a él. El panel se pliega para que no tape el cuadro. */
+  function verElemento(capa: string, clave: string) {
+    const e = elementos.current.get(capa)?.get(clave);
+    if (!e) return;
+    setPanelAbierto(false);
+    conFoco(true, () => abrirCuadroDe(e.capa));
+  }
+
   // ------------------------------------------------------------------ Avisos del asistente
   useEffect(() => {
     const L = leaflet.current;
@@ -255,20 +377,21 @@ export function Mapa({ marcadores, avisoActivo, enfocar, punto, reporte, lugarAc
     if (!listo || !L || !m || !g) return;
     g.clearLayers();
     marcasAviso.current.clear();
-    for (const a of marcadores) {
-      const span = document.createElement('span');
-      span.setAttribute('aria-hidden', 'true');
-      const icono = L.divIcon({ className: 'marcador-aviso', html: span, iconSize: [30, 30], iconAnchor: [15, 15], popupAnchor: [0, -15] });
-      const marca = L.marker([a.lat, a.lon], { icon: icono, title: `Aviso: ${a.titulo}`, keyboard: true, pane: 'ficha' })
-        .bindPopup(() => cuadro(a.titulo, [a.detalle], { texto: 'Ver ficha del entorno', alHacer: () => alVerFicha.current(a) }, a.url ? { texto: 'Ver el aviso original', url: a.url } : null))
+    marcadores.forEach((a, i) => {
+      const posicion = (a as MarcadorNumerado).posicion ?? i + 1;
+      const nombre = nombreDeAviso(posicion, a.titulo);
+      const marca = L.marker([a.lat, a.lon], { icon: iconoDeAviso(L, posicion), title: nombre, keyboard: true, pane: 'ficha' })
+        .bindPopup(() => cuadro(a.titulo, [a.detalle], { texto: 'Ver ficha del punto', alHacer: () => alVerFicha.current(a) }, a.url ? { texto: 'Ver el aviso original', url: a.url } : null))
         .on('click', () => alAviso.current(a))
-        // Con el teclado, Leaflet avisa de la tecla Enter como «keypress» (y no como «click»).
+        // Con el teclado, Leaflet avisa de la tecla Enter como «keypress» (y no como «click»); la barra espaciadora también activa el marcador.
         .on('keypress', (e: Leaflet.LeafletKeyboardEvent) => {
-          if (e.originalEvent.key === 'Enter') alAviso.current(a);
+          if (e.originalEvent.key === 'Enter' || e.originalEvent.key === ' ') alAviso.current(a);
         })
         .addTo(g);
+      abrirConEspacio(marca);
+      marca.getElement()?.setAttribute('aria-label', nombre);
       marcasAviso.current.set(a.id, marca);
-    }
+    });
     if (marcadores.length > 1) ajustar(L.latLngBounds(marcadores.map((a) => [a.lat, a.lon] as [number, number])));
     else if (marcadores.length === 1) m.setView([marcadores[0].lat, marcadores[0].lon], 16, SIN_ANIMACION);
   }, [marcadores, listo, ajustar]);
@@ -285,7 +408,7 @@ export function Mapa({ marcadores, avisoActivo, enfocar, punto, reporte, lugarAc
     const m = mapa.current;
     if (!marca || !m) return;
     m.setView(marca.getLatLng(), Math.max(m.getZoom(), 16), SIN_ANIMACION);
-    marca.openPopup();
+    conFoco(false, () => marca.openPopup());
   }, [enfocar]);
 
   // ------------------------------------------------------------------ El punto elegido y su ficha
@@ -326,7 +449,7 @@ export function Mapa({ marcadores, avisoActivo, enfocar, punto, reporte, lugarAc
     const l = reporte.lugares.find((x) => x.id === lugarActivo);
     if (!d || !l) return;
     ajustar(L.latLngBounds([[reporte.punto.lat, reporte.punto.lon], [l.lat, l.lon]]));
-    d.marcador.openPopup();
+    conFoco(false, () => d.marcador.openPopup());
   }, [lugarActivo, reporte, ajustar]);
 
   // ------------------------------------------------------------------ Lo que ubicó el asistente y el viaje
@@ -392,28 +515,30 @@ export function Mapa({ marcadores, avisoActivo, enfocar, punto, reporte, lugarAc
           errorDeLista={errorDeLista}
           activas={activas}
           estados={estados}
+          listas={listas}
           abierto={panelAbierto}
           onAbrir={(a) => {
             setPanelAbierto(a);
             if (a) avisarSuperficie('capas');
-            if (a && errorDeLista) {
-              fetch('/api/capas')
-                .then((r) => (r.ok ? r.json() : Promise.reject(new Error('lista'))))
-                .then((j) => {
-                  setCapas(j.capas as CapaInfo[]);
-                  setErrorDeLista(false);
-                })
-                .catch(() => setErrorDeLista(true));
-            }
+            if (a && errorDeLista) cargarLista();
           }}
           onAlternar={alternarCapa}
+          onReintentarLista={cargarLista}
+          onReintentarCapa={(id) => void cargarCapa(id)}
+          onVerElemento={verElemento}
         />
       </div>
       <div className="mapa-lienzo">
-        <div ref={contenedor} className="mapa" role="group" aria-label="Mapa de Arequipa: haz clic o toca para elegir un punto" data-listo={listo ? 'si' : 'no'} />
+        {/* El mapa se enfoca con Tab: ahí las flechas lo mueven y + y − lo acercan o alejan (lo hace Leaflet). La ayuda se lee con él. */}
+        <div ref={contenedor} className="mapa" role="group" aria-label="Mapa de Arequipa" aria-describedby={idAyuda} data-listo={listo ? 'si' : 'no'} />
+        {/* La mira marca el centro (el punto de «Ver ficha del centro del mapa»); solo se ve mientras el mapa tiene el foco del teclado. */}
+        <span className="mapa-mira" aria-hidden="true" />
+        <p id={idAyuda} className="solo-lectores">
+          {AYUDA_DEL_MAPA}
+        </p>
         {sinFondo && (
           <p className="mapa-nota" role="status">
-            No se pudo cargar el fondo del mapa. Puedes seguir buscando lugares y eligiendo puntos.
+            No se pudo cargar el fondo del mapa. Revisa tu conexión y recarga la página; mientras tanto se pueden seguir buscando lugares y eligiendo puntos.
           </p>
         )}
       </div>

@@ -1,0 +1,50 @@
+/* El mapa y su panel de capas, para quien no usa el ratón o no ve el color: foco del mapa, mira del centro, marcadores con número y área de toque de 44 px,
+   cuadros (ventanas) con botones que se tocan, y la «Lista de elementos de esta vista» del panel de capas.
+   Va aparte de globals.css y se importa desde Mapa.tsx. Los selectores son más específicos que los de globals.css (`.mapa-lienzo .mapa …`) para ganarles sin importar el orden
+   en que se cargan las hojas. El mapa de fondo es siempre claro, así que lo que se dibuja encima usa la tinta del mapa (`--tinta-mapa`) y no cambia con el tema. */
+
+/* El mapa se enfoca con Tab y se mueve con las flechas: el aro de foco va por dentro (el lienzo lo recortaría por fuera) */
+.mapa-lienzo .mapa:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
+
+/* La mira: marca el centro, que es el punto de «Ver ficha del centro del mapa». Solo se ve mientras el mapa tiene el foco del teclado. */
+.mapa-mira { display: none; position: absolute; z-index: 450; left: 50%; top: 50%; width: 30px; height: 30px; margin: -15px 0 0 -15px; pointer-events: none; }
+.mapa-lienzo .mapa:focus-visible + .mapa-mira { display: block; }
+.mapa-mira::before, .mapa-mira::after { content: ''; position: absolute; background: var(--tinta-mapa); box-shadow: 0 0 0 1.5px var(--sobre-mapa); }
+.mapa-mira::before { left: 0; right: 0; top: 14px; height: 2px; }
+.mapa-mira::after { top: 0; bottom: 0; left: 14px; width: 2px; }
+
+/* Botones de zoom: 44 px donde se tocan, también con ratón (globals.css solo lo hace en pantallas táctiles o estrechas) */
+.mapa-lienzo .leaflet-control-zoom.leaflet-bar a { width: 44px; height: 44px; line-height: 44px; font-size: 22px; }
+
+/* Marcadores de aviso: círculo claro con borde de tinta y el número del aviso (el mismo de su tarjeta). Nada de naranja: el ámbar es solo del aviso en la ficha.
+   El elemento mide 44 px con el dedo (área transparente); el dibujo queda centrado. */
+.mapa-lienzo .mapa .leaflet-marker-icon.marcador-aviso,
+.mapa-lienzo .mapa .leaflet-marker-icon.ent-marcador { display: flex; align-items: center; justify-content: center; }
+.mapa-lienzo .mapa .leaflet-marker-icon.marcador-aviso span { display: flex; align-items: center; justify-content: center; flex: none; width: 32px; height: 32px; margin: 0; border: 3px solid var(--tinta-mapa); border-radius: 50%; background: var(--sobre-mapa); color: var(--tinta-mapa); box-shadow: 0 0 0 2px var(--sobre-mapa), 0 1px 5px rgba(0, 0, 0, .5); font: 700 .95rem/1 var(--sans); font-variant-numeric: tabular-nums; outline: 0; transform: none; }
+/* El aviso activo (el de su tarjeta resaltada) se rellena de tinta y crece: se distingue por el relleno y el tamaño, no solo por el color. */
+.mapa-lienzo .mapa .leaflet-marker-icon.marcador-aviso.ent-activo span { background: var(--tinta-mapa); color: var(--sobre-mapa); outline: 0; transform: scale(1.2); }
+/* El foco de un marcador con dibujo propio va en el dibujo (no en su área transparente de 44 px) y se ve sobre el mapa claro en los dos temas: el aro es de la tinta del mapa */
+.mapa-lienzo .mapa .leaflet-marker-icon.marcador-aviso:focus-visible,
+.mapa-lienzo .mapa .leaflet-marker-icon.ent-marcador:focus-visible { outline: 0; }
+.mapa-lienzo .mapa .leaflet-marker-icon.marcador-aviso:focus-visible span,
+.mapa-lienzo .mapa .leaflet-marker-icon.ent-marcador:focus-visible span { outline: 3px solid var(--tinta-mapa); outline-offset: 3px; }
+
+/* Cuadros de los marcadores: el botón de cerrar y lo que se toca dentro miden 44 px */
+.mapa-lienzo .leaflet-popup-content { margin: 13px 44px 13px 18px; }
+.mapa-lienzo .leaflet-container a.leaflet-popup-close-button { top: 0; right: 0; width: 44px; height: 44px; font: 700 26px/44px var(--sans); text-align: center; padding: 0; }
+.mapa-lienzo .cuadro-aviso:focus-visible { outline: 3px solid var(--tinta-mapa); outline-offset: 4px; border-radius: 4px; }
+.mapa-lienzo .cuadro-aviso a { display: inline-flex; align-items: center; min-height: 44px; }
+.mapa-lienzo .cuadro-aviso button { display: block; min-height: 44px; margin-top: 6px; }
+
+/* Panel de capas: «Reintentar» de una capa o de la lista */
+.capa-estado:empty { margin: 0; }
+.capa-reintentar { min-height: 44px; margin: 4px 0 8px; }
+
+/* «Lista de elementos de esta vista»: la vía con teclado a los cuadros de lo que dibuja una capa */
+.capa-lista { margin: 4px 0 8px; }
+.capa-lista summary { display: flex; align-items: center; min-height: 44px; font-weight: 700; color: var(--tinta); cursor: pointer; }
+.capa-lista-nota { margin: 0 0 6px; color: var(--muted); }
+.capa-lista ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.capa-elemento { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; min-height: 44px; padding: 6px 10px; text-align: left; background: var(--surface); color: var(--ink); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); font-weight: 600; font-size: .85rem; }
+.capa-elemento:hover:not(:disabled) { background: var(--tinta-soft); }
+.capa-elemento-detalle { font-weight: 400; font-size: .78rem; color: var(--muted); }

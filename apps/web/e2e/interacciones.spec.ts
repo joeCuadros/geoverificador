@@ -145,7 +145,7 @@ test.describe('asistente y mapa', () => {
     const tarjeta = page.locator('.avisos-mapa li', { hasText: AVISO_2.titulo });
     await tarjeta.getByRole('button', { name: `Ver en el mapa: ${AVISO_2.titulo}` }).click();
     await expect(page.locator('.marcador-aviso.ent-activo')).toHaveCount(1);
-    await expect(page.locator('.marcador-aviso.ent-activo')).toHaveAttribute('title', `Aviso: ${AVISO_2.titulo}`);
+    await expect(page.locator('.marcador-aviso.ent-activo')).toHaveAttribute('title', new RegExp(`^Aviso \\d+: ${AVISO_2.titulo}$`));
     await expect(page.locator('.leaflet-popup-content')).toContainText(AVISO_2.titulo);
     await expect(tarjeta).toHaveAttribute('aria-current', 'true');
     const v = await vista(page);
@@ -245,7 +245,8 @@ test.describe('asistente y mapa', () => {
     await page.getByRole('button', { name: 'Sector 1: Cerca de la UNSA' }).click();
     const cuadro = page.locator('.leaflet-popup-content');
     await expect(cuadro).toContainText('Sector 1 · cerca de Cerca de la UNSA');
-    await expect(cuadro).toContainText('Aquí se cumple todo lo que pediste.');
+    await expect(cuadro).toContainText('Cumple los criterios pedidos según los datos.');
+    await expect(cuadro).not.toContainText('todo lo que pediste');
     await expect(cuadro).toContainText('su contorno no se dibuja');
   });
 });

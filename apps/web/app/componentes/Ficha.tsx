@@ -5,7 +5,10 @@ import '../ficha.css';
 import { ConteoDeGrupo, CuerpoDeItem, DetallesDeGrupo, EstadoChip, MasDeItem } from './FichaPartes.tsx';
 import type { EstadoFicha, PuntoElegido } from './tipos.ts';
 
-const grados = (n: number) => n.toFixed(5).replace('.', ',');
+/** Un punto como «-16.39883, -71.53697»: latitud y longitud con punto decimal (es-PE), separadas por coma. */
+const coordenadas = (lat: number, lon: number) => `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+
+const AVISO_PESTANA_NUEVA = ' (abre en otra pestaña)';
 
 function fechaLarga(iso: string): string {
   try {
@@ -123,7 +126,7 @@ function FichaCompleta({ punto, r, lugarActivo, onLugar }: { punto: PuntoElegido
   const titulo = useRef<HTMLHeadingElement>(null);
   useDesplegarAlImprimir(raiz);
   useEnfocarAlAbrir(titulo);
-  const navegacion = [...r.grupos.map((g) => ({ id: `ficha-g-${g.id}`, texto: g.corto })), { id: 'ficha-pasos', texto: 'Antes de decidir' }];
+  const navegacion = [...r.grupos.map((g) => ({ id: `ficha-g-${g.id}`, texto: g.corto })), { id: 'ficha-pasos', texto: 'Qué comprobar' }, { id: 'ficha-limites', texto: 'Límites' }];
   return (
     <article ref={raiz} className="ficha" aria-labelledby="ficha-titulo" data-testid="ficha">
       <header className="f-cabecera">
@@ -134,7 +137,7 @@ function FichaCompleta({ punto, r, lugarActivo, onLugar }: { punto: PuntoElegido
           {punto.etiqueta ? <strong>{punto.etiqueta} · </strong> : null}
           {r.distrito ? `Distrito de ${r.distrito} · ` : ''}
           <span data-testid="ficha-coordenadas">
-            {grados(r.punto.lat)}; {grados(r.punto.lon)}
+            {coordenadas(r.punto.lat, r.punto.lon)}
           </span>
         </p>
         <p className="f-fecha">
@@ -145,7 +148,7 @@ function FichaCompleta({ punto, r, lugarActivo, onLugar }: { punto: PuntoElegido
 
       <section className="f-esencial" aria-labelledby="ficha-esencial">
         <h3 id="ficha-esencial">Lo esencial de este punto</h3>
-        <p className="f-esencial-nota">Cada línea resume un grupo y cuenta sus distancias de referencia que cumplen, no cumplen o no tienen dato.</p>
+        <p className="f-esencial-nota">Cada línea resume un grupo y cuenta cuántas distancias de referencia quedan dentro de la referencia, fuera de ella o sin dato.</p>
         <ul>
           {r.esencial.map((e) => {
             const g = r.grupos.find((x) => x.id === e.grupo)!;
@@ -185,7 +188,7 @@ function FichaCompleta({ punto, r, lugarActivo, onLugar }: { punto: PuntoElegido
 
       <section id="ficha-pasos" className="f-grupo f-pasos" aria-labelledby="ficha-pasos-t">
         <h3 id="ficha-pasos-t" tabIndex={-1}>
-          Antes de decidir
+          Qué comprobar antes de decidir
         </h3>
         <p className="f-prosa f-grupo-resumen">Esta ficha es referencial: lo que sigue se comprueba fuera de ella.</p>
         <ul className="f-items">
@@ -200,6 +203,7 @@ function FichaCompleta({ punto, r, lugarActivo, onLugar }: { punto: PuntoElegido
                       <li key={e.url}>
                         <a href={e.url} target="_blank" rel="noopener noreferrer">
                           {e.texto}
+                          <span className="solo-lectores">{AVISO_PESTANA_NUEVA}</span>
                         </a>
                       </li>
                     ))}
@@ -213,7 +217,7 @@ function FichaCompleta({ punto, r, lugarActivo, onLugar }: { punto: PuntoElegido
 
       <section className="f-grupo f-limites" aria-labelledby="ficha-limites">
         <h3 id="ficha-limites" tabIndex={-1}>
-          Lo que conviene tener presente
+          Límites de estos datos
         </h3>
         <ul className="f-lista">
           {r.limitacionesClave.map((l, i) => (
@@ -221,7 +225,7 @@ function FichaCompleta({ punto, r, lugarActivo, onLugar }: { punto: PuntoElegido
           ))}
         </ul>
         <details className="f-mas">
-          <summary>Todas las limitaciones ({r.limitaciones.length})</summary>
+          <summary>Todos los límites ({r.limitaciones.length})</summary>
           <ul className="f-lista">
             {r.limitaciones.map((l, i) => (
               <li key={i} className="f-prosa">{l}</li>
@@ -240,8 +244,8 @@ function FichaCompleta({ punto, r, lugarActivo, onLugar }: { punto: PuntoElegido
 }
 
 /**
- * La ficha del punto elegido, ordenada por las preguntas de quien busca vivienda: lo esencial primero, cada elemento con su estado (cumple, no cumple, informativo
- * o sin dato), su fuente y la fecha de sus datos a la vista, y el método y los límites desplegables. Los datos vienen de GET /api/ficha (los pide `useFicha`).
+ * La ficha del punto elegido, ordenada por las preguntas de quien busca vivienda: lo esencial primero, cada elemento con su estado (dentro de la referencia, fuera de ella,
+ * informativo o sin dato), su fuente y la fecha de sus datos a la vista, y el método y los límites desplegables. Los datos vienen de GET /api/ficha (los pide `useFicha`).
  * Cada elemento con lugar en el mapa es un botón que lo resalta allí; el lugar activo se resalta aquí y en el mapa.
  */
 export function Ficha({ punto, estado, onReintentar, lugarActivo, onLugar }: { punto: PuntoElegido | null; estado: EstadoFicha; onReintentar: () => void; lugarActivo: string | null; onLugar: (id: string) => void }) {
@@ -260,7 +264,7 @@ export function Ficha({ punto, estado, onReintentar, lugarActivo, onLugar }: { p
   }
 
   const donde = punto.etiqueta ? `${punto.etiqueta} · ` : '';
-  const lugar = `${donde}${grados(punto.lat)}; ${grados(punto.lon)}`;
+  const lugar = `${donde}${coordenadas(punto.lat, punto.lon)}`;
   // El anuncio vive fuera de los estados para que el lector de pantalla lo diga al pasar de uno a otro (un aviso que aparece ya armado no siempre se lee).
   const anuncio = estado.tipo === 'cargando' ? `Armando la ficha de ${lugar}.` : estado.tipo === 'listo' ? `La ficha de ${lugar} está lista.` : '';
   return (
@@ -277,6 +281,7 @@ export function Ficha({ punto, estado, onReintentar, lugarActivo, onLugar }: { p
         <div className="ficha-estado" role="alert">
           <h2>Ficha del punto</h2>
           <p className="mensaje-error">{estado.mensaje}</p>
+          <p className="f-prosa">Pulsa Reintentar o elige otro punto en el mapa.</p>
           <button type="button" onClick={onReintentar}>
             Reintentar
           </button>

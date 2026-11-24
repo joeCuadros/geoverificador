@@ -2,7 +2,7 @@
  * Historias de la búsqueda con el asistente (H1 a H5) y reglas del producto (R1, R3 a R8) sobre la aplicación en marcha.
  * Los avisos son los de e2e/datos/avisos.json: cuatro avisos de prueba (tres departamentos en Yanahuara, uno sin coordenadas, y una casa en Cayma).
  */
-import { AVISO_1, AVISO_2, CONSULTA_AVISOS, abrir, expect, preguntar, test } from './apoyo.ts';
+import { AVISO_1, AVISO_2, CONSULTA_AVISOS, abrir, expect, marcadorDeAviso, preguntar, test } from './apoyo.ts';
 
 const LIMITES = [
   'GeoVerificador informa: no es asesoría legal ni financiera.',
@@ -181,14 +181,14 @@ test.describe('R1 y R2 · todo sale de la respuesta de la API y las tarjetas no 
     const conUbicacion = api.avisos.filter((a: any) => a.lat !== null && a.lon !== null);
     expect(conUbicacion.length).toBeLessThan(api.avisos.length);
     await expect(page.locator('.marcador-aviso')).toHaveCount(conUbicacion.length);
-    for (const a of conUbicacion) await expect(page.getByRole('button', { name: `Aviso: ${a.titulo}`, exact: true })).toBeVisible();
+    for (const a of conUbicacion) await expect(marcadorDeAviso(page, a.titulo)).toBeVisible();
     await expect(page.getByRole('button', { name: /sin ubicación/ })).toHaveCount(0);
   });
 
   test('las tarjetas del chat y el cuadro del marcador no muestran fotos, descripción ni datos del vendedor', async ({ page }) => {
     const r = await preguntar(page, CONSULTA_AVISOS);
     await expect(r.locator('img, picture, video, iframe')).toHaveCount(0);
-    await page.getByRole('button', { name: `Aviso: ${AVISO_1.titulo}`, exact: true }).click();
+    await marcadorDeAviso(page, AVISO_1.titulo).click();
     const cuadro = page.locator('.leaflet-popup-content');
     await expect(cuadro).toBeVisible();
     await expect(cuadro.locator('img, picture, video, iframe')).toHaveCount(0);

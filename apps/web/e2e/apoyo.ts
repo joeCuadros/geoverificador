@@ -63,11 +63,17 @@ export async function preguntar(page: Page, texto: string): Promise<Locator> {
   return page.locator('.burbuja-agente').last();
 }
 
-/** Lee «-16,39883; -71,53697» (coma decimal) como números. */
+/** Lee «-16.39883, -71.53697» (punto decimal, latitud y longitud separadas por coma) como números. */
 export function leerCoordenadas(texto: string): { lat: number; lon: number } {
-  const [lat, lon] = texto.split(';').map((x) => Number(x.trim().replace(',', '.')));
+  const [lat, lon] = texto.split(',').map((x) => Number(x.trim()));
   return { lat, lon };
 }
+
+/** El marcador de un aviso en el mapa por su título: se llama «Aviso N: título», con el número de su tarjeta. */
+export const marcadorDeAviso = (page: Page, titulo: string): Locator => {
+  const literal = titulo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return page.getByRole('button', { name: new RegExp(`^Aviso \\d+: ${literal}$`) });
+};
 
 /** Un clic en el mapa a (dx, dy) píxeles de su centro. */
 export async function clicEnMapa(page: Page, dx = 80, dy = -60): Promise<void> {

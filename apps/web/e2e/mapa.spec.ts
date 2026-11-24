@@ -1,4 +1,4 @@
-import { AVISO_1, CONSULTA_AVISOS, PLAZA, abrir, alejar, alerta, clicEnMapa, expect, ficha, leerCoordenadas, preguntar, test } from './apoyo.ts';
+import { AVISO_1, CONSULTA_AVISOS, PLAZA, abrir, alejar, alerta, clicEnMapa, expect, ficha, leerCoordenadas, marcadorDeAviso, preguntar, test } from './apoyo.ts';
 
 test.describe('mapa', () => {
   test.beforeEach(async ({ page }) => abrir(page));
@@ -39,7 +39,7 @@ test.describe('mapa', () => {
     await expect(ficha(page)).toBeVisible();
     await expect(ficha(page).getByRole('note').first()).toContainText('No es una recomendación de compra ni reemplaza los certificados municipales');
     await expect(ficha(page)).toContainText('Las distancias son en línea recta');
-    await expect(ficha(page).getByRole('heading', { name: 'Lo que conviene tener presente' })).toBeVisible();
+    await expect(ficha(page).getByRole('heading', { name: 'Límites de estos datos' })).toBeVisible();
     await expect(ficha(page).getByRole('heading', { name: 'Riesgos y restricciones' })).toBeVisible();
     await expect(ficha(page)).toContainText('no significa que el lugar sea seguro');
     // La ficha no muestra secciones que la base todavía no calcula.
@@ -90,7 +90,8 @@ test.describe('mapa', () => {
   test('si no hay conexión con el servidor, la ficha lo dice', async ({ page }) => {
     await page.route('**/api/ficha*', (ruta) => ruta.abort('connectionrefused'));
     await page.getByRole('button', { name: 'Ver ficha del centro del mapa' }).click();
-    await expect(alerta(page)).toContainText('No pude conectar');
+    await expect(alerta(page)).toContainText('No se pudo conectar');
+    await expect(alerta(page)).toContainText('Revisa tu conexión');
   });
 
   test('un punto fuera de Arequipa recibe el rechazo real del servidor y no una ficha vacía', async ({ page }) => {
@@ -150,7 +151,7 @@ test.describe('H8 y H9 · la ficha muestra lo que hay y no inventa lo que no hay
     await elegirPuntoFueraDelPlano(page);
     const sub = await ficha(page).locator('.f-sub').innerText();
     expect(sub).not.toMatch(/Distrito de [A-Z]/);
-    expect(sub).toMatch(/-?\d+,\d{5}; -?\d+,\d{5}/);
+    expect(sub).toMatch(/-?\d+\.\d{5}, -?\d+\.\d{5}/);
   });
 
   test('cada elemento con datos dice su fuente a la vista y la fecha en que se extrajeron los datos (la zonificación no trae fecha en la base)', async ({ page }) => {
@@ -165,7 +166,7 @@ test.describe('H8 y H9 · la ficha muestra lo que hay y no inventa lo que no hay
       const fuente = it.locator('.f-fuente').first();
       await expect(fuente, id).toBeVisible();
       const texto = await fuente.innerText();
-      if (id === 'zona') expect(texto, id).toMatch(/sin fecha en la base/);
+      if (id === 'zona') expect(texto, id).toMatch(/sin fecha registrada/);
       else expect(texto, id).toMatch(/datos del \d{4}-\d{2}-\d{2}/);
     }
   });
@@ -194,7 +195,7 @@ test.describe('buscador de lugares', () => {
   test('un lugar que no existe en los datos se dice, sin inventar un resultado', async ({ page }) => {
     await page.getByRole('searchbox', { name: 'Buscar un lugar' }).fill('zzzxqwv');
     await page.getByRole('button', { name: 'Buscar', exact: true }).click();
-    await expect(page.getByText('No encontré «zzzxqwv» en los datos')).toBeVisible();
+    await expect(page.getByText('Sin resultados para «zzzxqwv» en los datos')).toBeVisible();
     await expect(page.getByRole('list', { name: 'Resultados de la búsqueda' })).toHaveCount(0);
   });
 
@@ -218,7 +219,7 @@ test.describe('avisos del asistente en el mapa', () => {
   test('un marcador abre su cuadro con el título, el precio y el enlace original, y resalta su tarjeta en el asistente', async ({ page }) => {
     await preguntar(page, CONSULTA_AVISOS);
     await page.getByRole('tab', { name: 'Ficha del punto' }).click();
-    const marcador = page.getByRole('button', { name: `Aviso: ${AVISO_1.titulo}`, exact: true });
+    const marcador = marcadorDeAviso(page, AVISO_1.titulo);
     await expect(marcador).toBeVisible();
     await marcador.click();
     const cuadro = page.locator('.leaflet-popup-content .cuadro-aviso');
@@ -234,8 +235,8 @@ test.describe('avisos del asistente en el mapa', () => {
 
   test('desde el cuadro del marcador se abre la ficha de la ubicación del aviso', async ({ page }) => {
     await preguntar(page, CONSULTA_AVISOS);
-    await page.getByRole('button', { name: `Aviso: ${AVISO_1.titulo}`, exact: true }).click();
-    await page.locator('.leaflet-popup-content').getByRole('button', { name: 'Ver ficha del entorno' }).click();
+    await marcadorDeAviso(page, AVISO_1.titulo).click();
+    await page.locator('.leaflet-popup-content').getByRole('button', { name: 'Ver ficha del punto' }).click();
     await expect(ficha(page)).toBeVisible();
     const { lat, lon } = leerCoordenadas(await page.getByTestId('ficha-coordenadas').innerText());
     expect(lat).toBeCloseTo(AVISO_1.lat, 4);
@@ -245,10 +246,10 @@ test.describe('avisos del asistente en el mapa', () => {
 
   test('los marcadores y el botón de su cuadro se alcanzan con el teclado', async ({ page }) => {
     await preguntar(page, CONSULTA_AVISOS);
-    const marcador = page.getByRole('button', { name: `Aviso: ${AVISO_1.titulo}`, exact: true });
+    const marcador = marcadorDeAviso(page, AVISO_1.titulo);
     await marcador.focus();
     await page.keyboard.press('Enter');
-    const boton = page.locator('.leaflet-popup-content').getByRole('button', { name: 'Ver ficha del entorno' });
+    const boton = page.locator('.leaflet-popup-content').getByRole('button', { name: 'Ver ficha del punto' });
     await expect(boton).toBeVisible();
     await expect(page.locator('.avisos-mapa li[aria-current="true"]')).toContainText(AVISO_1.titulo);
     await boton.focus();

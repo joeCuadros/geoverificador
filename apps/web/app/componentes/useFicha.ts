@@ -3,7 +3,10 @@ import { useEffect, useState } from 'react';
 import type { ReporteDePunto } from '../../lib/reporte.ts';
 import type { EstadoFicha, PuntoElegido } from './tipos.ts';
 
-/** Pide la ficha del punto elegido (GET /api/ficha) y cancela la anterior si se elige otro. `reintentar` vuelve a pedir la misma. */
+/**
+ * Pide la ficha del punto elegido (GET /api/ficha) y cancela la anterior si se elige otro. `reintentar` vuelve a pedir la misma.
+ * Los errores no tienen sujeto («No se pudo…»): el mensaje del servidor se muestra tal cual y la ficha agrega el paso siguiente (Reintentar).
+ */
 export function useFicha(punto: PuntoElegido | null): { estado: EstadoFicha; reintentar: () => void } {
   const [estado, setEstado] = useState<EstadoFicha>({ tipo: 'vacio' });
   const [intento, setIntento] = useState(0);
@@ -21,7 +24,7 @@ export function useFicha(punto: PuntoElegido | null): { estado: EstadoFicha; rei
         if (!r.ok) setEstado({ tipo: 'error', mensaje: j.error ?? 'No se pudo armar la ficha de este punto.' });
         else setEstado({ tipo: 'listo', reporte: j as ReporteDePunto });
       } catch (e) {
-        if ((e as Error).name !== 'AbortError') setEstado({ tipo: 'error', mensaje: 'No pude conectar. Revisa tu conexión e intenta de nuevo.' });
+        if ((e as Error).name !== 'AbortError') setEstado({ tipo: 'error', mensaje: 'No se pudo conectar con el servidor. Revisa tu conexión.' });
       }
     })();
     return () => control.abort();
