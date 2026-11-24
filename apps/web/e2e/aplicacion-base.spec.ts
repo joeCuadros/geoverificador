@@ -2,7 +2,7 @@
  * La base de la página: metadatos y adaptación a la pantalla, iconos, tipografías, y lo que oyen y sienten quienes usan teclado o lector de pantalla
  * cuando una acción en el mapa o en el buscador cambia de pestaña. Con los datos de prueba (e2e/datos/avisos.json).
  */
-import { AVISO_1, CONSULTA_AVISOS, abrir, clicEnMapa, expect, ficha, preguntar, test } from './apoyo.ts';
+import { AVISO_1, CONSULTA_AVISOS, abrir, clicEnMapa, expect, ficha, marcadorDeAviso, preguntar, test } from './apoyo.ts';
 
 const anuncioDePestana = (page: import('@playwright/test').Page) => page.getByTestId('anuncio-de-pestana');
 
@@ -117,7 +117,7 @@ test.describe('cambios de pestaña desde el mapa y el buscador', () => {
     await preguntar(page, CONSULTA_AVISOS);
     await page.getByRole('tab', { name: 'Ficha del punto' }).click();
     await expect(anuncioDePestana(page)).toHaveText('');
-    await page.getByRole('button', { name: `Aviso: ${AVISO_1.titulo}`, exact: true }).click();
+    await marcadorDeAviso(page, AVISO_1.titulo).click();
     await expect(page.getByRole('tab', { name: 'Asistente' })).toHaveAttribute('aria-selected', 'true');
     await expect(anuncioDePestana(page)).toHaveText('Se abrió la pestaña «Asistente»: el aviso quedó resaltado.');
   });

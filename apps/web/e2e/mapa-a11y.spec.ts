@@ -112,11 +112,16 @@ test.describe('marcadores de aviso', () => {
     }
     // El número del marcador es el de la tarjeta del chat con el mismo título.
     const posicion = await page.locator('.avisos-mapa li', { hasText: AVISO_1.titulo }).locator('.tarjeta-posicion').innerText();
-    await expect(marcadorDeAviso(page, AVISO_1.titulo)).toHaveAccessibleName(new RegExp(`^Aviso ${posicion.trim()}: `));
+    // La tarjeta rotula «Aviso N»: solo importa el número.
+    const numeroDeTarjeta = posicion.match(/\d+/)![0];
+    await expect(marcadorDeAviso(page, AVISO_1.titulo)).toHaveAccessibleName(new RegExp(`^Aviso ${numeroDeTarjeta}: `));
   });
 
   test('el aviso activo se distingue por su relleno y su tamaño, no solo por el color', async ({ page }) => {
     await preguntar(page, CONSULTA_AVISOS);
+    // Ningún aviso viene resaltado por defecto: se resalta al elegirlo en su tarjeta.
+    await expect(page.locator('.marcador-aviso.ent-activo')).toHaveCount(0);
+    await page.locator('.avisos-mapa li').first().getByRole('button', { name: /^Ver en el mapa:/ }).click();
     const activo = page.locator('.marcador-aviso.ent-activo span');
     await expect(activo).toHaveCount(1);
     const e = await activo.evaluate((x) => ({ fondo: getComputedStyle(x).backgroundColor, texto: getComputedStyle(x).color, transform: getComputedStyle(x).transform }));
