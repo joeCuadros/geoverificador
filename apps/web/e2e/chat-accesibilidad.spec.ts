@@ -185,12 +185,13 @@ test.describe('privacidad: lo que sale hacia Google', () => {
     });
   }
 
-  test('con el modelo activo el aviso está junto al campo desde antes de enviar, en un tamaño legible y fiel a lo que se envía', async ({ page }) => {
+  test('con el modelo activo el aviso está en el saludo inicial desde antes de enviar, en un tamaño legible y fiel a lo que se envía', async ({ page }) => {
     await conModelo(page, true);
     await abrir(page);
     const aviso = page.getByTestId('aviso-modelo');
     await expect(aviso).toBeVisible();
-    await expect(page.locator('.compositor').getByTestId('aviso-modelo')).toHaveCount(1);
+    await expect(page.locator('[data-turno="0"]').getByTestId('aviso-modelo')).toHaveCount(1);
+    await expect(page.locator('.compositor').getByTestId('aviso-modelo')).toHaveCount(0);
     await expect(aviso).toContainText('Google');
     await expect(aviso).toContainText('tu mensaje');
     await expect(aviso).toContainText('lo que se entendió de tu búsqueda');

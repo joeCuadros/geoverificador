@@ -256,6 +256,14 @@ export function Chat({ onResultado, activo, viaje, punto, onEnfocar, onVerFicha 
                   <span>{agente.resumen}</span>
                 </p>
               )}
+              {t.id === 0 && agente?.modelo && (
+                <p className="aviso-modelo" data-testid="aviso-modelo">
+                  <IconoInfo />
+                  <span>
+                    <strong>Privacidad:</strong> un modelo de Google (Gemini) redacta la frase con que abre las respuestas con avisos. Si envías un mensaje, Google recibe tu mensaje, lo que se entendió de tu búsqueda y un resumen de los resultados, sin coordenadas.
+                  </span>
+                </p>
+              )}
               {t.r?.comparacion && <Comparacion c={t.r.comparacion} />}
               {t.r?.ficha && <FichaDelPunto f={t.r.ficha} vivo={vivo} />}
               {t.r?.resultados && <Resultados r={t.r.resultados} ubicados={t.ubicados ?? []} activo={activo} vivo={vivo} onEnfocar={onEnfocar} onVerFicha={onVerFicha} />}
@@ -274,14 +282,6 @@ export function Chat({ onResultado, activo, viaje, punto, onEnfocar, onVerFicha 
         {cargando && <Pensando />}
       </div>
       <div className="compositor" ref={compositor}>
-        {agente?.modelo && (
-          <p className="aviso-modelo" data-testid="aviso-modelo">
-            <IconoInfo />
-            <span>
-              <strong>Privacidad:</strong> un modelo de Google (Gemini) redacta la frase con que abre las respuestas con avisos. Si envías este mensaje, Google recibe tu mensaje, lo que se entendió de tu búsqueda y un resumen de los resultados, sin coordenadas.
-            </span>
-          </p>
-        )}
         {punto && (
           <div className="punto-elegido">
             <p>
