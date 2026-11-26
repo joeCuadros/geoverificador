@@ -37,9 +37,10 @@ test.describe('mapa con el teclado', () => {
 
   test('con el teclado se elige un punto: mover el mapa y pulsar «Ver ficha del centro del mapa» abre la ficha de lo que quedó al centro', async ({ page }) => {
     await mapa(page).focus();
+    // Leaflet no atiende una flecha mientras dura el desplazamiento de la anterior: se espera a que termine cada una.
     await page.keyboard.press('ArrowRight');
-    await page.keyboard.press('ArrowUp');
     await expect.poll(async () => (await vista(page)).lon).toBeGreaterThan(-71.53697);
+    await page.keyboard.press('ArrowUp');
     // El centro que se ve (zoom, lat, lon a la vista del DOM) antes de abrir la ficha: al abrirla, el mapa se encuadra sobre lo que la ficha dibuja.
     await expect.poll(async () => (await vista(page)).lat).toBeGreaterThan(-16.39883);
     const v = await vista(page);
@@ -106,9 +107,9 @@ test.describe('marcadores de aviso', () => {
       const estilo = await m.locator('span').evaluate((e) => ({ fondo: getComputedStyle(e).backgroundColor, texto: getComputedStyle(e).color, borde: getComputedStyle(e).borderTopColor, activo: Boolean(e.parentElement?.classList.contains('ent-activo')) }));
       expect(estilo.fondo).not.toBe('rgb(194, 65, 12)'); // el naranja de antes
       // Tinta del mapa y blanco: el aviso activo, relleno de tinta con el número en blanco; los demás, al revés.
-      expect(estilo.fondo).toBe(estilo.activo ? 'rgb(28, 58, 107)' : 'rgb(255, 255, 255)');
-      expect(estilo.texto).toBe(estilo.activo ? 'rgb(255, 255, 255)' : 'rgb(28, 58, 107)');
-      expect(estilo.borde).toBe('rgb(28, 58, 107)');
+      expect(estilo.fondo).toBe(estilo.activo ? 'rgb(138, 58, 31)' : 'rgb(255, 255, 255)');
+      expect(estilo.texto).toBe(estilo.activo ? 'rgb(255, 255, 255)' : 'rgb(138, 58, 31)');
+      expect(estilo.borde).toBe('rgb(138, 58, 31)');
     }
     // El número del marcador es el de la tarjeta del chat con el mismo título.
     const posicion = await page.locator('.avisos-mapa li', { hasText: AVISO_1.titulo }).locator('.tarjeta-posicion').innerText();
@@ -125,7 +126,7 @@ test.describe('marcadores de aviso', () => {
     const activo = page.locator('.marcador-aviso.ent-activo span');
     await expect(activo).toHaveCount(1);
     const e = await activo.evaluate((x) => ({ fondo: getComputedStyle(x).backgroundColor, texto: getComputedStyle(x).color, transform: getComputedStyle(x).transform }));
-    expect(e.fondo).toBe('rgb(28, 58, 107)');
+    expect(e.fondo).toBe('rgb(138, 58, 31)');
     expect(e.texto).toBe('rgb(255, 255, 255)');
     expect(e.transform).not.toBe('none');
   });

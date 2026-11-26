@@ -44,7 +44,7 @@ Not a listings portal and not a score. It is a verifiable, source-backed fit che
 
 ## Brand Commitments
 
-Name "GeoVerificador", subtitle "Predios de Arequipa". Identity to preserve: white-sillar ground with faint block joints, plan-blueprint ink blue for action and the top band, amber only for the "consulta referencial" notice, Public Sans (interface) and Source Serif 4 (headings, zone codes, figures), 12px card radius, light and dark themes on the same tokens, status always icon plus text. Spanish, tuteo, short sentences, never "la mejor zona".
+Name "GeoVerificador", subtitle "Predios de Arequipa". Identity "Hogar cálido" (`apps/web`, agreed by the team on 2026-11-25): warm sand and beige ground (`--bg #f3ede4`, surfaces `#fffcf7`), brown text (`--ink #2a211b`), terracotta for action and the brand mark (`--tinta #a3482a`; on the always-light map, `--tinta-mapa #8a3a1f`), mustard only for the "consulta referencial" notice, the highlight of what the guide explains and the halo of the selected marker (decorative only, never text or focus). Bricolage Grotesque for headings and figures, Instrument Sans for everything else, both self-hosted. White top bar; assistant, report and map side by side on desktop. Light and dark themes on the same tokens, AA contrast in both, status always icon plus text, 44px touch targets. Spanish, tuteo, short sentences, never "la mejor zona". `apps/estatica` still uses the earlier identity (white sillar, plan-blueprint ink blue, Public Sans and Source Serif 4).
 
 ## Evidence on Hand
 

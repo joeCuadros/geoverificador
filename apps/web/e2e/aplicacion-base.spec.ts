@@ -1,6 +1,6 @@
 /**
  * La base de la página: metadatos y adaptación a la pantalla, iconos, tipografías, y lo que oyen y sienten quienes usan teclado o lector de pantalla
- * cuando una acción en el mapa o en el buscador cambia de pestaña. Con los datos de prueba (e2e/datos/avisos.json).
+ * cuando una acción en el mapa o en el buscador abre o cierra la ficha. Con los datos de prueba (e2e/datos/avisos.json).
  */
 import { AVISO_1, CONSULTA_AVISOS, abrir, clicEnMapa, expect, ficha, marcadorDeAviso, preguntar, test } from './apoyo.ts';
 
@@ -19,8 +19,8 @@ test.describe('metadatos e iconos', () => {
     expect(await page.locator('meta[name="color-scheme"]').getAttribute('content')).toBe('light dark');
     const colores = await page.locator('meta[name="theme-color"]').evaluateAll((es) => es.map((e) => [e.getAttribute('media'), e.getAttribute('content')]));
     expect(colores).toEqual([
-      ['(prefers-color-scheme: light)', '#f3eee3'],
-      ['(prefers-color-scheme: dark)', '#101520'],
+      ['(prefers-color-scheme: light)', '#fffcf7'],
+      ['(prefers-color-scheme: dark)', '#1c1713'],
     ]);
     expect(await page.locator('meta[property="og:site_name"]').getAttribute('content')).toBe('GeoVerificador');
     expect(await page.locator('meta[property="og:locale"]').getAttribute('content')).toBe('es_PE');
@@ -49,7 +49,7 @@ test.describe('metadatos e iconos', () => {
 });
 
 test.describe('tipografías', () => {
-  test('Public Sans y Source Serif 4 se cargan de verdad y son las que usan el texto y los títulos', async ({ page }) => {
+  test('Instrument Sans y Bricolage Grotesque se cargan de verdad y son las que usan el texto y los títulos', async ({ page }) => {
     await abrir(page);
     const leer = () =>
       page.evaluate(async () => {
@@ -78,16 +78,16 @@ test.describe('tipografías', () => {
   });
 });
 
-test.describe('cambios de pestaña desde el mapa y el buscador', () => {
+test.describe('la ficha se abre desde el mapa y el buscador', () => {
   test.beforeEach(async ({ page }) => abrir(page));
 
   test('un clic en el mapa abre la ficha y lo anuncia una vez, con un texto distinto al de la ficha', async ({ page }) => {
     await expect(anuncioDePestana(page)).toHaveText('');
     await clicEnMapa(page);
-    await expect(anuncioDePestana(page)).toHaveText('Se abrió la pestaña «Ficha del punto».');
+    await expect(anuncioDePestana(page)).toHaveText('Se abrió la ficha del punto, junto al asistente.');
     await expect(ficha(page)).toBeVisible();
-    // La ficha dice por su lado «Armando…» y «… está lista»: no repite el anuncio de la pestaña.
-    await expect(page.getByRole('tabpanel', { name: 'Ficha del punto' }).getByRole('status')).toHaveText(/ está lista\.$/);
+    // La ficha dice por su lado «Armando…» y «… está lista»: no repite el anuncio de la apertura.
+    await expect(page.getByRole('region', { name: 'Ficha del punto' }).getByRole('status')).toHaveText(/ está lista\.$/);
     await expect(anuncioDePestana(page)).not.toHaveText(/lista|Armando/);
   });
 
@@ -100,26 +100,27 @@ test.describe('cambios de pestaña desde el mapa y el buscador', () => {
     await expect(page.locator('[data-testid="anuncio-de-pestana"]')).toHaveCount(1);
   });
 
-  test('cambiar de pestaña con las pestañas mismas no anuncia nada (el lector ya dice la pestaña seleccionada)', async ({ page }) => {
-    await page.getByRole('tab', { name: 'Ficha del punto' }).click();
-    await page.getByRole('tab', { name: 'Asistente' }).click();
-    await expect(anuncioDePestana(page)).toHaveText('');
-  });
-
-  test('elegir un punto estando ya en la ficha no repite el anuncio de la pestaña', async ({ page }) => {
-    await page.getByRole('tab', { name: 'Ficha del punto' }).click();
+  test('elegir otro punto con la ficha ya abierta no repite el anuncio', async ({ page }) => {
     await clicEnMapa(page);
+    await expect(ficha(page)).toBeVisible();
+    await expect(anuncioDePestana(page)).toHaveText('', { timeout: 9_000 });
+    await clicEnMapa(page, 60, 40);
     await expect(ficha(page)).toBeVisible();
     await expect(anuncioDePestana(page)).toHaveText('');
   });
 
+  test('cerrar la ficha lo anuncia', async ({ page }) => {
+    await clicEnMapa(page);
+    await expect(ficha(page)).toBeVisible();
+    await page.getByRole('button', { name: 'Cerrar la ficha del punto' }).click();
+    await expect(anuncioDePestana(page)).toHaveText('Se cerró la ficha del punto.');
+  });
+
   test('un marcador de aviso abre el asistente y lo anuncia', async ({ page }) => {
     await preguntar(page, CONSULTA_AVISOS);
-    await page.getByRole('tab', { name: 'Ficha del punto' }).click();
     await expect(anuncioDePestana(page)).toHaveText('');
     await marcadorDeAviso(page, AVISO_1.titulo).click();
-    await expect(page.getByRole('tab', { name: 'Asistente' })).toHaveAttribute('aria-selected', 'true');
-    await expect(anuncioDePestana(page)).toHaveText('Se abrió la pestaña «Asistente»: el aviso quedó resaltado.');
+    await expect(anuncioDePestana(page)).toHaveText('El aviso quedó resaltado en el asistente.');
   });
 
   test('al elegir un resultado del buscador, el foco no cae al inicio de la página: pasa al título de la ficha, también mientras se arma', async ({ page }) => {
@@ -130,7 +131,7 @@ test.describe('cambios de pestaña desde el mapa y el buscador', () => {
     await page.getByRole('searchbox', { name: 'Buscar un lugar' }).fill('Real Plaza');
     await page.getByRole('button', { name: 'Buscar', exact: true }).click();
     await page.getByRole('list', { name: 'Resultados de la búsqueda' }).getByRole('button', { name: /Real Plaza Arequipa/ }).first().click();
-    await expect(anuncioDePestana(page)).toHaveText('Se abrió la pestaña «Ficha del punto».');
+    await expect(anuncioDePestana(page)).toHaveText('Se abrió la ficha del punto, junto al asistente.');
     // Mientras se arma: el título del estado «Armando la ficha…».
     await expect(page.locator('.ficha-estado').getByRole('heading', { level: 2, name: 'Ficha del punto' })).toBeFocused();
     // Ya lista: el título de la ficha completa.
@@ -142,7 +143,7 @@ test.describe('cambios de pestaña desde el mapa y el buscador', () => {
     const boton = page.getByRole('button', { name: 'Ver ficha del centro del mapa' });
     await boton.focus();
     await page.keyboard.press('Enter');
-    await expect(page.getByRole('tab', { name: 'Ficha del punto' })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('region', { name: 'Ficha del punto' })).toBeVisible();
     await expect(ficha(page)).toBeVisible();
     await expect(boton).toBeFocused();
   });

@@ -1,4 +1,4 @@
-import { abrir, clicEnMapa, expect, ficha, mapa, preguntar, test, CONSULTA_AVISOS } from './apoyo.ts';
+import { abrir, clicEnMapa, expect, ficha, mapa, preguntar, test, CONSULTA_AVISOS, desplegarTemas } from './apoyo.ts';
 
 test.describe('estructura y accesibilidad', () => {
   test('la página tiene idioma, título, un solo h1 y las regiones principales', async ({ page }) => {
@@ -17,7 +17,7 @@ test.describe('estructura y accesibilidad', () => {
   test('el enlace para saltar lleva al panel', async ({ page }) => {
     await abrir(page);
     await page.keyboard.press('Tab');
-    const saltar = page.getByRole('link', { name: 'Saltar al asistente y la ficha' });
+    const saltar = page.getByRole('link', { name: 'Saltar al asistente' });
     await expect(saltar).toBeFocused();
     await saltar.press('Enter');
     await expect(page).toHaveURL(/#panel$/);
@@ -39,19 +39,21 @@ test.describe('estructura y accesibilidad', () => {
     await expect(page.getByRole('searchbox', { name: 'Buscar un lugar' })).toBeFocused();
   });
 
-  test('las pestañas siguen el patrón de WAI-ARIA y se cambian con las flechas', async ({ page }) => {
+  test('el asistente está siempre a la vista; la ficha se abre en su columna y se cierra con su botón, devolviendo el foco', async ({ page }) => {
     await abrir(page);
-    const asistente = page.getByRole('tab', { name: 'Asistente' });
-    const fichaTab = page.getByRole('tab', { name: 'Ficha del punto' });
-    await expect(asistente).toHaveAttribute('aria-selected', 'true');
-    await expect(fichaTab).toHaveAttribute('aria-selected', 'false');
-    await expect(page.getByRole('tabpanel', { name: 'Asistente' })).toBeVisible();
-    await asistente.focus();
-    await page.keyboard.press('ArrowRight');
-    await expect(fichaTab).toBeFocused();
-    await expect(fichaTab).toHaveAttribute('aria-selected', 'true');
-    await expect(page.getByRole('tabpanel', { name: 'Ficha del punto' })).toBeVisible();
-    await expect(page.getByRole('tabpanel', { name: 'Asistente' })).toBeHidden();
+    const asistente = page.getByRole('main', { name: 'Asistente' });
+    await expect(asistente).toBeVisible();
+    await expect(page.getByRole('tab')).toHaveCount(0);
+    await expect(page.getByRole('region', { name: 'Ficha del punto' })).toHaveCount(0);
+    const boton = page.getByRole('button', { name: 'Ver ficha del centro del mapa' });
+    await boton.focus();
+    await page.keyboard.press('Enter');
+    const columna = page.getByRole('region', { name: 'Ficha del punto' });
+    await expect(columna).toBeVisible();
+    await expect(asistente).toBeVisible();
+    await columna.getByRole('button', { name: 'Cerrar la ficha del punto' }).click();
+    await expect(columna).toHaveCount(0);
+    await expect(boton).toBeFocused();
   });
 
   test('el registro de la conversación no es una región viva (el titular se anuncia por una sola región «status») y los campos tienen etiqueta', async ({ page }) => {
@@ -68,7 +70,7 @@ test.describe('estructura y accesibilidad', () => {
 
   test('los botones principales miden al menos 44 px de alto', async ({ page }) => {
     await abrir(page);
-    for (const boton of [page.getByRole('button', { name: 'Enviar' }), page.getByRole('button', { name: 'Buscar', exact: true }), page.getByRole('button', { name: 'Ver ficha del centro del mapa' }), page.getByRole('tab', { name: 'Asistente' })]) {
+    for (const boton of [page.getByRole('button', { name: 'Enviar' }), page.getByRole('button', { name: 'Buscar', exact: true }), page.getByRole('button', { name: 'Ver ficha del centro del mapa' }), page.getByRole('button', { name: 'Ayuda' })]) {
       const caja = (await boton.boundingBox())!;
       expect(caja.height).toBeGreaterThanOrEqual(43.5);
     }
@@ -94,6 +96,7 @@ test.describe('estructura y accesibilidad', () => {
     await clicEnMapa(page);
     await expect(ficha(page)).toBeVisible();
     await expect(ficha(page).getByRole('heading', { level: 3 }).first()).toBeVisible();
+    await desplegarTemas(page);
     expect(await ficha(page).getByRole('list').count()).toBeGreaterThan(3);
     expect(await ficha(page).locator('script, iframe, object, embed').count()).toBe(0);
     expect(await mapa(page).count()).toBe(1);

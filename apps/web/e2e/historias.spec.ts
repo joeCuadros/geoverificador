@@ -37,9 +37,10 @@ test.describe('H1 · búsqueda con criterios', () => {
     await expect(sinDato.locator('.estado svg')).toHaveCount(1);
     await expect(sinDato).toContainText('sin dato (el aviso no tiene coordenadas)');
     const resumenes = r.locator('.aviso-resumen');
-    await expect(resumenes.filter({ hasText: 'Criterios con dato que cumplen: 1 de 1 · 0 sin dato' })).toHaveCount(1);
-    await expect(resumenes.filter({ hasText: 'Criterios con dato que cumplen: 0 de 1 · 0 sin dato' })).toHaveCount(1);
-    await expect(resumenes.filter({ hasText: 'Ningún criterio con dato · 1 sin dato' })).toHaveCount(1);
+    // Pastillas con icono y texto: cuántos cumplen, cuántos no y cuántos sin dato (solo las que tienen algo que contar).
+    await expect(resumenes.filter({ hasText: /^Criterios que pediste: 1 de 1 cumplen$/ })).toHaveCount(1);
+    await expect(resumenes.filter({ hasText: /^Criterios que pediste: 0 de 1 cumplen1 no cumple$/ })).toHaveCount(1);
+    await expect(resumenes.filter({ hasText: /^Criterios que pediste: 1 sin dato$/ })).toHaveCount(1);
     // Es un recuento, no una barra ni una nota: no hay segmentos dibujados.
     await expect(r.locator('.resumen-barras, .seg')).toHaveCount(0);
     await expect(r.locator('.aviso-fuente')).toHaveText([/Visto por última vez el \d{4}-\d{2}-\d{2}/, /Visto por última vez el \d{4}-\d{2}-\d{2}/, /Visto por última vez el \d{4}-\d{2}-\d{2}/]);
@@ -77,7 +78,7 @@ test.describe('H1 · búsqueda con criterios', () => {
     await expect(sinDato).toContainText('sin dato (el aviso no tiene coordenadas)');
     await expect(r.locator('.criterio-cumple, .criterio-no_cumple').filter({ hasText: /sin dato/i })).toHaveCount(0);
     expect(await r.innerText()).not.toMatch(/Colegio\s*0 m/);
-    await expect(r.locator('.aviso-resumen').filter({ hasText: 'Ningún criterio con dato · 1 sin dato' })).toHaveCount(1);
+    await expect(r.locator('.aviso-resumen').filter({ hasText: /^Criterios que pediste: 1 sin dato$/ })).toHaveCount(1);
     await expect(r.locator('.notas-resultado')).toContainText('sus criterios de cercanía figuran como «sin dato»');
   });
 

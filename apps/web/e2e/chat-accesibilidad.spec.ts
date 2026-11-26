@@ -88,7 +88,7 @@ test.describe('lo que no es una clasificación', () => {
       expect(estilo.borde).not.toBe('0px');
     }
     await expect(r.locator('.resumen-barras, .seg')).toHaveCount(0);
-    await expect(r.locator('.aviso-resumen').first()).toContainText('Criterios con dato que cumplen');
+    await expect(r.locator('.aviso-resumen').first()).toContainText('Criterios que pediste');
   });
 
   test('«Compara el 1 y el 2» (no «los dos primeros») y la comparación repite que el orden es de lectura', async ({ page }) => {
@@ -169,7 +169,6 @@ test.describe('foco y campo para escribir', () => {
 
   test('el punto elegido en el mapa se escribe «lat, lon» con punto decimal', async ({ page }) => {
     await clicEnMapa(page);
-    await page.getByRole('tab', { name: 'Asistente' }).click();
     const texto = await page.locator('.punto-elegido p').innerText();
     expect(texto).toMatch(/-?\d+\.\d{5}, -?\d+\.\d{5}/);
     expect(texto).not.toContain(';');

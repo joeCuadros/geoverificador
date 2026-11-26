@@ -49,6 +49,19 @@ export const CONSULTA_AVISOS = 'un departamento en Yanahuara cerca de un colegio
 export const mapa = (page: Page): Locator => page.locator('.mapa');
 export const ficha = (page: Page): Locator => page.getByTestId('ficha');
 
+/**
+ * Despliega todos los temas de la ficha para las pruebas que leen o pulsan sus elementos. En la página se abren de a uno (comparten `name`): aquí se los suelta
+ * del grupo para que queden todos abiertos a la vez.
+ */
+export async function desplegarTemas(page: Page): Promise<void> {
+  await ficha(page).locator('details.f-tema').evaluateAll((ds) =>
+    ds.forEach((d) => {
+      d.removeAttribute('name');
+      (d as HTMLDetailsElement).open = true;
+    }),
+  );
+}
+
 export async function abrir(page: Page): Promise<void> {
   await page.goto('/');
   await expect(page.locator('.mapa[data-listo="si"]')).toBeVisible();

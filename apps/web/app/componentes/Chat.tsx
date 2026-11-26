@@ -5,6 +5,8 @@ import { aMarcadores, type Marcador } from '../../lib/marcadores.ts';
 import { Comparacion, Entendido, FichaDelPunto, Narracion, Pensando, Resultados, Sugerencias } from './ChatPartes.tsx';
 import { coordenadasTexto } from './chat-formato.ts';
 import { IconoAlerta, IconoEnviar, IconoInfo, IconoMapa } from './Iconos.tsx';
+import { Ilustracion, type IdIlustracion } from './Ilustraciones.tsx';
+import { abrirGuiaEn } from './Onboarding.tsx';
 import type { Envio, EstadoDelAgente, RespuestaApi, Turno } from './chat-tipos.ts';
 import { llevarAlFinal, llevarAlInicio, llevarALaVista } from './desplazar.ts';
 import { MAPA_VACIO, type EstadoViaje, type PuntoElegido } from './tipos.ts';
@@ -19,6 +21,39 @@ const EJEMPLOS_BASE: EstadoDelAgente['ejemplos'] = [
   { texto: 'Una casa cerca de la UNSA hasta 400 mil soles', rol: 'ejemplo' },
   { texto: 'Zonas con salud y colegio cerca', rol: 'ejemplo' },
 ];
+
+/** La portada del asistente: tres pasos con su dibujo; cada uno abre la guía en el paso que lo explica. */
+const PASOS_PORTADA: { id: IdIlustracion; titulo: string; texto: string }[] = [
+  { id: 'asistente', titulo: 'Cuéntame lo que buscas', texto: 'La zona y lo que quieres tener cerca: colegio, paradero, parque…' },
+  { id: 'buscar', titulo: 'O elige un punto en el mapa', texto: 'Busca una dirección o toca el mapa.' },
+  { id: 'ficha', titulo: 'Lee su ficha', texto: 'Qué queda dentro de la referencia, qué no y de dónde sale cada dato.' },
+];
+
+function Portada() {
+  return (
+    <section className="portada" aria-labelledby="portada-titulo">
+      <h3 id="portada-titulo" className="portada-titulo">
+        Así funciona
+      </h3>
+      <ol className="portada-pasos">
+        {PASOS_PORTADA.map((p, i) => (
+          <li key={p.id}>
+            <button type="button" className="portada-paso" onClick={() => abrirGuiaEn(p.id)}>
+              <Ilustracion id={p.id} tam="mini" />
+              <span className="portada-textos">
+                <strong>
+                  {i + 1}. {p.titulo}
+                </strong>
+                <span>{p.texto}</span>
+                <span className="solo-lectores"> (abre la guía en este paso)</span>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
 
 /** Un turno del chat; el de un error guarda lo que se envió para poder reintentarlo. */
 type TurnoChat = Turno & { reintentar?: Envio };
@@ -129,9 +164,10 @@ export function Chat({ onResultado, activo, viaje, punto, onEnfocar, onVerFicha 
   }
 
   // Una respuesta nueva se lee desde su primera línea (no desde el final de un bloque largo); lo demás baja al final.
+  // La bienvenida (turno 0) no mueve nada: en un teléfono la conversación no tiene desplazamiento propio y bajar al final arrastraría la página, dejando el mapa fuera.
   useEffect(() => {
     const ultimo = turnos[turnos.length - 1];
-    if (!ultimo) return;
+    if (!ultimo || ultimo.id === 0) return;
     if (ultimo.quien === 'agente' && ultimo.id > 0) {
       const burbuja = document.querySelector<HTMLElement>(`.chat [data-turno="${ultimo.id}"]`);
       if (burbuja) llevarAlInicio(burbuja);
@@ -262,6 +298,7 @@ export function Chat({ onResultado, activo, viaje, punto, onEnfocar, onVerFicha 
               {t.r?.modo === 'modelo' && <p className="burbuja-modelo">La frase de apertura la redactó un modelo de lenguaje y se comprobó contra los datos; los avisos, cifras y fuentes salen de las herramientas.</p>}
               {vivo && t.r && <Entendido chips={t.r.entendido ?? []} deshabilitado={cargando} onEnviar={(e) => void enviar(e)} />}
               {vivo && t.r && <Sugerencias lista={t.r.sugerencias ?? []} titulo="Respuestas rápidas" deshabilitado={cargando} onEnviar={(e) => void enviar(e)} />}
+              {t.id === 0 && inicio && <Portada />}
               {t.id === 0 && inicio && <Sugerencias lista={agente?.ejemplos ?? EJEMPLOS_BASE} titulo="Ejemplos para empezar" deshabilitado={cargando} onEnviar={(e) => void enviar(e)} />}
             </div>
           );

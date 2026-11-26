@@ -14,7 +14,11 @@ export function useFicha(punto: PuntoElegido | null): { estado: EstadoFicha; rei
   const lon = punto?.lon;
 
   useEffect(() => {
-    if (lat === undefined || lon === undefined) return;
+    // Sin punto (la ficha se cerró) no queda la ficha anterior: el mapa deja de dibujar sus lugares.
+    if (lat === undefined || lon === undefined) {
+      setEstado({ tipo: 'vacio' });
+      return;
+    }
     const control = new AbortController();
     setEstado({ tipo: 'cargando' });
     (async () => {

@@ -1,26 +1,27 @@
-/* Guía de primera visita y botón «Ayuda». Solo los tokens de globals.css: sillar para la superficie, tinta para la acción, ámbar únicamente en la nota de «consulta referencial»,
-   estados con icono y texto, objetivos táctiles de 44 px (los botones ya los traen), claro y oscuro sin reglas propias. */
+/* Guía de primera visita y botón «Ayuda». Solo los tokens de globals.css: arena para la superficie, terracota para la acción, mostaza únicamente en la nota de
+   «consulta referencial» y en el realce de lo que se explica; cada paso abre con su dibujo (Ilustraciones.tsx). Objetivos táctiles de 44 px, claro y oscuro sin reglas propias. */
 
-/* El botón «Ayuda» vive en la banda superior, a la derecha del subtítulo. Los márgenes verticales negativos evitan que los 44 px de alto engorden la banda. */
-.onb-ayuda { margin: -6px 0 -6px auto; align-self: center; display: inline-flex; align-items: center; gap: 8px; background: transparent; color: var(--on-band); border-color: var(--band-muted); }
-.onb-ayuda:hover:not(:disabled) { background: rgba(255, 255, 255, .14); }
+/* El botón «Ayuda» vive en la barra superior, a la derecha. */
+.onb-ayuda { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; background: var(--surface); color: var(--ink); border-color: var(--line-strong); border-radius: 10px; font-weight: 600; }
+.onb-ayuda:hover:not(:disabled) { background: var(--tinta-soft); color: var(--tinta); }
 .onb-ayuda .icono { flex: none; }
 
 /* El control que se está explicando: contorno de tinta con un halo de la superficie para que se lea también bajo el velo. */
-[data-onb-destacado] { outline: 3px solid var(--tinta); outline-offset: 3px; box-shadow: 0 0 0 3px var(--surface); border-radius: var(--radius-sm); }
+[data-onb-destacado] { outline: 3px solid var(--tinta); outline-offset: 3px; box-shadow: 0 0 0 3px var(--surface), 0 0 0 9px var(--mostaza); border-radius: var(--radius-sm); }
 
 /* El velo y el cuadro. Por encima del mapa (Leaflet llega a 1000) y del resto de la página. */
-.onb-fondo { position: fixed; inset: 0; z-index: 3000; display: flex; justify-content: center; align-items: center; padding: 12px; background: rgba(16, 21, 32, .5); }
+.onb-fondo { position: fixed; inset: 0; z-index: 3000; display: flex; justify-content: center; align-items: center; padding: 12px; background: rgba(42, 33, 27, .5); }
 .onb-fondo[data-lado='abajo'] { align-items: flex-end; }
 .onb-fondo[data-lado='arriba'] { align-items: flex-start; }
-.onb-dialogo { width: min(520px, 100%); max-height: var(--onb-alto-max, 100%); overflow-y: auto; overscroll-behavior: contain; background: var(--surface); color: var(--ink); border: 1px solid var(--line-strong); border-radius: var(--radius); box-shadow: 0 8px 28px rgba(0, 0, 0, .4); padding: 16px 20px 20px; animation: onb-entra .18s ease-out; }
+.onb-dialogo { width: min(560px, 100%); max-height: var(--onb-alto-max, 100%); overflow-y: auto; overscroll-behavior: contain; background: var(--surface); color: var(--ink); border: 1px solid var(--line-strong); border-radius: 18px; box-shadow: 0 24px 60px rgba(42, 33, 27, .35); padding: 16px 20px 20px; animation: onb-entra .18s ease-out; }
 @keyframes onb-entra { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
 .onb-progreso { display: flex; align-items: center; gap: 12px; margin: 0 0 8px; font-size: .85rem; color: var(--ink-2); }
 .onb-barra { display: flex; gap: 4px; flex: 1; }
 .onb-tramo { flex: 1; height: 4px; border-radius: 2px; background: var(--line-strong); }
 .onb-tramo-hecho { background: var(--tinta); }
-.onb-titulo { margin: 0 0 8px; font-size: 1.3rem; }
+.onb-titulo { margin: 0 0 8px; font-size: 1.45rem; font-weight: 700; letter-spacing: -.02em; }
+.onb-contenido .il { margin: 0 0 14px; }
 .onb-intro { margin: 0 0 8px; }
 .onb-puntos { margin: 0 0 12px; padding-left: 20px; display: grid; gap: 6px; }
 
@@ -39,6 +40,7 @@
 /* Pantallas angostas (375 px): el cuadro se ancla abajo si no señala nada, los botones ocupan el ancho y «Omitir» queda debajo. */
 @media (max-width: 600px) {
   .onb-fondo[data-lado='centro'] { align-items: flex-end; }
+  .onb-contenido .il-grande { height: 12em; font-size: 12px; }
   .onb-dialogo { padding: 14px 16px 16px; }
   .onb-navegacion { flex: 1 1 100%; margin-left: 0; }
   .onb-navegacion button { flex: 1; }

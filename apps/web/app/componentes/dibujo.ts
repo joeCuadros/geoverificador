@@ -296,7 +296,7 @@ export interface LugarDibujado {
 export function dibujarLugares(L: L, grupo: Leaflet.LayerGroup, punto: { lat: number; lon: number }, lugares: LugarDeFicha[], alElegir: (id: string) => void): Map<string, LugarDibujado> {
   const dibujados = new Map<string, LugarDibujado>();
   for (const l of lugares) {
-    const color = l.tipo === 'parque' ? '#2f7d3b' : l.tipo === 'cauce' ? '#1f6fb2' : '#1c3a6b';
+    const color = l.tipo === 'parque' ? '#2f7d3b' : l.tipo === 'cauce' ? '#1f6fb2' : '#8a3a1f';
     let forma: Leaflet.Layer | null = null;
     if (l.forma) forma = L.geoJSON({ type: 'Feature', geometry: l.forma, properties: {} } as any, { style: { color, weight: l.tipo === 'cauce' ? 4 : 2, fillOpacity: 0.2 }, interactive: false, pane: 'ficha' }).addTo(grupo);
     else if (l.tipo !== 'geologico') forma = L.polyline([[punto.lat, punto.lon], [l.lat, l.lon]], { color, weight: 2, dashArray: '4 6', interactive: false, pane: 'ficha' }).addTo(grupo);

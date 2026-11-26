@@ -77,7 +77,10 @@ describe('texto y objetivos', () => {
   });
 
   it('las familias usan las variables que define layout.tsx (next/font) y conservan su nombre y el sistema como respaldo', () => {
-    expect(css).toMatch(/--sans:\s*var\(--fuente-sans, system-ui\), 'Public Sans', system-ui/);
-    expect(css).toMatch(/--serif:\s*var\(--fuente-serif, Georgia\), 'Source Serif 4', Georgia/);
+    expect(css).toMatch(/--sans:\s*var\(--fuente-sans, system-ui\), 'Instrument Sans', system-ui/);
+    expect(css).toMatch(/--titulo:\s*var\(--fuente-titulo, system-ui\), 'Bricolage Grotesque', system-ui/);
+    // Los títulos usan la familia de títulos; la prosa ya no va en serif.
+    expect(regla('h1, h2, h3, h4 {')).toMatch(/var\(--titulo\)/);
+    expect(css).not.toMatch(/var\(--serif\)/);
   });
 });

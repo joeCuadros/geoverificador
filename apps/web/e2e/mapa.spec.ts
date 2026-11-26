@@ -1,4 +1,4 @@
-import { AVISO_1, CONSULTA_AVISOS, PLAZA, abrir, alejar, alerta, clicEnMapa, expect, ficha, leerCoordenadas, marcadorDeAviso, preguntar, test } from './apoyo.ts';
+import { AVISO_1, CONSULTA_AVISOS, PLAZA, abrir, alejar, alerta, clicEnMapa, expect, ficha, leerCoordenadas, marcadorDeAviso, preguntar, test, desplegarTemas } from './apoyo.ts';
 
 test.describe('mapa', () => {
   test.beforeEach(async ({ page }) => abrir(page));
@@ -8,24 +8,24 @@ test.describe('mapa', () => {
     await expect(page.locator('.leaflet-control-scale')).toBeVisible();
     await expect(page.locator('.leaflet-control-attribution')).toContainText('OpenStreetMap');
     await expect(page.locator('.leaflet-tile-pane img.leaflet-tile').first()).toBeAttached();
-    // Sin elegir nada todavía, la ficha explica qué hacer.
-    await page.getByRole('tab', { name: 'Ficha del punto' }).click();
-    await expect(page.getByText('Elige un punto en el mapa')).toBeVisible();
+    // Sin elegir nada todavía, la columna de la ficha no está: el asistente y el mapa ocupan la pantalla.
+    await expect(page.getByRole('region', { name: 'Ficha del punto' })).toHaveCount(0);
     await expect(ficha(page)).toHaveCount(0);
   });
 
   test('un clic en el mapa abre la ficha de ese punto, con su fuente y su fecha en cada sección', async ({ page }) => {
     await clicEnMapa(page, 80, -60);
-    await expect(page.getByRole('tab', { name: 'Ficha del punto' })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('region', { name: 'Ficha del punto' })).toBeVisible();
     await expect(ficha(page)).toBeVisible();
+    await desplegarTemas(page);
     const { lat, lon } = leerCoordenadas(await page.getByTestId('ficha-coordenadas').innerText());
     // Cerca del centro (a unos 100 píxeles de la Plaza de Armas, menos de 0,02°) y dentro de Arequipa.
     expect(Math.abs(lat - PLAZA.lat)).toBeLessThan(0.02);
     expect(Math.abs(lon - PLAZA.lon)).toBeLessThan(0.02);
     await expect(ficha(page)).toContainText('Distrito de');
-    await expect(ficha(page).getByRole('heading', { level: 3, name: 'Lo esencial de este punto' })).toBeVisible();
+    await expect(ficha(page).getByRole('heading', { level: 3, name: 'En pocas palabras' })).toBeVisible();
     for (const titulo of ['Qué se puede construir', 'Qué hay cerca', 'Cómo moverse', 'Servicios básicos', 'Riesgos y restricciones']) {
-      await expect(ficha(page).getByRole('heading', { level: 3, name: titulo })).toBeVisible();
+      await expect(ficha(page).locator('.f-tema-titulo').getByText(titulo, { exact: true })).toBeVisible();
     }
     // Cada elemento dice su fuente, a la vista; la de salud, con la fecha de los datos.
     expect(await ficha(page).locator('.f-fuente').count()).toBeGreaterThanOrEqual(10);
@@ -37,10 +37,11 @@ test.describe('mapa', () => {
   test('la ficha trae los avisos de siempre: informativa, distancias en línea recta, peligros como contexto y limitaciones', async ({ page }) => {
     await page.getByRole('button', { name: 'Ver ficha del centro del mapa' }).click();
     await expect(ficha(page)).toBeVisible();
+    await desplegarTemas(page);
     await expect(ficha(page).getByRole('note').first()).toContainText('No es una recomendación de compra ni reemplaza los certificados municipales');
     await expect(ficha(page)).toContainText('Las distancias son en línea recta');
-    await expect(ficha(page).getByRole('heading', { name: 'Límites de estos datos' })).toBeVisible();
-    await expect(ficha(page).getByRole('heading', { name: 'Riesgos y restricciones' })).toBeVisible();
+    await expect(ficha(page).locator('.f-tema-titulo').getByText('Límites de estos datos', { exact: true })).toBeVisible();
+    await expect(ficha(page).locator('.f-tema-titulo').getByText('Riesgos y restricciones', { exact: true })).toBeVisible();
     await expect(ficha(page)).toContainText('no significa que el lugar sea seguro');
     // La ficha no muestra secciones que la base todavía no calcula.
     await expect(ficha(page)).not.toContainText('No se calcul');
@@ -66,9 +67,8 @@ test.describe('mapa', () => {
     await clicEnMapa(page, 80, -60);
     await expect(ficha(page)).toBeVisible();
     const primera = leerCoordenadas(await page.getByTestId('ficha-coordenadas').innerText());
-    await page.getByRole('tab', { name: 'Asistente' }).click();
     await clicEnMapa(page, -150, 120);
-    await expect(page.getByRole('tab', { name: 'Ficha del punto' })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('region', { name: 'Ficha del punto' })).toBeVisible();
     await expect(async () => {
       const segunda = leerCoordenadas(await page.getByTestId('ficha-coordenadas').innerText());
       expect(Math.abs(segunda.lat - primera.lat)).toBeGreaterThan(0.001);
@@ -157,6 +157,7 @@ test.describe('H8 y H9 · la ficha muestra lo que hay y no inventa lo que no hay
   test('cada elemento con datos dice su fuente a la vista y la fecha en que se extrajeron los datos (la zonificación no trae fecha en la base)', async ({ page }) => {
     await page.getByRole('button', { name: 'Ver ficha del centro del mapa' }).click();
     await expect(ficha(page)).toBeVisible();
+    await desplegarTemas(page);
     const items = ficha(page).locator('li[data-item]');
     const total = await items.count();
     expect(total).toBeGreaterThanOrEqual(12);
@@ -218,7 +219,6 @@ test.describe('avisos del asistente en el mapa', () => {
 
   test('un marcador abre su cuadro con el título, el precio y el enlace original, y resalta su tarjeta en el asistente', async ({ page }) => {
     await preguntar(page, CONSULTA_AVISOS);
-    await page.getByRole('tab', { name: 'Ficha del punto' }).click();
     const marcador = marcadorDeAviso(page, AVISO_1.titulo);
     await expect(marcador).toBeVisible();
     await marcador.click();
@@ -228,7 +228,7 @@ test.describe('avisos del asistente en el mapa', () => {
     await expect(cuadro).toContainText('cumple 1 de 1 criterios');
     await expect(cuadro.getByRole('link', { name: 'Ver el aviso original' })).toHaveAttribute('href', AVISO_1.url);
     // La tarjeta del asistente queda resaltada y a la vista.
-    await expect(page.getByRole('tab', { name: 'Asistente' })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('main', { name: 'Asistente' })).toBeVisible();
     await expect(page.locator('.avisos-mapa li[aria-current="true"]')).toHaveCount(1);
     await expect(page.locator('.avisos-mapa li[aria-current="true"]')).toContainText(AVISO_1.titulo);
   });

@@ -92,6 +92,43 @@ export function Medidor({ referencia, estado, distancia }: { referencia: Referen
   );
 }
 
+/** El estado que resume un grupo en su fila plegada: lo que pide atención primero (fuera de la referencia), después lo que falta (sin dato). */
+export function estadoDeGrupo(conteo: GrupoDeFicha['conteo']): EstadoDeItem {
+  if (conteo.noCumple) return 'no_cumple';
+  if (conteo.sinDato) return 'sin_dato';
+  if (conteo.cumple) return 'cumple';
+  return 'informativo';
+}
+
+/** El estado de un grupo como un círculo con su dibujo (el texto lo dice la fila: el título del grupo y su recuento). */
+export function MarcaDeEstado({ estado }: { estado: EstadoDeItem }) {
+  return (
+    <span className={`f-marca f-marca-${estado}`} aria-hidden="true">
+      <IconoEstado estado={estado} tam={18} />
+    </span>
+  );
+}
+
+/**
+ * El recuento corto de la fila plegada de un grupo («2 de 3»): cuántas distancias de referencia quedan dentro de la referencia entre las que tienen dato.
+ * El detalle completo (fuera, sin dato) lo lee el lector de pantalla y está dentro del grupo. Sin distancias de referencia, «Informativo».
+ */
+export function ConteoCorto({ conteo }: { conteo: GrupoDeFicha['conteo'] }) {
+  const conDato = conteo.cumple + conteo.noCumple;
+  if (!conDato && !conteo.sinDato) return <span className="f-conteo-corto">Informativo</span>;
+  const partes = [`${conteo.cumple} de ${conDato} dentro de la referencia`];
+  if (conteo.sinDato) partes.push(`${conteo.sinDato} sin dato`);
+  return (
+    <span className="f-conteo-corto">
+      <span aria-hidden="true">
+        {conDato ? `${conteo.cumple} de ${conDato}` : 'Sin dato'}
+        {conDato && conteo.sinDato ? ` · ${conteo.sinDato} ?` : ''}
+      </span>
+      <span className="solo-lectores">{partes.join(', ')}</span>
+    </span>
+  );
+}
+
 /** Un icono de mapa: indica que el elemento se puede ver en el mapa. */
 function IconoMapa() {
   return (

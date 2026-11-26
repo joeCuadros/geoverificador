@@ -1,5 +1,7 @@
 # Identidad visual de GeoVerificador
 
+> **Nota (2026-11-25):** esta página describe el sitio estático (`apps/estatica`). La aplicación `apps/web` pasó a la identidad «Hogar cálido» (arena, texto marrón, terracota, mostaza solo para el aviso; Bricolage Grotesque e Instrument Sans), acordada por el equipo: ver «Brand Commitments» en `PRODUCT.md` y los tokens de `apps/web/app/globals.css`.
+
 Fuente: `apps/estatica/public/css/styles.css` del repositorio (tokens en `:root`). El sitio publicado es <https://geoverificador-nine.vercel.app>.
 
 **Idea:** la piedra blanca de Arequipa (sillar) y la tinta azul de los planos. Fondo de sillar claro con juntas de bloques apenas visibles; tinta azul para la acción y la barra superior; ámbar solo para el aviso de que la consulta es referencial.
