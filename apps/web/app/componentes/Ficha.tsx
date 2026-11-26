@@ -2,7 +2,7 @@
 import { useEffect, useRef, type MouseEvent, type RefObject } from 'react';
 import type { GrupoDeFicha, ItemDeFicha, ReporteDePunto } from '../../lib/reporte.ts';
 import '../ficha.css';
-import { ConteoDeGrupo, CuerpoDeItem, DetallesDeGrupo, EstadoChip, MasDeItem } from './FichaPartes.tsx';
+import { ConteoCorto, ConteoDeGrupo, CuerpoDeItem, DetallesDeGrupo, EstadoChip, MarcaDeEstado, MasDeItem, estadoDeGrupo } from './FichaPartes.tsx';
 import type { EstadoFicha, PuntoElegido } from './tipos.ts';
 
 /** Un punto como «-16.39883, -71.53697»: latitud y longitud con punto decimal (es-PE), separadas por coma. */
@@ -18,13 +18,17 @@ function fechaLarga(iso: string): string {
   }
 }
 
-/** Lleva a un grupo sin cambiar la dirección de la página y deja el foco en su título, para quien usa lector de pantalla o teclado. */
+/**
+ * Lleva a un tema sin cambiar la dirección de la página: lo despliega (los temas se abren de a uno) y deja el foco en su fila, para quien usa lector de pantalla
+ * o teclado.
+ */
 function irA(e: MouseEvent<HTMLAnchorElement>, id: string) {
   e.preventDefault();
   const seccion = document.getElementById(id);
   if (!seccion) return;
+  if (seccion instanceof HTMLDetailsElement) seccion.open = true;
   seccion.scrollIntoView({ block: 'start' });
-  seccion.querySelector<HTMLElement>('h3, h2')?.focus({ preventScroll: true });
+  seccion.querySelector<HTMLElement>('summary')?.focus({ preventScroll: true });
 }
 
 interface PropsItem {
@@ -60,30 +64,55 @@ function Item({ item, activo, sinChipInformativo, onLugar }: PropsItem) {
   );
 }
 
+/**
+ * Un tema de la ficha, plegado: la fila dice su estado, su nombre, su resumen y cuántas distancias de referencia quedan dentro. Al desplegarlo (de a uno: los
+ * `details` comparten nombre) aparecen sus datos, cada uno con su estado, su distancia, su barra y su fuente; el método y los límites quedan plegados aparte.
+ */
 function Grupo({ grupo, lugarActivo, onLugar }: { grupo: GrupoDeFicha; lugarActivo: string | null; onLugar: (id: string) => void }) {
   const idTitulo = `ficha-g-${grupo.id}-t`;
+  const estado = estadoDeGrupo(grupo.conteo);
   return (
-    <section id={`ficha-g-${grupo.id}`} className="f-grupo" aria-labelledby={idTitulo}>
-      <div className="f-grupo-cab">
-        <h3 id={idTitulo} tabIndex={-1}>
-          {grupo.titulo}
-        </h3>
-        {grupo.soloInformativo && <EstadoChip estado="informativo" texto="Solo informativo" />}
+    <details id={`ficha-g-${grupo.id}`} className="f-tema" name="ficha-temas" data-estado={estado}>
+      <summary>
+        <MarcaDeEstado estado={estado} />
+        <span className="f-tema-textos">
+          <span id={idTitulo} className="f-tema-titulo">
+            {grupo.titulo}
+          </span>
+          {grupo.resumen && <span className="f-tema-resumen">{grupo.resumen}</span>}
+        </span>
+        <ConteoCorto conteo={grupo.conteo} />
+        <span className="f-tema-flecha" aria-hidden="true" />
+      </summary>
+      <div className="f-tema-cuerpo">
+        {grupo.soloInformativo ? <EstadoChip estado="informativo" texto="Solo informativo" /> : <ConteoDeGrupo conteo={grupo.conteo} />}
+        {grupo.subgrupos.map((s, i) => (
+          <div key={s.titulo ?? i} className="f-subgrupo">
+            {s.titulo && <h4>{s.titulo}</h4>}
+            <ul className="f-items">
+              {s.items.map((it) => (
+                <Item key={it.id} item={it} activo={Boolean(it.lugarId) && it.lugarId === lugarActivo} sinChipInformativo={s.informativo} onLugar={onLugar} />
+              ))}
+            </ul>
+          </div>
+        ))}
+        <DetallesDeGrupo items={grupo.subgrupos.flatMap((s) => s.items)} />
       </div>
-      {grupo.resumen && <p className="f-prosa f-grupo-resumen">{grupo.resumen}</p>}
-      <ConteoDeGrupo conteo={grupo.conteo} />
-      {grupo.subgrupos.map((s, i) => (
-        <div key={s.titulo ?? i} className="f-subgrupo">
-          {s.titulo && <h4>{s.titulo}</h4>}
-          <ul className="f-items">
-            {s.items.map((it) => (
-              <Item key={it.id} item={it} activo={Boolean(it.lugarId) && it.lugarId === lugarActivo} sinChipInformativo={s.informativo} onLugar={onLugar} />
-            ))}
-          </ul>
-        </div>
-      ))}
-      <DetallesDeGrupo items={grupo.subgrupos.flatMap((s) => s.items)} />
-    </section>
+    </details>
+  );
+}
+
+/** Cuántas distancias de referencia de toda la ficha quedan dentro, fuera o sin dato: una línea de pastillas bajo el título, sin total ni puntaje. */
+function RecuentoTotal({ grupos }: { grupos: GrupoDeFicha[] }) {
+  const t = grupos.reduce((a, g) => ({ cumple: a.cumple + g.conteo.cumple, noCumple: a.noCumple + g.conteo.noCumple, sinDato: a.sinDato + g.conteo.sinDato }), { cumple: 0, noCumple: 0, sinDato: 0 });
+  if (!t.cumple && !t.noCumple && !t.sinDato) return null;
+  return (
+    <p className="f-recuento" data-testid="ficha-recuento">
+      <span className="solo-lectores">Distancias de referencia de esta ficha: </span>
+      <EstadoChip estado="cumple" texto={`${t.cumple} dentro`} />
+      <EstadoChip estado="no_cumple" texto={`${t.noCumple} fuera`} />
+      <EstadoChip estado="sin_dato" texto={`${t.sinDato} sin dato`} />
+    </p>
   );
 }
 
@@ -91,14 +120,20 @@ function Grupo({ grupo, lugarActivo, onLugar }: { grupo: GrupoDeFicha; lugarActi
 function useDesplegarAlImprimir(raiz: React.RefObject<HTMLElement | null>) {
   useEffect(() => {
     let abiertos: HTMLDetailsElement[] = [];
+    let agrupados: [HTMLDetailsElement, string][] = [];
     const antes = () => {
       const todos = [...(raiz.current?.querySelectorAll('details') ?? [])] as HTMLDetailsElement[];
+      // Los temas se abren de a uno (comparten `name`): para imprimir se sueltan del grupo, si no solo quedaría abierto el último.
+      agrupados = todos.filter((d) => d.name).map((d) => [d, d.name]);
+      for (const [d] of agrupados) d.removeAttribute('name');
       abiertos = todos.filter((d) => !d.open);
       for (const d of abiertos) d.open = true;
     };
     const despues = () => {
       for (const d of abiertos) d.open = false;
+      for (const [d, nombre] of agrupados) d.name = nombre;
       abiertos = [];
+      agrupados = [];
     };
     window.addEventListener('beforeprint', antes);
     window.addEventListener('afterprint', despues);
@@ -126,39 +161,38 @@ function FichaCompleta({ punto, r, lugarActivo, onLugar }: { punto: PuntoElegido
   const titulo = useRef<HTMLHeadingElement>(null);
   useDesplegarAlImprimir(raiz);
   useEnfocarAlAbrir(titulo);
-  const navegacion = [...r.grupos.map((g) => ({ id: `ficha-g-${g.id}`, texto: g.corto })), { id: 'ficha-pasos', texto: 'Qué comprobar' }, { id: 'ficha-limites', texto: 'Límites' }];
+  const lugar = punto.etiqueta ?? (r.distrito ? `Un punto en ${r.distrito}` : 'Punto elegido en el mapa');
   return (
     <article ref={raiz} className="ficha" aria-labelledby="ficha-titulo" data-testid="ficha">
       <header className="f-cabecera">
         <h2 id="ficha-titulo" ref={titulo} tabIndex={-1}>
-          Ficha del punto
+          <span className="f-sobretitulo">Ficha del punto</span> <span className="f-lugar">{lugar}</span>
         </h2>
         <p className="f-sub">
-          {punto.etiqueta ? <strong>{punto.etiqueta} · </strong> : null}
           {r.distrito ? `Distrito de ${r.distrito} · ` : ''}
           <span data-testid="ficha-coordenadas">
             {coordenadas(r.punto.lat, r.punto.lon)}
           </span>
         </p>
+        <RecuentoTotal grupos={r.grupos} />
         <p className="f-fecha">
-          Generada el <time dateTime={r.generado}>{fechaLarga(r.generado)}</time>
-          <span className="f-fecha-nota">Cada dato dice su fuente y la fecha de sus datos.</span>
+          Generada el <time dateTime={r.generado}>{fechaLarga(r.generado)}</time>. Cada dato dice su fuente y la fecha de sus datos.
         </p>
       </header>
 
+      {/* Primera capa: lo esencial, una frase por tema; cada una abre su tema. */}
       <section className="f-esencial" aria-labelledby="ficha-esencial">
-        <h3 id="ficha-esencial">Lo esencial de este punto</h3>
-        <p className="f-esencial-nota">Cada línea resume un grupo y cuenta cuántas distancias de referencia quedan dentro de la referencia, fuera de ella o sin dato.</p>
+        <h3 id="ficha-esencial">En pocas palabras</h3>
         <ul>
           {r.esencial.map((e) => {
             const g = r.grupos.find((x) => x.id === e.grupo)!;
             return (
               <li key={e.grupo}>
                 <a href={`#ficha-g-${e.grupo}`} onClick={(ev) => irA(ev, `ficha-g-${e.grupo}`)}>
+                  <MarcaDeEstado estado={estadoDeGrupo(g.conteo)} />
                   <span className="f-esencial-frase">
-                    <span className="f-esencial-tema">{g.corto}</span> <span className="f-esencial-texto">{e.texto}</span>
+                    <span className="f-esencial-tema">{g.corto}:</span> <span className="f-esencial-texto">{e.texto}</span>
                   </span>
-                  <ConteoDeGrupo conteo={g.conteo} />
                 </a>
               </li>
             );
@@ -170,27 +204,28 @@ function FichaCompleta({ punto, r, lugarActivo, onLugar }: { punto: PuntoElegido
         {r.aviso}
       </p>
 
-      <nav className="f-nav" aria-label="Secciones de la ficha">
-        <ul>
-          {navegacion.map((n) => (
-            <li key={n.id}>
-              <a href={`#${n.id}`} onClick={(ev) => irA(ev, n.id)}>
-                {n.texto}
-              </a>
-            </li>
-          ))}
-        </ul>
-      </nav>
+      {/* Segunda capa: los temas, plegados y de a uno. */}
+      <section className="f-temas" aria-labelledby="ficha-temas">
+        <h3 id="ficha-temas">Por tema</h3>
+        {r.grupos.map((g) => (
+          <Grupo key={g.id} grupo={g} lugarActivo={lugarActivo} onLugar={onLugar} />
+        ))}
+      </section>
 
-      {r.grupos.map((g) => (
-        <Grupo key={g.id} grupo={g} lugarActivo={lugarActivo} onLugar={onLugar} />
-      ))}
-
-      <section id="ficha-pasos" className="f-grupo f-pasos" aria-labelledby="ficha-pasos-t">
-        <h3 id="ficha-pasos-t" tabIndex={-1}>
-          Qué comprobar antes de decidir
-        </h3>
-        <p className="f-prosa f-grupo-resumen">Esta ficha es referencial: lo que sigue se comprueba fuera de ella.</p>
+      {/* Tercera capa: lo que se comprueba fuera de la ficha y los límites de los datos. */}
+      <section className="f-temas" aria-labelledby="ficha-antes">
+        <h3 id="ficha-antes">Antes de decidir</h3>
+      <details id="ficha-pasos" className="f-tema f-pasos" name="ficha-temas">
+        <summary>
+          <MarcaDeEstado estado="informativo" />
+          <span className="f-tema-textos">
+            <span className="f-tema-titulo">Qué comprobar antes de decidir</span>
+            <span className="f-tema-resumen">Esta ficha es referencial: lo que sigue se comprueba fuera de ella.</span>
+          </span>
+          <span className="f-conteo-corto">{r.pasos.length} pasos</span>
+          <span className="f-tema-flecha" aria-hidden="true" />
+        </summary>
+        <div className="f-tema-cuerpo">
         <ul className="f-items">
           {r.pasos.map((p) => (
             <li key={p.id} className="f-item">
@@ -213,25 +248,34 @@ function FichaCompleta({ punto, r, lugarActivo, onLugar }: { punto: PuntoElegido
             </li>
           ))}
         </ul>
-      </section>
+        </div>
+      </details>
 
-      <section className="f-grupo f-limites" aria-labelledby="ficha-limites">
-        <h3 id="ficha-limites" tabIndex={-1}>
-          Límites de estos datos
-        </h3>
-        <ul className="f-lista">
-          {r.limitacionesClave.map((l, i) => (
-            <li key={i} className="f-prosa">{l}</li>
-          ))}
-        </ul>
-        <details className="f-mas">
-          <summary>Todos los límites ({r.limitaciones.length})</summary>
+      <details id="ficha-limites" className="f-tema f-limites" name="ficha-temas">
+        <summary>
+          <MarcaDeEstado estado="informativo" />
+          <span className="f-tema-textos">
+            <span className="f-tema-titulo">Límites de estos datos</span>
+            <span className="f-tema-resumen">Lo que esta ficha no puede decir.</span>
+          </span>
+          <span className="f-tema-flecha" aria-hidden="true" />
+        </summary>
+        <div className="f-tema-cuerpo">
           <ul className="f-lista">
-            {r.limitaciones.map((l, i) => (
+            {r.limitacionesClave.map((l, i) => (
               <li key={i} className="f-prosa">{l}</li>
             ))}
           </ul>
-        </details>
+          <details className="f-mas">
+            <summary>Todos los límites ({r.limitaciones.length})</summary>
+            <ul className="f-lista">
+              {r.limitaciones.map((l, i) => (
+                <li key={i} className="f-prosa">{l}</li>
+              ))}
+            </ul>
+          </details>
+        </div>
+      </details>
       </section>
 
       <div className="f-acciones">
@@ -249,9 +293,13 @@ function FichaCompleta({ punto, r, lugarActivo, onLugar }: { punto: PuntoElegido
  * Cada elemento con lugar en el mapa es un botón que lo resalta allí; el lugar activo se resalta aquí y en el mapa.
  */
 export function Ficha({ punto, estado, onReintentar, lugarActivo, onLugar }: { punto: PuntoElegido | null; estado: EstadoFicha; onReintentar: () => void; lugarActivo: string | null; onLugar: (id: string) => void }) {
-  // Si el lugar se eligió desde el mapa, su elemento entra en la vista.
+  // Si el lugar se eligió desde el mapa, su tema se despliega y su elemento entra en la vista.
   useEffect(() => {
-    if (lugarActivo) document.querySelector(`[data-lugar="${CSS.escape(lugarActivo)}"]`)?.scrollIntoView({ block: 'nearest' });
+    if (!lugarActivo) return;
+    const fila = document.querySelector<HTMLElement>(`[data-lugar="${CSS.escape(lugarActivo)}"]`);
+    const tema = fila?.closest('details.f-tema');
+    if (tema instanceof HTMLDetailsElement && !tema.open) tema.open = true;
+    fila?.scrollIntoView({ block: 'nearest' });
   }, [lugarActivo]);
 
   if (!punto || estado.tipo === 'vacio') {

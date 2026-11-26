@@ -1,83 +1,80 @@
-/* GeoVerificador (web). Mismos tokens que la aplicación estática: sillar claro, tinta de plano para la acción, estados siempre con texto.
-   Primero móvil (mapa arriba, panel debajo); desde 900 px, panel a la izquierda y mapa a la derecha, cada uno con su desplazamiento. */
+/* GeoVerificador (web). Paleta «hogar cálido»: arena y beige de fondo, texto marrón oscuro, terracota para la acción y mostaza solo para el aviso
+   referencial y el realce del aviso elegido en el mapa. Los estados van siempre con icono y texto (el color nunca es lo único que informa).
+   Escritorio: barra arriba y, debajo, el asistente, la ficha del punto (cuando hay uno elegido) y el mapa en columnas. Teléfono: mapa, ficha y asistente apilados. */
 
 :root {
   color-scheme: light dark;
-  --bg: #f3eee3;
-  --surface: #fbf8f1;
-  --surface-2: #ece6d8;
-  --line: #d8cfbc;
-  --line-strong: #b9ad94;
-  --input-border: #7d7461;
-  --ink: #1b2233;
-  --ink-2: #3a4254;
-  --muted: #565c6b;
-  --tinta: #1c3a6b;
-  --tinta-hover: #142b53;
-  --on-tinta: #fbf8f1;
-  --tinta-soft: #dfe7f3;
-  --tinta-soft-line: #b6c6e1;
-  --band: #15294f;
-  --on-band: #f3eee3;
-  --band-muted: #c3cfe6;
-  --no: #9b2415;
-  --no-bg: #f9e3de;
-  --no-line: #dc9d92;
-  --amb-bg: #fff1c9;
-  --amb-line: #b07a12;
-  --amb-text: #4a3000;
-  --ok: #17603a;
-  --ok-bg: #e1f1e6;
-  --ok-line: #8cc5a3;
-  --focus: #1c3a6b;
+  --bg: #f3ede4;
+  --surface: #fffcf7;
+  --surface-2: #ede5d8;
+  --line: #e5dccd;
+  --line-strong: #cdbfaa;
+  --input-border: #7d6e5e;
+  --ink: #2a211b;
+  --ink-2: #4d4137;
+  --muted: #6b5d50;
+  --tinta: #a3482a;
+  --tinta-hover: #86391f;
+  --on-tinta: #fffcf7;
+  --tinta-soft: #f6e3d8;
+  --tinta-soft-line: #e9c9b6;
+  --mostaza: #d9a43a;
+  --no: #962d3e;
+  --no-bg: #f6e0e3;
+  --no-line: #dba3ad;
+  --amb-bg: #f7e9c6;
+  --amb-line: #a07a2c;
+  --amb-text: #6a4a0a;
+  --ok: #2f6a3f;
+  --ok-bg: #e3eedf;
+  --ok-line: #9cc4a5;
+  --focus: #a3482a;
   /* Lo que se dibuja sobre el mapa (el círculo de «cerca de» y su rótulo): el fondo del mapa es siempre claro, así que esta tinta no cambia con el tema. */
-  --tinta-mapa: #1c3a6b;
+  --tinta-mapa: #8a3a1f;
   --sobre-mapa: #ffffff;
   --radius: 12px;
   --radius-sm: 8px;
-  /* --fuente-sans y --fuente-serif las define app/layout.tsx (next/font/local, con su fuente de respaldo de métricas ajustadas); si faltaran, cae a los nombres y al sistema. */
-  --sans: var(--fuente-sans, system-ui), 'Public Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --serif: var(--fuente-serif, Georgia), 'Source Serif 4', Georgia, 'Times New Roman', serif;
+  /* --fuente-sans y --fuente-titulo las define app/layout.tsx (next/font/local, con su fuente de respaldo de métricas ajustadas); si faltaran, cae a los nombres y al sistema. */
+  --sans: var(--fuente-sans, system-ui), 'Instrument Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --titulo: var(--fuente-titulo, system-ui), 'Bricolage Grotesque', system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #101520;
-    --surface: #171d2b;
-    --surface-2: #1f2738;
-    --line: #2c3548;
-    --line-strong: #46506a;
-    --input-border: #7b86a0;
-    --ink: #ece8de;
-    --ink-2: #cfcbc0;
-    --muted: #a4a9b8;
-    --tinta: #9dbcf0;
-    --tinta-hover: #bcd1f6;
-    --on-tinta: #0d1730;
-    --tinta-soft: #1f2c47;
-    --tinta-soft-line: #34476d;
-    --band: #0a0e17;
-    --on-band: #ece8de;
-    --band-muted: #a4a9b8;
-    --no: #ffa595;
-    --no-bg: #3a1a15;
-    --no-line: #8a3b2e;
-    --amb-bg: #35280a;
-    --amb-line: #b08a30;
-    --amb-text: #f6dfa5;
-    --ok: #8fd6a6;
-    --ok-bg: #12301f;
+    --bg: #1c1713;
+    --surface: #26201b;
+    --surface-2: #2e2721;
+    --line: #3a3129;
+    --line-strong: #5a4d41;
+    --input-border: #8c7e70;
+    --ink: #efe6da;
+    --ink-2: #d6cbbd;
+    --muted: #b9ac9c;
+    --tinta: #f0a27e;
+    --tinta-hover: #f6bea3;
+    --on-tinta: #2a1209;
+    --tinta-soft: #3a2a22;
+    --tinta-soft-line: #6a4636;
+    --mostaza: #d9a43a;
+    --no: #ffa9b4;
+    --no-bg: #3b1a20;
+    --no-line: #8a3a48;
+    --amb-bg: #3a2c0c;
+    --amb-line: #c49b3e;
+    --amb-text: #f3d58e;
+    --ok: #8fd3a2;
+    --ok-bg: #163020;
     --ok-line: #2f6b47;
-    --focus: #9dbcf0;
+    --focus: #f0a27e;
   }
 }
 
 * { box-sizing: border-box; }
-/* scroll-padding: lo que queda pegado (la navegación de la ficha arriba, el campo del asistente abajo) no tapa el destino de un salto o de scrollIntoView. */
+/* scroll-padding: lo que queda pegado (el campo del asistente abajo) no tapa el destino de un salto o de scrollIntoView. */
 html { scroll-padding-top: 3.75rem; scroll-padding-bottom: 7rem; }
 html, body { margin: 0; }
 body { font: 1rem/1.5 var(--sans); background: var(--bg); color: var(--ink); }
-h1, h2, h3, h4 { font-family: var(--serif); line-height: 1.25; }
+h1, h2, h3, h4 { font-family: var(--titulo); line-height: 1.2; letter-spacing: -.01em; }
 a { color: var(--tinta); }
 :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 
@@ -96,29 +93,34 @@ button:disabled { opacity: .6; cursor: progress; }
 .boton-secundario:hover:not(:disabled) { background: var(--tinta-soft); }
 input { min-height: 44px; padding: 8px 12px; border: 1px solid var(--input-border); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); min-width: 0; }
 
-/* Estructura */
-.app { display: grid; grid-template-rows: auto 1fr; min-height: 100dvh; }
-.banda { background: var(--band); color: var(--on-band); padding: 10px 16px; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
-.banda h1 { margin: 0; font-size: 1.25rem; }
-.banda p { margin: 0; color: var(--band-muted); font-size: .9rem; }
-.zona-mapa { display: flex; flex-direction: column; border-bottom: 1px solid var(--line); background: var(--surface); }
-.panel { background: var(--surface); min-width: 0; display: flex; flex-direction: column; }
-.cuerpo-panel { padding: 12px 16px 24px; min-height: 0; flex: 1; scroll-padding-top: 3.75rem; scroll-padding-bottom: 7rem; }
-.cuerpo-panel[hidden] { display: none; }
+/* Estructura. Teléfono: barra, mapa, ficha (si hay un punto elegido) y asistente, uno debajo del otro. */
+.app { display: grid; grid-template-rows: auto; grid-template-areas: 'banda' 'mapa' 'ficha' 'panel'; min-height: 100dvh; }
+.banda { grid-area: banda; position: relative; z-index: 900; display: flex; align-items: center; gap: 10px; min-height: 60px; padding: 8px 16px; background: var(--surface); color: var(--ink); border-bottom: 1px solid var(--line); }
+.banda-marca { display: grid; place-items: center; flex: none; width: 34px; height: 34px; border-radius: 10px; background: var(--tinta); color: var(--on-tinta); }
+.banda-nombre { display: flex; flex-direction: column; line-height: 1.1; }
+.banda h1 { margin: 0; font-size: 1.15rem; font-weight: 700; letter-spacing: -.02em; }
+.banda p { margin: 0; color: var(--muted); font-size: .8rem; }
+.zona-mapa { grid-area: mapa; display: flex; flex-direction: column; border-bottom: 1px solid var(--line); background: var(--surface); }
+.panel { grid-area: panel; background: var(--surface); min-width: 0; display: flex; flex-direction: column; }
+.cuerpo-panel { padding: 16px 16px 24px; min-height: 0; flex: 1; scroll-padding-top: 1rem; scroll-padding-bottom: 7rem; }
+
+/* La ficha del punto: su propia columna, con el botón de cerrar arriba a la derecha (encima de su cabecera). */
+.panel-ficha { grid-area: ficha; position: relative; min-width: 0; display: flex; flex-direction: column; background: var(--bg); border-bottom: 1px solid var(--line); }
+.panel-ficha:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
+.cuerpo-ficha { padding: 16px; min-height: 0; flex: 1; scroll-padding-top: 1rem; }
+.ficha-cerrar { position: absolute; z-index: 10; top: 12px; right: 12px; width: 44px; padding: 0; display: grid; place-items: center; background: var(--surface-2); color: var(--ink); border: 1px solid var(--line); border-radius: 10px; }
+.ficha-cerrar:hover:not(:disabled) { background: var(--tinta-soft); color: var(--tinta); }
 
 @media (min-width: 900px) {
-  .app { height: 100dvh; grid-template-columns: minmax(380px, 460px) 1fr; grid-template-rows: auto 1fr; grid-template-areas: 'banda banda' 'panel mapa'; }
-  .banda { grid-area: banda; }
-  .panel { grid-area: panel; border-right: 1px solid var(--line); overflow: hidden; }
+  /* Escritorio: el asistente a la izquierda, la ficha a su lado cuando hay un punto, y el mapa con el resto del ancho. Cada columna se desplaza por dentro. */
+  .app { height: 100dvh; grid-template-columns: minmax(340px, 400px) 1fr; grid-template-rows: auto minmax(0, 1fr); grid-template-areas: 'banda banda' 'panel mapa'; }
+  .app-con-ficha { grid-template-columns: minmax(320px, 380px) minmax(340px, 420px) minmax(320px, 1fr); grid-template-areas: 'banda banda banda' 'panel ficha mapa'; }
+  .panel { border-right: 1px solid var(--line); overflow: hidden; }
   .cuerpo-panel { overflow-y: auto; }
-  .zona-mapa { grid-area: mapa; border-bottom: 0; min-height: 0; }
+  .panel-ficha { border-bottom: 0; border-right: 1px solid var(--line); overflow: hidden; }
+  .cuerpo-ficha { overflow-y: auto; }
+  .zona-mapa { border-bottom: 0; min-height: 0; }
 }
-
-/* Pestañas */
-.pestanas { display: flex; border-bottom: 1px solid var(--line); background: var(--surface-2); }
-.pestana { flex: 1; background: transparent; color: var(--ink-2); border: 0; border-bottom: 3px solid transparent; border-radius: 0; }
-.pestana:hover:not(:disabled) { background: var(--tinta-soft); }
-.pestana[aria-selected='true'] { color: var(--tinta); border-bottom-color: var(--tinta); background: var(--surface); }
 
 /* Buscador: el campo con su etiqueta visible y su botón de borrar; los resultados se despliegan sobre el mapa (no lo empujan), arriba de las capas. */
 .buscador { position: relative; z-index: 700; padding: 10px max(16px, env(safe-area-inset-right)) 10px max(16px, env(safe-area-inset-left)); border-bottom: 1px solid var(--line); }
@@ -156,7 +158,7 @@ button[aria-disabled='true'] { opacity: .6; cursor: progress; }
 @media (min-width: 640px) { .mapa-envoltorio:has(.capas-panel:not([hidden])) .mapa-nota { max-width: calc(100% - 64px - 360px); } }
 @media (min-width: 900px) { .mapa-envoltorio { height: auto; min-height: 0; } }
 .marcador-aviso span, .marcador-punto span { display: block; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .5); }
-.marcador-aviso span { width: 24px; height: 24px; margin: 3px; background: #c2410c; }
+.marcador-aviso span { width: 24px; height: 24px; margin: 3px; background: #a3482a; }
 /* Las marcas del mapa usan la tinta del mapa, no la del tema: el fondo del mapa es siempre claro, y con el tema oscuro --tinta es un azul claro que casi no se distingue de él. */
 .marcador-punto span { width: 22px; height: 22px; margin: 2px; background: var(--tinta-mapa); outline: 2px solid #fff; }
 /* Los botones de zoom miden 44 px donde se toca (los de Leaflet miden 30). El margen izquierdo de los cuadros (56 px, ver crearPanes) ya los deja libres. */
@@ -181,10 +183,9 @@ button[aria-disabled='true'] { opacity: .6; cursor: progress; }
 
 /* Impresión: solo la ficha */
 @media print {
-  .banda, .zona-mapa, .pestanas, .saltar, .ficha-acciones, .chat { display: none !important; }
+  .banda, .zona-mapa, .panel, .saltar, .ficha-cerrar, .ficha-acciones, .chat { display: none !important; }
   .app { display: block; height: auto; }
-  .panel, .cuerpo-panel { overflow: visible; border: 0; }
-  .cuerpo-panel[hidden] { display: none !important; }
+  .panel-ficha, .cuerpo-ficha { overflow: visible; border: 0; background: #fff; }
   body { background: #fff; color: #000; }
 }
 
@@ -240,7 +241,7 @@ button[aria-disabled='true'] { opacity: .6; cursor: progress; }
 .leaflet-marker-icon.ent-sector span { font-size: .9rem; border-radius: 6px; }
 .leaflet-marker-icon.ent-ficha span { border-color: #fff; }
 .leaflet-marker-icon.ent-activo span { outline: 3px solid var(--tinta-mapa); outline-offset: 2px; transform: scale(1.25); }
-.leaflet-marker-icon.marcador-aviso.ent-activo span { outline: 3px solid var(--tinta-mapa); outline-offset: 2px; transform: scale(1.2); }
+.leaflet-marker-icon.marcador-aviso.ent-activo span { outline: 3px solid var(--tinta-mapa); outline-offset: 2px; box-shadow: 0 0 0 7px var(--mostaza), 0 1px 4px rgba(0, 0, 0, .5); transform: scale(1.2); }
 
 /* Chat: el estado del viaje al trabajo */
 .viaje-estado { margin: 0; font-size: .85rem; background: var(--tinta-soft); border: 1px solid var(--tinta-soft-line); border-radius: var(--radius-sm); padding: 8px 12px; }

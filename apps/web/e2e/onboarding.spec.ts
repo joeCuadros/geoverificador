@@ -217,13 +217,13 @@ test.describe('presentación', () => {
     expect(await dialogo(page).evaluate((el) => getComputedStyle(el).animationName)).toBe('onb-entra');
   });
 
-  test('usa la superficie y la tinta del tema, en claro y en oscuro, con radio de 12 px', async ({ page }) => {
+  test('usa la superficie y la tinta del tema, en claro y en oscuro, con radio de 18 px', async ({ page }) => {
     await page.emulateMedia({ colorScheme: 'light' });
     await abrir(page);
     const estilo = () => dialogo(page).evaluate((el) => ({ fondo: getComputedStyle(el).backgroundColor, radio: getComputedStyle(el).borderTopLeftRadius }));
-    expect(await estilo()).toEqual({ fondo: 'rgb(251, 248, 241)', radio: '12px' });
+    expect(await estilo()).toEqual({ fondo: 'rgb(255, 252, 247)', radio: '18px' });
     await page.emulateMedia({ colorScheme: 'dark' });
-    expect(await estilo()).toEqual({ fondo: 'rgb(23, 29, 43)', radio: '12px' });
+    expect(await estilo()).toEqual({ fondo: 'rgb(38, 32, 27)', radio: '18px' });
   });
 
   test('la nota de consulta referencial es el único elemento ámbar y lleva icono y texto', async ({ page }) => {
@@ -231,8 +231,8 @@ test.describe('presentación', () => {
     const aviso = page.locator('.onb-aviso');
     await expect(aviso).toContainText('Consulta referencial');
     await expect(aviso.locator('svg')).toHaveCount(1);
-    expect(await aviso.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe('rgb(255, 241, 201)');
-    expect(await dialogo(page).locator('button').evaluateAll((bs) => bs.map((b) => getComputedStyle(b).backgroundColor))).not.toContain('rgb(255, 241, 201)');
+    expect(await aviso.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe('rgb(247, 233, 198)');
+    expect(await dialogo(page).locator('button').evaluateAll((bs) => bs.map((b) => getComputedStyle(b).backgroundColor))).not.toContain('rgb(247, 233, 198)');
   });
 });
 

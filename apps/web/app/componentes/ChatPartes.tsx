@@ -203,14 +203,12 @@ function TarjetaAviso({ t, marcador, activo, onEnfocar, onVerFicha }: { t: Tarje
         </p>
       </div>
       {t.pedidos > 0 && (
+        // El resumen se lee antes de abrir nada: cuántos de los criterios pedidos cumplen, cuántos no y cuántos no tienen dato (sin total ni puntaje).
         <p className="aviso-resumen">
-          {t.pedidos - t.sinDato > 0 ? (
-            <span>
-              Criterios con dato que cumplen: <strong>{t.cumplidos}</strong> de {t.pedidos - t.sinDato} · {t.sinDato} sin dato
-            </span>
-          ) : (
-            <span>Ningún criterio con dato · {t.sinDato} sin dato</span>
-          )}
+          <span className="solo-lectores">Criterios que pediste: </span>
+          {t.pedidos - t.sinDato > 0 && <EstadoChip estado="cumple" texto={`${t.cumplidos} de ${t.pedidos - t.sinDato} cumplen`} />}
+          {t.pedidos - t.sinDato - t.cumplidos > 0 && <EstadoChip estado="no_cumple" texto={`${t.pedidos - t.sinDato - t.cumplidos} no cumple${t.pedidos - t.sinDato - t.cumplidos === 1 ? '' : 'n'}`} />}
+          {t.sinDato > 0 && <EstadoChip estado="sin_dato" texto={`${t.sinDato} sin dato`} />}
         </p>
       )}
       {t.criterios.length > 0 && (

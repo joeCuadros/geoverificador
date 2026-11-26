@@ -1,0 +1,59 @@
+/* Los dibujos de la guía (Ilustraciones.tsx). Todo se mide en em: el mismo dibujo sale en miniatura en la portada del asistente (`.il-mini`) y grande en el
+   cuadro de la guía (`.il-grande`). Usa los tokens del tema, salvo el mapa, que es siempre claro como el de verdad. */
+
+.il { display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: 12px; background: var(--surface-2); color: var(--ink); line-height: 1.25; }
+.il * { box-sizing: border-box; }
+.il-grande { font-size: 14px; width: 100%; height: 16em; padding: 1.4em; }
+.il-mini { font-size: 5.5px; flex: none; width: 17.5em; height: 12.5em; padding: 1em; border-radius: 10px; }
+.il-fila { display: flex; align-items: stretch; gap: 1em; width: 100%; height: 100%; }
+.il-columna { display: flex; flex-direction: column; gap: .8em; width: 100%; height: 100%; }
+
+.il-tarjeta { display: flex; flex-direction: column; gap: .6em; padding: 1em; background: var(--surface); border: 1px solid var(--line); border-radius: 1em; box-shadow: 0 .4em 1.2em -.6em rgba(42, 33, 27, .35); }
+.il-chat { width: min(100%, 24em); justify-content: center; }
+.il-chat-corto { width: 45%; flex: none; }
+.il-burbuja { align-self: flex-end; max-width: 90%; padding: .5em .8em; border-radius: .9em .9em .25em .9em; background: var(--tinta-soft); color: var(--ink); font-size: .9em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.il-linea { display: block; height: .55em; border-radius: .3em; background: var(--line); }
+.il-compositor, .il-buscador { display: flex; align-items: center; gap: .6em; padding: .45em .45em .45em .9em; border: 1px solid var(--line-strong); border-radius: .8em; background: var(--surface); }
+.il-compositor-texto { flex: 1; font-size: .9em; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.il-enviar { flex: none; width: 2em; height: 2em; border-radius: .6em; background: var(--tinta); }
+.il-lupa { flex: none; width: 1em; height: 1em; border: .18em solid var(--muted); border-radius: 50%; }
+/* Lo que el paso explica lleva el realce mostaza, como el control resaltado en la página. */
+.il-resalte { outline: .25em solid var(--mostaza); outline-offset: .25em; }
+
+/* El mapa: siempre claro */
+.il-mapa { position: relative; flex: 1; min-width: 0; min-height: 6em; border-radius: 1em; overflow: hidden; background: #f1ece3; border: 1px solid #e5dccd; }
+.il-calle { position: absolute; background: #fffdf9; }
+.il-calle-1 { left: -10%; right: -10%; top: 45%; height: .7em; transform: rotate(-8deg); }
+.il-calle-2 { top: -10%; bottom: -10%; left: 30%; width: .6em; transform: rotate(6deg); }
+.il-rio { position: absolute; top: -10%; bottom: -10%; left: 58%; width: 1.1em; background: #b4cdd6; transform: rotate(14deg); }
+.il-parque { position: absolute; right: 8%; bottom: 12%; width: 4em; height: 2.4em; border-radius: 50%; background: #dce3c8; }
+.il-marcador { position: absolute; display: grid; place-items: center; width: 2.1em; height: 2.1em; transform: translate(-50%, -50%); border: .2em solid #fff; border-radius: 50%; background: #2a211b; color: #fff; font-size: .9em; font-weight: 700; }
+.il-marcador-activo { width: 2.8em; height: 2.8em; background: #a3482a; outline: .25em solid #d9a43a; }
+.il-punto { position: absolute; left: 40%; top: 40%; width: 2em; height: 2em; border: .3em solid #fff; border-radius: 50%; background: #8a3a1f; box-shadow: 0 0 0 .25em #d9a43a; }
+
+.il-capas { width: 46%; flex: none; justify-content: center; }
+.il-titulo-mini { font: 700 1em/1.2 var(--titulo); }
+.il-capa { display: flex; align-items: center; gap: .5em; font-size: .9em; }
+.il-casilla { flex: none; width: 1.1em; height: 1.1em; border: .15em solid var(--input-border); border-radius: .3em; }
+.il-casilla-marcada { background: var(--tinta); border-color: var(--tinta); }
+
+.il-ficha { width: min(100%, 26em); }
+.il-pastillas { display: flex; flex-wrap: wrap; gap: .35em; }
+.il-pastilla { padding: .15em .6em; border-radius: 999px; font-size: .8em; font-weight: 700; white-space: nowrap; }
+.il-ok { background: var(--ok-bg); color: var(--ok); }
+.il-no { background: var(--no-bg); color: var(--no); }
+.il-nd { background: var(--surface-2); color: var(--muted); }
+.il-medida { display: grid; gap: .3em; }
+.il-medida-fila { display: flex; justify-content: space-between; font-size: .85em; }
+.il-medida-fila b { color: var(--ok); }
+.il-barra { display: block; height: .5em; border-radius: .3em; background: var(--surface-2); overflow: hidden; }
+.il-barra span { display: block; height: 100%; }
+.il-ok-fondo { background: var(--ok); }
+.il-tema { display: flex; justify-content: space-between; align-items: center; padding: .4em .6em; border: 1px solid var(--no-line); border-radius: .6em; font-size: .85em; font-weight: 700; }
+
+.il-privacidad { align-items: center; }
+.il-candado { align-self: flex-start; width: 1.6em; height: 1.3em; border-radius: .25em; background: var(--muted); position: relative; margin-top: .6em; }
+.il-candado::before { content: ''; position: absolute; left: .3em; right: .3em; top: -.75em; height: .9em; border: .2em solid var(--muted); border-bottom: 0; border-radius: .6em .6em 0 0; }
+.il-flecha { flex: none; width: 3em; height: .25em; background: var(--line-strong); position: relative; }
+.il-flecha::after { content: ''; position: absolute; right: -.1em; top: -.4em; border: .5em solid transparent; border-left-color: var(--line-strong); border-right: 0; }
+.il-servidor { flex: 1; justify-content: center; }

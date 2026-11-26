@@ -3,7 +3,17 @@ import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type 
 import { createPortal } from 'react-dom';
 import { PASOS, almacenDelNavegador, anterior, esPrimero, esUltimo, marcarVisto, progreso, siguiente, textoDelModelo, yaVisto } from '../../lib/onboarding.ts';
 import { IconoAlerta, IconoInfo } from './Iconos.tsx';
+import { Ilustracion, tieneIlustracion } from './Ilustraciones.tsx';
+import './ilustraciones.css';
 import './onboarding.css';
+
+/** El evento con que otra parte de la página (la portada del asistente) abre la guía en un paso: `detail` es el id del paso. */
+const EVENTO_GUIA = 'geoverificador:guia';
+
+/** Abre la guía en el paso `id` (o en el primero, si no existe). */
+export function abrirGuiaEn(id: string) {
+  window.dispatchEvent(new CustomEvent<string>(EVENTO_GUIA, { detail: id }));
+}
 
 /** Dónde se ancla el cuadro: del lado opuesto al control que explica, para no taparlo; centrado si el paso no señala ninguno. */
 type Lado = 'arriba' | 'abajo' | 'centro';
@@ -27,11 +37,21 @@ export function Onboarding() {
   const previo = useRef<HTMLElement | null>(null);
   const idTitulo = useId();
 
-  const abrir = useCallback(() => {
+  const abrir = useCallback((inicio = 0) => {
     previo.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    setPaso(0);
+    setPaso(inicio);
     setAbierto(true);
   }, []);
+
+  // La portada del asistente abre la guía en el paso que explica cada una de sus miniaturas.
+  useEffect(() => {
+    const alPedir = (e: Event) => {
+      const i = PASOS.findIndex((p) => p.id === (e as CustomEvent<string>).detail);
+      abrir(i >= 0 ? i : 0);
+    };
+    window.addEventListener(EVENTO_GUIA, alPedir);
+    return () => window.removeEventListener(EVENTO_GUIA, alPedir);
+  }, [abrir]);
 
   /** Cerrar de cualquier modo (terminar, omitir o Esc) cuenta como «ya la vi». */
   const cerrar = useCallback(() => {
@@ -123,7 +143,7 @@ export function Onboarding() {
 
   return (
     <>
-      <button ref={botonAyuda} type="button" className="onb-ayuda" aria-haspopup="dialog" onClick={abrir}>
+      <button ref={botonAyuda} type="button" className="onb-ayuda" aria-haspopup="dialog" onClick={() => abrir()}>
         <IconoInfo />
         Ayuda
       </button>
@@ -144,6 +164,7 @@ export function Onboarding() {
                   {actual.titulo}
                 </h2>
                 <div key={actual.id}>
+                  {tieneIlustracion(actual.id) && <Ilustracion id={actual.id} />}
                   <p className="onb-intro">{actual.intro}</p>
                   <ul className="onb-puntos">
                     {actual.puntos.map((p) => (

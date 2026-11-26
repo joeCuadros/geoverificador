@@ -164,7 +164,6 @@ test.describe('lo que el asistente responde del mapa y entre avisos', () => {
 
   test('con un punto elegido en el mapa, «¿qué hay aquí?» responde desde la ficha, con fuente y fecha', async ({ page }) => {
     await clicEnMapa(page);
-    await page.getByRole('tab', { name: 'Asistente' }).click();
     await expect(page.locator('.punto-elegido')).toContainText('Punto elegido en el mapa');
     await page.getByRole('button', { name: '¿Qué hay aquí?' }).click();
     const r = ultimaBurbuja(page);
@@ -179,7 +178,6 @@ test.describe('lo que el asistente responde del mapa y entre avisos', () => {
     await expect(sin).toContainText('primero elígelo en el mapa');
     await expect(page.locator('.punto-elegido')).toHaveCount(0);
     await clicEnMapa(page);
-    await page.getByRole('tab', { name: 'Asistente' }).click();
     const con = await preguntar(page, 'qué hay en este punto');
     await expect(con.locator('.ficha-chat')).toBeVisible();
   });

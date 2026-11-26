@@ -6,7 +6,7 @@ test('de la pregunta a la ficha: el aviso del chat se ubica en el mapa y su bot√
   await expect(page.locator('.marcador-aviso')).toHaveCount(2);
 
   await r.getByRole('button', { name: new RegExp(`Ver ficha del punto: ${AVISO_1.titulo}`) }).click();
-  await expect(page.getByRole('tab', { name: 'Ficha del punto' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('region', { name: 'Ficha del punto' })).toBeVisible();
   await expect(ficha(page)).toBeVisible();
   const { lat, lon } = leerCoordenadas(await page.getByTestId('ficha-coordenadas').innerText());
   expect(lat).toBeCloseTo(AVISO_1.lat, 4);
@@ -15,7 +15,6 @@ test('de la pregunta a la ficha: el aviso del chat se ubica en el mapa y su bot√
   await expect(ficha(page)).toContainText(/RENIPRESS.*datos del \d{4}-\d{2}-\d{2}/);
 
   // La conversaci√≥n sigue donde estaba al volver al asistente.
-  await page.getByRole('tab', { name: 'Asistente' }).click();
   await expect(page.locator('.burbuja-yo').last()).toContainText('Yanahuara');
   await expect(r).toBeVisible();
   await expect(page.locator('.marcador-aviso')).toHaveCount(2);

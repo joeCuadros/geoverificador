@@ -51,12 +51,13 @@ export const PASOS: readonly PasoDeGuia[] = [
   {
     id: 'ficha',
     titulo: 'La ficha del punto',
-    intro: 'En «Ficha del punto» ves la zonificación y los servicios cerca del punto elegido, cada uno con su fuente.',
+    intro: 'Al elegir un punto o un resultado, su ficha se abre en una columna junto al asistente: arriba el recuento y lo esencial, debajo cada tema plegado.',
     puntos: [
       'Cada dato lleva su estado con icono y texto: Cumple, No cumple, Informativo o Sin dato.',
       'Las distancias son en línea recta, no recorrido a pie.',
     ],
-    objetivo: 'button[role="tab"][aria-controls$="-panel-ficha"]',
+    // Con una ficha abierta se resalta su columna; si no, el botón que abre la del centro del mapa.
+    objetivo: '#ficha-panel, button[aria-label="Ver ficha del centro del mapa"]',
   },
   {
     id: 'asistente',

@@ -3,7 +3,7 @@
  * dibuja el trabajo que ubicó y la combi o bus que midió. Las pruebas que dicen «simulado» sustituyen la respuesta del servidor para un caso que los datos de prueba
  * no producen (no hay sectores, el asistente nunca ubica un «lugar pedido»).
  */
-import { AVISO_1, AVISO_2, CONSULTA_AVISOS, abrir, expect, ficha, leerCoordenadas, mapa, preguntar, test, vista } from './apoyo.ts';
+import { AVISO_1, AVISO_2, CONSULTA_AVISOS, abrir, expect, ficha, leerCoordenadas, mapa, preguntar, test, vista, desplegarTemas } from './apoyo.ts';
 
 const CONSULTA_TRABAJO = 'un departamento en Yanahuara cerca de mi trabajo en el Parque Industrial hasta 450 mil soles';
 const filaDe = (page: import('@playwright/test').Page, id: string) => ficha(page).locator(`li[data-item="${id}"]`);
@@ -13,11 +13,13 @@ const botonDe = (page: import('@playwright/test').Page, id: string) => filaDe(pa
 /** Ningún aviso viene elegido: la persona elige uno con su tarjeta («Ver en el mapa»), y recién entonces se mide y se dibuja su ruta al trabajo. */
 const elegirPrimerAviso = (page: import('@playwright/test').Page) => page.locator('.avisos-mapa li').first().getByRole('button', { name: /^Ver en el mapa:/ }).click();
 
+/** Abre la ficha del centro del mapa con todos sus temas desplegados (para leer y pulsar sus elementos). */
 async function abrirFichaDelCentro(page: import('@playwright/test').Page) {
   const respuesta = page.waitForResponse((r) => r.url().includes('/api/ficha') && r.status() === 200);
   await page.getByRole('button', { name: 'Ver ficha del centro del mapa' }).click();
   const reporte = await (await respuesta).json();
   await expect(ficha(page)).toBeVisible();
+  await desplegarTemas(page);
   return reporte;
 }
 
@@ -92,9 +94,8 @@ test.describe('ficha y mapa', () => {
   test('tocar un lugar en el mapa marca su elemento en la ficha, aunque se estuviera en el asistente', async ({ page }) => {
     const reporte = await abrirFichaDelCentro(page);
     const salud = reporte.lugares.find((l: any) => l.filas.includes('Salud'));
-    await page.getByRole('tab', { name: 'Asistente' }).click();
     await page.locator(`.ent-ficha[title^="${salud.nombre}"]`).click();
-    await expect(page.getByRole('tab', { name: 'Ficha del punto' })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('region', { name: 'Ficha del punto' })).toBeVisible();
     await expect(filaDe(page, 'salud')).toHaveAttribute('aria-current', 'true');
     await expect(page.locator('.leaflet-popup-content')).toContainText(salud.nombre);
   });
@@ -120,7 +121,6 @@ test.describe('ficha y mapa', () => {
   test('una ficha nueva reemplaza los lugares de la anterior', async ({ page }) => {
     await abrirFichaDelCentro(page);
     const segunda = page.waitForResponse((r) => r.url().includes('/api/ficha') && r.status() === 200);
-    await page.getByRole('tab', { name: 'Asistente' }).click();
     const caja = (await mapa(page).boundingBox())!;
     await page.mouse.click(caja.x + caja.width / 2 + 150, caja.y + caja.height / 2 - 100);
     const reporte = await (await segunda).json();
@@ -132,7 +132,6 @@ test.describe('ficha y mapa', () => {
     await abrirFichaDelCentro(page);
     await expect(page.locator('.ent-ficha').first()).toBeVisible();
     await page.route('**/api/ficha*', (ruta) => ruta.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'No se pudo armar la ficha de este punto. Intenta de nuevo.' }) }));
-    await page.getByRole('tab', { name: 'Asistente' }).click();
     const caja = (await mapa(page).boundingBox())!;
     await page.mouse.click(caja.x + caja.width / 2 + 150, caja.y + caja.height / 2 - 100);
     await expect(page.getByRole('button', { name: 'Reintentar' })).toBeVisible();
@@ -323,9 +322,9 @@ test.describe('el círculo de «cerca de»', () => {
       await preguntar(page, 'un departamento cerca de la UNSA');
       await expect(page.locator('.circulo-cerca')).toHaveCount(1);
       const trazo = await page.locator('.circulo-cerca').evaluate((el) => getComputedStyle(el).stroke);
-      expect(trazo, esquema).toBe('rgb(28, 58, 107)');
+      expect(trazo, esquema).toBe('rgb(138, 58, 31)');
       const etiqueta = await page.locator('.etiqueta-circulo').evaluate((el) => ({ color: getComputedStyle(el).color, fondo: getComputedStyle(el).backgroundColor }));
-      expect(etiqueta, esquema).toEqual({ color: 'rgb(28, 58, 107)', fondo: 'rgb(255, 255, 255)' });
+      expect(etiqueta, esquema).toEqual({ color: 'rgb(138, 58, 31)', fondo: 'rgb(255, 255, 255)' });
     }
   });
 });
@@ -341,9 +340,9 @@ test.describe('de la pregunta a la ficha y de vuelta', () => {
     expect(lon).toBeCloseTo(AVISO_1.lon, 4);
     await expect(page.locator('.ent-ficha').first()).toBeVisible();
     await expect(page.locator('.marcador-aviso')).toHaveCount(2); // los avisos siguen en el mapa junto a los lugares de la ficha
+    await desplegarTemas(page);
     await botonDe(page, 'salud').click();
     await expect(page.locator('.ent-ficha.ent-activo')).toHaveCount(1);
-    await page.getByRole('tab', { name: 'Asistente' }).click();
     await expect(page.locator('.avisos-mapa li[aria-current="true"]')).toContainText(AVISO_1.titulo);
   });
 });

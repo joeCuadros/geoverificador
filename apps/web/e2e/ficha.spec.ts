@@ -4,13 +4,15 @@
  * botón «Ver ficha del centro del mapa» en un teléfono.
  */
 import type { Page } from '@playwright/test';
-import { AVISO_1, CONSULTA_AVISOS, abrir, alejar, clicEnMapa, expect, ficha, mapa, preguntar, test } from './apoyo.ts';
+import { AVISO_1, CONSULTA_AVISOS, abrir, alejar, clicEnMapa, expect, ficha, mapa, preguntar, test, desplegarTemas } from './apoyo.ts';
 
-async function abrirFichaDelCentro(page: Page) {
+/** Abre la ficha del centro del mapa; salvo que se pida plegada, con todos sus temas desplegados (para leer y pulsar sus elementos). */
+async function abrirFichaDelCentro(page: Page, { plegada = false } = {}) {
   const respuesta = page.waitForResponse((r) => r.url().includes('/api/ficha') && r.status() === 200);
   await page.getByRole('button', { name: 'Ver ficha del centro del mapa' }).click();
   const reporte = await (await respuesta).json();
   await expect(ficha(page)).toBeVisible();
+  if (!plegada) await desplegarTemas(page);
   return reporte;
 }
 
@@ -19,21 +21,22 @@ const item = (page: Page, id: string) => ficha(page).locator(`li[data-item="${id
 test.describe('ficha: leerla', () => {
   test.beforeEach(async ({ page }) => abrir(page));
 
-  test('lo esencial va primero y cada frase lleva a su grupo', async ({ page }) => {
-    await abrirFichaDelCentro(page);
+  test('lo esencial va primero y cada frase abre su tema', async ({ page }) => {
+    await abrirFichaDelCentro(page, { plegada: true });
     const esencial = ficha(page).locator('.f-esencial');
-    await expect(esencial.getByRole('heading', { level: 3, name: 'Lo esencial de este punto' })).toBeVisible();
+    await expect(esencial.getByRole('heading', { level: 3, name: 'En pocas palabras' })).toBeVisible();
     const enlaces = esencial.getByRole('link');
     expect(await enlaces.count()).toBeGreaterThanOrEqual(3);
     // Va antes que cualquier grupo.
     const yEsencial = (await esencial.boundingBox())!.y;
-    const yPrimerGrupo = (await ficha(page).locator('section.f-grupo').first().boundingBox())!.y;
+    const yPrimerGrupo = (await ficha(page).locator('details.f-tema').first().boundingBox())!.y;
     expect(yEsencial).toBeLessThan(yPrimerGrupo);
     // Nada que parezca un veredicto: ni puntaje ni «buen lugar».
     await expect(esencial).not.toContainText(/puntaje|mejor|recomendad|buen lugar|\d+\s*\/\s*10/i);
-    // Seguir una frase lleva el foco al título de su grupo.
+    // Seguir una frase despliega su tema y deja el foco en su fila.
     await esencial.getByRole('link', { name: /Cerca/ }).click();
-    await expect(ficha(page).getByRole('heading', { level: 3, name: 'Qué hay cerca' })).toBeFocused();
+    await expect(ficha(page).locator('#ficha-g-cerca')).toHaveAttribute('open', '');
+    await expect(ficha(page).locator('#ficha-g-cerca > summary')).toBeFocused();
   });
 
   test('el estado se dice con icono y texto, y lo informativo no se parece a un veredicto', async ({ page }) => {
@@ -43,7 +46,7 @@ test.describe('ficha: leerla', () => {
       ['estado-cumple', 'Dentro de la referencia'],
       ['estado-no_cumple', 'Fuera de la referencia'],
     ] as const) {
-      const chip = ficha(page).locator(`.${clase}`).first();
+      const chip = ficha(page).locator(`li[data-item] .${clase}`).first();
       await expect(chip).toContainText(texto);
       await expect(chip).not.toContainText(/^(No )?cumple$/i);
       expect(await chip.locator('svg').count()).toBe(1); // el icono acompaña al texto: el color no es lo único que informa
@@ -51,7 +54,7 @@ test.describe('ficha: leerla', () => {
     // Servicios y riesgos son datos de contexto: el grupo lo dice una vez y sus filas no repiten «Informativo».
     for (const id of ['servicios', 'riesgos']) {
       const grupo = ficha(page).locator(`#ficha-g-${id}`);
-      await expect(grupo.locator('.f-grupo-cab .estado-informativo')).toContainText('Solo informativo');
+      await expect(grupo.locator('.f-tema-cuerpo > .estado-informativo')).toContainText('Solo informativo');
       await expect(grupo.locator('li[data-item] .estado-informativo')).toHaveCount(0);
     }
     await expect(ficha(page)).not.toContainText(/INFORMATIVO\s*·/);
@@ -125,11 +128,11 @@ test.describe('ficha: leerla', () => {
   test('hay pasos concretos antes de decidir y solo las limitaciones que aplican, con el resto plegado', async ({ page }) => {
     await abrirFichaDelCentro(page);
     const pasos = ficha(page).locator('#ficha-pasos');
-    await expect(pasos.getByRole('heading', { level: 3, name: 'Qué comprobar antes de decidir' })).toBeVisible();
+    await expect(pasos.locator('> summary')).toContainText('Qué comprobar antes de decidir');
     await expect(pasos).toContainText(/Certificado de Zonificación/);
     await expect(pasos).toContainText(/Copia literal de la partida/);
     const limites = ficha(page).locator('.f-limites');
-    const visibles = await limites.locator(':scope > ul > li').count();
+    const visibles = await limites.locator('.f-tema-cuerpo > ul > li').count();
     expect(visibles).toBeGreaterThanOrEqual(2);
     expect(visibles).toBeLessThanOrEqual(4);
     const todas = limites.locator('details.f-mas');
@@ -138,16 +141,22 @@ test.describe('ficha: leerla', () => {
     expect(await todas.locator('li').count()).toBeGreaterThan(visibles);
   });
 
-  test('la navegación por secciones lleva al grupo y deja el foco en su título', async ({ page }) => {
-    await abrirFichaDelCentro(page);
-    const nav = ficha(page).getByRole('navigation', { name: 'Secciones de la ficha' });
-    for (const [enlace, titulo] of [
-      ['Riesgos', 'Riesgos y restricciones'],
-      ['Moverse', 'Cómo moverse'],
-    ] as const) {
-      await nav.getByRole('link', { name: enlace }).click();
-      await expect(ficha(page).getByRole('heading', { level: 3, name: titulo })).toBeFocused();
-    }
+  test('los temas están plegados, dicen su recuento sin abrirlos y se abren de a uno', async ({ page }) => {
+    await abrirFichaDelCentro(page, { plegada: true });
+    const temas = ficha(page).locator('details.f-tema');
+    expect(await temas.count()).toBeGreaterThanOrEqual(5);
+    await expect(ficha(page).locator('details.f-tema[open]')).toHaveCount(0);
+    // La fila plegada ya dice cuántas distancias quedan dentro (para el lector, en una frase completa).
+    await expect(ficha(page).locator('#ficha-g-cerca > summary .f-conteo-corto')).toContainText(/\d+ de \d+ dentro de la referencia|Informativo/);
+    const riesgos = ficha(page).locator('#ficha-g-riesgos');
+    const moverse = ficha(page).locator('#ficha-g-moverse');
+    await riesgos.locator('> summary').click();
+    await expect(riesgos).toHaveAttribute('open', '');
+    await moverse.locator('> summary').click();
+    await expect(moverse).toHaveAttribute('open', '');
+    await expect(riesgos).not.toHaveAttribute('open', '');
+    // El recuento de toda la ficha está en la cabecera, sin total ni puntaje.
+    await expect(ficha(page).getByTestId('ficha-recuento')).toContainText(/\d+ dentro.*\d+ fuera.*\d+ sin dato/s);
   });
 
   test('un punto fuera del plano dice «Sin dato» en la zona y no inventa una', async ({ page }) => {
@@ -167,7 +176,7 @@ test.describe('ficha: jerarquía, desconocidos y lectura', () => {
   test('lo esencial cuenta las distancias de cada grupo con icono y texto, sin total ni puntaje, y «sin dato» no se mezcla con «no cumple»', async ({ page }) => {
     const reporte = await abrirFichaDelCentro(page);
     for (const g of reporte.grupos) {
-      const conteo = ficha(page).locator(`#ficha-g-${g.id} > .f-conteo`);
+      const conteo = ficha(page).locator(`#ficha-g-${g.id} > .f-tema-cuerpo > .f-conteo`);
       const esperado = g.conteo.cumple + g.conteo.noCumple + g.conteo.sinDato;
       await expect(conteo, g.id).toHaveCount(esperado > 0 ? 1 : 0);
       if (esperado === 0) continue;
@@ -183,8 +192,9 @@ test.describe('ficha: jerarquía, desconocidos y lectura', () => {
           expect(await parte.locator('svg').count(), `${g.id} ${clase}: el icono acompaña al texto`).toBe(1);
         }
       }
-      // El mismo recuento aparece en lo esencial, junto a la frase que lleva al grupo.
-      await expect(ficha(page).locator(`.f-esencial a[href="#ficha-g-${g.id}"] .f-conteo`)).toHaveCount(1);
+      // Lo esencial lleva el estado del tema (un círculo con su dibujo) junto a la frase; el recuento corto está en la fila plegada del tema.
+      await expect(ficha(page).locator(`.f-esencial a[href="#ficha-g-${g.id}"] .f-marca svg`)).toHaveCount(1);
+      await expect(ficha(page).locator(`#ficha-g-${g.id} > summary .f-conteo-corto`)).toContainText(new RegExp(`${g.conteo.cumple} de ${g.conteo.cumple + g.conteo.noCumple}|Sin dato`));
     }
     await expect(ficha(page).locator('.f-conteo').first()).not.toContainText(/puntaje|mejor|recomendad|\d+\s*\/\s*\d+|total/i);
   });
@@ -210,16 +220,16 @@ test.describe('ficha: jerarquía, desconocidos y lectura', () => {
     await expect(ficha(page).locator('.f-fecha time')).toHaveAttribute('datetime', /^\d{4}-\d{2}-\d{2}T/);
   });
 
-  test('la prosa va en Source Serif 4 con renglones de 65 caracteres y los datos en Public Sans', async ({ page }) => {
+  test('los títulos van en Bricolage Grotesque, la prosa y los datos en Instrument Sans, con renglones de 65 caracteres', async ({ page }) => {
     await abrirFichaDelCentro(page);
     const fuentes = await ficha(page).evaluate((raiz) => {
       const de = (sel: string) => [...raiz.querySelectorAll(sel)].map((e) => getComputedStyle(e).fontFamily);
-      return { prosa: de('.f-grupo-resumen, .f-aviso, .f-texto'), datos: de('.f-distancia, .f-fuente, .estado') };
+      return { titulos: de('.f-cabecera h2, .f-tema-titulo, .f-distancia'), texto: de('.f-tema-resumen, .f-aviso, .f-texto, .f-fuente, .estado') };
     });
-    expect(fuentes.prosa.length).toBeGreaterThan(2);
-    for (const f of fuentes.prosa) expect(f).toContain('Source Serif 4');
-    expect(fuentes.datos.length).toBeGreaterThan(2);
-    for (const f of fuentes.datos) expect(f).toContain('Public Sans');
+    expect(fuentes.titulos.length).toBeGreaterThan(2);
+    for (const f of fuentes.titulos) expect(f).toContain('Bricolage Grotesque');
+    expect(fuentes.texto.length).toBeGreaterThan(2);
+    for (const f of fuentes.texto) expect(f).toContain('Instrument Sans');
     // Ningún párrafo de prosa pasa de 65ch (65 × el ancho de «0» de su tipografía).
     const pasados = await ficha(page).locator('.f-prosa').evaluateAll((es) =>
       es
@@ -258,17 +268,19 @@ test.describe('ficha: jerarquía, desconocidos y lectura', () => {
       await ruta.continue();
     });
     await page.getByRole('button', { name: 'Ver ficha del centro del mapa' }).click();
-    const anuncio = page.getByRole('tabpanel', { name: 'Ficha del punto' }).getByRole('status');
+    const anuncio = page.getByRole('region', { name: 'Ficha del punto' }).getByRole('status');
     await expect(anuncio).toHaveText(/^Armando la ficha de /);
     await expect(ficha(page)).toBeVisible();
     await expect(anuncio).toHaveText(/ está lista\.$/);
   });
 
-  test('si el foco se quedó sin lugar (se tocó un botón del asistente que ya no se ve), pasa al título de la ficha', async ({ page }) => {
+  test('el botón del asistente que abrió la ficha sigue a la vista y conserva el foco (la ficha se abre al lado y se anuncia)', async ({ page }) => {
     const r = await preguntar(page, CONSULTA_AVISOS);
-    await r.getByRole('button', { name: new RegExp(`Ver ficha del punto: ${AVISO_1.titulo}`) }).click();
+    const boton = r.getByRole('button', { name: new RegExp(`Ver ficha del punto: ${AVISO_1.titulo}`) });
+    await boton.click();
     await expect(ficha(page)).toBeVisible();
-    await expect(ficha(page).getByRole('heading', { level: 2, name: 'Ficha del punto' })).toBeFocused();
+    await expect(boton).toBeFocused();
+    await expect(page.getByTestId('anuncio-de-pestana')).toHaveText('Se abrió la ficha del punto, junto al asistente.');
   });
 
   test('si falla la ficha y se reintenta, el foco llega al título y no se queda en el botón que desapareció', async ({ page }) => {
@@ -291,7 +303,7 @@ test.describe('ficha: jerarquía, desconocidos y lectura', () => {
   test('con movimiento reducido, la ficha no hace transiciones', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await abrirFichaDelCentro(page);
-    const duraciones = await ficha(page).locator('.f-esencial a, .f-nav a, button.f-item-boton').evaluateAll((es) => es.map((e) => getComputedStyle(e).transitionDuration));
+    const duraciones = await ficha(page).locator('.f-esencial a, button.f-item-boton').evaluateAll((es) => es.map((e) => getComputedStyle(e).transitionDuration));
     expect(duraciones.length).toBeGreaterThan(3);
     for (const d of duraciones) expect(d).toBe('0s');
   });
@@ -315,9 +327,9 @@ test.describe('ficha: jerarquía, desconocidos y lectura', () => {
       return (x + 0.05) / (y + 0.05);
     };
     const aviso = await ficha(page).locator('.f-aviso').evaluate((e) => ({ fondo: getComputedStyle(e).backgroundColor, texto: getComputedStyle(e).color }));
-    expect(aviso.fondo).toBe('rgb(53, 40, 10)');
+    expect(aviso.fondo).toBe('rgb(58, 44, 12)');
     expect(contraste(aviso.fondo, aviso.texto)).toBeGreaterThanOrEqual(4.5);
-    // El texto de cada estado contra el fondo de su fila (el del panel, #171d2b, si la fila no tiene uno propio).
+    // El texto de cada estado contra el fondo de su fila (el de la columna, #26201b, si la fila no tiene uno propio).
     for (const clase of ['estado-cumple', 'estado-no_cumple', 'estado-sin_dato']) {
       const c = ficha(page).locator(`.${clase}`).first();
       if (!(await c.count())) continue;
@@ -326,10 +338,10 @@ test.describe('ficha: jerarquía, desconocidos y lectura', () => {
         const fondo = fila ? getComputedStyle(fila).backgroundColor : 'rgba(0, 0, 0, 0)';
         return { fondo, texto: getComputedStyle(e).color };
       });
-      const fondo = m.fondo === 'rgba(0, 0, 0, 0)' ? 'rgb(23, 29, 43)' : m.fondo;
+      const fondo = m.fondo === 'rgba(0, 0, 0, 0)' ? 'rgb(38, 32, 27)' : m.fondo;
       expect(contraste(fondo, m.texto), clase).toBeGreaterThanOrEqual(4.5);
     }
-    const ambar = await ficha(page).evaluate((raiz) => [...raiz.querySelectorAll('*')].filter((e) => getComputedStyle(e).backgroundColor === 'rgb(53, 40, 10)' && !e.classList.contains('f-aviso')).length);
+    const ambar = await ficha(page).evaluate((raiz) => [...raiz.querySelectorAll('*')].filter((e) => getComputedStyle(e).backgroundColor === 'rgb(58, 44, 12)' && !e.classList.contains('f-aviso')).length);
     expect(ambar).toBe(0);
   });
 });
@@ -337,12 +349,11 @@ test.describe('ficha: jerarquía, desconocidos y lectura', () => {
 test.describe('ficha: imprimir', () => {
   test('al imprimir se despliega todo y se quitan los controles', async ({ page }) => {
     await abrir(page);
-    await abrirFichaDelCentro(page);
+    await abrirFichaDelCentro(page, { plegada: true });
     expect(await ficha(page).locator('details:not([open])').count()).toBeGreaterThan(3);
     await page.emulateMedia({ media: 'print' });
     await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')));
     await expect.poll(() => ficha(page).locator('details:not([open])').count()).toBe(0);
-    await expect(ficha(page).getByRole('navigation', { name: 'Secciones de la ficha' })).toBeHidden();
     await expect(ficha(page).locator('.f-ver').first()).toBeHidden();
     await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
     await page.emulateMedia({ media: 'screen' });
@@ -362,11 +373,11 @@ test.describe('ficha en un teléfono', () => {
     // Nada de la ficha se sale del panel.
     const sobresale = await ficha(page).evaluate((raiz) => {
       const borde = raiz.getBoundingClientRect().right + 1;
-      return [...raiz.querySelectorAll('*')].filter((e) => !e.closest('.f-nav') && e.getBoundingClientRect().right > borde).map((e) => `${e.tagName}.${e.className}: ${e.textContent?.slice(0, 40)}`);
+      return [...raiz.querySelectorAll('*')].filter((e) => e.getBoundingClientRect().right > borde).map((e) => `${e.tagName}.${e.className}: ${e.textContent?.slice(0, 40)}`);
     });
     expect(sobresale).toEqual([]);
     // Objetivos de al menos 44 px.
-    for (const sel of ['.f-nav a', 'button.f-item-boton', '.f-esencial a', 'summary']) {
+    for (const sel of ['button.f-item-boton', '.f-esencial a', 'summary']) {
       const cajas = await ficha(page).locator(sel).evaluateAll((es) => es.map((e) => e.getBoundingClientRect().height));
       expect(cajas.length, sel).toBeGreaterThan(0);
       for (const h of cajas) expect(h, sel).toBeGreaterThanOrEqual(43.5);
@@ -385,10 +396,10 @@ test.describe('ficha a 375 px', () => {
     expect(ancho).toBeLessThanOrEqual(visible);
     const sobresale = await ficha(page).evaluate((raiz) => {
       const borde = raiz.getBoundingClientRect().right + 1;
-      return [...raiz.querySelectorAll('*')].filter((e) => !e.closest('.f-nav') && e.getBoundingClientRect().right > borde).map((e) => `${e.tagName}.${e.className}`);
+      return [...raiz.querySelectorAll('*')].filter((e) => e.getBoundingClientRect().right > borde).map((e) => `${e.tagName}.${e.className}`);
     });
     expect(sobresale).toEqual([]);
-    for (const sel of ['.f-nav a', 'button.f-item-boton', '.f-esencial a', 'summary', '.f-acciones button']) {
+    for (const sel of ['button.f-item-boton', '.f-esencial a', 'summary', '.f-acciones button']) {
       const cajas = await ficha(page).locator(sel).evaluateAll((es) => es.map((e) => e.getBoundingClientRect().height));
       expect(cajas.length, sel).toBeGreaterThan(0);
       for (const h of cajas) expect(h, sel).toBeGreaterThanOrEqual(43.5);
